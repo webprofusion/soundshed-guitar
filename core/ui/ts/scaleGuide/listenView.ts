@@ -58,8 +58,8 @@ export function noteReadout(view: ScaleGuideView, midi: number): { html: string;
   const note = describeNote(view, midi);
   const what = view.mode === "chord" ? "chord" : "scale";
   return note.inView
-    ? { html: `<b>${escapeHtml(note.name)}</b><span>${escapeHtml(note.interval)} · in the ${what}</span>`, state: "in" }
-    : { html: `<b>${escapeHtml(note.name)}</b><span>not in the ${what}</span>`, state: "out" };
+    ? { html: `<b>${escapeHtml(note.name)}</b><span>${escapeHtml(note.interval)} · of the ${what}</span>`, state: "in" }
+    : { html: `<b>${escapeHtml(note.name)}</b><span>outside the ${what}</span>`, state: "out" };
 }
 
 /** The match meter, the tones heard or missing, and the readout, for one chroma reading (null: quiet). */
@@ -79,7 +79,7 @@ export function showMatch(root: HTMLElement, view: ScaleGuideView, match: ChordM
   }
 
   if (text) {
-    text.textContent = match ? `Clean ${percent}%` : "Play the chord";
+    text.textContent = match ? `Clean ${percent}%` : "Waiting for a strum";
   }
 
   root.querySelectorAll<HTMLElement>("#sg-info .sg-pill").forEach((pill, index) => {

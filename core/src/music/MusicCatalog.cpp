@@ -25,13 +25,13 @@ struct ScaleGroup
 const std::vector<ScaleGroup>& ScaleGroups()
 {
     static const std::vector<ScaleGroup> groups = {
-        {"Common",
-         {{"major", "Major (Ionian)", "1 2 3 4 5 6 7", ""},
-          {"minor", "Natural Minor (Aeolian)", "1 2 b3 4 5 b6 b7", ""},
-          {"majpent", "Major Pentatonic", "1 2 3 5 6", ""},
-          {"minpent", "Minor Pentatonic", "1 b3 4 5 b7", ""},
+        {"Essentials",
+         {{"minpent", "Minor Pentatonic", "1 b3 4 5 b7", ""},
           {"blues", "Blues", "1 b3 4 b5 5 b7", "minpent"},
+          {"majpent", "Major Pentatonic", "1 2 3 5 6", ""},
           {"majblues", "Major Blues", "1 2 b3 3 5 6", "majpent"},
+          {"minor", "Natural Minor (Aeolian)", "1 2 b3 4 5 b6 b7", ""},
+          {"major", "Major (Ionian)", "1 2 3 4 5 6 7", ""},
           {"harmin", "Harmonic Minor", "1 2 b3 4 5 b6 7", ""},
           {"melmin", "Melodic Minor", "1 2 b3 4 5 6 7", ""}}},
         {"Modes",
@@ -120,11 +120,19 @@ struct ProgressionRow
 const std::vector<ProgressionRow>& ProgressionRows()
 {
     static const std::vector<ProgressionRow> rows = {
-        {"pop", "Pop", "I V vi IV"},
-        {"sadpop", "Sad pop", "vi IV I V"},
-        {"fifties", "'50s", "I vi IV V"},
-        {"threechord", "Three-chord rock", "I IV V IV"},
-        {"classicrock", "Classic rock", "I bVII IV I"},
+        {"pop", "Axis", "I V vi IV"},
+        {"sadpop", "Axis from the vi", "vi IV I V"},
+        {"epicminor", "Axis in minor", "i bVI bIII bVII"},
+        {"fifties", "Doo-wop", "I vi IV V"},
+        {"canon", "Pachelbel's Canon", "I V vi iii IV I IV V"},
+        {"threechord", "Garage rock", "I IV V IV"},
+        {"classicrock", "Mixolydian loop", "I bVII IV"},
+        {"minorrock", "Modal rock", "i bIII bVII IV"},
+        {"dorianvamp", "Dorian vamp", "i7 IV7"},
+        {"andalusian", "Andalusian cadence", "i bVII bVI V"},
+        {"minor", "Minor cadence", "i iv V i"},
+        {"metal", "Tritone riff", "I5 bV5 I5 bIII5"},
+        {"phrygianmetal", "Phrygian climb", "I5 bII5 bIII5 bII5"},
         {"blues12", "12-bar blues", "I7 I7 I7 I7 IV7 IV7 I7 I7 V7 IV7 I7 V7"},
         {"quickchange", "12-bar blues, quick change", "I7 IV7 I7 I7 IV7 IV7 I7 I7 V7 IV7 I7 V7"},
         {"minblues", "Minor blues", "i7 i7 i7 i7 iv7 iv7 i7 i7 bVI7 V7 i7 V7"},
@@ -132,15 +140,7 @@ const std::vector<ProgressionRow>& ProgressionRows()
         {"minortwofiveone", "Minor ii V i",
          "ii\xC3\xB8"
          "7 V7 i7 i7"},
-        {"turnaround", "Turnaround", "Imaj7 vi7 ii7 V7"},
-        {"canon", "Canon", "I V vi iii IV I IV V"},
-        {"minorrock", "Minor rock", "i bVII bVI bVII"},
-        {"epicminor", "Epic minor", "i bVI bIII bVII"},
-        {"andalusian", "Andalusian", "i bVII bVI V"},
-        {"minor", "Minor", "i iv v i"},
-        {"dorianvamp", "Dorian vamp", "i7 IV7"},
-        {"metal", "Metal power chords", "I5 bVI5 bVII5 I5"},
-        {"phrygianmetal", "Phrygian riff", "I5 bII5 I5 bVII5"}};
+        {"turnaround", "Turnaround", "Imaj7 vi7 ii7 V7"}};
     return rows;
 }
 } // namespace

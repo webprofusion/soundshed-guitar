@@ -293,7 +293,7 @@ function bindEditor(): void {
 
     if (builtIn) {
       // A built-in is never changed: editing it makes the player a copy.
-      draft = { id: null, name: `${builtIn.name} (mine)`, chords: numeralTokens(builtIn.numerals) };
+      draft = { id: null, name: `Copy of ${builtIn.name}`, chords: numeralTokens(builtIn.numerals) };
     } else if (own) {
       draft = { id: own.id, name: own.name, chords: [...own.chords] };
     } else {
@@ -612,7 +612,7 @@ function renderView(): void {
   if (neck) {
     neck.innerHTML =
       model.mode === "chord" && (model.shapes?.length ?? 0) === 0
-        ? `${renderNeckSvg(model, { labels: state.labels, leftHanded: state.leftHanded })}<p class="sg-note">No playable shape in this tuning: every chord tone is shown.</p>`
+        ? `${renderNeckSvg(model, { labels: state.labels, leftHanded: state.leftHanded })}<p class="sg-note">No shape fits this tuning, so the neck marks all the chord's notes.</p>`
         : renderNeckSvg(model, { labels: state.labels, leftHanded: state.leftHanded });
   }
 

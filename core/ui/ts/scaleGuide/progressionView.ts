@@ -27,10 +27,10 @@ export function progressionOptions(catalog: ScaleGuideCatalog | null, mine: read
   );
   const own = mine.map((p) => `<option value="u:${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`);
   return [
-    `<option value="">Single chord</option>`,
+    `<option value="">One chord</option>`,
     builtIn.length ? `<optgroup label="Progressions">${builtIn.join("")}</optgroup>` : "",
-    own.length ? `<optgroup label="My progressions">${own.join("")}</optgroup>` : "",
-    `<option value="${NEW_PROGRESSION}">+ New progression…</option>`,
+    own.length ? `<optgroup label="Saved progressions">${own.join("")}</optgroup>` : "",
+    `<option value="${NEW_PROGRESSION}">+ Write a progression…</option>`,
   ].join("");
 }
 

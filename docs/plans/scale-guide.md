@@ -57,8 +57,8 @@ One neck view, two modes, sharing the key and tuning.
 **Both**
 - NOTES / INTERVALS / DEGREES / none labels; left-handed (mirrored) view; fret range (0-12,
   0-24, or follow the chosen position); capo (shifts the nut, labels stay concert pitch).
-- LISTEN (phase 4): the note being played lights up, green when it's in the scale; in Chords
-  mode, a clean strum of the chord moves a progression on.
+- LISTEN (phase 4): the neck marks each note you hit, coloured by whether it fits the scale; in
+  Chords mode, strumming the current chord steps the progression.
 
 Out of scope: backing tracks (Jam already has search, favourites and the floating player; the
 guide can link to it), tab/notation, a chord-name finder from tapped notes (a later idea).

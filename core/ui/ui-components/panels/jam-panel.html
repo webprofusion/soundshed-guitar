@@ -78,15 +78,15 @@
                         <span class="sg-segmented" id="sg-positions" role="group" aria-labelledby="sg-position-label"></span>
                       </span>
                       <label class="sg-check"><input type="checkbox" id="sg-left-handed" /> Left-handed</label>
-                      <button type="button" class="sg-listen" id="sg-listen" aria-pressed="false" title="Play: the note lights up on the neck, or a clean chord moves a progression on">Listen</button>
+                      <button type="button" class="sg-listen" id="sg-listen" aria-pressed="false" title="Hears your guitar: marks each note you hit, and steps through a progression as you strum it">Listen</button>
                     </div>
                     <div class="sg-controls-row sg-controls-steps" id="sg-steps-row" hidden>
                       <span class="sg-label" id="sg-steps-label">Steps</span>
                       <span class="sg-steps" id="sg-steps" role="group" aria-labelledby="sg-steps-label"></span>
                       <span class="sg-step-buttons">
-                        <button type="button" class="sg-button sg-button-icon" data-sg-step="prev" title="Previous chord (←)" aria-label="Previous chord">◀</button>
-                        <button type="button" class="sg-button sg-button-icon" data-sg-step="next" title="Next chord (→)" aria-label="Next chord">▶</button>
-                        <button type="button" class="sg-button sg-button-icon" data-sg-step="first" title="Back to the first chord" aria-label="Back to the first chord">↺</button>
+                        <button type="button" class="sg-button sg-button-icon" data-sg-step="prev" title="Back one chord (←)" aria-label="Back one chord">◀</button>
+                        <button type="button" class="sg-button sg-button-icon" data-sg-step="next" title="Forward one chord (→)" aria-label="Forward one chord">▶</button>
+                        <button type="button" class="sg-button sg-button-icon" data-sg-step="first" title="Restart from the top" aria-label="Restart from the top">↺</button>
                       </span>
                       <span class="sg-round" id="sg-round" hidden></span>
                     </div>
@@ -130,8 +130,8 @@
                       <div class="sg-info" id="sg-info"></div>
                       <div class="sg-match" id="sg-match" hidden>
                         <span class="sg-meter" aria-hidden="true"><span class="sg-meter-fill" id="sg-meter-fill"></span><span class="sg-meter-threshold" id="sg-meter-threshold"></span></span>
-                        <span class="sg-match-text" id="sg-match-text" aria-live="polite">Play the chord</span>
-                        <span class="sg-segmented sg-segmented-small" role="group" aria-label="How clean a chord must ring">
+                        <span class="sg-match-text" id="sg-match-text" aria-live="polite">Waiting for a strum</span>
+                        <span class="sg-segmented sg-segmented-small" role="group" aria-label="Match strictness">
                           <button type="button" class="sg-segment" data-sg-match="easy">Easy</button>
                           <button type="button" class="sg-segment" data-sg-match="normal">Normal</button>
                           <button type="button" class="sg-segment" data-sg-match="strict">Strict</button>

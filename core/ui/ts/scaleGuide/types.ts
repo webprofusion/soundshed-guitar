@@ -100,6 +100,6 @@ export interface ScaleGuideSettings {
   leftHanded: boolean;
   /** LISTEN: light the note played (Scales) or step on a clean chord (Chords). */
   listen: boolean;
-  /** How clean a chord must ring to count. */
+  /** How closely a strum has to match its chord. */
   match: "easy" | "normal" | "strict";
 }

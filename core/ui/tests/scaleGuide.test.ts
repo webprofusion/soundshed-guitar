@@ -364,7 +364,7 @@ describe("scale guide panel", () => {
     (document.querySelector('[data-sg-mode="chord"]') as HTMLElement).click();
     choose("sg-progression", "b:classicrock");
     (document.getElementById("sg-progression-edit") as HTMLElement).click();
-    expect((document.getElementById("sg-editor-name") as HTMLInputElement).value).toBe("Classic rock (mine)");
+    expect((document.getElementById("sg-editor-name") as HTMLInputElement).value).toBe("Copy of Classic rock");
     expect(lastViewRequest().request).toMatchObject({ progressionChords: ["I", "bVII", "IV", "I"] });
     expect(document.getElementById("sg-editor-delete")?.hidden).toBe(true);
   });
@@ -385,14 +385,14 @@ describe("scale guide panel", () => {
     expect(onScaleGuideReading(reading)).toBe(true);
     onScaleGuideReading(reading);
     expect(document.querySelectorAll("#sg-neck .sg-dot.sg-hit").length).toBeGreaterThan(0);
-    expect(document.getElementById("sg-live")?.textContent).toContain("in the scale");
+    expect(document.getElementById("sg-live")?.textContent).toContain("of the scale");
 
     // A note with no dot (A4, not in C E G) gets a ring instead.
     const offScale = { type: "tunerUpdate", detected: true, noteName: "A", octave: 4, levelDb: -20 };
     onScaleGuideReading(offScale);
     onScaleGuideReading(offScale);
     expect(document.querySelectorAll("#sg-neck .sg-live-layer .sg-miss").length).toBeGreaterThan(0);
-    expect(document.getElementById("sg-live")?.textContent).toContain("not in the");
+    expect(document.getElementById("sg-live")?.textContent).toContain("outside the");
 
     (document.querySelector('[data-sg-mode="chord"]') as HTMLElement).click();
     expect(listens().at(-1)).toMatchObject({ enabled: true, chroma: true });

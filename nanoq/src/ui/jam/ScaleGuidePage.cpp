@@ -261,7 +261,7 @@ Ptr Shell::BuildScaleGuide(float width)
     }
     else
     {
-        std::string playing = "Single chord";
+        std::string playing = "One chord";
 
         if (settings.progression.rfind("b:", 0) == 0)
         {
@@ -290,7 +290,7 @@ Ptr Shell::BuildScaleGuide(float width)
                 return [this, value] { ChangeScaleGuide([value](sg::Settings& s) { s.progression = value; }); };
             };
             std::vector<MenuItem> items;
-            items.push_back({"Single chord", current.empty(), false, choose("")});
+            items.push_back({"One chord", current.empty(), false, choose("")});
             items.push_back({"PROGRESSIONS", false, true, nullptr});
 
             for (const auto& p : Catalog()["progressions"])
@@ -312,7 +312,7 @@ Ptr Shell::BuildScaleGuide(float width)
 
             if (!mine.empty())
             {
-                items.push_back({"MY PROGRESSIONS", false, true, nullptr});
+                items.push_back({"SAVED PROGRESSIONS", false, true, nullptr});
 
                 for (const auto& p : mine)
                 {
@@ -491,10 +491,10 @@ Ptr Shell::BuildScaleGuide(float width)
             {Middle(Label(mTheme, "Steps")), HGap(8),
              // A long progression scrolls its steps only when they would not fit beside the buttons.
              Middle(static_cast<float>(steps.size()) * 44.0f > width - 300.0f ? HScroll(stepper) : Ptr(stepper)),
-             HGap(8), Middle(button("\xE2\x97\x80", "Previous chord", [this] { ScaleGuideStep(mScaleGuideStep - 1); })),
-             HGap(4), Middle(button("\xE2\x96\xB6", "Next chord", [this] { ScaleGuideStep(mScaleGuideStep + 1); })),
+             HGap(8), Middle(button("\xE2\x97\x80", "Back one chord", [this] { ScaleGuideStep(mScaleGuideStep - 1); })),
+             HGap(4), Middle(button("\xE2\x96\xB6", "Forward one chord", [this] { ScaleGuideStep(mScaleGuideStep + 1); })),
              HGap(4),
-             Middle(button("\xE2\x86\xBA", "Back to the first chord",
+             Middle(button("\xE2\x86\xBA", "Restart from the top",
                            [this] {
                                mScaleGuideRound = 1;
                                ScaleGuideStep(0);
@@ -726,8 +726,8 @@ void Shell::SyncScaleGuideListen()
         const auto tone =
             std::find_if(tones.begin(), tones.end(), [pc](const auto& t) { return t.value("pitchClass", -1) == pc; });
         setReadout(tone != tones.end()
-                       ? tone->value("name", "") + "  " + tone->value("interval", "") + " \xC2\xB7 in the scale"
-                       : tuner.noteName.substr(0, tuner.noteName.find('/')) + "  not in the scale");
+                       ? tone->value("name", "") + "  " + tone->value("interval", "") + " \xC2\xB7 of the scale"
+                       : tuner.noteName.substr(0, tuner.noteName.find('/')) + "  outside the scale");
         return;
     }
 
