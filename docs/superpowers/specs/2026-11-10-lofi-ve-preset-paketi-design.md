@@ -113,7 +113,7 @@ Her adım ayrı commit'lerdir.
 
 ## Ön koşul
 
-Fork hazır: `justsomeone-e/soundshed-guitar`. Bu oturumun fork'a yazabilmesi için Claude GitHub uygulamasının fork'a kurulması gerekir. Ürün adı kullanıcı tarafından seçilir. Bu doküman fork'a `docs/superpowers/specs/` altına taşınıp commit'lenir.
+Fork hazır: `justsomeone-e/soundshed-guitar`. Bu oturumun fork'a yazabilmesi için Claude GitHub uygulamasının fork'a kurulması gerekir. Ürün adı: **Sepia** (üretici adı uygulama planında belirlenir). Bu doküman fork'a `docs/superpowers/specs/` altına taşınıp commit'lenir.
 
 ## Riskler
 
