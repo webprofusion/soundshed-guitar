@@ -364,6 +364,8 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kDistortion },
   { type: EffectGuids.kMultibandDistortion },
   { type: EffectGuids.kFuzz },
+  { type: EffectGuids.kTapeSaturation },
+  { type: EffectGuids.kBitcrusher },
   // Amp
   { type: EffectGuids.kAmpBuiltin },
   { type: EffectGuids.kAmpNamOptimized },

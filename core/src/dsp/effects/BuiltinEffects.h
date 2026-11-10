@@ -15,6 +15,7 @@
 #include "dsp/effects/GraphicEQEffect.h"
 #include "dsp/effects/DelayEffect.h"
 #include "dsp/effects/TapeDelayEffect.h"
+#include "dsp/effects/TapeSaturationEffect.h"
 #include "dsp/effects/AnalogDelayEffect.h"
 #include "dsp/effects/DoublerEffect.h"
 #include "dsp/effects/HarmonizerEffect.h"
@@ -29,6 +30,7 @@
 #include "dsp/effects/CompressorEffect.h"
 #include "dsp/effects/OverdriveEffect.h"
 #include "dsp/effects/DistortionEffect.h"
+#include "dsp/effects/BitcrusherEffect.h"
 #include "dsp/effects/FuzzEffect.h"
 #include "dsp/effects/BuiltinAmpEffect.h"
 #include "dsp/effects/ChorusEffect.h"
@@ -112,6 +114,8 @@ inline void RegisterAllEffects()
     RegisterDistortionEffect();
     RegisterMultibandDistortionEffect();
     RegisterFuzzEffect();
+    RegisterTapeSaturationEffect();
+    RegisterBitcrusherEffect();
 
     // EQ
     RegisterParametricEQEffect();

@@ -173,6 +173,14 @@
       "guid": "3a38b19c-1d97-4989-b5bb-12bcc59d1e6b",
       "icon": "flame"
     },
+    "kTapeSaturation": {
+      "guid": "7d0c1f52-6b1e-4c0a-9a3f-5e2b8c4d9f10",
+      "icon": "flame"
+    },
+    "kBitcrusher": {
+      "guid": "b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45",
+      "icon": "flame"
+    },
     "kAmpBuiltin": {
       "guid": "1460a632-6690-4fef-ac6d-6432e3b983f8",
       "icon": "amp"

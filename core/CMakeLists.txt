@@ -708,7 +708,9 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/effects/DriveLegacyMigration.h
     src/dsp/effects/OverdriveEffect.h
     src/dsp/effects/DistortionEffect.h
+    src/dsp/effects/BitcrusherEffect.h
     src/dsp/effects/FuzzEffect.h
+    src/dsp/effects/TapeSaturationEffect.h
     src/dsp/effects/BuiltinAmpEffect.h
     src/dsp/effects/BuiltinAmpOversampling.h
     src/dsp/effects/BuiltinAmpFilters.h

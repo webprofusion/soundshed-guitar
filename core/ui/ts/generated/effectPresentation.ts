@@ -128,6 +128,8 @@ export const EFFECTS: Readonly<Record<string, EffectPresentation>> = {
   [EffectGuids.kDistortion]: { icon: "flame" },
   [EffectGuids.kMultibandDistortion]: { icon: "flame" },
   [EffectGuids.kFuzz]: { icon: "flame" },
+  [EffectGuids.kTapeSaturation]: { icon: "flame" },
+  [EffectGuids.kBitcrusher]: { icon: "flame" },
   [EffectGuids.kAmpBuiltin]: { icon: "amp" },
   [EffectGuids.kAmpNamOptimized]: { icon: "amp" },
   [EffectGuids.kFxNam]: { icon: "pedal", equipmentImage: "images/equipment/pedals/colourful-pedal2.png" },

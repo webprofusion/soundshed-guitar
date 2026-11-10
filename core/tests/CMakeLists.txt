@@ -140,6 +140,10 @@ set(TEST_SOURCES
     RiffCaptureNoticeTests.cpp
     RiffRecorderTests.cpp
     RingModEffectTests.cpp
+    TapeSaturationEffectTests.cpp
+    BitcrusherEffectTests.cpp
+    SepiaEffectCatalog.cpp
+    SepiaFactoryPackTests.cpp
     DispersalEffectTests.cpp
     EffectEdgeCaseSweepTests.cpp
     PitchTrackingEqEffectTests.cpp
