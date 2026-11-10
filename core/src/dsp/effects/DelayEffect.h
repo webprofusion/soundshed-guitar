@@ -3,6 +3,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
 #include "dsp/effects/DelayLineSupport.h"
 #include "dsp/effects/FactoryPresetSupport.h"
 #include "dsp/effects/TempoSync.h"
@@ -132,8 +133,10 @@ class DelayEffect : public EffectProcessor
             const double sliceL = std::max(kMinReverseSlice, delaySamples);
             const double sliceR = std::max(kMinReverseSlice, delaySamples + spreadSamples);
 
-            const float inL = inputs[0] ? inputs[0][i] : 0.0f;
-            const float inR = hasRightInput ? inputs[1][i] : inL;
+            // Scrubbed: a NaN or infinity written into the line would ring round the feedback
+            // for good, and every repeat after it would come out non-finite.
+            const float inL = inputs[0] && IsFinite(inputs[0][i]) ? inputs[0][i] : 0.0f;
+            const float inR = hasRightInput ? (IsFinite(inputs[1][i]) ? inputs[1][i] : 0.0f) : inL;
 
             // Ping-pong feeds the lines from mid and side: the mid goes in leaning left (0.8 to
             // 0.2) so the repeats have something to bounce, and the side keeps its place. With

@@ -141,6 +141,7 @@ set(TEST_SOURCES
     RiffRecorderTests.cpp
     RingModEffectTests.cpp
     DispersalEffectTests.cpp
+    EffectEdgeCaseSweepTests.cpp
     PitchTrackingEqEffectTests.cpp
     RotaryVibeEffectTests.cpp
     NamResamplerLatencyTests.cpp

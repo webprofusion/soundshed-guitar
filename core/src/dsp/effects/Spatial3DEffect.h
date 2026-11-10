@@ -3,6 +3,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
 #include "dsp/effects/TempoSync.h"
 
 #include <algorithm>
@@ -426,8 +427,10 @@ class Spatial3DEffect : public EffectProcessor
             for (int i = 0; i < len; ++i)
             {
                 const int n = offset + i;
-                const float inL = (inputs && inputs[0]) ? inputs[0][n] : 0.0f;
-                const float inR = (inputs && inputs[1]) ? inputs[1][n] : inL;
+                // Scrubbed: a NaN or infinity reaching the room's feedback paths would
+                // circulate for good, and every sample after it would come out non-finite.
+                const float inL = (inputs && inputs[0] && IsFinite(inputs[0][n])) ? inputs[0][n] : 0.0f;
+                const float inR = (inputs && inputs[1]) ? (IsFinite(inputs[1][n]) ? inputs[1][n] : 0.0f) : inL;
 
                 // The positioner treats the input as a single point source.
                 const float mono = 0.5f * (inL + inR);

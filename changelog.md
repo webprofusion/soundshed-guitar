@@ -24,6 +24,7 @@ Every change of branch crossfades over Crossfade (10 ms to start with). Copy, wh
 * Many updates to the custom layout editor enabling better custom layout designs
 * Riff capture records on the new looper's recorder. An armed take now keeps the 10 ms before your first note, so the pick attack isn't cut, and waits for a note louder than your pickup's hum instead of a fixed level that a single coil's hum could set off. Your riff library and saved takes are unchanged.
 * A split inside a branch of another split now shows in full in the signal chain: the inner split's branches, its mixer and everything after it on that branch. Before, the branch stopped at the inner splitter, so the effects past it couldn't be seen or edited. Add a Splitter on any connection in a branch to nest one, and remove it with the × on its mixer as usual. Soundshed Nano Q draws them too.
+* The Chorus, Phaser, Digital Delay and Spatial 3D effects no longer go silent until you reload the preset when an effect before them glitches and sends one invalid sample. They now ignore it and carry on. Nothing else about how they sound has changed.
 
 ## 1.7.3 (Unreleased)
 * **macOS**: choosing a template from **New Preset** now creates the preset. Before, the menu closed as you clicked and nothing happened.

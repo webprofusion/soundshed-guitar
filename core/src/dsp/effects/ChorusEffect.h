@@ -3,6 +3,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
 #include "dsp/effects/ModulationPresets.h"
 #include "dsp/effects/TempoSync.h"
 #include <atomic>
@@ -77,8 +78,10 @@ class ChorusEffect : public EffectProcessor
 
         for (int i = 0; i < numSamples; ++i)
         {
-            const float inL = inputs[0] ? inputs[0][i] : 0.0f;
-            const float inR = inputs[1] ? inputs[1][i] : 0.0f;
+            // Scrubbed: a NaN or infinity let into the feedback loop would circulate for good,
+            // and every sample after it would come out non-finite.
+            const float inL = inputs[0] && IsFinite(inputs[0][i]) ? inputs[0][i] : 0.0f;
+            const float inR = inputs[1] && IsFinite(inputs[1][i]) ? inputs[1][i] : 0.0f;
 
             const float lfoL = static_cast<float>(std::sin(phase));
             const float lfoR = static_cast<float>(std::sin(phase + kHalfPi));

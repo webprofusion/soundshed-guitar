@@ -3,6 +3,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
 #include "dsp/effects/TempoSync.h"
 #include <atomic>
 #include <algorithm>
@@ -74,8 +75,10 @@ class PhaserEffect : public EffectProcessor
 
         for (int i = 0; i < numSamples; ++i)
         {
-            const float inL = inputs[0] ? inputs[0][i] : 0.0f;
-            const float inR = inputs[1] ? inputs[1][i] : 0.0f;
+            // Scrubbed: a NaN or infinity let into the feedback loop would circulate for good,
+            // and every sample after it would come out non-finite.
+            const float inL = inputs[0] && IsFinite(inputs[0][i]) ? inputs[0][i] : 0.0f;
+            const float inR = inputs[1] && IsFinite(inputs[1][i]) ? inputs[1][i] : 0.0f;
 
             const float lfo = static_cast<float>(0.5 * (1.0 + std::sin(mPhase)));
             const float freq = std::clamp(center + range * lfo, 200.0f, 3500.0f);
