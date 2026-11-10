@@ -22,14 +22,13 @@
    ]
   },
   {
-   "name": "Slow Swell Sky", "tags": ["ambient", "swell"],
+   "name": "Open Sky Pad", "tags": ["ambient", "pad"],
    "chain": [
-    {"type": "dynamics_gate", "preset": "slow-swell"},
     {"type": "compressor_opto", "preset": "clean-sustain"},
     {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.45, "bright": 1}},
     {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
-    {"type": "delay_digital", "preset": "ambient-wash", "params": {"mix": 0.35}},
-    {"type": "reverb_ambient", "preset": "infinite-wash", "params": {"mix": 0.45}}
+    {"type": "delay_digital", "preset": "ambient-wash", "params": {"mix": 0.28}},
+    {"type": "reverb_ambient", "preset": "wide-bloom", "params": {"mix": 0.4}}
    ]
   },
   {
@@ -53,10 +52,10 @@
   {
    "name": "Fuzz Blanket", "tags": ["shoegaze", "fuzz"],
    "chain": [
-    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -50}},
-    {"type": "fuzz", "params": {"model": 4, "drive": 0.8, "tone": 0.55, "bass": 0.6}},
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -60}},
+    {"type": "fuzz", "params": {"model": 2, "drive": 0.8, "tone": 0.65, "bass": 0.55}},
     {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.55, "bass": 0.45}},
-    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.45}},
     {"type": "flanger", "preset": "classic-flanger", "params": {"mix": 0.25}},
     {"type": "reverb_ambient", "preset": "dark-swell", "params": {"mix": 0.4}}
    ]
@@ -75,9 +74,9 @@
    "name": "Deep Space Drone", "tags": ["ambient", "octave"],
    "chain": [
     {"type": "compressor_opto", "preset": "slow-bloom"},
-    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.48, "bass": 0.6}},
-    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}},
-    {"type": "octave", "params": {"octaveUp": 0.0, "octaveDown": 0.5, "mix": 0.45}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.48, "bass": 0.5, "treble": 0.58}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 0}},
+    {"type": "octave", "params": {"octaveUp": 0.0, "octaveDown": 0.4, "mix": 0.3}},
     {"type": "delay_analog", "preset": "runaway", "params": {"feedback": 0.7, "mix": 0.25}},
     {"type": "reverb_ambient", "preset": "deep-shimmer", "params": {"mix": 0.45}}
    ]

@@ -346,3 +346,6 @@ target_link_libraries(EffectPresetWorkflowTests PRIVATE guitarfx_miniz)
 
 # The default-settings audio snapshot tools/audio-ab compares between versions. Built, not registered.
 include(AudioSnapshot.cmake)
+
+# OfflineBrandingTests reads the brand macros themselves, which the core keeps private.
+target_include_directories(OfflineBrandingTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../config)
