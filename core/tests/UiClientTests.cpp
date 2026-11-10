@@ -624,7 +624,8 @@ void TestToneSharing()
     Expect(!refused.ok && refused.error == "Invalid code", "an error reads as the service's message");
     Expect(ParseResponse(409, "").error == "Request failed (409)", "a bodiless error reads as its status");
     Expect(!ParseResponse(200, R"({"ok":false})").ok, "ok:false is a failure whatever the status");
-    Expect(ParseResponse(0, "").error.find("connection") != std::string::npos, "no answer at all says so");
+    // Sepia has no online service: an unanswered request means exactly that, not a bad connection.
+    Expect(ParseResponse(0, "").error.find("not available") != std::string::npos, "no answer at all says so");
 
     // The featured page: presets and packs mixed.
     const auto home = ParseHome(nlohmann::json::parse(R"({"rows":[
