@@ -1,0 +1,121 @@
+{
+ "group": "Metal",
+ "presets": [
+  {
+   "name": "Tight Modern Rhythm", "tags": ["metal", "rhythm"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -48}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.15, "tone": 0.6, "level": 6}},
+    {"type": "amp_builtin", "preset": "tight-modern-rhythm"},
+    {"type": "cab_simple", "params": {"cabinet": 0}}
+   ]
+  },
+  {
+   "name": "Djent Machine", "tags": ["metal", "djent"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "staccato-chug", "params": {"threshold": -46}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.1, "tone": 0.65, "level": 7}},
+    {"type": "amp_builtin", "preset": "tight-djent"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4, "presence": 0.6}},
+    {"type": "eq_parametric", "preset": "tight-low-end"}
+   ]
+  },
+  {
+   "name": "Scooped Thrash", "tags": ["metal", "thrash"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -48}},
+    {"type": "amp_builtin", "preset": "scooped-thrash"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "mids": 0.4}}
+   ]
+  },
+  {
+   "name": "Old School Death", "tags": ["metal", "death"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -46}},
+    {"type": "distortion", "params": {"model": 3, "drive": 0.6, "tone": 0.55, "mid": -4, "level": 2}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.7, "middle": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 0, "bass": 0.55}}
+   ]
+  },
+  {
+   "name": "Vintage High Gain", "tags": ["metal", "classic"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -50}},
+    {"type": "amp_builtin", "preset": "vintage-high-gain"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "speakerDrive": 0.3}}
+   ]
+  },
+  {
+   "name": "Doom Monolith", "tags": ["metal", "doom"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -48}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.9, "tone": 0.35, "bass": 0.7}},
+    {"type": "amp_builtin", "preset": "vintage-high-gain", "params": {"gain": 0.6, "bass": 0.65, "treble": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "size": 0.8, "micType": 1}},
+    {"type": "reverb_room", "preset": "large-room", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Black Frost Tremolo", "tags": ["metal", "black"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -48}},
+    {"type": "amp_builtin", "preset": "scooped-thrash", "params": {"gain": 0.9, "treble": 0.7, "presence": 0.7, "bass": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "brightness": 0.7, "micPosition": 0.3}},
+    {"type": "reverb_chamber", "preset": "large-chamber", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Singing Metal Lead", "tags": ["metal", "lead"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -50}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.25, "tone": 0.55, "level": 5}},
+    {"type": "amp_builtin", "preset": "singing-lead"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.6}},
+    {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.24}},
+    {"type": "reverb_chamber", "preset": "echo-chamber", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Shred Legato", "tags": ["metal", "lead"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -50}},
+    {"type": "compressor_vca", "preset": "lead-sustain"},
+    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.9, "middle": 0.62, "treble": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1, "micPosition": 0.55}},
+    {"type": "delay_digital", "preset": "ping-pong", "params": {"mix": 0.18}},
+    {"type": "reverb_ambient", "preset": "lead-halo", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Metalcore Chug", "tags": ["metal", "core"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "staccato-chug", "params": {"threshold": -46}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.2, "tone": 0.7, "level": 6}},
+    {"type": "amp_builtin", "preset": "tight-modern-rhythm", "params": {"gain": 0.85, "middle": 0.6, "presence": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "presence": 0.6}},
+    {"type": "eq_parametric", "preset": "mud-cut"}
+   ]
+  },
+  {
+   "name": "Clean Before the Storm", "tags": ["metal", "clean"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "transparent-leveler"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.38, "bright": 1, "bass": 0.45, "treble": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 2}},
+    {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.25}},
+    {"type": "delay_digital", "preset": "dotted-eighth", "params": {"mix": 0.22}},
+    {"type": "reverb_ambient", "preset": "tight-ambience", "params": {"mix": 0.24}}
+   ]
+  },
+  {
+   "name": "Industrial Grind", "tags": ["metal", "industrial"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -46}},
+    {"type": "amp_builtin", "preset": "tight-modern-rhythm", "params": {"gain": 0.8, "middle": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.35}},
+    {"type": "bitcrusher", "preset": "subtle-grit", "params": {"bits": 9, "downsample": 3, "mix": 0.5}},
+    {"type": "flanger", "preset": "metallic-comb", "params": {"mix": 0.15}}
+   ]
+  }
+ ]
+}

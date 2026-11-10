@@ -1,0 +1,86 @@
+{
+ "group": "Shoegaze & Ambient",
+ "presets": [
+  {
+   "name": "Wall of Haze", "tags": ["shoegaze", "fuzz"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -52}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.75, "tone": 0.45}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.7, "middle": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}},
+    {"type": "reverb_ambient", "preset": "cloud", "params": {"mix": 0.42}},
+    {"type": "delay_digital", "preset": "reverse-wash", "params": {"mix": 0.22}}
+   ]
+  },
+  {
+   "name": "Glide Vibrato", "tags": ["shoegaze", "vibrato"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.74}},
+    {"type": "cab_simple", "params": {"cabinet": 2}},
+    {"type": "chorus", "preset": "vibrato", "params": {"rate": 1.4, "depth": 5, "mix": 0.7}},
+    {"type": "reverb_ambient", "preset": "wide-bloom", "params": {"mix": 0.36}}
+   ]
+  },
+  {
+   "name": "Slow Swell Sky", "tags": ["ambient", "swell"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "slow-swell"},
+    {"type": "compressor_opto", "preset": "clean-sustain"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.45, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
+    {"type": "delay_digital", "preset": "ambient-wash", "params": {"mix": 0.35}},
+    {"type": "reverb_ambient", "preset": "infinite-wash", "params": {"mix": 0.45}}
+   ]
+  },
+  {
+   "name": "Shimmer Cathedral", "tags": ["ambient", "shimmer"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "smooth-opto"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "treble": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 4, "micType": 2}},
+    {"type": "reverb_ambient", "preset": "shimmer", "params": {"mix": 0.4}}
+   ]
+  },
+  {
+   "name": "Reverse Tide", "tags": ["ambient", "reverse"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 3}},
+    {"type": "delay_digital", "preset": "reverse", "params": {"mix": 0.45}},
+    {"type": "reverb_chamber", "preset": "large-chamber", "params": {"mix": 0.3}}
+   ]
+  },
+  {
+   "name": "Fuzz Blanket", "tags": ["shoegaze", "fuzz"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -50}},
+    {"type": "fuzz", "params": {"model": 4, "drive": 0.8, "tone": 0.55, "bass": 0.6}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.55, "bass": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.6}},
+    {"type": "flanger", "preset": "classic-flanger", "params": {"mix": 0.25}},
+    {"type": "reverb_ambient", "preset": "dark-swell", "params": {"mix": 0.4}}
+   ]
+  },
+  {
+   "name": "Tape Halo", "tags": ["ambient", "tape"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"hiss": 0.15}},
+    {"type": "delay_tape", "preset": "three-head", "params": {"mix": 0.3}},
+    {"type": "reverb_ambient", "preset": "lead-halo", "params": {"mix": 0.34}}
+   ]
+  },
+  {
+   "name": "Deep Space Drone", "tags": ["ambient", "octave"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "slow-bloom"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.48, "bass": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}},
+    {"type": "octave", "params": {"octaveUp": 0.0, "octaveDown": 0.5, "mix": 0.45}},
+    {"type": "delay_analog", "preset": "runaway", "params": {"feedback": 0.7, "mix": 0.25}},
+    {"type": "reverb_ambient", "preset": "deep-shimmer", "params": {"mix": 0.45}}
+   ]
+  }
+ ]
+}

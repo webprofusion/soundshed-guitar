@@ -1,0 +1,99 @@
+{
+ "group": "Blues & Classic Rock",
+ "presets": [
+  {
+   "name": "Smoky Bar Blues", "tags": ["blues"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.72, "middle": 0.65}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "speakerDrive": 0.35}},
+    {"type": "reverb_spring", "preset": "amp-spring", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Tweed Howl", "tags": ["blues", "crunch"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.82, "bass": 0.4, "middle": 0.7, "powerDrive": 0.55, "sag": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 4, "speakerDrive": 0.5}},
+    {"type": "reverb_spring", "preset": "short-spring", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Mid Hump Lead", "tags": ["blues", "lead"],
+   "chain": [
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.45, "tone": 0.55, "level": 3}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 2}},
+    {"type": "delay_analog", "preset": "dm2", "params": {"mix": 0.14}},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Stack on Seven", "tags": ["rock", "crunch"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -58}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.9}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "speakerDrive": 0.4}}
+   ]
+  },
+  {
+   "name": "British Bite", "tags": ["rock", "crunch"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -58}},
+    {"type": "overdrive", "params": {"model": 6, "drive": 0.4, "tone": 0.6}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.78, "treble": 0.66, "presence": 0.66, "bass": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.35, "presence": 0.6}},
+    {"type": "reverb_room", "preset": "live-room", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Southern Slide", "tags": ["rock", "slide"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "clean-sustain"},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.8, "middle": 0.7, "treble": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1}},
+    {"type": "delay_tape", "preset": "slapback", "params": {"mix": 0.14}},
+    {"type": "reverb_spring", "preset": "dark-spring", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Arena Rhythm", "tags": ["rock"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -56}},
+    {"type": "amp_builtin", "preset": "vintage-high-gain", "params": {"gain": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 0}},
+    {"type": "delay_doubler", "params": {"time": 22, "mix": 0.25}},
+    {"type": "reverb_room", "preset": "large-room", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Vibe Machine", "tags": ["rock", "vibe"],
+   "chain": [
+    {"type": "fuzz", "params": {"model": 0, "drive": 0.55, "tone": 0.5, "level": 2}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}},
+    {"type": "vibe", "preset": "classic-vibe"},
+    {"type": "reverb_room", "preset": "live-room", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Surf Splash", "tags": ["surf", "clean"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.52, "bright": 1, "treble": 0.65, "bass": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "brightness": 0.65}},
+    {"type": "tremolo", "preset": "surf", "params": {"depth": 0.45}},
+    {"type": "reverb_spring", "preset": "surf-spring"}
+   ]
+  },
+  {
+   "name": "Singing Sustain", "tags": ["rock", "lead"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -56}},
+    {"type": "compressor_vca", "preset": "lead-sustain"},
+    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.8}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.6}},
+    {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.22}},
+    {"type": "reverb_chamber", "preset": "echo-chamber", "params": {"mix": 0.14}}
+   ]
+  }
+ ]
+}

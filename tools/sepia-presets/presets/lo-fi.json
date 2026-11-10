@@ -1,0 +1,80 @@
+{
+ "group": "Lo-Fi",
+ "presets": [
+  {
+   "name": "Sunday Tape", "tags": ["tape", "clean"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.42, "treble": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 8}},
+    {"type": "tape_saturation", "preset": "cassette"},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Camcorder Summer", "tags": ["vhs", "chorus"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 9}},
+    {"type": "chorus", "preset": "warble", "params": {"mix": 0.4}},
+    {"type": "tape_saturation", "preset": "vhs"},
+    {"type": "reverb_spring", "preset": "dark-spring", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Kitchen Radio", "tags": ["radio"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 5}},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"drive": 0.5, "hiss": 0.3, "tone": 0.35}}
+   ]
+  },
+  {
+   "name": "Answering Machine", "tags": ["telephone"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "peak-catcher"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.55, "middle": 0.65}},
+    {"type": "cab_simple", "params": {"cabinet": 6}},
+    {"type": "tape_saturation", "preset": "worn-cassette", "params": {"wow": 0.4, "dropout": 0.3}}
+   ]
+  },
+  {
+   "name": "Boombox Demo", "tags": ["boombox", "crunch"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.72}},
+    {"type": "cab_simple", "params": {"cabinet": 7, "speakerDrive": 0.5}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"drive": 0.65}},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Eight Bit Garage", "tags": ["bitcrusher"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.8, "treble": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.4}},
+    {"type": "bitcrusher", "preset": "8-bit", "params": {"mix": 0.8}}
+   ]
+  },
+  {
+   "name": "Worn Out Mixtape", "tags": ["tape", "warble"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bass": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "chorus", "preset": "ce2", "params": {"mix": 0.2}},
+    {"type": "tape_saturation", "preset": "worn-cassette"},
+    {"type": "delay_tape", "preset": "worn-tape", "params": {"mix": 0.2}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.18}}
+   ]
+  },
+  {
+   "name": "Dusty Sampler", "tags": ["sampler", "clean"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "gentle-leveler"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "treble": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 9, "bass": 0.6}},
+    {"type": "bitcrusher", "preset": "sampler"},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"wow": 0.3, "hiss": 0.25, "tone": 0.4}},
+    {"type": "delay_digital", "preset": "lo-fi-echo", "params": {"mix": 0.18}}
+   ]
+  }
+ ]
+}

@@ -1,0 +1,119 @@
+{
+ "group": "Clean & Indie",
+ "presets": [
+  {
+   "name": "Warm Clean Room", "tags": ["clean"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "gentle-leveler"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.38, "bass": 0.55, "treble": 0.48, "presence": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Glass Chime", "tags": ["clean", "bright"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "funk-clean"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bright": 1, "treble": 0.62, "middle": 0.42, "presence": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2, "brightness": 0.6}},
+    {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.18}},
+    {"type": "reverb_chamber", "preset": "bright-chamber", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Slack Wobble", "tags": ["clean", "chorus"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "middle": 0.58, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micPosition": 0.65}},
+    {"type": "chorus", "preset": "vibrato", "params": {"rate": 0.9, "depth": 3.2, "mix": 0.55}},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"wow": 0.45, "flutter": 0.2}},
+    {"type": "reverb_spring", "preset": "amp-spring", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Bedroom Window", "tags": ["clean", "soft"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.34, "bass": 0.6, "treble": 0.4, "presence": 0.35}},
+    {"type": "cab_simple", "params": {"cabinet": 4, "micType": 1, "micDistance": 0.35}},
+    {"type": "chorus", "preset": "ce2", "params": {"mix": 0.25}},
+    {"type": "delay_analog", "preset": "short-analog", "params": {"mix": 0.14}},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.24}}
+   ]
+  },
+  {
+   "name": "Jangle Twelve", "tags": ["clean", "jangle"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "chicken-pickin"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.56, "bright": 1, "bass": 0.4, "middle": 0.45, "treble": 0.68, "presence": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "brightness": 0.7, "presence": 0.6}},
+    {"type": "delay_doubler", "params": {"time": 18, "mix": 0.3}},
+    {"type": "reverb_room", "preset": "bright-room", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Edge of Sunday", "tags": ["breakup"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.66}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "speakerDrive": 0.3}},
+    {"type": "reverb_spring", "preset": "short-spring", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Tremolo Porch", "tags": ["clean", "tremolo"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.48, "bass": 0.52, "treble": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 4}},
+    {"type": "tremolo", "preset": "brown-harmonic"},
+    {"type": "reverb_spring", "preset": "long-spring", "params": {"mix": 0.22}}
+   ]
+  },
+  {
+   "name": "Dream Arpeggio", "tags": ["clean", "delay"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "clean-sustain"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.42, "bright": 1, "treble": 0.58}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 2}},
+    {"type": "chorus", "preset": "lush-chorus", "params": {"mix": 0.3}},
+    {"type": "delay_digital", "preset": "dotted-eighth", "params": {"mix": 0.28}},
+    {"type": "reverb_ambient", "preset": "tight-ambience", "params": {"mix": 0.22}}
+   ]
+  },
+  {
+   "name": "Dry Studio Clean", "tags": ["clean", "dry"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "transparent-leveler"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "character": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.4}}
+   ]
+  },
+  {
+   "name": "Rotor Lounge", "tags": ["clean", "rotary"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "middle": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "rotary", "preset": "guitar-rotor"},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.18}}
+   ]
+  },
+  {
+   "name": "Phase Daydream", "tags": ["clean", "phaser"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.52, "treble": 0.52}},
+    {"type": "cab_simple", "params": {"cabinet": 2}},
+    {"type": "phaser", "params": {"rate": 0.25, "depth": 0.7, "feedback": 0.35, "mix": 0.45}},
+    {"type": "delay_tape", "preset": "slapback", "params": {"mix": 0.16}},
+    {"type": "reverb_room", "preset": "live-room", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Soft Focus Lead", "tags": ["lead", "soft"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "slow-bloom"},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.78, "treble": 0.45, "presence": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1}},
+    {"type": "delay_analog", "preset": "memory-man", "params": {"mix": 0.22}},
+    {"type": "reverb_chamber", "preset": "dark-chamber", "params": {"mix": 0.2}}
+   ]
+  }
+ ]
+}
