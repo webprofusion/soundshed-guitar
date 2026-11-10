@@ -16,13 +16,13 @@ set(PROJECT_NAME "SoundshedGuitar")
 #   set(PROJECT_NAME "MyPlugin_v${MAJOR_VERSION}")
 # Doing so enables major versions to show up in IDEs and DAWs as separate plugins
 # allowing you to change parameters and behavior without breaking existing user projects
-set(PRODUCT_NAME "Soundshed Guitar")
+set(PRODUCT_NAME "Sepia")
 
 # Change me! Used for the MacOS bundle name and Installers
-set(COMPANY_NAME "Soundshed")
+set(COMPANY_NAME "Sepia Audio Project")
 
 # Change me! Used for the MacOS bundle identifier (and signing)
-set(BUNDLE_ID "com.soundshed.guitar")
+set(BUNDLE_ID "org.sepia.guitar")
 
 # A phone or tablet: Android (android/, docs/android-build.md) or iOS and iPadOS
 # (ios/, docs/ios-build.md). The app owns the screen, there is one instance and no
@@ -54,7 +54,7 @@ if(LINUX AND GUITARFX_ENABLE_LV2)
     list(APPEND FORMATS LV2)
 endif()
 
-set(GUITARFX_LV2_URI "urn:soundshed:guitar" CACHE STRING "Stable LV2 URI for Soundshed Guitar")
+set(GUITARFX_LV2_URI "urn:sepia:guitar" CACHE STRING "Stable LV2 URI for Sepia")
 
 # Hosting third-party plugins needs a desktop plugin format on disk. Android has
 # none, so the format manager is compiled with no formats registered and the
@@ -388,12 +388,12 @@ juce_add_plugin("${PROJECT_NAME}"
     # Change me!
     # A four-character plugin id
     # First character MUST be uppercase for AU formats
-    PLUGIN_MANUFACTURER_CODE Shed
+    PLUGIN_MANUFACTURER_CODE SpAP
 
     # Change me!
     # A unique four-character plugin id
     # Note: this must have at least one upper-case character
-    PLUGIN_CODE SND1
+    PLUGIN_CODE SpFX
     LV2URI "${GUITARFX_LV2_URI}"
     FORMATS "${FORMATS}"
     VST3_AUTO_MANIFEST ${GUITARFX_VST3_AUTO_MANIFEST}
@@ -409,7 +409,7 @@ juce_add_plugin("${PROJECT_NAME}"
     # MIDI only to 'aumf', as it never could to 1.5.0. Changing this breaks saved projects.
     AU_MAIN_TYPE kAudioUnitType_Effect
     MICROPHONE_PERMISSION_ENABLED TRUE
-    MICROPHONE_PERMISSION_TEXT "Soundshed Guitar needs microphone access to record and process live audio input."
+    MICROPHONE_PERMISSION_TEXT "Sepia needs microphone access to record and process live audio input."
     ${GUITARFX_IOS_APP_OPTIONS}
 
     # The name of your final executable
@@ -428,7 +428,7 @@ if(APPLE AND TARGET ${PROJECT_NAME}_Standalone)
     get_target_property(_standalone_plist ${PROJECT_NAME}_Standalone MACOSX_BUNDLE_INFO_PLIST)
     execute_process(
         COMMAND /usr/bin/plutil -replace CFBundleURLTypes -xml
-            "<array><dict><key>CFBundleURLName</key><string>${BUNDLE_ID}</string><key>CFBundleURLSchemes</key><array><string>soundshed</string></array></dict></array>"
+            "<array><dict><key>CFBundleURLName</key><string>${BUNDLE_ID}</string><key>CFBundleURLSchemes</key><array><string>sepia</string></array></dict></array>"
             "${_standalone_plist}"
         RESULT_VARIABLE _plutil_result
         ERROR_VARIABLE _plutil_error)
@@ -544,7 +544,7 @@ target_compile_definitions(SharedCode
     VERSION="${CURRENT_VERSION}"
 
     # JucePlugin_Name is for some reason doesn't use the nicer PRODUCT_NAME
-    PRODUCT_NAME_WITHOUT_VERSION="Soundshed Guitar"
+    PRODUCT_NAME_WITHOUT_VERSION="Sepia"
 
     # Android or iOS: the window fills the screen, one instance, no launch curtain
     SOUNDSHED_MOBILE=${SSG_MOBILE_DEFINE}

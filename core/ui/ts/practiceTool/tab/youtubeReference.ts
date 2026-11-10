@@ -25,7 +25,7 @@ const YT_PLAYING = 1;
 const YT_BUFFERING = 3;
 
 export interface YouTubeReferenceOptions {
-  /** API base, e.g. https://api-guitar.soundshed.com/v1. */
+  /** API base, e.g. https://api.sepia.invalid/v1. */
   relayBase: string;
   startSec?: number;
   /** The video's title, once known. */

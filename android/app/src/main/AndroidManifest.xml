@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Outgoing HTTPS. The UI fetches from api-guitar.soundshed.com (tone
+      Outgoing HTTPS. The UI fetches from api.sepia.invalid (tone
       sharing), www.tone3000.com (model search) and www.googleapis.com
       (YouTube). Without this every request fails as "TypeError: Failed to
       fetch", which looks like a CORS or endpoint problem and is not.

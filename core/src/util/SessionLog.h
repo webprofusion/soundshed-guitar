@@ -15,7 +15,7 @@ namespace guitarfx::util
 /// and when the app is started by something that captures them and then stops reading, every
 /// write blocks once the pipe is full: that hung the Standalone mid preset switch. Lines from
 /// different threads never interleave. Not for the audio thread, as it opens a file. A line
-/// the profile will not take goes to <temp>/Soundshed Guitar/session-log.txt instead; one
+/// the profile will not take goes to <temp>/Sepia/session-log.txt instead; one
 /// that cannot be written there either is dropped. This never throws.
 void AppendSessionLog(const std::filesystem::path& settingsDirectory, std::string_view message);
 

@@ -52,7 +52,7 @@ void PluginController::OpenDocumentStore() const
     //
     // On macOS this is what triggers migrateDataOutOfSandboxContainerOnce(),
     // which copies a pre-sandbox-removal profile out of
-    // ~/Library/Containers/... into ~/Library/Soundshed Guitar. That copy is
+    // ~/Library/Containers/... into ~/Library/Sepia. That copy is
     // skipped if the destination already contains anything, and opening the
     // store creates <destination>/data/v1/ — so opening first would strand the
     // user's entire library in the container, silently and permanently.

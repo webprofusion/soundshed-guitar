@@ -3,12 +3,12 @@
 /**
  * EffectLayoutTypes.h - Custom effect layouts, as the native UI reads them.
  *
- * A layout is a picture of an effect designed in Soundshed Guitar's layout designer: a canvas of
+ * A layout is a picture of an effect designed in Sepia's layout designer: a canvas of
  * a fixed size with backgrounds, rectangles, text and the effect's controls placed on it in
  * design pixels from its top-left corner. The engine sends the whole library in
  * `layoutLibraryLoaded` and the list of images in `layoutImagesLoaded`; these are the fields the
  * web UI's renderer reads (core/ui/ts/layoutTypes.ts), parsed leniently by EffectLayouts.cpp.
- * Designing layouts stays in Soundshed Guitar; nothing here writes one.
+ * Designing layouts stays in Sepia; nothing here writes one.
  */
 
 #include <cstdint>

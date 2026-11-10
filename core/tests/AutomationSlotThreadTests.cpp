@@ -140,7 +140,7 @@ class OtherInstance
     explicit OtherInstance(const fs::path& sandbox)
     {
         std::string error;
-        mOpen = mStore.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error);
+        mOpen = mStore.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error);
 
         if (!mOpen)
         {

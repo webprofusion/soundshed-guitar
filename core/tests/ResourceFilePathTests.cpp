@@ -181,20 +181,20 @@ fs::path Sandbox(const std::string& name)
 #else
     setenv("HOME", root.string().c_str(), 1);
 #endif
-    // The tests read and write <root>/Soundshed Guitar, which is where APPDATA puts it on Windows;
+    // The tests read and write <root>/Sepia, which is where APPDATA puts it on Windows;
     // macOS would look under Library/, Linux under .config/.
-    guitarfx::FileSystem::SetPlatformRootOverride(root / "Soundshed Guitar");
+    guitarfx::FileSystem::SetPlatformRootOverride(root / "Sepia");
     return root;
 }
 
 fs::path ResourcesRoot(const fs::path& sandbox)
 {
-    return sandbox / "Soundshed Guitar" / "data" / "v1" / "resources";
+    return sandbox / "Sepia" / "data" / "v1" / "resources";
 }
 
 fs::path StorePath(const fs::path& sandbox)
 {
-    return sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db";
+    return sandbox / "Sepia" / "data" / "v1" / "soundshed.db";
 }
 
 /// Writes through the extended-length form, so a test can put a file past MAX_PATH.
@@ -670,12 +670,12 @@ void TestFactoryArchiveUnderLongProfile()
 {
     const auto bundled = Sandbox("factory-long");
     const auto packTail =
-        fs::path("Soundshed Guitar") / "data" / "v1" / "resources" / "content" / "factory-archives" / "Long-Pack";
+        fs::path("Sepia") / "data" / "v1" / "resources" / "content" / "factory-archives" / "Long-Pack";
     const std::size_t shortest = (bundled / "p" / packTail).native().size();
     const auto profile = bundled / std::string(shortest < 252 ? 253 - shortest : 1, 'p');
     const auto packDir = profile / packTail;
     _putenv_s("APPDATA", profile.string().c_str());
-    guitarfx::FileSystem::SetPlatformRootOverride(profile / "Soundshed Guitar");
+    guitarfx::FileSystem::SetPlatformRootOverride(profile / "Sepia");
 
     const std::string modelName = kHashA + "-Deep-Model.nam";
     const std::string irName = kHashB + "-Deep-Cab.wav";

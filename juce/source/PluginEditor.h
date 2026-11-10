@@ -29,7 +29,7 @@ class SinglePageBrowser : public juce::WebBrowserComponent
 };
 
 //==============================================================================
-/// The Soundshed Guitar editor: the WebView UI in core/ui. What every editor does regardless of
+/// The Sepia editor: the WebView UI in core/ui. What every editor does regardless of
 /// how it draws (idle tick, sizing, DPI, visibility) lives in SoundshedEditorBase.
 class PluginEditor : public soundshed::editor::SoundshedEditorBase
 {

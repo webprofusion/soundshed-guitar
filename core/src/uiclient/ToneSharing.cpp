@@ -199,7 +199,7 @@ Response ParseResponse(int status, const std::string& body, const std::string& s
 
     if (!response.ok && response.error.empty())
     {
-        response.error = status == 0 ? "Could not reach Soundshed. Check your connection."
+        response.error = status == 0 ? "Online services are not available in Sepia."
                                      : "Request failed (" + std::to_string(status) + ")";
     }
 

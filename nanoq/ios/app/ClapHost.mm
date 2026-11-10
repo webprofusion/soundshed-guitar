@@ -103,7 +103,7 @@ ClapHost::ClapHost()
     mHost.host_data = this;
     mHost.name = "Soundshed Nano Q (iOS)";
     mHost.vendor = "Soundshed";
-    mHost.url = "https://soundshed.com";
+    mHost.url = "https://github.com/justsomeone-e/soundshed-guitar";
     mHost.version = NANOQ_VERSION;
     mHost.get_extension = GetExtension;
     mHost.request_restart = RequestRestart;

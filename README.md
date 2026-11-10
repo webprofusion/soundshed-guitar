@@ -1,19 +1,39 @@
-# Soundshed Guitar
+# Sepia
 
-Soundshed Guitar is a guitar/bass effects app and plugin combining Neural Amp Modeler (NAM) with a modern UI. It targets VST3, AU, CLAP and AAX formats with an extensible signal graph architecture.
+Sepia is a free, open-source guitar amp simulator: plug a guitar into an audio interface, pick a
+preset, play. It runs as a standalone app and as a VST3 plugin on Windows and Linux.
 
-Downloads: https://guitar.soundshed.com
+It is a fork of [Soundshed Guitar](https://github.com/webprofusion/soundshed-guitar) by
+Webprofusion Pty Ltd, which does the heavy lifting: the audio engine, the Neural Amp Modeler
+integration, the built-in amp and cabinet models and over fifty effects. Sepia is not affiliated
+with or endorsed by that project. See [Copyright](#copyright).
 
-Requirements: x64 CPU with AVX2 support (Intel Haswell 2013+, AMD Excavator 2015+), or M1 onwards for macOS. Windows builds can drop to a lower SIMD baseline with `build_windows.bat --simd avx` (Intel Sandy Bridge 2011+, AMD Bulldozer 2011+, still fully vectorised) or `--simd sse2` (no AVX at all).
+## What Sepia adds
 
-![Screenshot](https://guitar.soundshed.com/img/site/amp.png)
+- **Lo-fi cabinets.** Five new Simple Cabinet voicings: AM Radio, Telephone, Boombox, Practice
+  Amp and VHS.
+- **Tape.** Cassette and video tape character without an echo: saturation, wow and flutter,
+  hiss, dropouts and a worn top end.
+- **Bitcrusher.** Fewer bits and a lower sample rate, aliasing left in.
+- **Sixty factory presets** from indie cleans and lo-fi to grunge and metal, level-matched,
+  built only from the built-in amp, cabinets and effects. Nothing to download.
+
+## What Sepia leaves out
+
+- **It is offline.** The upstream app's preset sharing, update check, tone search relay and
+  YouTube embed belong to the upstream project's own servers, which forks may not use. They
+  are switched off. Tone3000 browsing still works with your own Tone3000 key.
+- **The upstream factory pack** is not bundled: it is made of third-party amp captures.
+  You can still load your own NAM models and impulse responses.
+
+How the factory pack is built and measured: [tools/sepia-presets](tools/sepia-presets/README.md).
+What still needs a guitar and ears: [docs/sepia-testing.md](docs/sepia-testing.md).
 
 ## Features
 
 - Neural Amp Modeler DSP for amp/pedal captures, with optional global 2x–32x time-scaled oversampling
 - Flexible signal graph with arbitrary effect ordering and parallel paths
 - Preset management with category support and content-addressed resource deduplication
-- Remote preset search/download for community sharing
 - WebView UI (HTML/CSS/TypeScript)
 
 ## Documentation
@@ -163,7 +183,12 @@ AGPL-3.0. Third-party components retain their upstream licenses.
 
 ## Copyright
 
+The upstream project's notice, which Sepia follows:
+
 - Soundshed and Soundshed Guitar are copyright Webprofusion Pty Ltd via soundshed.com and permission to re-use the Soundshed/Soundshed Guitar brand is not granted.
 - All services/APIs used by the app are excusively for use by our own software unless permission to use has been granted in writing to your project.
+
+Accordingly Sepia ships under its own name and ids, and calls none of those services. The
+source is AGPL-3.0, as upstream's is; Sepia's changes are released under the same licence.
 - All content resources (NAM, IR etc) are copyright their respective creators. 
-- For DMCA requests etc contact guitar at soundshed.com.
+- For anything about Sepia, open an issue on this repository. Do not contact the upstream project about this fork.

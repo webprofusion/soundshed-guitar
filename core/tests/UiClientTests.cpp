@@ -530,12 +530,12 @@ void TestTone3000AndHttp()
     namespace t3 = tone3000;
     Expect(
         t3::Url(t3::TonesSearchPath("Super Reverb", "full-rig", "newest", "2", 3)) ==
-            "https://api-guitar.soundshed.com/v1/resourcesearch/tones/search?page=3&page_size=20&query=Super%20Reverb&gear=full-rig&sort=newest&architecture=2",
+            "https://api.sepia.invalid/v1/resourcesearch/tones/search?page=3&page_size=20&query=Super%20Reverb&gear=full-rig&sort=newest&architecture=2",
         "tone3000: a search path");
     Expect(t3::ModelsPath("87866", 1, "2") == "/models?tone_id=87866&page=1&page_size=100&architecture=2",
            "tone3000: a models path");
     Expect(t3::ThroughRelay("https://www.tone3000.com/api/v1/models/742072/download/x.nam") ==
-               "https://api-guitar.soundshed.com/v1/resourcesearch/models/742072/download/x.nam",
+               "https://api.sepia.invalid/v1/resourcesearch/models/742072/download/x.nam",
            "tone3000: a model download goes through the relay");
     Expect(t3::ThroughRelay("https://cdn.example.com/x.nam") == "https://cdn.example.com/x.nam",
            "tone3000: other URLs stay");
@@ -642,12 +642,12 @@ void TestToneSharing()
         Expect(preset.title == "Crunch" && !preset.IsPack(), "a preset card, title trimmed");
         Expect(preset.downloads == 1250 && FormatCount(preset.downloads) == "1.3K", "downloads, compact");
         Expect(preset.creatorHandle == "@ann_b", "the creator's handle gets its @");
-        Expect(preset.creatorAvatarUrl == "https://api-guitar.soundshed.com/v1/auth/avatar/a1",
+        Expect(preset.creatorAvatarUrl == "https://api.sepia.invalid/v1/auth/avatar/a1",
                "and the avatar a full URL");
         Expect(preset.tags == std::vector<std::string>{"crunch"}, "\"preset\" is not shown as a tag");
 
         const auto& pack = home[0].tones[1];
-        Expect(pack.IsPack() && pack.thumbnailUrl == "https://api-guitar.soundshed.com/v1/packs/p1/thumbnail",
+        Expect(pack.IsPack() && pack.thumbnailUrl == "https://api.sepia.invalid/v1/packs/p1/thumbnail",
                "a pack card, its thumbnail without a doubled /v1");
     }
     else
@@ -667,7 +667,7 @@ void TestToneSharing()
 
     Expect(ItemsPath(2, " high gain ", "high-gain") == "/items?page=2&pageSize=36&q=high%20gain&tag=high-gain",
            "the preset search path, encoded");
-    Expect(ShareLink(packs[0]) == "https://api-guitar.soundshed.com/share/pack/p2", "a pack's share link");
+    Expect(ShareLink(packs[0]) == "https://api.sepia.invalid/share/pack/p2", "a pack's share link");
     Expect(NormalizeHandle("@@x") == "", "a handle is at least two characters");
     Expect(FormatCount(999) == "999" && FormatCount(12'400) == "12K" && FormatCount(2'000'000) == "2M",
            "counts read as the web UI writes them");

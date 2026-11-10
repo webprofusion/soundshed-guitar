@@ -61,7 +61,7 @@ void AppendSessionLog(const std::filesystem::path& settingsDirectory, std::strin
         if (!output)
         {
             // A profile that refuses writes would otherwise lose the very line saying so.
-            const auto fallback = std::filesystem::temp_directory_path(ec) / "Soundshed Guitar" / "session-log.txt";
+            const auto fallback = std::filesystem::temp_directory_path(ec) / "Sepia" / "session-log.txt";
 
             if (!ec)
             {

@@ -19,7 +19,7 @@ namespace soundshed::android_audio
 #if defined(__ANDROID__)
 namespace
 {
-constexpr const char* kLogTag = "SoundshedGuitar";
+constexpr const char* kLogTag = "Sepia";
 constexpr const char* kPolicyProperty = "debug.soundshed.audio.cores";
 
 // The NDK's APerformanceHint_* functions arrived in API 33 and minSdk is 29, so they are looked

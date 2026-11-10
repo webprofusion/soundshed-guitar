@@ -40,7 +40,7 @@ class StoreReader
     explicit StoreReader(const fs::path& sandbox)
     {
         std::string error;
-        mOpen = mStore.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error);
+        mOpen = mStore.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error);
 
         if (!mOpen)
         {
@@ -174,9 +174,9 @@ void SetSettingsEnvRoot(const fs::path& root)
 #else
     setenv("HOME", root.string().c_str(), 1);
 #endif
-    // The tests write settings and presets at <root>/Soundshed Guitar, which is where APPDATA puts
+    // The tests write settings and presets at <root>/Sepia, which is where APPDATA puts
     // them on Windows; macOS would look under Library/, Linux under .config/.
-    guitarfx::FileSystem::SetPlatformRootOverride(root / "Soundshed Guitar");
+    guitarfx::FileSystem::SetPlatformRootOverride(root / "Sepia");
 }
 
 guitarfx::Preset BuildPreset(const std::string& id, const std::string& name)
@@ -389,7 +389,7 @@ bool TestRiffLibraryPathNormalization()
             takeFile << "riff";
         }
 
-        const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+        const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
         fs::create_directories(settingsPath.parent_path(), ec);
         {
             nlohmann::json appSettings = nlohmann::json::object();
@@ -1936,7 +1936,7 @@ bool TestLoadPresetRehydratesScrubbedHostedPluginState()
         fs::create_directories(sandbox, ec);
         SetSettingsEnvRoot(sandbox);
 
-        const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        const fs::path presetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
         fs::create_directories(presetDir, ec);
 
         constexpr const char* expectedPluginState = "expected-plugin-state";
@@ -2047,7 +2047,7 @@ bool TestLoadPresetRehydratesScrubbedHostedPluginStateFromActivePreset()
         fs::create_directories(sandbox, ec);
         SetSettingsEnvRoot(sandbox);
 
-        const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        const fs::path presetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
         fs::create_directories(presetDir, ec);
 
         constexpr const char* storedPluginState = "stored-plugin-state";
@@ -2675,7 +2675,7 @@ bool TestLoadAppSettingsAppliesUserInputCalibrationProfile()
     fs::create_directories(sandbox, ec);
     SetSettingsEnvRoot(sandbox);
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
@@ -2746,7 +2746,7 @@ bool TestLoadAppSettingsPrunesUnusedLegacyKeys()
     fs::create_directories(sandbox, ec);
     SetSettingsEnvRoot(sandbox);
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
@@ -2756,7 +2756,7 @@ bool TestLoadAppSettingsPrunesUnusedLegacyKeys()
         settings["parameters"] = nlohmann::json::array({0, 1, 2});
         settings["metronomeEnabled"] = false;
         settings["performancePads.open"] = false;
-        settings["toneSharing.apiBase"] = "https://api-guitar.soundshed.com/v1";
+        settings["toneSharing.apiBase"] = "https://api.sepia.invalid/v1";
         settings["ui.experimentalFeaturesEnabled"] = true;
         settings["audio.processing.namMonoOnly"] = false;
         settings["app.lastUpdateCheck"] = 1234;
@@ -2833,7 +2833,7 @@ bool TestUserInputCalibrationTrainingBypassesActiveProfileWithoutPersistingSelec
     fs::create_directories(sandbox, ec);
     SetSettingsEnvRoot(sandbox);
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
@@ -3196,7 +3196,7 @@ bool TestPresetArchiveSessionMode()
         fs::create_directories(sandbox, ec);
         SetSettingsEnvRoot(sandbox);
 
-        const fs::path userPresetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        const fs::path userPresetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
         fs::create_directories(userPresetDir, ec);
 
         const auto normalPreset = BuildPreset("saved-preset", "Saved Preset");
@@ -3209,7 +3209,7 @@ bool TestPresetArchiveSessionMode()
 
         nlohmann::json settings = nlohmann::json::object();
         settings["lastPresetId"] = "saved-preset";
-        const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+        const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
         fs::create_directories(settingsPath.parent_path(), ec);
         {
             std::ofstream output(settingsPath);
@@ -3434,7 +3434,7 @@ bool TestFactoryPresetArchiveStartupImport()
 
     nlohmann::json settings = nlohmann::json::object();
     settings["lastPresetId"] = "bundle__factory-archive-preset";
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         std::ofstream output(settingsPath);
@@ -3629,7 +3629,7 @@ bool TestStandaloneDeserializeStateIgnoresEmbeddedPresetSnapshot()
     fs::create_directories(sandbox, ec);
     SetSettingsEnvRoot(sandbox);
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
@@ -3639,7 +3639,7 @@ bool TestStandaloneDeserializeStateIgnoresEmbeddedPresetSnapshot()
         output << settings.dump(2);
     }
 
-    const fs::path userPresetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+    const fs::path userPresetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
     fs::create_directories(userPresetDir, ec);
 
     auto savedPreset = BuildPreset("saved-preset", "Saved Preset");
@@ -3751,7 +3751,7 @@ bool TestStandaloneStartupInputModeOverridesRestoredPreset()
     fs::create_directories(sandbox, ec);
     SetSettingsEnvRoot(sandbox);
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
@@ -3762,7 +3762,7 @@ bool TestStandaloneStartupInputModeOverridesRestoredPreset()
         output << settings.dump(2);
     }
 
-    const fs::path userPresetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+    const fs::path userPresetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
     fs::create_directories(userPresetDir, ec);
 
     auto savedPreset = BuildPassthroughPreset("saved-preset", "Saved Preset");
@@ -3801,7 +3801,7 @@ bool TestSharedSyncReloadKeepsStandaloneInputMode()
     fs::create_directories(sandbox, ec);
     SetSettingsEnvRoot(sandbox);
 
-    const fs::path settingsPath = sandbox / "Soundshed Guitar" / "data" / "v1" / "settings" / "app.json";
+    const fs::path settingsPath = sandbox / "Sepia" / "data" / "v1" / "settings" / "app.json";
     fs::create_directories(settingsPath.parent_path(), ec);
     {
         nlohmann::json settings = nlohmann::json::object();
@@ -4176,7 +4176,7 @@ bool TestSetlistCursorSwitchesPresetWithoutStackingMixer()
         fs::create_directories(sandbox, ec);
         SetSettingsEnvRoot(sandbox);
 
-        const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        const fs::path presetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
         fs::create_directories(presetDir, ec);
 
         for (const auto& [id, name] :
@@ -4294,7 +4294,7 @@ bool TestSetlistStepOntoPlayingPresetKeepsUnsavedEdits()
         fs::create_directories(sandbox, ec);
         SetSettingsEnvRoot(sandbox);
 
-        const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        const fs::path presetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
         fs::create_directories(presetDir, ec);
 
         for (const auto& [id, name] :
@@ -4437,7 +4437,7 @@ bool TestCompositePresetRoundTripsMixGain()
         fs::create_directories(sandbox, ec);
         SetSettingsEnvRoot(sandbox);
 
-        const fs::path presetDir = sandbox / "Soundshed Guitar" / "data" / "v1" / "presets" / "user";
+        const fs::path presetDir = sandbox / "Sepia" / "data" / "v1" / "presets" / "user";
         fs::create_directories(presetDir, ec);
 
         for (const auto& [id, name] :
@@ -4622,7 +4622,7 @@ bool TestLegacyMultiRigPresetsSurviveTheUpgrade()
         SetSettingsEnvRoot(sandbox);
 
         // The host's user data folder is the profile root, as it is in the app.
-        const fs::path profile = sandbox / "Soundshed Guitar";
+        const fs::path profile = sandbox / "Sepia";
         fs::create_directories(profile / "composite-presets", ec);
         std::ofstream(profile / "composite-presets" / "legacy-rig.composite.json") << legacyRig;
 

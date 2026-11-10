@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * NanoQUiEditor - Soundshed Guitar's editor drawn by Nano Q's native UI (nanoq/src/ui), not
+ * NanoQUiEditor - Sepia's editor drawn by Nano Q's native UI (nanoq/src/ui), not
  * the WebView. A spike: built only with -DSOUNDSHED_NANOQ_UI=ON (juce/cmake/NanoQUi.cmake), on
  * Windows.
  *

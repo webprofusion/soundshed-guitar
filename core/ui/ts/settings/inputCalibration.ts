@@ -646,7 +646,7 @@ export function refreshUserInputCalibrationView(): void {
       const currentPeak = Number.isFinite(currentPeakDbfs) ? ` Current raw peak: ${formatDbfsValue(currentPeakDbfs)}.` : "";
       userInputCalibrationSummary.textContent = `${activeProfile.name}. ${description}Applies ${formatSignedDbValue(activeProfile.gainDb)} toward ${formatDbfsValue(activeProfile.targetPeakDbfs)} from a captured ${formatDbfsValue(activeProfile.capturedPeakDbfs)}.${currentPeak}`;
     } else {
-      userInputCalibrationSummary.textContent = "No global input levelling active. Train one profile for each guitar or interface gain position you want Soundshed to normalize.";
+      userInputCalibrationSummary.textContent = "No global input levelling active. Train one profile for each guitar or interface gain position you want Sepia to normalize.";
     }
   }
 

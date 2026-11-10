@@ -1,19 +1,23 @@
 #pragma once
 
-#define GUITARFX_BRAND_COMPANY_STR "Soundshed"
-#define GUITARFX_BRAND_PRODUCT_STR "Soundshed Guitar"
+// Sepia is a fork of Soundshed Guitar (https://github.com/webprofusion/soundshed-guitar,
+// AGPL-3.0, copyright Webprofusion Pty Ltd). The upstream project does not license its name or
+// its online services to forks, so this build carries its own name and ids and stays offline.
+
+#define GUITARFX_BRAND_COMPANY_STR "Sepia Audio Project"
+#define GUITARFX_BRAND_PRODUCT_STR "Sepia"
 #define GUITARFX_BRAND_COPYRIGHT_YEAR_STR "2026"
-#define GUITARFX_BRAND_DOMAIN_STR "com.soundshed.guitar"
-#define GUITARFX_BRAND_DISPLAY_STR GUITARFX_BRAND_COMPANY_STR " " GUITARFX_BRAND_PRODUCT_STR
+#define GUITARFX_BRAND_DOMAIN_STR "org.sepia.guitar"
+#define GUITARFX_BRAND_DISPLAY_STR GUITARFX_BRAND_PRODUCT_STR
 
 #define PLUG_NAME GUITARFX_BRAND_PRODUCT_STR
 #define PLUG_MFR GUITARFX_BRAND_COMPANY_STR
 #define PLUG_VERSION_HEX 0x00040000
 #define PLUG_VERSION_STR "0.4.0"
-#define PLUG_UNIQUE_ID 'SGFX'
-#define PLUG_MFR_ID 'SndS'
-#define PLUG_URL_STR "https://soundshed.com"
-#define PLUG_EMAIL_STR "support@soundshed.com"
+#define PLUG_UNIQUE_ID 'SpFX'
+#define PLUG_MFR_ID 'SpAP'
+#define PLUG_URL_STR "https://github.com/justsomeone-e/soundshed-guitar"
+#define PLUG_EMAIL_STR ""
 #define PLUG_COPYRIGHT_STR "Copyright " GUITARFX_BRAND_COPYRIGHT_YEAR_STR " " GUITARFX_BRAND_COMPANY_STR
 
 #define PLUG_CHANNEL_IO "1-1 2-2"
@@ -43,7 +47,7 @@
 // Leave empty to disable automatic startup preset loading.
 // When set, the title is matched after initialization and factory preset imports
 // if no previous preset selection is stored.
-#define GUITARFX_DEFAULT_STARTUP_PRESET_TITLE "Black Album (Full Rig)"
+#define GUITARFX_DEFAULT_STARTUP_PRESET_TITLE "Warm Clean Room"
 
 #define PLUG_BG_COLOR 0x202020FF
 
@@ -56,6 +60,9 @@ inline constexpr const char* kCompany = GUITARFX_BRAND_COMPANY_STR;
 inline constexpr const char* kProduct = GUITARFX_BRAND_PRODUCT_STR;
 inline constexpr const char* kDisplay = GUITARFX_BRAND_DISPLAY_STR;
 inline constexpr const char* kDomain = GUITARFX_BRAND_DOMAIN_STR;
+/// False: this build has no online service, and must not call the upstream project's. The web
+/// UI's twin is ONLINE_SERVICES_ENABLED in core/ui/ts/apiConfig.ts.
+inline constexpr bool kOnlineServicesEnabled = false;
 } // namespace guitarfx::branding
 
 namespace guitarfx::config

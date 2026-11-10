@@ -65,14 +65,14 @@
             <h2 id="settings-tone3000-heading">Tone3000</h2>
             <div class="settings-section" id="settings-tone3000-section">
               <h3>Tone3000 API</h3>
-              <div class="settings-row">
-                <label for="tone3000-use-soundshed-api-toggle">Use Soundshed Tone Search API</label>
+              <div class="settings-row" hidden style="display: none">
+                <label for="tone3000-use-soundshed-api-toggle">Use relay API</label>
                 <label class="toggle-switch">
                   <input type="checkbox" id="tone3000-use-soundshed-api-toggle" />
                   <span class="toggle-slider"></span>
                 </label>
               </div>
-              <div class="settings-hint" id="tone3000-proxy-info-hint">Fetch Tone 3000 results via the Soundshed API.</div>
+              <div class="settings-hint" id="tone3000-proxy-info-hint" hidden style="display: none"></div>
               <div class="settings-hint" id="tone3000-api-mode-status">Connection mode: Direct Tone3000 API</div>
               <div class="settings-row" id="tone3000-proxy-health-row">
                 <label for="tone3000-proxy-health-check">API Health</label>
@@ -106,7 +106,7 @@
             <div class="settings-section">
               <h3>Current Version</h3>
               <div class="settings-row">
-                <label>Soundshed Guitar</label>
+                <label>Sepia</label>
                 <span id="current-version-display" class="version-display">—</span>
               </div>
             </div>
@@ -120,7 +120,7 @@
                   <span class="toggle-slider"></span>
                 </label>
               </div>
-              <div class="settings-hint">Automatically checks if a new version of Soundshed Guitar is available.</div>
+              <div class="settings-hint">Automatically checks if a new version of Sepia is available.</div>
             </div>
 
             <h2>UI</h2>

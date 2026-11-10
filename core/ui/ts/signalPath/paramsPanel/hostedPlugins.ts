@@ -104,14 +104,14 @@ export function bindHostedPluginListControls(node: GraphNode): void {
         if (isBlockedHostedPluginLibraryEntry(resourceId)) {
           showNotification(
             "Blocked plugin",
-            "Soundshed plugins cannot be loaded in the hosted plugin slot. Remove this entry if it is invalid.",
+            "Sepia plugins cannot be loaded in the hosted plugin slot. Remove this entry if it is invalid.",
           );
           renderHostedPluginWarningIntoOpenPanel(
             nodeId,
             resourceIndex,
             buildHostedPluginWarningMarkup(
               "Blocked Plugin",
-              "Soundshed plugins cannot be loaded in the hosted plugin slot.",
+              "Sepia plugins cannot be loaded in the hosted plugin slot.",
             ),
           );
           return;

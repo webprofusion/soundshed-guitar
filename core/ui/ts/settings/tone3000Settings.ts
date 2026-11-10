@@ -48,7 +48,7 @@ export function updateTone3000ApiModeStatus(): void {
 
   const config = getTone3000ApiClientConfig();
   tone3000ApiModeStatus.textContent = config.usingProxy
-    ? "Connection mode: Soundshed API"
+    ? "Connection mode: relay API"
     : "Connection mode: Direct Tone3000 API with user API Key";
 }
 

@@ -5,7 +5,7 @@
  * one: its scale, its colours, its controls' sizes and its image knobs.
  *
  * Each function follows the web UI's own (named alongside), so a layout looks and resolves the
- * same in Soundshed Guitar and Soundshed Nano Q: layoutPreferences.ts decides between the
+ * same in Sepia and Soundshed Nano Q: layoutPreferences.ts decides between the
  * standard controls and a layout, layoutScaling.ts sizes it, layoutRenderer.ts and
  * layoutControlImages.ts draw it, layoutKnobImages.ts turns its image knobs.
  */

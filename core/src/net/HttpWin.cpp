@@ -79,12 +79,12 @@ struct Session
 
     Session()
     {
-        handle = WinHttpOpen(L"Soundshed", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
+        handle = WinHttpOpen(L"Sepia", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
                              WINHTTP_NO_PROXY_BYPASS, 0);
 
         if (handle == nullptr) // before Windows 8.1 there is no automatic proxy
         {
-            handle = WinHttpOpen(L"Soundshed", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
+            handle = WinHttpOpen(L"Sepia", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
                                  WINHTTP_NO_PROXY_BYPASS, 0);
         }
 

@@ -164,7 +164,7 @@ class CurlTransport final : public HttpTransport
     {
         const bool secure = request.url.rfind("https://", 0) == 0;
         curl_easy_setopt(easy, CURLOPT_URL, request.url.c_str());
-        curl_easy_setopt(easy, CURLOPT_USERAGENT, "Soundshed");
+        curl_easy_setopt(easy, CURLOPT_USERAGENT, "Sepia");
         curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "http,https");
         // As WinHTTP's default policy: a redirect never takes a secure request back to plain http.
         curl_easy_setopt(easy, CURLOPT_REDIR_PROTOCOLS_STR, secure ? "https" : "http,https");

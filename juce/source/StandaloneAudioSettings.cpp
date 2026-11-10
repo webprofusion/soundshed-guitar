@@ -645,7 +645,7 @@ juce::String StandaloneAudioSettings::requestInputPermission()
             // Android stops asking once the user has said no twice; from then on
             // only the system settings can grant it.
             self->sendState(granted ? juce::String()
-                                    : juce::String("Microphone access was not granted. Allow it for Soundshed Guitar "
+                                    : juce::String("Microphone access was not granted. Allow it for Sepia "
                                                    "in the system settings, under Apps, then Permissions."));
         });
     });

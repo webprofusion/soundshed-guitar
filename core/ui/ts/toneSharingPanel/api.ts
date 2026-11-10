@@ -13,7 +13,7 @@ export function getApiOrigin(): string {
   try {
     return new URL(toneSharingState.apiBase).origin;
   } catch {
-    return "https://api-guitar.soundshed.com";
+    return "https://api.sepia.invalid";
   }
 }
 

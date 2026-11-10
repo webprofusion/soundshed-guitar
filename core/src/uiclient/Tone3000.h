@@ -2,7 +2,7 @@
 
 /**
  * Tone3000.h - Tone3000 (www.tone3000.com) as the native UIs reach it: through Soundshed's own
- * relay (https://api-guitar.soundshed.com/v1/resourcesearch), which adds the shared key, so a UI
+ * relay (https://api.sepia.invalid/v1/resourcesearch), which adds the shared key, so a UI
  * sends no credentials. The shapes of its answers, the paths it is asked, what a model is called
  * once imported, and which of a shared preset's models still have to be fetched.
  *
@@ -20,7 +20,7 @@
 
 namespace guitarfx::uiclient::tone3000
 {
-inline constexpr const char* kProxyBase = "https://api-guitar.soundshed.com/v1/resourcesearch";
+inline constexpr const char* kProxyBase = "https://api.sepia.invalid/v1/resourcesearch";
 
 /// Results a search page holds, and the models one page of a tone holds, as the web UI asks.
 inline constexpr int kSearchPageSize = 20;

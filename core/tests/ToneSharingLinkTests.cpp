@@ -41,9 +41,9 @@ void TestDeepLinks()
     Expect(Is(tones::ParseLink("itemId=itm_2"), Kind::Preset, "itm_2"),
            "the query alone, as the JUCE editor passes it");
     Expect(Is(tones::ParseLink("soundshed%3A%2F%2Fx%3FitemId%3Ditm_3"), Kind::Preset, "itm_3"), "percent-encoded");
-    Expect(Is(tones::ParseLink("https://api-guitar.soundshed.com/share/item/itm_4"), Kind::Preset, "itm_4"),
+    Expect(Is(tones::ParseLink("https://api.sepia.invalid/share/item/itm_4"), Kind::Preset, "itm_4"),
            "an item share link");
-    Expect(Is(tones::ParseLink("https://api-guitar.soundshed.com/share/pack/pck_5?ref=a"), Kind::Pack, "pck_5"),
+    Expect(Is(tones::ParseLink("https://api.sepia.invalid/share/pack/pck_5?ref=a"), Kind::Pack, "pck_5"),
            "a pack share link");
     Expect(!tones::ParseLink("").has_value(), "nothing");
     Expect(!tones::ParseLink("C:\\Users\\me\\preset.zip").has_value(), "a file path");
