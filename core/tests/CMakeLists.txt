@@ -145,6 +145,7 @@ set(TEST_SOURCES
     SepiaEffectCatalog.cpp
     SepiaFactoryPackTests.cpp
     OfflineBrandingTests.cpp
+    SimpleCabLoFiTests.cpp
     DispersalEffectTests.cpp
     EffectEdgeCaseSweepTests.cpp
     PitchTrackingEqEffectTests.cpp

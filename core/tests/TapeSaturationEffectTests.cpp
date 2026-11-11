@@ -31,7 +31,7 @@ using namespace lofi_test;
 using guitarfx::TapeSaturationEffect;
 
 /// Everything off: the settings each test turns one thing up from.
-const Params kAtRest = {{"drive", 0.0}, {"wow", 0.0},  {"flutter", 0.0}, {"hiss", 0.0},
+const Params kAtRest = {{"drive", 0.0},   {"wow", 0.0},  {"flutter", 0.0}, {"hiss", 0.0},
                         {"dropout", 0.0}, {"tone", 1.0}, {"mix", 1.0}};
 
 Params With(Params overrides)
@@ -275,8 +275,8 @@ void TestHissAndDropout()
         Configure(hissy, With({{"hiss", 1.0}}), sampleRate);
         const std::vector<float> none(static_cast<std::size_t>(2.0 * sampleRate), 0.0f);
         const double rmsDb = ToDb(Rms(Run(hissy, none, none).left, 4800));
-        Check(rmsDb > -70.0 && rmsDb < -50.0, "full Hiss at " + Num(sampleRate, 0) + " Hz sits between -70 and -50 dBFS",
-              Num(rmsDb, 1) + " dBFS");
+        Check(rmsDb > -70.0 && rmsDb < -50.0,
+              "full Hiss at " + Num(sampleRate, 0) + " Hz sits between -70 and -50 dBFS", Num(rmsDb, 1) + " dBFS");
     }
 
     // Hiss is laid over the tape, after the saturation: Drive does not turn it up.
@@ -351,7 +351,7 @@ void TestMonoMatchesStereo()
 {
     std::cout << "\nMono path" << std::endl;
     const auto input = Noise(1.0, 0.3);
-    const Params busy = {{"drive", 0.7}, {"wow", 0.8}, {"flutter", 0.6}, {"hiss", 0.5},
+    const Params busy = {{"drive", 0.7},   {"wow", 0.8},  {"flutter", 0.6}, {"hiss", 0.5},
                          {"dropout", 0.7}, {"tone", 0.4}, {"mix", 0.8}};
     TapeSaturationEffect stereo;
     TapeSaturationEffect mono;
@@ -378,7 +378,7 @@ void TestMonoMatchesStereo()
 void TestNonFiniteRecovery()
 {
     std::cout << "\nNon-finite input" << std::endl;
-    const Params busy = {{"drive", 0.7}, {"wow", 0.8}, {"flutter", 0.6}, {"hiss", 0.3},
+    const Params busy = {{"drive", 0.7},   {"wow", 0.8},  {"flutter", 0.6}, {"hiss", 0.3},
                          {"dropout", 0.5}, {"tone", 0.4}, {"mix", 1.0}};
 
     for (const float bad : {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(), 1.0e30f})
@@ -406,8 +406,14 @@ void TestSampleRates()
     for (const double sampleRate : {8000.0, 44100.0, 96000.0, 192000.0})
     {
         TapeSaturationEffect effect;
-        Configure(effect, {{"drive", 1.0}, {"wow", 1.0}, {"flutter", 1.0}, {"hiss", 1.0},
-                           {"dropout", 1.0}, {"tone", 0.0}, {"mix", 1.0}},
+        Configure(effect,
+                  {{"drive", 1.0},
+                   {"wow", 1.0},
+                   {"flutter", 1.0},
+                   {"hiss", 1.0},
+                   {"dropout", 1.0},
+                   {"tone", 0.0},
+                   {"mix", 1.0}},
                   sampleRate);
         const auto input = Noise(1.0, 0.9, sampleRate);
         const auto out = Run(effect, input, input).left;

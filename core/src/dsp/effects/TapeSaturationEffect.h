@@ -326,9 +326,9 @@ class TapeSaturationEffect : public EffectProcessor
             mDesignedTone = tone;
         }
 
-        const double baseDelay = tape_saturation::kDelayGuardSamples +
-                                 mSampleRate * (wow * tape_saturation::kWowSwingSeconds +
-                                                flutter * tape_saturation::kFlutterSwingSeconds);
+        const double baseDelay =
+            tape_saturation::kDelayGuardSamples +
+            mSampleRate * (wow * tape_saturation::kWowSwingSeconds + flutter * tape_saturation::kFlutterSwingSeconds);
         mDelayGlide.SetTarget(baseDelay);
 
         if (mSnapPending)
@@ -366,8 +366,8 @@ class TapeSaturationEffect : public EffectProcessor
 
             if (hissGain > 0.0f)
             {
-                noise = hissGain *
-                        static_cast<float>(mHissState.Process(mHissHighPass, static_cast<double>(mHissRng.NextBipolar())));
+                noise = hissGain * static_cast<float>(
+                                       mHissState.Process(mHissHighPass, static_cast<double>(mHissRng.NextBipolar())));
             }
 
             for (int c = 0; c < channels; ++c)
@@ -399,7 +399,8 @@ class TapeSaturationEffect : public EffectProcessor
 
                 if (toneOn || toneShare > 0.0f)
                 {
-                    const auto filtered = static_cast<float>(channel.tone.Process(mToneFilter, static_cast<double>(wet)));
+                    const auto filtered =
+                        static_cast<float>(channel.tone.Process(mToneFilter, static_cast<double>(wet)));
                     wet += toneShare * (filtered - wet);
                 }
 
@@ -478,12 +479,9 @@ inline void RegisterTapeSaturationEffect()
                        "hiss, dropouts and a worn top end";
     info.requiresResource = false;
     info.parameters = {
-        {"drive", "Drive", 0.3, 0.0, 1.0, "amount"},
-        {"wow", "Wow", 0.25, 0.0, 1.0, "amount"},
-        {"flutter", "Flutter", 0.25, 0.0, 1.0, "amount"},
-        {"hiss", "Hiss", 0.0, 0.0, 1.0, "amount"},
-        {"dropout", "Dropout", 0.0, 0.0, 1.0, "amount"},
-        {"tone", "Tone", 0.6, 0.0, 1.0, "amount"},
+        {"drive", "Drive", 0.3, 0.0, 1.0, "amount"},      {"wow", "Wow", 0.25, 0.0, 1.0, "amount"},
+        {"flutter", "Flutter", 0.25, 0.0, 1.0, "amount"}, {"hiss", "Hiss", 0.0, 0.0, 1.0, "amount"},
+        {"dropout", "Dropout", 0.0, 0.0, 1.0, "amount"},  {"tone", "Tone", 0.6, 0.0, 1.0, "amount"},
         {"mix", "Mix", 1.0, 0.0, 1.0, "amount"},
     };
     info.presets = tape_saturation::FactoryPresets(info.parameters);

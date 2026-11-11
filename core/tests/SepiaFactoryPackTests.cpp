@@ -122,8 +122,7 @@ std::optional<Pack> LoadPack()
 
     Pack pack;
     pack.document = json::parse(manifest->begin(), manifest->end(), nullptr, false);
-    Check(pack.document.is_object() && pack.document.value("presets", json::array()).is_array(),
-          "presets.json parses");
+    Check(pack.document.is_object() && pack.document.value("presets", json::array()).is_array(), "presets.json parses");
 
     if (!pack.document.is_object())
     {
@@ -168,9 +167,9 @@ void TestSelfContained(const Pack& pack)
     Check(pack.document.value("resources", json::array()).empty(), "the archive lists no resources");
     Check(pack.presets.size() >= 60, "at least sixty presets", std::to_string(pack.presets.size()));
 
-    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 12}, {"Lo-Fi", 8},
+    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 12},     {"Lo-Fi", 8},
                                                          {"Shoegaze & Ambient", 8}, {"Blues & Classic Rock", 10},
-                                                         {"Grunge & Punk", 10},  {"Metal", 12}};
+                                                         {"Grunge & Punk", 10},     {"Metal", 12}};
     std::map<std::string, std::size_t> counts;
 
     for (const auto& [id, group] : pack.groupOf)
@@ -186,8 +185,8 @@ void TestSelfContained(const Pack& pack)
 
     // Names an original pack has no business using. Lower case; matched as substrings.
     const std::vector<std::string> denied = {"soundshed", "roomtone", "black album", "karnivore", "dumble",
-                                             "marshall", "fender",   "mesa",        "boss ",     "ibanez",
-                                             "demarco",  "nirvana",  "metallica",   "hendrix",   "tame impala"};
+                                             "marshall",  "fender",   "mesa",        "boss ",     "ibanez",
+                                             "demarco",   "nirvana",  "metallica",   "hendrix",   "tame impala"};
     std::set<std::string> names;
     std::set<std::string> ids;
 
@@ -262,8 +261,7 @@ void TestSelfContained(const Pack& pack)
 class Rig
 {
   public:
-    Rig()
-        : mProfile(fs::temp_directory_path() / ("sepia-pack-test-" + std::to_string(std::rand())))
+    Rig() : mProfile(fs::temp_directory_path() / ("sepia-pack-test-" + std::to_string(std::rand())))
     {
         std::error_code ec;
         fs::remove_all(mProfile, ec);
@@ -296,11 +294,10 @@ class Rig
 
     void Load(const guitarfx::Preset& preset)
     {
-        mController->HandleUIMessage(
-            json{{"type", "loadPreset"},
-                 {"presetId", preset.id},
-                 {"preset", json::parse(guitarfx::PresetStorage::SerializeToJson(preset))}}
-                .dump());
+        mController->HandleUIMessage(json{{"type", "loadPreset"},
+                                          {"presetId", preset.id},
+                                          {"preset", json::parse(guitarfx::PresetStorage::SerializeToJson(preset))}}
+                                         .dump());
         mController->OnIdle();
     }
 
@@ -428,8 +425,9 @@ json TestLevels(const Pack& pack, bool measureOnly)
         {
             const auto level = Measure(rig.Play(clips[name]));
             rig.Settle(1.5);
-            entry["clips"].push_back(
-                {{"clip", name}, {"lufs", level.lufs ? json(*level.lufs) : json(nullptr)}, {"peakDbfs", level.peakDbfs}});
+            entry["clips"].push_back({{"clip", name},
+                                      {"lufs", level.lufs ? json(*level.lufs) : json(nullptr)},
+                                      {"peakDbfs", level.peakDbfs}});
             Check(level.finite, preset.name + " stays finite on " + name);
             perClip.push_back(level.lufs.value_or(-200.0));
             peak = std::max(peak, level.peakDbfs);
@@ -467,8 +465,8 @@ json TestLevels(const Pack& pack, bool measureOnly)
 
         for (std::size_t i = 0; i < perClip.size(); ++i)
         {
-            Check(std::fabs(perClip[i] - kTargetLufs) <= kClipToleranceLu,
-                  preset.name + " is near it on " + kClips[i], Num(perClip[i]) + " LUFS");
+            Check(std::fabs(perClip[i] - kTargetLufs) <= kClipToleranceLu, preset.name + " is near it on " + kClips[i],
+                  Num(perClip[i]) + " LUFS");
         }
 
         Check(peak <= kPeakCeilingDbfs, preset.name + " never reaches full scale", Num(peak) + " dBFS");
@@ -486,8 +484,7 @@ json TestLevels(const Pack& pack, bool measureOnly)
             Lower(preset.name).find("edge") == std::string::npos)
         {
             // A compressor in front of a clean amp takes some of it back; it is still not an overdrive.
-            Check(followed > 4.0, preset.name + " is clean: a 12 dB drop still comes through",
-                  Num(followed) + " dB");
+            Check(followed > 4.0, preset.name + " is clean: a 12 dB drop still comes through", Num(followed) + " dB");
         }
     }
 

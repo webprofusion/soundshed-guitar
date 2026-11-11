@@ -643,8 +643,7 @@ void TestToneSharing()
         Expect(preset.title == "Crunch" && !preset.IsPack(), "a preset card, title trimmed");
         Expect(preset.downloads == 1250 && FormatCount(preset.downloads) == "1.3K", "downloads, compact");
         Expect(preset.creatorHandle == "@ann_b", "the creator's handle gets its @");
-        Expect(preset.creatorAvatarUrl == "https://api.sepia.invalid/v1/auth/avatar/a1",
-               "and the avatar a full URL");
+        Expect(preset.creatorAvatarUrl == "https://api.sepia.invalid/v1/auth/avatar/a1", "and the avatar a full URL");
         Expect(preset.tags == std::vector<std::string>{"crunch"}, "\"preset\" is not shown as a tag");
 
         const auto& pack = home[0].tones[1];

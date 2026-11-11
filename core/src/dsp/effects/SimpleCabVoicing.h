@@ -56,8 +56,8 @@ enum Param : int
     kParamCount
 };
 
-inline constexpr const char* kCabinetLabels[] = {"4x12 Closed", "1x12 Open", "2x12 Open", "2x12 Closed", "4x10 Open",
-                                                  "AM Radio",    "Telephone", "Boombox",   "Practice Amp", "VHS"};
+inline constexpr const char* kCabinetLabels[] = {"4x12 Closed", "1x12 Open", "2x12 Open", "2x12 Closed",  "4x10 Open",
+                                                 "AM Radio",    "Telephone", "Boombox",   "Practice Amp", "VHS"};
 inline constexpr const char* kMicTypeLabels[] = {"Dynamic", "Ribbon", "Condenser"};
 
 /// In `Param` order, which is also the order the UI lays the controls out in.
