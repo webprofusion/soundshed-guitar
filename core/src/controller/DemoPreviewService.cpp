@@ -159,7 +159,10 @@ void DemoPreviewService::MixIntoInput(float** inputs, int numSamples)
         }
     };
 
-    int i = 0;
+    // Waiting for the bar line: nothing yet, then the clip from the frame the line falls on.
+    const auto waited = static_cast<int>(std::min(mStartDelay, static_cast<std::size_t>(numSamples)));
+    mStartDelay -= static_cast<std::size_t>(waited);
+    int i = waited;
 
     while (i < numSamples)
     {
@@ -368,6 +371,7 @@ void DemoPreviewService::StartDecodedPreview(const std::vector<std::uint8_t>& de
         // Past the carry: the wrap crossfade is for the seam, and a preview that opened with
         // it smeared the end of the loop over its start and then played that start again.
         mCarryPos = region ? region->carryL.size() : 0;
+        mStartDelay = 0;
         std::atomic_store_explicit(&mPreviewRegion, region, std::memory_order_release);
         std::atomic_store_explicit(&mDemoAudioBuffer, buffer, std::memory_order_release);
         mDemoAudioActive.store(true, std::memory_order_release);
@@ -380,19 +384,24 @@ void DemoPreviewService::StartDecodedPreview(const std::vector<std::uint8_t>& de
     mSendMessage(startMsg.dump());
 }
 
-void DemoPreviewService::StartPreviewFromSamples(std::vector<float> samples, double sampleRate, const std::string& id,
-                                                 const std::string& title, bool announce)
+double DemoPreviewService::StartPreviewFromSamples(std::vector<float> samples, double sampleRate, const std::string& id,
+                                                   const std::string& title, bool announce,
+                                                   const TransportClock* barClock)
 {
     if (samples.empty() || sampleRate <= 0.0)
     {
-        return;
+        return 0.0;
     }
+
+    const bool waits = barClock != nullptr && barClock->running.load(std::memory_order_relaxed) &&
+                       barClock->samplesPerBar.load(std::memory_order_relaxed) > 0.0;
 
     // Cut dead, what was playing would click, and a high-gain preset makes a loud thing of a click.
     const auto previous = std::atomic_load_explicit(&mDemoAudioBuffer, std::memory_order_acquire);
     const bool interrupting = previous && mDemoAudioActive.load(std::memory_order_acquire);
 
-    if (interrupting && previous->channels > 0)
+    // Not under a start that waits: the old sound's tail would come out late, on the bar line.
+    if (interrupting && previous->channels > 0 && !waits)
     {
         constexpr double kFadeSeconds = 0.015;
         const auto& left = previous->channelSamples[0];
@@ -413,8 +422,21 @@ void DemoPreviewService::StartPreviewFromSamples(std::vector<float> samples, dou
     buffer->announce = announce;
     buffer->channelSamples.push_back(std::move(samples));
 
+    std::size_t delay = 0;
+
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
+
+        if (waits)
+        {
+            // Between blocks the clock says where in the bar the next one starts, which is where
+            // this clip's first frame would otherwise fall.
+            const double bar = barClock->samplesPerBar.load(std::memory_order_relaxed);
+            const double into = barClock->samplesSinceBar.load(std::memory_order_relaxed);
+            delay = into >= 1.0 && into < bar ? static_cast<std::size_t>(std::llround(bar - into)) : 0;
+        }
+
+        mStartDelay = delay;
         mDemoAudioCursor.store(0, std::memory_order_release);
         mCarryPos = 0;
         std::atomic_store_explicit(&mPreviewRegion, std::shared_ptr<const PreviewRegion>{}, std::memory_order_release);
@@ -440,6 +462,8 @@ void DemoPreviewService::StartPreviewFromSamples(std::vector<float> samples, dou
         started["title"] = buffer->title;
         mSendMessage(started.dump());
     }
+
+    return static_cast<double>(delay) / sampleRate;
 }
 
 void DemoPreviewService::StopPreview()

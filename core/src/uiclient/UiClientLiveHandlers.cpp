@@ -221,7 +221,14 @@ void UiClient::RegisterLiveHandlers()
         mState.demo.playing = true;
         mState.demo.title = m.value("title", "");
         mState.demo.previewId = m.value("id", "");
+        // The notes of what starts now follow in `scaleGuidePlayback`: the last play's are done with.
+        mState.demo.scaleGuide = {};
         Notify(Topic::Demo);
+    });
+
+    On("scaleGuidePlayback", [this](const nlohmann::json& m) {
+        mState.demo.scaleGuide = scaleguide::ParsePlayback(m);
+        mState.demo.scaleGuideAt = mNowSeconds;
     });
 
     On("previewComplete", [this](const nlohmann::json&) {

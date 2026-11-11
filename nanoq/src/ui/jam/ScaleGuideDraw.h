@@ -15,6 +15,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace nanoq::ui
@@ -62,7 +63,7 @@ struct GuideRunNote
 struct GuideRunStep
 {
     int note = 0;
-    std::string stroke; ///< "down", "up", "hammer" or "pull"
+    std::string stroke; ///< "down", "up", "hammer", "pull" or "slide"
 };
 
 /// One way through a position, an arpeggio's or a scale's: its notes lowest first, its steps up them
@@ -76,6 +77,27 @@ struct GuideRun
     std::vector<GuideRunNote> notes;
     std::vector<GuideRunStep> steps;
 };
+
+/// One chord of a progression's arpeggios: which of the piece's steps are its bar.
+struct GuideBar
+{
+    int chord = 0;
+    std::string name;
+    std::string numeral;
+    int from = 0;
+    int count = 0;
+};
+
+/// A progression's arpeggios end to end (the view's `progressionRun`): one run, a bar for each chord.
+struct GuideProgressionRun
+{
+    GuideRun run;
+    bool slides = false;
+    std::vector<GuideBar> bars;
+};
+
+/// The view's progression run, when it has one.
+[[nodiscard]] std::optional<GuideProgressionRun> ReadGuideProgressionRun(const nlohmann::json& view);
 
 /// What the neck and boxes draw, read from a scaleGuideView model.
 struct GuideModel
@@ -118,8 +140,13 @@ class ScaleNeck final : public el::element, public Drawn, public TapTarget
         return true;
     }
 
-    /// The note now first, then the trail; returns true when it changed.
-    bool SetHeard(std::vector<int> notes);
+    /// The note now first, then the trail; returns true when it changed. `everywhere` marks every
+    /// place a note is on the neck; without it only the places inside the chosen position are
+    /// marked, unless the note is nowhere in it.
+    bool SetHeard(std::vector<int> notes, bool everywhere = true);
+
+    /// The places (string, fret) Play is sounding now, lit; returns true when they changed.
+    bool SetPlaying(std::vector<std::pair<int, int>> places);
 
     /// A note tapped on the neck.
     std::function<void(int midi)> onNote;
@@ -130,6 +157,8 @@ class ScaleNeck final : public el::element, public Drawn, public TapTarget
     std::string mLabels;
     bool mLeftHanded;
     std::vector<int> mHeard;
+    bool mHeardEverywhere = true;
+    std::vector<std::pair<int, int>> mPlaying;
     int mPressedNote = -1;
 
     /// The note of the dot under `point`, or -1.
@@ -146,10 +175,67 @@ class RunTabView final : public el::element, public Drawn
     el::view_limits limits(const el::basic_context& ctx) const override;
     void draw(const el::context& ctx) override;
 
+    /// The steps of the run Play is sounding now, lit; returns true when they changed.
+    bool SetPlaying(std::vector<int> steps);
+
   private:
     const Theme& mTheme;
     GuideRun mRun;
     std::vector<std::string> mStringNames;
+    std::vector<int> mPlaying;
+};
+
+/// A progression's arpeggios as one diagram (the web UI's runTab.ts with a flow): it runs on to new
+/// lines at the width given, a bar line after each chord, the chord's name over its first note and
+/// the string names at the start of each line. A tap on a chord's bar reports that chord.
+class ProgressionTabView final : public el::element, public Drawn, public TapTarget
+{
+  public:
+    ProgressionTabView(const Theme& theme, GuideProgressionRun whole, std::vector<std::string> stringNames, float width,
+                       int activeChord);
+
+    el::view_limits limits(const el::basic_context& ctx) const override;
+    void draw(const el::context& ctx) override;
+    bool click(const el::context& ctx, el::mouse_button btn) override;
+
+    bool wants_control() const override
+    {
+        return true;
+    }
+
+    /// The steps of the piece Play is sounding now, lit; returns true when they changed.
+    bool SetPlaying(std::vector<int> steps);
+
+    /// A chord's bar tapped: its index in the progression.
+    std::function<void(int chord)> onBar;
+
+  private:
+    /// One chord's stretch of one line: a bar that does not fit a line carries on as another.
+    struct Segment
+    {
+        std::size_t bar = 0;
+        int line = 0;
+        float from = 0.0f;
+        float to = 0.0f;
+        bool first = true;
+        bool last = true;
+        /// Each step's index in the run and where its number sits.
+        std::vector<std::pair<int, float>> cells;
+    };
+
+    const Theme& mTheme;
+    GuideProgressionRun mWhole;
+    std::vector<std::string> mStringNames;
+    int mActive;
+    std::vector<Segment> mSegments;
+    int mLines = 1;
+    float mWidth = 0.0f;
+    std::vector<int> mPlaying;
+    int mPressedBar = -1;
+
+    [[nodiscard]] float LineHeight() const;
+    /// The chord whose bar is under `point`, or -1.
+    [[nodiscard]] int BarAt(const el::context& ctx, el::point point) const;
 };
 
 /// What lies under it plays when clicked: a face that shows hover, and stays lit while it plays.

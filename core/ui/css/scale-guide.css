@@ -1,6 +1,7 @@
 /* ===== Scale Guide =====
-   Jam → Scales (ts/scaleGuide/): underlined Scales/Chords tabs, a card of
-   pickers and view controls, the neck, the chord boxes and a summary card.
+   Jam → Scales (ts/scaleGuide/): underlined tabs with the actions and
+   the instrument beside them, two bars of pickers, the neck, the chord
+   boxes and a summary card.
    The neck and boxes are SVG whose parts carry classes, so every colour is
    here. The defaults are for a dark surface (dark and classic); light
    overrides the board, the dots and the surfaces, as practice-tool.css does. */
@@ -10,6 +11,7 @@
   --sg-surface-raised: rgba(255, 255, 255, 0.045);
   --sg-line: rgba(255, 255, 255, 0.08);
   --sg-line-strong: rgba(255, 255, 255, 0.14);
+  --sg-popover: #22222a;
   --sg-wood-top: #26201b;
   --sg-wood-mid: #1b1714;
   --sg-wood-bottom: #221c18;
@@ -40,6 +42,7 @@
   --sg-surface-raised: #ffffff;
   --sg-line: rgba(20, 24, 34, 0.1);
   --sg-line-strong: rgba(20, 24, 34, 0.18);
+  --sg-popover: #ffffff;
   --sg-wood-top: #e9dccb;
   --sg-wood-mid: #e2d4c0;
   --sg-wood-bottom: #e7d9c6;
@@ -66,17 +69,18 @@
 .scale-guide {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding: 0 2px 16px;
   color: var(--text-primary);
   min-width: 0;
 }
 
-/* ── Tabs ── */
+/* ── Tabs, with the actions and the instrument at their end ── */
 .sg-tabs {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
-  gap: 28px;
+  gap: 0 24px;
   border-bottom: 1px solid var(--sg-line);
 }
 
@@ -112,31 +116,94 @@
   background: var(--color-accent);
 }
 
-.sg-title {
+.sg-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
   margin-left: auto;
-  padding-bottom: 12px;
-  font-size: 12px;
-  color: var(--text-muted);
+  padding-bottom: 7px;
 }
 
-/* ── Cards ── */
+/* The instrument: tuning, capo and hand, set once and then left alone. */
+.sg-setup {
+  position: relative;
+}
+
+.sg-setup-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--sg-line-strong);
+  border-radius: 10px;
+  background: var(--sg-surface-raised) var(--sg-select-arrow) no-repeat right 12px center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  list-style: none;
+  cursor: pointer;
+}
+
+.sg-setup-button::-webkit-details-marker {
+  display: none;
+}
+
+.sg-setup-button:hover,
+.sg-setup[open] .sg-setup-button {
+  border-color: var(--color-accent);
+  color: var(--text-primary);
+}
+
+.sg-setup-icon {
+  flex: none;
+  width: 10px;
+  height: 17px;
+  fill: currentColor;
+}
+
+.sg-setup-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 280px;
+  padding: 16px;
+  border: 1px solid var(--sg-line-strong);
+  border-radius: 12px;
+  background: var(--sg-popover);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Cards and the two bars of controls ── */
 .sg-card {
   border: 1px solid var(--sg-line);
   border-radius: 12px;
   background: var(--sg-surface);
 }
 
-.sg-controls-row {
+.sg-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sg-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 28px;
-  padding: 16px 22px;
+  gap: 8px 22px;
 }
 
-.sg-controls-pickers {
-  align-items: flex-end;
-  border-bottom: 1px solid var(--sg-line);
+.sg-bar-end {
+  margin-left: auto;
 }
 
 .sg-label {
@@ -150,7 +217,7 @@
 .sg-field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 120px;
 }
 
@@ -158,24 +225,15 @@
   display: none;
 }
 
-.sg-field-key {
-  min-width: 110px;
-}
-
-.sg-field-wide {
-  flex: 1 1 200px;
-  max-width: 340px;
-}
-
 /* Under .scale-guide to outrank the themes' `.theme-dark select`. */
 .scale-guide .sg-select {
-  height: 44px;
-  padding: 0 38px 0 16px;
+  height: 36px;
+  padding: 0 34px 0 12px;
   border: 1px solid var(--sg-line-strong);
   border-radius: 10px;
-  background: var(--sg-surface-raised) var(--sg-select-arrow) no-repeat right 14px center;
+  background: var(--sg-surface-raised) var(--sg-select-arrow) no-repeat right 12px center;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
   appearance: none;
   cursor: pointer;
@@ -188,20 +246,42 @@
 }
 
 .scale-guide .sg-select-accent {
+  min-width: 84px;
   border-color: var(--color-accent);
 }
 
 .sg-inline {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sg-inline[hidden] {
+  display: none;
+}
+
+/* A picker with its label: it gives way before the bar wraps. */
+.sg-field-wide {
+  flex: 0 1 auto;
+}
+
+.sg-field-wide .sg-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 280px;
+}
+
+.sg-inline-group {
+  flex-wrap: wrap;
+  gap: 8px 22px;
 }
 
 .sg-segmented {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 2px;
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--sg-line);
   border-radius: 10px;
   background: var(--sg-surface);
@@ -211,16 +291,20 @@
   display: inline-flex;
   align-items: baseline;
   gap: 3px;
-  min-width: 40px;
+  min-width: 36px;
   justify-content: center;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+}
+
+.sg-segment[hidden] {
+  display: none;
 }
 
 .sg-segment small {

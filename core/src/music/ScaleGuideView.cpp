@@ -323,6 +323,101 @@ json ProgressionStrip(const Neck& neck, const std::vector<SpelledChord>& chords,
     return strip;
 }
 
+/// The request's progression in its key, or no chords for a single chord.
+struct ResolvedProgression
+{
+    std::vector<SpelledChord> chords;
+    int step = 0;
+    /// Its id, name, step and the next chord's name: null without a progression.
+    json header;
+};
+
+ResolvedProgression ResolveProgression(const ScaleGuideRequest& request)
+{
+    ResolvedProgression resolved;
+    std::vector<RomanChord> romans = request.progressionChords;
+    std::string id = romans.empty() ? std::string() : "custom";
+    std::string name = request.progressionName;
+
+    if (romans.empty())
+    {
+        if (const auto* progression = FindProgression(request.progression))
+        {
+            romans = progression->chords;
+            id = progression->id;
+            name = progression->name;
+        }
+    }
+
+    if (!romans.empty())
+    {
+        resolved.chords = ChordsInKey(request.key, romans);
+        resolved.step = request.step % static_cast<int>(resolved.chords.size());
+        resolved.header = {{"id", id},
+                           {"name", name},
+                           {"step", resolved.step},
+                           {"next", resolved.chords[(resolved.step + 1) % resolved.chords.size()].name}};
+    }
+
+    return resolved;
+}
+
+/// A progression's arpeggios as one piece of tab: every chord's chosen run end to end, a bar each.
+/// Its notes are numbered through the whole piece, and a bar says which of the steps are its own.
+json ProgressionRunJson(const std::vector<SpelledChord>& chords, const std::vector<ArpeggioProgressionChord>& walked,
+                        const std::string& name, bool slides, int capo)
+{
+    json notes = json::array();
+    json steps = json::array();
+    json bars = json::array();
+    std::vector<int> firstNote(chords.size(), 0);
+    int fretFrom = 0;
+    int fretTo = 0;
+    bool any = false;
+
+    for (std::size_t i = 0; i < chords.size(); ++i)
+    {
+        firstNote[i] = static_cast<int>(notes.size());
+        json bar = {{"chord", static_cast<int>(i)},
+                    {"name", chords[i].name},
+                    {"numeral", RomanNumeral(*chords[i].roman)},
+                    {"from", 0},
+                    {"count", 0}};
+
+        if (walked[i].chosen >= 0)
+        {
+            const auto run = OnNeck(walked[i].runs[walked[i].chosen], capo);
+            const auto runJson = RunJson(run, chords[i].notes, RunName(run, chords[i].notes));
+            notes.insert(notes.end(), runJson["notes"].begin(), runJson["notes"].end());
+            bar["run"] = runJson["name"];
+            bar["fretFrom"] = run.fretFrom;
+            bar["fretTo"] = run.fretTo;
+            fretFrom = any ? std::min(fretFrom, run.fretFrom) : run.fretFrom;
+            fretTo = any ? std::max(fretTo, run.fretTo) : run.fretTo;
+            any = true;
+        }
+
+        bars.push_back(std::move(bar));
+    }
+
+    for (const auto& step : ArpeggioProgressionSteps(walked, slides))
+    {
+        auto& bar = bars[static_cast<std::size_t>(step.chord)];
+
+        if (bar["count"] == 0)
+        {
+            bar["from"] = static_cast<int>(steps.size());
+        }
+
+        bar["count"] = bar["count"].get<int>() + 1;
+        steps.push_back(
+            {{"note", firstNote[step.chord] + step.note}, {"stroke", std::string(PickStrokeId(step.stroke))}});
+    }
+
+    return {{"name", name},   {"slides", slides}, {"fretFrom", fretFrom}, {"fretTo", fretTo},
+            {"notes", notes}, {"steps", steps},   {"bars", bars}};
+}
+
 std::vector<int> ShiftedFrets(const std::vector<int>& frets, int capo)
 {
     std::vector<int> out;
@@ -361,6 +456,8 @@ ScaleGuideRequest ParseScaleGuideRequest(const json& object)
     request.allowInversions = object.value("allowInversions", false);
     request.arpeggioStyle = ParseArpeggioStyle(StringField(object, "arpeggioStyle", "")).value_or(ArpeggioStyle::Sweep);
     request.arpeggioStrings = IntField(object, "arpeggioStrings", 0, 0, kMaxStrings);
+    request.arpeggioSlides = object.value("arpeggioSlides", false);
+    request.anchorStep = IntField(object, "anchorStep", -1, -1, 1000);
     request.instrument = ParseInstrument(StringField(object, "instrument", "guitar")).value_or(Instrument::Guitar);
 
     if (const auto it = object.find("progressionChords"); it != object.end() && it->is_array())
@@ -435,7 +532,10 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
     if (arpeggioMode)
     {
         const auto* def = FindChord(request.chord);
-        const auto chord = SpellChord(request.key, def != nullptr ? *def : Chords().front());
+        const auto progression = ResolveProgression(request);
+        const auto chord = progression.chords.empty()
+                               ? SpellChord(request.key, def != nullptr ? *def : Chords().front())
+                               : progression.chords[progression.step];
         tones = chord.notes;
 
         ArpeggioSearch search;
@@ -472,6 +572,40 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
                             {"advice", ArpeggioAdvice(request.arpeggioStyle)},
                             {"empty", ArpeggioEmptyNote(request.arpeggioStyle, playing)},
                             {"runs", runsJson}};
+
+        if (!progression.chords.empty())
+        {
+            // One chord's run is the player's; the others follow it round the progression.
+            ArpeggioProgressionSearch walk;
+            walk.style = request.arpeggioStyle;
+            walk.strings = request.arpeggioStrings;
+            walk.slides = request.arpeggioSlides;
+            walk.anchorChord = request.anchorStep >= 0 ? request.anchorStep : progression.step;
+            walk.anchorChord %= static_cast<int>(progression.chords.size());
+            walk.anchorRun = std::max(0, request.position - 1);
+            const auto walked = ArpeggioProgression(playing, progression.chords, walk);
+            json chords = json::array();
+
+            for (std::size_t i = 0; i < progression.chords.size(); ++i)
+            {
+                chords.push_back({{"name", progression.chords[i].name},
+                                  {"numeral", RomanNumeral(*progression.chords[i].roman)},
+                                  {"rootPitchClass", progression.chords[i].rootPitchClass},
+                                  {"shape", nullptr},
+                                  {"position", walked[i].chosen + 1}});
+            }
+
+            // The whole neck stays the whole neck; a chosen run becomes this chord's place in the walk.
+            const int anchorPosition = request.position > 0 ? walked[walk.anchorChord].chosen + 1 : 0;
+            position = request.position > 0 ? walked[progression.step].chosen + 1 : 0;
+            view["progression"] = progression.header;
+            view["progression"]["chords"] = chords;
+            view["progression"]["anchorStep"] = walk.anchorChord;
+            view["progression"]["anchorPosition"] = anchorPosition;
+            view["progressionRun"] =
+                ProgressionRunJson(progression.chords, walked, progression.header.value("name", std::string()),
+                                   request.arpeggioSlides, capo);
+        }
     }
     else if (!chordMode)
     {
@@ -520,32 +654,14 @@ json BuildScaleGuideView(const ScaleGuideRequest& request)
     else
     {
         SpelledChord chord;
-        json progressionJson;
-        std::vector<SpelledChord> progressionChords;
-        int step = 0;
-        std::vector<RomanChord> romans = request.progressionChords;
-        std::string progressionId = romans.empty() ? std::string() : "custom";
-        std::string progressionName = request.progressionName;
+        const auto progression = ResolveProgression(request);
+        json progressionJson = progression.header;
+        const auto& progressionChords = progression.chords;
+        const int step = progression.step;
 
-        if (romans.empty())
+        if (!progressionChords.empty())
         {
-            if (const auto* progression = FindProgression(request.progression))
-            {
-                romans = progression->chords;
-                progressionId = progression->id;
-                progressionName = progression->name;
-            }
-        }
-
-        if (!romans.empty())
-        {
-            progressionChords = ChordsInKey(request.key, romans);
-            step = request.step % static_cast<int>(progressionChords.size());
             chord = progressionChords[step];
-            progressionJson = {{"id", progressionId},
-                               {"name", progressionName},
-                               {"step", step},
-                               {"next", progressionChords[(step + 1) % progressionChords.size()].name}};
         }
         else
         {

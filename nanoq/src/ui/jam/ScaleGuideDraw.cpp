@@ -37,6 +37,15 @@ constexpr float kTabTop = 34.0f;
 constexpr float kTabStringGap = 15.0f;
 constexpr float kTabIntervalGap = 22.0f;
 constexpr float kTabNumberGap = 18.0f;
+/// A flowed tab: the room a bar line takes, the row the chord names sit in, the gap between lines,
+/// and the fewest notes a line holds however narrow the page.
+constexpr float kTabBarGap = 14.0f;
+constexpr float kTabChordRow = 20.0f;
+constexpr float kTabLineGap = 12.0f;
+constexpr int kTabFewestSlots = 6;
+/// A slide's slanted line beside its number: how far it runs and how much it rises.
+constexpr float kTabSlideLength = 12.0f;
+constexpr float kTabSlideRise = 4.0f;
 
 int IntAt(const nlohmann::json& object, const char* key, int fallback = 0)
 {
@@ -135,6 +144,27 @@ GuideShape ReadGuideShape(const nlohmann::json& shape)
     for (const auto& b : shape.value("barres", nlohmann::json::array()))
     {
         out.barres.push_back({IntAt(b, "fret"), IntAt(b, "fromString"), IntAt(b, "toString")});
+    }
+
+    return out;
+}
+
+std::optional<GuideProgressionRun> ReadGuideProgressionRun(const nlohmann::json& view)
+{
+    if (!view.is_object() || !view.contains("progressionRun") || !view["progressionRun"].is_object())
+    {
+        return std::nullopt;
+    }
+
+    const auto& whole = view["progressionRun"];
+    GuideProgressionRun out;
+    out.run = ReadRun(whole);
+    out.slides = whole.value("slides", false);
+
+    for (const auto& b : whole.value("bars", nlohmann::json::array()))
+    {
+        out.bars.push_back({IntAt(b, "chord"), StringAt(b, "name"), StringAt(b, "numeral"), IntAt(b, "from"),
+                            std::max(0, IntAt(b, "count"))});
     }
 
     return out;
@@ -268,14 +298,26 @@ bool ScaleNeck::click(const el::context& ctx, el::mouse_button btn)
     return true;
 }
 
-bool ScaleNeck::SetHeard(std::vector<int> notes)
+bool ScaleNeck::SetHeard(std::vector<int> notes, bool everywhere)
 {
-    if (notes == mHeard)
+    if (notes == mHeard && everywhere == mHeardEverywhere)
     {
         return false;
     }
 
     mHeard = std::move(notes);
+    mHeardEverywhere = everywhere;
+    return true;
+}
+
+bool ScaleNeck::SetPlaying(std::vector<std::pair<int, int>> places)
+{
+    if (places == mPlaying)
+    {
+        return false;
+    }
+
+    mPlaying = std::move(places);
     return true;
 }
 
@@ -389,9 +431,20 @@ void ScaleNeck::draw(const el::context& ctx)
         return shape != nullptr && string < static_cast<int>(shape->frets.size()) &&
                shape->frets[static_cast<std::size_t>(string)] < 0;
     };
-    const auto heardAge = [&](int midi) {
-        const auto it = std::find(mHeard.begin(), mHeard.end(), midi);
-        return it == mHeard.end() ? -1 : static_cast<int>(it - mHeard.begin());
+    // A heard note marks every place it is, or only its places in the chosen position when it has any.
+    const auto heardAge = [&](const GuideDot& dot) {
+        const auto it = std::find(mHeard.begin(), mHeard.end(), dot.midi);
+
+        if (it == mHeard.end())
+        {
+            return -1;
+        }
+
+        const bool elsewhere = !mHeardEverywhere && !dot.inPosition &&
+                               std::any_of(mModel.dots.begin(), mModel.dots.end(), [&dot](const GuideDot& other) {
+                                   return other.midi == dot.midi && other.inPosition;
+                               });
+        return elsewhere ? -1 : static_cast<int>(it - mHeard.begin());
     };
     const el::color heardColours[] = {mTheme.Success(), mTheme.Success().opacity(0.55f),
                                       mTheme.Success().opacity(0.3f)};
@@ -436,7 +489,28 @@ void ScaleNeck::draw(const el::context& ctx)
 
         const float cx = x(NoteX(dot.fret, frets, end));
         const float cy = y(dot.string);
-        const int age = heardAge(dot.midi);
+
+        // The note Play is sounding: filled as a root is and ringed, where it is fretted and nowhere else.
+        if (std::find(mPlaying.begin(), mPlaying.end(), std::make_pair(dot.string, dot.fret)) != mPlaying.end())
+        {
+            // A glow round it sets a sounding root apart from one at rest.
+            Circle(cnv, cx, cy, kDotRadius + 6.0f);
+            cnv.fill_style(mTheme.Accent().opacity(0.35f));
+            cnv.fill();
+            Circle(cnv, cx, cy, kDotRadius + 1.5f);
+            cnv.fill_style(mTheme.Accent());
+            cnv.fill();
+            cnv.stroke_style(mTheme.Pick(el::rgba(242, 243, 247, 255), el::rgba(22, 24, 29, 255)));
+            cnv.line_width(3.0f);
+            cnv.stroke();
+            const std::string name = mLabels == "none" ? std::string() : dot.name;
+            FillText(cnv, name, Font(Weight::SemiBold).size(name.size() > 3 ? 9.5f : 11.5f),
+                     el::rgba(255, 255, 255, 255), {cx - kDotRadius, cy - kDotRadius, cx + kDotRadius, cy + kDotRadius},
+                     HAlign::Centre);
+            continue;
+        }
+
+        const int age = heardAge(dot);
         const float alpha = dot.inPosition || age >= 0 ? 1.0f : 0.45f;
         const el::color fill = dot.root ? mTheme.Accent()
                                : !dot.inPosition && age < 0
@@ -520,6 +594,17 @@ void ScaleNeck::draw(const el::context& ctx)
 RunTabView::RunTabView(const Theme& theme, GuideRun run, std::vector<std::string> stringNames)
     : mTheme(theme), mRun(std::move(run)), mStringNames(std::move(stringNames))
 {
+}
+
+bool RunTabView::SetPlaying(std::vector<int> steps)
+{
+    if (steps == mPlaying)
+    {
+        return false;
+    }
+
+    mPlaying = std::move(steps);
+    return true;
 }
 
 el::view_limits RunTabView::limits(const el::basic_context&) const
@@ -611,10 +696,327 @@ void RunTabView::draw(const el::context& ctx)
         }
 
         const float y = stringY(note.string);
-        FillText(cnv, std::to_string(note.fret), Font(Weight::SemiBold).size(13.0f), note.root ? mTheme.Accent() : ink,
-                 {cx - 12.0f, y - 8.0f, cx + 12.0f, y + 8.0f}, HAlign::Centre);
+        // The note Play is sounding reads larger, in the accent.
+        const bool sounding = std::find(mPlaying.begin(), mPlaying.end(), static_cast<int>(slot)) != mPlaying.end();
+        FillText(cnv, std::to_string(note.fret), Font(Weight::SemiBold).size(sounding ? 16.0f : 13.0f),
+                 note.root || sounding ? mTheme.Accent() : ink, {cx - 12.0f, y - 9.0f, cx + 12.0f, y + 9.0f},
+                 HAlign::Centre);
         FillText(cnv, note.interval, small, note.root ? mTheme.Accent() : mTheme.TextMuted(),
                  {cx - 14.0f, intervalY - 8.0f, cx + 14.0f, intervalY + 8.0f}, HAlign::Centre);
+    }
+}
+
+ProgressionTabView::ProgressionTabView(const Theme& theme, GuideProgressionRun whole,
+                                       std::vector<std::string> stringNames, float width, int activeChord)
+    : mTheme(theme), mWhole(std::move(whole)), mStringNames(std::move(stringNames)), mActive(activeChord)
+{
+    // As ts/scaleGuide/runTab.ts lays it out: a bar stays on one line where a line can hold it.
+    const float edge = std::max(width - kTabRight, kTabLeft + kTabFewestSlots * kTabSlot + kTabBarGap);
+    int line = 0;
+    float x = kTabLeft;
+
+    for (std::size_t b = 0; b < mWhole.bars.size(); ++b)
+    {
+        const auto& bar = mWhole.bars[b];
+        // A chord with no run keeps a short bar, so the progression still reads whole.
+        const int slots = std::max(bar.count, 2);
+        const float whole = static_cast<float>(slots) * kTabSlot + kTabBarGap;
+
+        if (x > kTabLeft && x + whole > edge && kTabLeft + whole <= edge)
+        {
+            ++line;
+            x = kTabLeft;
+        }
+
+        Segment segment{b, line, x, x, true, true, {}};
+
+        for (int slot = 0; slot < slots; ++slot)
+        {
+            if (x > kTabLeft && x + kTabSlot + kTabBarGap > edge)
+            {
+                segment.last = false;
+                mSegments.push_back(segment);
+                ++line;
+                x = kTabLeft;
+                segment = Segment{b, line, x, x, false, true, {}};
+            }
+
+            if (slot < bar.count)
+            {
+                segment.cells.emplace_back(bar.from + slot, x + kTabSlot * 0.5f);
+            }
+
+            x += kTabSlot;
+            segment.to = x;
+        }
+
+        mSegments.push_back(segment);
+        x += kTabBarGap;
+    }
+
+    mLines = line + 1;
+
+    for (const auto& segment : mSegments)
+    {
+        mWidth = std::max(mWidth, segment.to + kTabBarGap * 0.5f + kTabRight);
+    }
+}
+
+float ProgressionTabView::LineHeight() const
+{
+    const auto strings = static_cast<float>(std::max<std::size_t>(1, mStringNames.size()));
+    return kTabChordRow + kTabTop + (strings - 1.0f) * kTabStringGap + kTabIntervalGap + 8.0f;
+}
+
+bool ProgressionTabView::SetPlaying(std::vector<int> steps)
+{
+    if (steps == mPlaying)
+    {
+        return false;
+    }
+
+    mPlaying = std::move(steps);
+    return true;
+}
+
+el::view_limits ProgressionTabView::limits(const el::basic_context&) const
+{
+    const float height = static_cast<float>(mLines) * LineHeight() + static_cast<float>(mLines - 1) * kTabLineGap;
+    return {{mWidth, height}, {mWidth, height}};
+}
+
+int ProgressionTabView::BarAt(const el::context& ctx, el::point point) const
+{
+    const float pitch = LineHeight() + kTabLineGap;
+    const float x = point.x - ctx.bounds.left;
+    const float y = point.y - ctx.bounds.top;
+    const int line = static_cast<int>(std::floor(y / pitch));
+
+    if (y < 0.0f || y - static_cast<float>(line) * pitch > LineHeight())
+    {
+        return -1;
+    }
+
+    for (const auto& segment : mSegments)
+    {
+        if (segment.line == line && x >= segment.from - 4.0f && x <= segment.to + 4.0f)
+        {
+            return mWhole.bars[segment.bar].chord;
+        }
+    }
+
+    return -1;
+}
+
+bool ProgressionTabView::click(const el::context& ctx, el::mouse_button btn)
+{
+    if (btn.state != el::mouse_button::left)
+    {
+        return false;
+    }
+
+    if (btn.down)
+    {
+        mPressedBar = BarAt(ctx, btn.pos);
+        return mPressedBar >= 0;
+    }
+
+    const int bar = mPressedBar;
+    mPressedBar = -1;
+
+    if (bar >= 0 && bar == BarAt(ctx, btn.pos) && onBar)
+    {
+        onBar(bar);
+    }
+
+    return true;
+}
+
+void ProgressionTabView::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds;
+    const int strings = static_cast<int>(mStringNames.size());
+    const auto& run = mWhole.run;
+    const float pitch = LineHeight() + kTabLineGap;
+    const auto lineTop = [&](int line) { return b.top + static_cast<float>(line) * pitch; };
+    const auto stringY = [&](int line, int s) {
+        return lineTop(line) + kTabChordRow + kTabTop + static_cast<float>(strings - 1 - s) * kTabStringGap;
+    };
+    const auto noteAt = [&](int step) -> const GuideRunNote* {
+        if (step < 0 || step >= static_cast<int>(run.steps.size()))
+        {
+            return nullptr;
+        }
+
+        const auto index = static_cast<std::size_t>(run.steps[static_cast<std::size_t>(step)].note);
+        return index < run.notes.size() ? &run.notes[index] : nullptr;
+    };
+    const auto small = Font(Weight::Regular).size(11.0f);
+    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
+    const el::color ink = mTheme.Text();
+
+    // The chord showing on the neck, behind its bar.
+    for (const auto& segment : mSegments)
+    {
+        if (mWhole.bars[segment.bar].chord == mActive)
+        {
+            const float top = lineTop(segment.line);
+            cnv.begin_path();
+            cnv.add_round_rect(
+                {b.left + segment.from - 4.0f, top + 1.0f, b.left + segment.to + 4.0f, top + LineHeight() - 1.0f},
+                6.0f);
+            cnv.fill_style(mTheme.Accent().opacity(0.14f));
+            cnv.fill();
+        }
+    }
+
+    // The strings of each line, broken around their numbers, with their names at its start.
+    for (int l = 0; l < mLines; ++l)
+    {
+        float end = kTabLeft;
+
+        for (const auto& segment : mSegments)
+        {
+            end = segment.line == l ? std::max(end, segment.to + kTabBarGap * 0.5f) : end;
+        }
+
+        for (int s = 0; s < strings; ++s)
+        {
+            const float y = stringY(l, s);
+            float from = b.left + kTabLeft - 8.0f;
+            cnv.stroke_style(line);
+            cnv.line_width(1.0f);
+
+            for (const auto& segment : mSegments)
+            {
+                for (const auto& [step, x] : segment.cells)
+                {
+                    const auto* note = noteAt(step);
+
+                    if (segment.line == l && note != nullptr && note->string == s)
+                    {
+                        Line(cnv, from, y, b.left + x - kTabNumberGap * 0.5f, y);
+                        from = b.left + x + kTabNumberGap * 0.5f;
+                    }
+                }
+            }
+
+            Line(cnv, from, y, b.left + end, y);
+            FillText(cnv, mStringNames[static_cast<std::size_t>(s)], small, mTheme.TextMuted(),
+                     {b.left + 2.0f, y - 8.0f, b.left + 22.0f, y + 8.0f}, HAlign::Centre);
+        }
+    }
+
+    const auto slide = [&](float cx, float cy, float side, bool rising) {
+        const float inner = cx + side * (kTabNumberGap * 0.5f - 1.0f);
+        const float outer = inner + side * kTabSlideLength;
+        const float lift = (rising ? -1.0f : 1.0f) * side * kTabSlideRise;
+        cnv.stroke_style(ink);
+        cnv.line_width(1.5f);
+        Line(cnv, inner, cy - lift, outer, cy + lift);
+    };
+
+    for (std::size_t i = 0; i < mSegments.size(); ++i)
+    {
+        const auto& segment = mSegments[i];
+        const auto& bar = mWhole.bars[segment.bar];
+        const float top = lineTop(segment.line);
+        const float strokeY = top + kTabChordRow + kTabStrokesY;
+        const float intervalY = stringY(segment.line, 0) + kTabIntervalGap;
+
+        if (segment.first)
+        {
+            const auto nameFont = Font(Weight::SemiBold).size(14.0f);
+            const float nameWidth = el::measure_text(cnv, bar.name, nameFont).x;
+            const float left = b.left + segment.from + 4.0f;
+            FillText(cnv, bar.name, nameFont, ink, {left, top + 2.0f, left + nameWidth + 2.0f, top + 20.0f},
+                     HAlign::Left);
+            FillText(cnv, bar.numeral, small, mTheme.TextMuted(),
+                     {left + nameWidth + 6.0f, top + 3.0f, left + nameWidth + 70.0f, top + 20.0f}, HAlign::Left);
+        }
+
+        if (bar.count == 0)
+        {
+            FillText(cnv, "no run", small, mTheme.TextMuted(),
+                     {b.left + segment.from, intervalY - 8.0f, b.left + segment.to, intervalY + 8.0f}, HAlign::Centre);
+        }
+
+        for (const auto& [step, x] : segment.cells)
+        {
+            const auto* note = noteAt(step);
+
+            if (note == nullptr)
+            {
+                continue;
+            }
+
+            const auto& stroke = run.steps[static_cast<std::size_t>(step)].stroke;
+            const float cx = b.left + x;
+            const float y = stringY(segment.line, note->string);
+            cnv.stroke_style(ink);
+            cnv.line_width(1.5f);
+
+            if (stroke == "down")
+            {
+                cnv.begin_path();
+                cnv.move_to(cx - 5.0f, strokeY + 5.0f);
+                cnv.line_to(cx - 5.0f, strokeY - 5.0f);
+                cnv.line_to(cx + 5.0f, strokeY - 5.0f);
+                cnv.line_to(cx + 5.0f, strokeY + 5.0f);
+                cnv.stroke();
+            }
+            else if (stroke == "up")
+            {
+                cnv.begin_path();
+                cnv.move_to(cx - 5.0f, strokeY - 5.0f);
+                cnv.line_to(cx, strokeY + 5.0f);
+                cnv.line_to(cx + 5.0f, strokeY - 5.0f);
+                cnv.stroke();
+            }
+            else
+            {
+                FillText(cnv,
+                         stroke == "hammer"  ? "h"
+                         : stroke == "slide" ? "sl."
+                                             : "p",
+                         Font(Weight::Regular).size(13.0f), ink,
+                         {cx - 10.0f, strokeY - 8.0f, cx + 10.0f, strokeY + 8.0f}, HAlign::Centre);
+            }
+
+            // A slide is drawn as its two halves, out of one number and into the next.
+            const auto* before = noteAt(step - 1);
+
+            if (stroke == "slide" && before != nullptr)
+            {
+                slide(cx, y, -1.0f, note->fret > before->fret);
+            }
+
+            const auto* after = noteAt(step + 1);
+
+            if (after != nullptr && run.steps[static_cast<std::size_t>(step + 1)].stroke == "slide")
+            {
+                slide(cx, y, 1.0f, after->fret > note->fret);
+            }
+
+            // The note Play is sounding reads larger, in the accent.
+            const bool sounding = std::find(mPlaying.begin(), mPlaying.end(), step) != mPlaying.end();
+            FillText(cnv, std::to_string(note->fret), Font(Weight::SemiBold).size(sounding ? 16.0f : 13.0f),
+                     note->root || sounding ? mTheme.Accent() : ink, {cx - 12.0f, y - 9.0f, cx + 12.0f, y + 9.0f},
+                     HAlign::Centre);
+            FillText(cnv, note->interval, small, note->root ? mTheme.Accent() : mTheme.TextMuted(),
+                     {cx - 14.0f, intervalY - 8.0f, cx + 14.0f, intervalY + 8.0f}, HAlign::Centre);
+        }
+
+        // The bar line, where the chord ends: heavier after the last.
+        if (segment.last)
+        {
+            const float x = b.left + segment.to + kTabBarGap * 0.5f;
+            cnv.stroke_style(line);
+            cnv.line_width(i + 1 == mSegments.size() ? 3.5f : 1.5f);
+            Line(cnv, x, stringY(segment.line, strings - 1), x, stringY(segment.line, 0));
+        }
     }
 }
 

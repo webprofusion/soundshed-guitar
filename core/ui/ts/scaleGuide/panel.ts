@@ -8,22 +8,28 @@
 import { postMessage } from "../bridge.js";
 import type { IncomingPayload } from "../messages/types.js";
 import { escapeHtml } from "../utils.js";
-import { effectiveLabels, isArpeggioStyle, renderRunCard, renderArpeggioControls } from "./arpeggioView.js";
+import { effectiveLabels, isArpeggioStyle, renderRunCard, renderArpeggioControls, watchRunCard } from "./arpeggioView.js";
 import { renderChordBoxSvg } from "./chordBox.js";
 import { onListenReading, renderListen, resetListenForTests, resetRound, syncListening, type ListenHost } from "./listenController.js";
 import {
   markSummaryPlayable,
   onScaleGuidePlaybackEnded,
+  bindPlayVolume,
+  followProgressionWith,
+  playScaleGuideBar,
   playScaleGuideChord,
   playScaleGuideNote,
   resetPlaybackForTests,
+  showPlayVolume,
   showScaleGuidePlaying,
   stopScaleGuidePlayback,
   toggleScaleGuidePlay,
 } from "./playback.js";
 import { neckDrawingWidth, renderNeckSvg } from "./neck.js";
+import { renderPositions } from "./positionsView.js";
 import { MAX_PROGRESSION_CHORDS, loadProgressions, newProgressionId, romanToken, saveProgressions, type UserProgression } from "./progressions.js";
 import { NEW_PROGRESSION, degreeOptions, editorChordsMarkup, numeralTokens, progressionOptions, qualityOptions, stepsMarkup, stripMarkup } from "./progressionView.js";
+import { bindSetupMenu, instrumentLabel, showSetupChoices } from "./setupMenu.js";
 import { loadSettings, MAX_CAPO, saveSettings, viewRequest, type ProgressionRequest } from "./state.js";
 import type { ScaleGuideCatalog, ScaleGuideLabels, ScaleGuideMode, ScaleGuideSettings, ScaleGuideView } from "./types.js";
 
@@ -47,6 +53,8 @@ let bound = false;
 let drawnNeckWidth = 0;
 /** The progression step showing; the engine wraps it and says where it landed. */
 let step = 0;
+/** In Arpeggios: the progression chord whose run the player chose; the others follow from it. */
+let anchorStep = 0;
 /** The shape to lead from, sent once with the next request after a step. */
 let pendingPrevious: number[] | undefined;
 /** A progression being written or changed: `id` null for a new one (or a built-in's copy). */
@@ -78,26 +86,28 @@ function mine(): UserProgression[] {
   return userProgressions;
 }
 
-/** What the request adds in Chords mode: the draft being edited, or the chosen progression. */
+/** What the request adds in Chords and Arpeggios: the draft being edited, or the chosen progression. */
 function progressionRequest(): ProgressionRequest {
   const state = current();
   const previousFrets = pendingPrevious;
   pendingPrevious = undefined;
 
-  if (state.mode !== "chord") {
+  if (state.mode === "scale") {
     return {};
   }
 
+  const where = state.mode === "arpeggio" ? { step, anchorStep } : { step, previousFrets };
+
   if (draft) {
-    return draft.chords.length ? { progressionChords: [...draft.chords], progressionName: draft.name, step: Math.min(step, draft.chords.length - 1) } : {};
+    return draft.chords.length ? { ...where, progressionChords: [...draft.chords], progressionName: draft.name, step: Math.min(step, draft.chords.length - 1) } : {};
   }
 
   if (state.progression.startsWith("b:")) {
-    return { progression: state.progression.slice(2), step, previousFrets };
+    return { ...where, progression: state.progression.slice(2) };
   }
 
   const own = state.progression.startsWith("u:") ? mine().find((p) => p.id === state.progression.slice(2)) : undefined;
-  return own ? { progressionChords: [...own.chords], progressionName: own.name, step, previousFrets } : {};
+  return own ? { ...where, progressionChords: [...own.chords], progressionName: own.name } : {};
 }
 
 /** Steps a progression; the next chord takes the shape nearest the one showing, or `frets` when given. */
@@ -126,6 +136,7 @@ export function renderScaleGuidePanel(): void {
   if (!bound) {
     bindEvents(root);
     watchNeckWidth();
+    watchRunCard(() => view);
     bound = true;
   }
 
@@ -158,6 +169,7 @@ function change(patch: Partial<ScaleGuideSettings>): void {
 
   if (next.mode !== before.mode || next.progression !== before.progression) {
     step = 0;
+    anchorStep = 0;
     resetRound();
     draft = next.mode === before.mode ? draft : null;
   }
@@ -180,7 +192,7 @@ function change(patch: Partial<ScaleGuideSettings>): void {
   }
 
   // Labels, handedness and LISTEN's settings only change how the same model is drawn.
-  const redrawOnly = Object.keys(patch).every((key) => ["labels", "leftHanded", "listen", "match"].includes(key));
+  const redrawOnly = Object.keys(patch).every((key) => ["labels", "leftHanded", "listen", "match", "listenEverywhere", "playVolume"].includes(key));
 
   if (redrawOnly && view) {
     renderView();
@@ -210,9 +222,13 @@ export function onScaleGuideView(payload: IncomingPayload): void {
   view = payload.view as ScaleGuideView;
   step = view.progression?.step ?? step;
 
-  // The engine falls back to the whole neck for a position the new scale or tuning lacks.
-  if (settings && settings.position !== view.position) {
-    settings = { ...settings, position: view.position };
+  // The engine falls back to the whole neck for a position the new scale or tuning lacks. In a
+  // progression's arpeggios the choice is the anchor chord's run, not the one showing.
+  const chosen = view.progression?.anchorPosition ?? view.position;
+  anchorStep = view.progression?.anchorStep ?? 0;
+
+  if (settings && settings.position !== chosen) {
+    settings = { ...settings, position: chosen };
   }
 
   renderView();
@@ -236,7 +252,7 @@ function bindEvents(root: HTMLElement): void {
     }
 
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-play],[data-sg-play-scale],#sg-listen",
+      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-arp-slides],[data-sg-play],[data-sg-play-scale],#sg-listen",
     );
 
     if (!target || !root.contains(target)) {
@@ -263,12 +279,15 @@ function bindEvents(root: HTMLElement): void {
       change({ arpeggioStyle: data.sgArpStyle });
     } else if (data.sgArpStrings !== undefined) {
       change({ arpeggioStrings: Number(data.sgArpStrings) });
+    } else if (data.sgArpSlides !== undefined) {
+      change({ arpeggioSlides: !current().arpeggioSlides });
     } else if (data.sgMode) {
       change({ mode: data.sgMode as ScaleGuideMode });
     } else if (data.sgLabels) {
       change({ labels: data.sgLabels as ScaleGuideLabels });
     } else if (data.sgPosition !== undefined) {
       const shape = target.classList.contains("sg-box") ? view?.shapes?.[Number(data.sgPosition) - 1] : undefined;
+      anchorStep = step;
       change({ position: Number(data.sgPosition) });
       playShape(shape?.frets);
     } else if (data.sgChordRoot !== undefined) {
@@ -279,6 +298,10 @@ function bindEvents(root: HTMLElement): void {
       const frets = target.classList.contains("sg-strip-box") ? (view?.progression?.chords[index]?.shape?.frets ?? undefined) : undefined;
       goStep(index, frets);
       playShape(frets);
+
+      if (target.classList.contains("sg-tab-bar")) {
+        playScaleGuideBar(viewRequest(current(), progressionRequest()), index);
+      }
     } else if (data.sgStep) {
       if (data.sgStep === "first") {
         resetRound();
@@ -318,6 +341,10 @@ function bindEvents(root: HTMLElement): void {
   });
 
   bindEditor();
+  bindSetupMenu(root);
+  followProgressionWith((chord) => chord !== step && goStep(chord));
+  bindPlayVolume((playVolume) => change({ playVolume }));
+  element<HTMLInputElement>("sg-listen-everywhere")?.addEventListener("change", (event) => change({ listenEverywhere: (event.target as HTMLInputElement).checked }));
 
   element<HTMLSelectElement>("sg-key")?.addEventListener("change", (event) => change({ key: Number((event.target as HTMLSelectElement).value) }));
   element<HTMLSelectElement>("sg-scale")?.addEventListener("change", (event) => change({ scale: (event.target as HTMLSelectElement).value }));
@@ -426,7 +453,7 @@ function bindEditor(): void {
 
 function renderEditor(state: ScaleGuideSettings): void {
   const editor = element<HTMLElement>("sg-editor");
-  editor?.toggleAttribute("hidden", !draft || state.mode !== "chord");
+  editor?.toggleAttribute("hidden", !draft || state.mode === "scale");
 
   if (!draft) {
     return;
@@ -507,7 +534,7 @@ function buildPickers(): void {
 function renderControls(): void {
   const state = current();
   const chordMode = state.mode === "chord";
-  const arpeggioMode = state.mode === "arpeggio";
+  const scaleMode = state.mode === "scale";
   const labels = effectiveLabels(state);
   buildPickers();
 
@@ -533,16 +560,17 @@ function renderControls(): void {
 
   const keyLabel = element<HTMLElement>("sg-key-label");
 
-  const singleChord = chordMode && !state.progression && !draft;
+  // Chords and Arpeggios take one chord on a root, or a progression in a key.
+  const singleChord = !scaleMode && !state.progression && !draft;
 
   if (keyLabel) {
-    keyLabel.textContent = singleChord || arpeggioMode ? "Root" : "Key";
+    keyLabel.textContent = singleChord ? "Root" : "Key";
   }
 
-  element<HTMLElement>("sg-scale-field")?.toggleAttribute("hidden", state.mode !== "scale");
-  element<HTMLElement>("sg-progression-field")?.toggleAttribute("hidden", !chordMode);
-  element<HTMLElement>("sg-chord-field")?.toggleAttribute("hidden", !singleChord && !arpeggioMode);
-  element<HTMLElement>("sg-progression-edit")?.toggleAttribute("hidden", !chordMode || !state.progression || draft !== null);
+  element<HTMLElement>("sg-scale-field")?.toggleAttribute("hidden", !scaleMode);
+  element<HTMLElement>("sg-progression-field")?.toggleAttribute("hidden", scaleMode);
+  element<HTMLElement>("sg-chord-field")?.toggleAttribute("hidden", !singleChord);
+  element<HTMLElement>("sg-progression-edit")?.toggleAttribute("hidden", scaleMode || !state.progression || draft !== null);
 
   const progressionSelect = element<HTMLSelectElement>("sg-progression");
 
@@ -574,40 +602,14 @@ function renderControls(): void {
   setValue("sg-tuning", state.tuning);
   setValue("sg-capo", String(state.capo));
 
-  const leftHanded = element<HTMLInputElement>("sg-left-handed");
-
-  if (leftHanded) {
-    leftHanded.checked = state.leftHanded;
-  }
+  showSetupChoices(state);
+  showPlayVolume(state.playVolume);
 
   const positionLabel = element<HTMLElement>("sg-position-label");
 
   if (positionLabel) {
     positionLabel.textContent = chordMode ? "Shape" : "Position";
   }
-}
-
-function renderPositions(model: ScaleGuideView): string {
-  const chordMode = model.mode === "chord";
-  const runs = model.arpeggio?.runs ?? [];
-  const count = chordMode ? (model.shapes?.length ?? 0) : model.mode === "arpeggio" ? runs.length : (model.positions?.length ?? 0);
-  const segment = (position: number, label: string, title: string, hint = ""): string =>
-    `<button type="button" class="sg-segment${model.position === position ? " active" : ""}" data-sg-position="${position}" aria-pressed="${model.position === position}" title="${escapeHtml(title)}">${escapeHtml(label)}${hint ? `<small>${escapeHtml(hint)}</small>` : ""}</button>`;
-  const segments = [segment(0, "All", chordMode || model.mode === "arpeggio" ? "Every chord tone on the neck" : "The whole neck")];
-
-  for (let position = 1; position <= count; position += 1) {
-    const run = runs[position - 1];
-
-    if (run) {
-      segments.push(segment(position, String(position), `${run.name}, from fret ${run.fretFrom}`, run.start));
-      continue;
-    }
-
-    const caged = chordMode ? (model.shapes?.[position - 1]?.caged ?? "") : "";
-    segments.push(segment(position, String(position), caged ? `${caged} shape` : `${chordMode ? "Shape" : "Position"} ${position}`, caged));
-  }
-
-  return segments.join("");
 }
 
 /** The middle of the summary: the scale's chords, or the chord's formula and shape. */
@@ -713,12 +715,12 @@ function renderView(): void {
   const play = element<HTMLButtonElement>("sg-play");
 
   if (play) {
-    const nothingChosen = model.position === 0;
+    const nothingChosen = model.position === 0 && !model.progressionRun?.steps.length;
     play.disabled = nothingChosen;
     play.title = nothingChosen ? "Pick a position to hear it" : "Hear it played through the current preset";
   }
 
-  setText("sg-title", `${model.title} · ${model.tuning.name}`);
+  setText("sg-title", instrumentLabel(model, state));
 
   const positions = element<HTMLElement>("sg-positions");
 
@@ -728,11 +730,7 @@ function renderView(): void {
 
   renderNeck(model, state);
 
-  const tab = element<HTMLElement>("sg-arp-tab");
-
-  if (tab) {
-    renderRunCard(tab, model);
-  }
+  renderRunCard(element<HTMLElement>("sg-arp-tab"), model);
 
   const root = element<HTMLElement>("scale-guide");
 
@@ -740,13 +738,15 @@ function renderView(): void {
     renderArpeggioControls(root, state, model);
   }
 
-  const progression = model.mode === "chord" ? model.progression : undefined;
-  element<HTMLElement>("sg-steps-row")?.toggleAttribute("hidden", !progression);
+  // The steps row is the progression's in Chords and Arpeggios; the strip of chord boxes is Chords' alone.
+  element<HTMLElement>("sg-steps-row")?.toggleAttribute("hidden", !model.progression);
   const steps = element<HTMLElement>("sg-steps");
 
   if (steps) {
-    steps.innerHTML = progression ? stepsMarkup(model) : "";
+    steps.innerHTML = model.progression ? stepsMarkup(model) : "";
   }
+
+  const progression = model.mode === "chord" ? model.progression : undefined;
 
   const boxes = element<HTMLElement>("sg-boxes");
 
@@ -787,6 +787,7 @@ export function resetScaleGuideForTests(): void {
   bound = false;
   drawnNeckWidth = 0;
   step = 0;
+  anchorStep = 0;
   pendingPrevious = undefined;
   draft = null;
   userProgressions = null;

@@ -640,6 +640,8 @@ std::string_view PickStrokeId(PickStroke stroke)
         return "hammer";
     case PickStroke::Pull:
         return "pull";
+    case PickStroke::Slide:
+        return "slide";
     case PickStroke::Down:
         break;
     }

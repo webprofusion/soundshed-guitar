@@ -25,6 +25,9 @@ export const DEFAULT_SETTINGS: Readonly<ScaleGuideSettings> = {
   match: "normal",
   arpeggioStyle: "sweep",
   arpeggioStrings: 0,
+  arpeggioSlides: false,
+  listenEverywhere: false,
+  playVolume: 100,
 };
 
 const LABELS: readonly ScaleGuideLabels[] = ["name", "interval", "degree", "none", "order", "finger"];
@@ -62,6 +65,9 @@ export function normalizeSettings(value: unknown): ScaleGuideSettings {
     match: MATCHES.includes(stored.match as ScaleGuideSettings["match"]) ? (stored.match as ScaleGuideSettings["match"]) : defaults.match,
     arpeggioStyle: ARPEGGIO_STYLES.includes(stored.arpeggioStyle as ArpeggioStyle) ? (stored.arpeggioStyle as ArpeggioStyle) : defaults.arpeggioStyle,
     arpeggioStrings: wholeNumber(stored.arpeggioStrings, defaults.arpeggioStrings, 0, MAX_STRINGS),
+    arpeggioSlides: typeof stored.arpeggioSlides === "boolean" ? stored.arpeggioSlides : defaults.arpeggioSlides,
+    listenEverywhere: typeof stored.listenEverywhere === "boolean" ? stored.listenEverywhere : defaults.listenEverywhere,
+    playVolume: wholeNumber(stored.playVolume, defaults.playVolume, 0, 100),
   };
 }
 
@@ -81,6 +87,8 @@ export interface ProgressionRequest {
   step?: number;
   /** The shape last shown, so the next chord takes the shape nearest it. */
   previousFrets?: number[];
+  /** In Arpeggios: the chord whose run `position` chooses; the other chords follow from it. */
+  anchorStep?: number;
 }
 
 /** The engine request for these choices (core/src/music/ScaleGuideView.h). */
@@ -95,6 +103,7 @@ export function viewRequest(settings: ScaleGuideSettings, progression: Progressi
     position: settings.position,
     arpeggioStyle: settings.arpeggioStyle,
     arpeggioStrings: settings.arpeggioStrings,
+    arpeggioSlides: settings.arpeggioSlides,
     ...progression,
   };
 }

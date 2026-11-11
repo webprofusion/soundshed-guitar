@@ -13,6 +13,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace guitarfx::uiclient::scaleguide
@@ -40,6 +41,9 @@ struct Settings
     std::string match = "normal";        ///< "easy", "normal" or "strict"
     std::string arpeggioStyle = "sweep"; ///< "sweep", "two" or "box"
     int arpeggioStrings = 0;             ///< from the highest string; 0 for the default
+    bool arpeggioSlides = false;         ///< a progression's arpeggios joined by slides
+    bool listenEverywhere = false;       ///< LISTEN marks a note everywhere on the neck
+    int playVolume = 100;                ///< Play's level into the preset, 0 to 100
 };
 
 /// The stored choices, anything missing or malformed taking its default.
@@ -58,9 +62,48 @@ struct UserProgression
 [[nodiscard]] nlohmann::json ProgressionsJson(const std::vector<UserProgression>& progressions);
 
 /// The engine request for these choices: the chosen progression (a built-in's id, or one of the
-/// player's own as numerals), the step showing, and the shape to lead from when stepping.
+/// player's own as numerals), the step showing, and in Chords the shape to lead from when stepping.
+/// In Arpeggios `anchorStep` is the chord whose run the position chooses (ScaleGuideView.h).
 [[nodiscard]] nlohmann::json ViewRequest(const Settings& settings, const std::vector<UserProgression>& progressions,
-                                         int step, const std::vector<int>& previousFrets = {});
+                                         int step, const std::vector<int>& previousFrets = {}, int anchorStep = 0);
+
+// ── Play ────────────────────────────────────────────────────────────────────
+
+/// One note of what Play sounds, as the engine's `scaleGuidePlayback` times it.
+struct PlayedNote
+{
+    int string = 0;
+    int fret = 0;
+    double startMs = 0.0;
+    double lengthMs = 0.0;
+    int step = -1;  ///< which step of the tab it is, or -1
+    int chord = -1; ///< which chord of a progression it belongs to, or -1
+};
+
+/// What Play is sounding: its notes in order, after `delayMs` (the wait for the metronome's bar).
+struct Playback
+{
+    std::vector<PlayedNote> notes;
+    double delayMs = 0.0;
+};
+
+[[nodiscard]] Playback ParsePlayback(const nlohmann::json& message);
+
+/// What to show at one moment of a playback: the places sounding on the neck, their steps of the
+/// tab, and the progression chord to show (-1 for none).
+struct PlaybackMoment
+{
+    std::vector<std::pair<int, int>> places; ///< string, fret
+    std::vector<int> steps;
+    int chord = -1;
+
+    bool operator==(const PlaybackMoment&) const = default;
+};
+
+/// A progression's next chord shows this long before its first note, so the neck is drawn in time.
+inline constexpr double kPlaybackStepLeadMs = 80.0;
+
+[[nodiscard]] PlaybackMoment PlaybackAt(const Playback& playback, double elapsedMs);
 
 // ── LISTEN ──────────────────────────────────────────────────────────────────
 

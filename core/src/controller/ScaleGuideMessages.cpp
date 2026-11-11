@@ -36,9 +36,31 @@ nlohmann::json RequestedView(const nlohmann::json& payload, int position = -1)
     return music::BuildScaleGuideView(music::ParseScaleGuideRequest(request));
 }
 
-/// Sounds the notes, and tells the UI when each one falls so it can follow along.
+/// The notes rendered at the level the payload's `volume` asks for, 0 to 1, full without one. The
+/// slider is squared, so its middle is a quarter of the level (-12 dB), as a volume control feels.
+std::vector<float> Rendered(const std::vector<music::PlayedNote>& notes, double rate, const nlohmann::json& payload)
+{
+    auto samples = music::RenderPluckedNotes(notes, rate);
+    const auto asked = payload.find("volume");
+    const double volume =
+        asked != payload.end() && asked->is_number() ? std::clamp(asked->get<double>(), 0.0, 1.0) : 1.0;
+    const auto gain = static_cast<float>(volume * volume);
+
+    if (gain < 1.0f)
+    {
+        for (auto& sample : samples)
+        {
+            sample *= gain;
+        }
+    }
+
+    return samples;
+}
+
+/// Sounds the notes, and tells the UI when each one falls so it can follow along. `onBar` waits for
+/// the metronome's bar line.
 void PlayNotes(const std::vector<music::PlayedNote>& notes, const ScaleGuideAudio& audio,
-               const std::function<void(const std::string&)>& send)
+               const std::function<void(const std::string&)>& send, bool onBar, const nlohmann::json& payload)
 {
     if (notes.empty())
     {
@@ -46,7 +68,7 @@ void PlayNotes(const std::vector<music::PlayedNote>& notes, const ScaleGuideAudi
     }
 
     const double rate = RenderRate(audio);
-    audio.play(music::RenderPluckedNotes(notes, rate), rate, true);
+    const double delaySec = audio.play(Rendered(notes, rate, payload), rate, true, onBar);
 
     nlohmann::json timed = nlohmann::json::array();
 
@@ -56,10 +78,12 @@ void PlayNotes(const std::vector<music::PlayedNote>& notes, const ScaleGuideAudi
                          {"fret", note.fret},
                          {"midi", note.midi},
                          {"startMs", note.startSec * 1000.0},
-                         {"lengthMs", note.lengthSec * 1000.0}});
+                         {"lengthMs", note.lengthSec * 1000.0},
+                         {"step", note.step},
+                         {"chord", note.chord}});
     }
 
-    send(nlohmann::json{{"type", "scaleGuidePlayback"}, {"notes", timed}}.dump());
+    send(nlohmann::json{{"type", "scaleGuidePlayback"}, {"notes", timed}, {"delayMs", delaySec * 1000.0}}.dump());
 }
 } // namespace
 
@@ -72,7 +96,11 @@ void RegisterScaleGuideMessages(MessageHandlerRegistry& registry, std::function<
 
             if (action == "play")
             {
-                PlayNotes(music::ScaleGuidePlaybackNotes(RequestedView(payload), audio.tempoBpm()), audio, send);
+                const auto bar = payload.find("bar");
+                const int onlyBar = bar != payload.end() && bar->is_number_integer() ? bar->get<int>() : -1;
+                const double barSec = audio.barSeconds ? audio.barSeconds() : 0.0;
+                PlayNotes(music::ScaleGuidePlaybackNotes(RequestedView(payload), audio.tempoBpm(), barSec, onlyBar),
+                          audio, send, true, payload);
                 return;
             }
 
@@ -83,7 +111,7 @@ void RegisterScaleGuideMessages(MessageHandlerRegistry& registry, std::function<
                 const bool wholeNeck =
                     request == payload.end() || !request->is_object() || request->value("position", 0) <= 0;
                 PlayNotes(music::ScaleExampleNotes(RequestedView(payload, wholeNeck ? 1 : -1), audio.tempoBpm()), audio,
-                          send);
+                          send, true, payload);
                 return;
             }
 
@@ -96,7 +124,7 @@ void RegisterScaleGuideMessages(MessageHandlerRegistry& registry, std::function<
                     frets.push_back(fret.is_number_integer() ? std::clamp(fret.get<int>(), -1, 36) : -1);
                 }
 
-                PlayNotes(music::StrummedChord(RequestedView(payload), frets), audio, send);
+                PlayNotes(music::StrummedChord(RequestedView(payload), frets), audio, send, false, payload);
                 return;
             }
 
@@ -104,7 +132,7 @@ void RegisterScaleGuideMessages(MessageHandlerRegistry& registry, std::function<
             {
                 const int midi = std::clamp(payload.value("midi", 60), 0, 127);
                 const double rate = RenderRate(audio);
-                audio.play(music::RenderPluckedNotes({music::SingleNote(midi)}, rate), rate, false);
+                audio.play(Rendered({music::SingleNote(midi)}, rate, payload), rate, false, false);
                 return;
             }
 

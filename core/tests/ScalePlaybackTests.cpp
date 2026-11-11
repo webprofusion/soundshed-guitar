@@ -5,7 +5,8 @@
  * The voice is judged by what a player would notice: in tune to a few cents across a guitar's range
  * at the usual rates, dying away, level with a DI track, no click at either end, and no brighter
  * than a real guitar's DI. `--tone` prints the octave bands of the voice beside the demo clips', and
- * `--wav <file>` writes what that check plays, to listen to.
+ * `--wav <file>` writes what that check plays, to listen to, and `--wav <file> held` the notes Play
+ * leaves ringing.
  */
 
 #include "DemoAudio.h"
@@ -321,10 +322,30 @@ void TestNoBrighterThanAGuitar()
     Expect(voice >= guitar - 11.0, "nor so much less that it sounds muffled (" + std::to_string(voice) + " dB)");
 }
 
-/// The brightness check's sample as a 16-bit WAV, for listening.
-void WriteWav(const std::string& path)
+/// What Play leaves ringing, one after another: an arpeggio run's last note, a strummed chord and a
+/// clicked note.
+std::vector<float> HeldSample()
 {
-    const auto samples = VoiceSample();
+    auto notes = music::ScaleGuidePlaybackNotes(
+        ViewFor({{"mode", "arpeggio"}, {"key", 9}, {"chord", "m"}, {"position", 1}}), 120.0);
+    double at = notes.back().startSec + notes.back().lengthSec + 0.3;
+
+    for (auto note : music::StrummedChord(ViewFor({{"mode", "chord"}, {"key", 0}, {"chord", "maj"}}), {-1, 3, 2, 0, 1, 0}))
+    {
+        note.startSec += at;
+        notes.push_back(note);
+    }
+
+    auto single = music::SingleNote(64);
+    single.startSec = notes.back().startSec + notes.back().lengthSec + 0.3;
+    notes.push_back(single);
+    return music::RenderPluckedNotes(notes, 48000.0);
+}
+
+/// The brightness check's sample as a 16-bit WAV, for listening, or the held notes'.
+void WriteWav(const std::string& path, bool held)
+{
+    const auto samples = held ? HeldSample() : VoiceSample();
     const auto put = [](std::ofstream& out, std::uint32_t value, int bytes) {
         for (int i = 0; i < bytes; ++i)
         {
@@ -393,6 +414,121 @@ void TestLegatoIsSofter()
     Expect(Peak(both, half, half + twenty) < Peak(both, 0, twenty), "a hammer-on hits softer than a pick");
 }
 
+/// The pitch over a tenth of a second from `fromSec`, in cents against `hertz`: the spacing of the
+/// rising zero crossings of the fundamental, the harmonics filtered off first.
+double CentsAt(const std::vector<float>& samples, double rate, double hertz, double fromSec)
+{
+    const double keep = std::exp(-2.0 * 3.14159265358979323846 * 0.6 * hertz / rate);
+    std::array<double, 5> poles{};
+    double lower = 0.0;
+    double before = 0.0;
+    double first = -1.0;
+    double last = -1.0;
+    int crossings = 0;
+    const auto from = static_cast<std::size_t>(fromSec * rate);
+    const auto warm = static_cast<std::size_t>(0.05 * rate);
+
+    for (std::size_t i = from - warm; i < from + static_cast<std::size_t>(0.1 * rate) && i < samples.size(); ++i)
+    {
+        lower = samples[i];
+
+        for (auto& pole : poles)
+        {
+            pole += (1.0 - keep) * (lower - pole);
+            lower = pole;
+        }
+
+        if (i >= from && before < 0.0 && lower >= 0.0)
+        {
+            const double at = static_cast<double>(i) - lower / (lower - before);
+            first = first < 0.0 ? at : first;
+            last = at;
+            ++crossings;
+        }
+
+        before = lower;
+    }
+
+    return crossings > 1 ? 1200.0 * std::log2((crossings - 1) * rate / (last - first) / hertz) : 0.0;
+}
+
+/// A held note keeps ringing, its pitch starts to waver only once it has been held, never the same
+/// way twice running, and it fades out rather than stopping.
+void TestHeldNoteRingsAndWavers()
+{
+    const double rate = 48000.0;
+    const double hertz = 440.0 * std::pow(2.0, (57 - 69) / 12.0);
+    const auto held = music::RenderPluckedNotes({music::SingleNote(57)}, rate);
+    Expect(held.size() > static_cast<std::size_t>(3.0 * rate), "a held note lasts over three seconds");
+
+    double lowest = 1e9;
+    double highest = -1e9;
+    std::vector<double> swings;
+    bool rising = true;
+    double turn = 0.0;
+
+    for (double at = 0.15; at < 2.6; at += 0.02)
+    {
+        const double cents = CentsAt(held, rate, hertz, at);
+
+        if (at < 0.45)
+        {
+            Expect(std::abs(cents) < 4.0, "steady at first: " + std::to_string(cents) + " cents at " + std::to_string(at));
+            continue;
+        }
+
+        if (at > 1.9)
+        {
+            lowest = std::min(lowest, cents);
+            highest = std::max(highest, cents);
+        }
+
+        // Each top of the vibrato, to see that no two are alike.
+        if (rising && cents < turn - 1.0)
+        {
+            swings.push_back(turn);
+            rising = false;
+        }
+        else if (!rising && cents > turn + 1.0)
+        {
+            rising = true;
+        }
+
+        turn = rising ? std::max(turn, cents) : std::min(turn, cents);
+    }
+
+    Expect(highest - lowest > 6.0 && highest - lowest < 30.0,
+           "then wavers a little: " + std::to_string(highest - lowest) + " cents");
+    Expect(lowest > -4.0, "only ever sharp, as a bent string is: " + std::to_string(lowest));
+    Expect(swings.size() >= 4, "several times over: " + std::to_string(swings.size()));
+
+    if (swings.size() >= 4)
+    {
+        Expect(swings.front() < swings.back(), "growing as it goes");
+    }
+
+    const auto second = static_cast<std::size_t>(rate);
+    Expect(Peak(held, 2 * second, 2 * second + second / 4) > 0.1 * Peak(held, second / 4, second / 2),
+           "still ringing two seconds in");
+
+    for (std::size_t from = 5 * second / 2; from + second / 5 < held.size(); from += second / 5)
+    {
+        Expect(Peak(held, from + second / 5, from + 2 * second / 5) < Peak(held, from, from + second / 5),
+               "fading to the end");
+    }
+
+    auto open = music::SingleNote(57);
+    open.vibrato = 0.0;
+    const auto plain = music::RenderPluckedNotes({open}, rate);
+    Expect(std::abs(CentsAt(plain, rate, hertz, 2.2)) < 4.0 && std::abs(CentsAt(plain, rate, hertz, 2.3)) < 4.0,
+           "an open string holds its pitch");
+
+    const auto chord = music::StrummedChord(ViewFor({{"mode", "chord"}, {"key", 0}, {"chord", "maj"}}), {-1, 3, 2, 0, 1, 0});
+    Expect(chord.size() == 5 && chord[0].ring && chord[0].vibrato > 0.0 && chord[0].vibrato < 1.0 &&
+               chord[2].vibrato == 0.0,
+           "a chord rings with a little vibrato on its fretted strings alone");
+}
+
 void TestNotesForEachView()
 {
     auto notes = music::ScaleGuidePlaybackNotes(
@@ -400,6 +536,17 @@ void TestNotesForEachView()
     Expect(notes.size() >= 11, "a scale position goes up and comes back");
     Expect(notes.front().midi == notes.back().midi, "and ends where it began");
     Expect(std::abs(notes[1].startSec - 0.25) < 1e-9, "as eighth notes at the tempo");
+
+    // Whatever the metronome is set to, the notes stay on its clicks: twice as long past the
+    // fastest a run is played, half as long below the slowest.
+    const auto second = [](double bpm) {
+        return music::ScaleGuidePlaybackNotes(
+                   ViewFor({{"mode", "scale"}, {"key", 9}, {"scale", "minpent"}, {"position", 1}}), bpm)[1]
+            .startSec;
+    };
+    Expect(std::abs(second(240.0) - 0.25) < 1e-9, "quarter notes at 240");
+    Expect(std::abs(second(200.0) - 0.15) < 1e-9 && std::abs(second(60.0) - 0.5) < 1e-9, "eighths from 60 to 200");
+    Expect(std::abs(second(40.0) - 0.375) < 1e-9, "sixteenths at 40");
 
     for (std::size_t i = 1; i < notes.size() / 2 + 1; ++i)
     {
@@ -486,6 +633,58 @@ void TestScaleRun()
     Expect(arpeggio["run"] == arpeggio["arpeggio"]["runs"][1], "an arpeggio's chosen run is the same one");
 }
 
+/// A progression's arpeggios keep to the bar, and a slide is one stroke whose pitch moves.
+void TestProgressionTimingAndSlides()
+{
+    const json request = {
+        {"mode", "arpeggio"}, {"key", 0}, {"progression", "pop"}, {"position", 1}, {"arpeggioSlides", true}};
+    const auto view = ViewFor(request);
+    const auto bars = view["progressionRun"]["bars"];
+    const auto loose = music::ScaleGuidePlaybackNotes(view, 120.0);
+    const auto barred = music::ScaleGuidePlaybackNotes(view, 120.0, 2.0);
+    Expect(loose.size() == barred.size() && !barred.empty(), "the same notes with a bar length or without");
+
+    for (const auto& bar : bars)
+    {
+        const auto& first = barred[static_cast<std::size_t>(bar["from"].get<int>())];
+        const double inBars = first.startSec / 2.0;
+        Expect(std::abs(inBars - std::round(inBars)) < 1e-9, "each chord starts on a bar line");
+    }
+
+    const auto second = static_cast<std::size_t>(bars[1]["from"].get<int>());
+    Expect(std::abs(loose[second].startSec - 0.25 * static_cast<double>(second)) < 1e-9,
+           "without a bar length the chords follow straight on");
+    Expect(barred[second].slide &&
+               barred[second - 1].startSec + barred[second - 1].lengthSec >= barred[second].startSec,
+           "the last note of a chord is held up to the next, which is slid into");
+    Expect(barred.back().ring && !barred[second - 1].ring, "only the last note of all is left ringing");
+
+    const auto alone = music::ScaleGuidePlaybackNotes(view, 120.0, 2.0, 1);
+    Expect(static_cast<int>(alone.size()) == bars[1]["count"].get<int>() && alone.front().startSec == 0.0 &&
+               !alone.front().slide && alone.front().step == bars[1]["from"].get<int>() && alone.back().ring,
+           "one bar alone starts at once, picked, and keeps its place in the tab");
+
+    // A slide up two frets on the A string: A to B, one stroke.
+    const double rate = 48000.0;
+    music::PlayedNote from{57, 1, 12, 0.0, 0.5, false};
+    music::PlayedNote to{59, 1, 14, 0.5, 1.0, true};
+    to.slide = true;
+    const auto slid = music::RenderPluckedNotes({from, to}, rate);
+    const double a = 440.0 * std::pow(2.0, (57 - 69) / 12.0);
+    const double b = 440.0 * std::pow(2.0, (59 - 69) / 12.0);
+    Expect(std::abs(CentsAt(slid, rate, a, 0.2)) < 5.0, "a slide starts on the note before");
+    Expect(std::abs(CentsAt(slid, rate, b, 0.75)) < 5.0 && std::abs(CentsAt(slid, rate, b, 1.1)) < 5.0,
+           "and comes to rest on the new one: " + std::to_string(CentsAt(slid, rate, b, 0.75)) + " cents");
+
+    to.slide = false;
+    const auto struck = music::RenderPluckedNotes({from, to}, rate);
+    Expect(struck != slid && std::abs(CentsAt(struck, rate, b, 0.75)) < 5.0, "which is not the same as striking it");
+
+    to.slide = true;
+    to.string = 2;
+    Expect(music::RenderPluckedNotes({from, to}, rate) != slid, "on another string it is struck after all");
+}
+
 void TestMessages()
 {
     guitarfx::MessageHandlerRegistry registry;
@@ -499,10 +698,16 @@ void TestMessages()
     guitarfx::ScaleGuideAudio audio;
     audio.sampleRate = [] { return 44100.0; };
     audio.tempoBpm = [] { return 120.0; };
-    audio.play = [&](std::vector<float> samples, double rate, bool announce) {
+    int onBars = 0;
+    float lastPeak = 0.0f;
+    audio.barSeconds = [] { return 2.0; };
+    audio.play = [&](std::vector<float> samples, double rate, bool announce, bool onBar) {
         ++(announce ? announced : unannounced);
+        onBars += onBar ? 1 : 0;
         renderedAt = rate;
         lastLength = samples.size();
+        lastPeak = Peak(samples, 0, samples.size());
+        return onBar ? 0.5 : 0.0;
     };
     audio.stop = [&stops] { ++stops; };
     guitarfx::RegisterScaleGuideMessages(
@@ -515,6 +720,7 @@ void TestMessages()
     Expect(announced == 1 && lastLength > 44100 && renderedAt == 44100.0, "Play renders at the host's rate");
     Expect(sent.size() == 1 && sent[0]["type"] == "scaleGuidePlayback" && sent[0]["notes"].size() > 5,
            "and says when each note falls");
+    Expect(onBars == 1 && sent[0]["delayMs"] == 500.0, "starting on the metronome's bar, and saying how long that is");
 
     play["request"]["position"] = 0;
     registry.Dispatch("scaleGuide", play);
@@ -522,6 +728,12 @@ void TestMessages()
 
     registry.Dispatch("scaleGuide", {{"type", "scaleGuide"}, {"action", "playNote"}, {"midi", 64}});
     Expect(unannounced == 1 && sent.size() == 1, "a clicked note plays without a report");
+    const float full = lastPeak;
+    registry.Dispatch("scaleGuide", {{"type", "scaleGuide"}, {"action", "playNote"}, {"midi", 64}, {"volume", 0.5}});
+    Expect(std::abs(lastPeak - 0.25f * full) < 1e-4f, "at half volume it is a quarter of the level");
+    registry.Dispatch("scaleGuide", {{"type", "scaleGuide"}, {"action", "playNote"}, {"midi", 64}, {"volume", 7}});
+    Expect(lastPeak == full, "and never louder than full");
+    unannounced = 1;
 
     json example = {
         {"type", "scaleGuide"},
@@ -537,6 +749,19 @@ void TestMessages()
                   {"frets", {-1, 3, 2, 0, 1, 0}}};
     registry.Dispatch("scaleGuide", strum);
     Expect(announced == 3 && sent.size() == 3 && sent[2]["notes"].size() == 5, "a chord box strums its shape");
+    Expect(onBars == 2 && sent[2]["delayMs"] == 0.0, "at once: only Play waits for the bar");
+
+    json whole = {
+        {"type", "scaleGuide"},
+        {"action", "play"},
+        {"request", {{"mode", "arpeggio"}, {"key", 0}, {"progression", "pop"}, {"tuning", "std"}, {"position", 1}}}};
+    registry.Dispatch("scaleGuide", whole);
+    const auto all = sent.back()["notes"];
+    whole["bar"] = 2;
+    registry.Dispatch("scaleGuide", whole);
+    const auto one = sent.back()["notes"];
+    Expect(one.size() < all.size() && one[0]["chord"] == 2 && one[0]["startMs"] == 0.0 && one.back()["chord"] == 2,
+           "a bar asked for plays alone, from its first note");
 
     registry.Dispatch("scaleGuide", {{"type", "scaleGuide"}, {"action", "stop"}});
     Expect(stops == 1, "stop stops");
@@ -553,7 +778,7 @@ int main(int argc, char** argv)
 
     if (argc > 2 && std::string(argv[1]) == "--wav")
     {
-        WriteWav(argv[2]);
+        WriteWav(argv[2], argc > 3 && std::string(argv[3]) == "held");
         return 0;
     }
 
@@ -561,8 +786,10 @@ int main(int argc, char** argv)
     TestNoBrighterThanAGuitar();
     TestScaleExample();
     TestLegatoIsSofter();
+    TestHeldNoteRingsAndWavers();
     TestNotesForEachView();
     TestScaleRun();
+    TestProgressionTimingAndSlides();
     TestMessages();
 
     if (gFailures > 0)

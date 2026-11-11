@@ -66,6 +66,13 @@ One neck view, three modes, sharing the key and tuning.
 - The chosen run lies on the neck as a path through its notes, labelled Order or Fingers if asked,
   with the rest dimmed. Under the neck, a tab card: up the strings and back, pick strokes above,
   intervals below.
+- Or a progression in the key, the same list as Chords (built-ins and the player's own; the choice
+  is shared between the two tabs). The neck shows the chord at the current step and the tab card
+  writes the whole progression out, a bar for each chord, each chord in the shape nearest the one
+  before. A bar is a button that steps to its chord. Slides, in the card's heading, makes each
+  chord take a shape that can be slid into from the last note of the chord before, and marks the
+  slide (`sl.`). Play sounds the whole progression, the tab lighting each note and the neck
+  stepping to each chord as it comes.
 
 **All three**
 - A chosen position can be heard: Play sends it through the current preset, and a dot on the neck
@@ -163,6 +170,19 @@ expected dots and shapes) live in core/tests and are what both renderers' tests 
   fret 24 still holds a label; inlays at 3 5 7 9 15 17 19 21, doubles at 12 and 24. Colours from
   theme tokens (root uses the accent token), so light and dark themes both work. Compact layout
   stacks the chord box under the neck and scrolls the neck horizontally.
+- **Web layout:** three slim rows above the neck, so the neck starts as high as it can. The tabs,
+  with Listen, Play and the instrument button at their end; the button reads what is set
+  ("Standard E · Capo 2 · Left-handed") and opens Tuning, Capo and Left-handed, which are set once
+  and then left alone. Then what is showing: Key or Root with the scale, chord or progression,
+  and on that row an arpeggio's Style and Strings and a progression's steps. Then, on the neck,
+  Position or Shape at the left and what the dots say at the right. The progression editor is a
+  card of its own that shows only while editing. Play's volume is a short slider beside it, and
+  "Listen marks the whole neck" is in the instrument menu.
+- **Nano Q layout:** the same rows, drawn with its own widgets. The instrument button opens a
+  three-column menu (tunings, capo, then Left-handed and "Listen marks the whole neck"), Play's
+  volume is a picker of fixed steps (100 to 10%) rather than a slider, and an arpeggio's Style and
+  Strings and a progression's steps each take a row of their own. It has no progression editor,
+  as before.
 - **Nano Q:** a drawn element in `nanoq/src/ui/` (alongside `EqPlot.cpp` / `ResponsePlot`),
   painting the same model with the artist canvas, plus the page controls with the existing
   `DialogChrome.h` widgets and `WithSectionNav`. This removes the Scales WebView from Nano Q, so
@@ -237,6 +257,42 @@ web do no music theory.
 - `runs` carry `notes` lowest first and `steps` for the way up and back, the top note once.
 - The golden shapes and the rules over every tuning are in `core/tests/ArpeggioTests.cpp`, and
   `ArpeggioTests --dump <tuning> <key> <chord> <style> <strings>` prints the runs found.
+- A progression (`ArpeggioProgression.h`) searches each distinct chord once, in the style and on
+  the most strings it has runs for, up to the count asked. One chord is the anchor: `position`
+  picks its run and `anchorStep` says which chord that is (the one showing when the player last
+  picked a position). The rest follow round the progression from it, each taking the run with the
+  least shift from the one before: twice the change in starting fret, four times the change in
+  starting string, plus the change in highest fret. Stepping changes `step` only, so the tab
+  never moves under the player. `view.position` is the showing chord's run; the anchor's comes
+  back as `progression.anchorStep` and `anchorPosition`, and that is what the UI keeps.
+- With `arpeggioSlides` a run that starts on the last run's starting string at another fret (both
+  fretted) is preferred over a nearer one, and its first step's stroke is `slide`. Every run goes
+  up and back, so it ends where it began and the slide is along that one string. Where no such
+  run exists (an open string, a box that starts on another string) the chord is picked as usual.
+- `view.progressionRun` is the whole piece: `notes` numbered through it, `steps`, and `bars` (one
+  per chord: `from`, `count`, the run's name and frets). A chord with no run keeps an empty bar.
+  Play uses it whenever it is there, whatever the position, and each played note carries its
+  `step` of the tab and its `chord`, which is how the UI follows.
+- Played, each chord starts on a bar line of the metronome's meter (`MetronomeService::BarSeconds`):
+  a run of 13 eighths in 4/4 takes two bars, its last note held for the rest of the second. A
+  `play` with `bar` sounds that one chord's bar alone, from its first note, which is what a click
+  on a bar of the tab does.
+- A slide is one stroke: the renderer does not strike the note slid to, it lets the note before it
+  last through both and moves its read through the string's samples faster or slower (the same
+  moving read the vibrato uses), eased over 60 ms plus 12 ms a fret, at most 140 ms, centred on
+  the beat. A note marked `slide` with no note before it on its string is struck like a hammer-on.
+- The web draws the tab as one diagram that runs on to new lines at the card's width
+  (`runTab.ts`, `TabFlow`): a bar line after each chord, a heavier one at the end, the chord's
+  name over its first note and the string names at the start of each line. A bar is kept on one
+  line where a line can hold it and split where it cannot. It is laid out again when the width
+  changes.
+- `ArpeggioTests --progression <tuning> <key> <progression> <style> <slides 0|1>` prints a
+  progression bar by bar.
+- Nano Q has the same (`ScaleGuidePage.cpp`, `ProgressionTabView` in `ScaleGuideDraw.cpp`): the
+  progression picker in Arpeggios, the flowing tab with bar lines and slides, Slides in the card's
+  heading, and a bar that steps to its chord and plays. `uiclient::scaleguide::ViewRequest` sends
+  the progression, `anchorStep` and `arpeggioSlides`. As a progression plays, the neck steps
+  through its chords (see Play notes).
 
 ## Play notes
 
@@ -253,11 +309,27 @@ web do no music theory.
   the metronome's tempo (held to 60-200 BPM), peaking at 0.35 like a DI track.
   `DemoPreviewService::StartPreviewFromSamples` then mixes it into the input, so it goes through the
   preset as a demo clip does; the audio thread only copies.
+- In time with the click: while the metronome is clicking, Play and a scale's example wait for its
+  next bar line. `StartPreviewFromSamples` takes the metronome's `TransportClock`, reads where in
+  the bar the next block starts while it holds the DSP lock, and has the audio thread skip that
+  many frames before the clip's first, so the start is to the sample. The wait goes back to the
+  UI as `delayMs` in `scaleGuidePlayback`, and the following waits with it. A clicked note and a
+  strummed chord box do not wait. With the click off, or in a DAW (where the host owns the tempo
+  and the clock is not running), Play starts at once: it does not follow the host's transport.
+  What was sounding stops at once under a start that waits, without the usual fade.
 - The voice is a Karplus-Strong string: a noise burst low-passed and combed by the pick position, a
   loop that loses the most top a pass can, an all-pass for the fraction of a sample, a comb for the
   pickup, then the pickup and cable as a two-pole and a one-pole low-pass. It is within 4 cents from
   E2 to E6 at 44.1, 48 and 96 kHz. Hammer-ons and pull-offs start softer and rounder. A render never
   varies, so a test can pin it.
+- A note left held (a run's last, a chord's strings, a clicked note) rings for 3.5 s, a chord 4.5 s,
+  on the string's own decay (5 to 13 s to -60 dB, the loop gain making up what its filter takes
+  from the fundamental), and fades over its last 1.2 s rather than being stopped. From 0.55 s in a
+  vibrato grows over 1.3 s to a bend of about 16 cents, sharp only as a rocked finger is, near 5 Hz
+  with its rate and depth wandering towards a new random mark every 0.2 s, seeded per note. A
+  chord's fretted strings get a third of that each, on their own wander; an open string gets none.
+  It is a moving Hermite read of the string's samples, outside the loop, so the loop's tuning and
+  losses are untouched. `ScalePlaybackTests --wav <file> held` writes these to listen to.
 - Its first voicing was harsh: -5 dB of its power above 2.8 kHz, where the demo DI take has -34 dB
   and the two riff recordings -45 dB. It is now -37 dB, and its octave bands from 63 Hz to 5.6 kHz
   sit between the DI's and the riffs'. `ScalePlaybackTests --tone` prints the bands side by side,
@@ -266,8 +338,12 @@ web do no music theory.
 - Reports use the preview id `scale-guide`, kept out of the demo clip's notifications on the web. A
   clicked note is not announced at all, and fades over whatever it interrupts, since a hard cut
   through a high-gain preset is a loud click.
-- The web lights each note from `scaleGuidePlayback`'s timings. Nano Q plays but does not light them
-  yet; it lights the summary, and turns every Play to Stop, while anything plays.
+- Both UIs light each note from `scaleGuidePlayback`'s timings, on the neck where it is fretted and
+  in the tab, and show a progression's next chord 80 ms before its first note. The web sets timers
+  (`playback.ts`). Nano Q keeps the notes and the time they came in the client state
+  (`DemoState::scaleGuide`), and each tick asks `uiclient::scaleguide::PlaybackAt` what sounds now
+  (`Shell::SyncScaleGuidePlayback`): a changed note repaints the neck and the tab, a changed chord
+  rebuilds the page. Neither scrolls the tab to the bar playing.
 
 ## LISTEN notes (phase 4)
 

@@ -852,24 +852,31 @@ void UiCommands::SetMetronomeSubdivision(const std::string& subdivision)
     mClient.Send("setMetronome", {{"subdivision", subdivision}});
 }
 
-void UiCommands::PlayScaleGuide(const nlohmann::json& request)
+void UiCommands::PlayScaleGuide(const nlohmann::json& request, double volume, int bar)
 {
-    mClient.Send("scaleGuide", {{"action", "play"}, {"request", request}});
+    nlohmann::json payload = {{"action", "play"}, {"request", request}, {"volume", volume}};
+
+    if (bar >= 0)
+    {
+        payload["bar"] = bar;
+    }
+
+    mClient.Send("scaleGuide", payload);
 }
 
-void UiCommands::PlayScaleExample(const nlohmann::json& request)
+void UiCommands::PlayScaleExample(const nlohmann::json& request, double volume)
 {
-    mClient.Send("scaleGuide", {{"action", "playScale"}, {"request", request}});
+    mClient.Send("scaleGuide", {{"action", "playScale"}, {"request", request}, {"volume", volume}});
 }
 
-void UiCommands::PlayScaleGuideChord(const nlohmann::json& request, const std::vector<int>& frets)
+void UiCommands::PlayScaleGuideChord(const nlohmann::json& request, const std::vector<int>& frets, double volume)
 {
-    mClient.Send("scaleGuide", {{"action", "playChord"}, {"request", request}, {"frets", frets}});
+    mClient.Send("scaleGuide", {{"action", "playChord"}, {"request", request}, {"frets", frets}, {"volume", volume}});
 }
 
-void UiCommands::PlayScaleGuideNote(int midi)
+void UiCommands::PlayScaleGuideNote(int midi, double volume)
 {
-    mClient.Send("scaleGuide", {{"action", "playNote"}, {"midi", midi}});
+    mClient.Send("scaleGuide", {{"action", "playNote"}, {"midi", midi}, {"volume", volume}});
 }
 
 void UiCommands::StopScaleGuide()

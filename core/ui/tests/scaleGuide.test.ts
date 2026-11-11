@@ -229,7 +229,7 @@ describe("scale guide panel", () => {
 
     onScaleGuideView({ type: "scaleGuideView", requestId: second, view: ukuleleView() });
     expect(document.getElementById("sg-neck")?.innerHTML).toContain("sg-neck-svg");
-    expect(document.getElementById("sg-title")?.textContent).toBe("C · Ukulele");
+    expect(document.getElementById("sg-title")?.textContent).toBe("Ukulele");
     expect(document.querySelectorAll("#sg-boxes [data-sg-position]")).toHaveLength(1);
     expect(document.getElementById("sg-root-badge")?.textContent).toBe("C");
     expect(document.getElementById("sg-summary-label")?.textContent).toBe("Chord");

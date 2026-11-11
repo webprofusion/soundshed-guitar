@@ -24,8 +24,12 @@ export function describeNote(view: ScaleGuideView, midi: number): { name: string
     : { name: (view.flats ? FLAT_NAMES : SHARP_NAMES)[pitchClass], interval: "", inView: false };
 }
 
-/** Marks the note now (`notes[0]`) and the trail behind it on the neck; null entries are skipped. */
-export function showNotes(neck: HTMLElement, view: ScaleGuideView, options: NeckOptions, notes: readonly (number | null)[]): void {
+/**
+ * Marks the note now (`notes[0]`) and the trail behind it on the neck; null entries are skipped.
+ * `everywhere` marks every place the note is; without it only the places inside the chosen
+ * position are marked, unless the note is nowhere in it.
+ */
+export function showNotes(neck: HTMLElement, view: ScaleGuideView, options: NeckOptions, notes: readonly (number | null)[], everywhere = true): void {
   neck.querySelectorAll<SVGGElement>(".sg-dot").forEach((dot) => dot.classList.remove(...HIT_CLASSES));
   const layer = neck.querySelector<SVGGElement>(".sg-live-layer");
   const markers: string[] = [];
@@ -35,7 +39,9 @@ export function showNotes(neck: HTMLElement, view: ScaleGuideView, options: Neck
       return;
     }
 
-    const dots = neck.querySelectorAll<SVGGElement>(`.sg-dot[data-midi="${midi}"]`);
+    const all = neck.querySelectorAll<SVGGElement>(`.sg-dot[data-midi="${midi}"]`);
+    const inPosition = everywhere ? [] : Array.from(all).filter((dot) => !dot.classList.contains("sg-dot-dim"));
+    const dots = inPosition.length > 0 ? inPosition : Array.from(all);
     dots.forEach((dot) => dot.classList.add(HIT_CLASSES[age]));
 
     if (dots.length === 0) {

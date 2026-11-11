@@ -124,6 +124,8 @@ struct SectionNav
 
 class WebViewSlot; // JamPage.cpp
 class ScaleNeck;   // ScaleGuideDraw.h
+class RunTabView;
+class ProgressionTabView;
 class NodeCard;    // NodeCard.h
 class Connector;   // ChainWires.h
 
@@ -620,13 +622,19 @@ class Shell
     void ScaleGuideStep(int index, std::vector<int> fromFrets = {});
     /// Every tick: LISTEN on while the guide shows with it on, and the readings it brings.
     void SyncScaleGuideListen();
+    /// Every tick: Play followed on the neck and in the tab, a progression's chords shown as they come.
+    void SyncScaleGuidePlayback();
     [[nodiscard]] std::vector<int> ScaleGuideHeard() const;
     [[nodiscard]] bool ScaleGuidePlaying() const;
     nlohmann::json mScaleGuideView;
     std::string mScaleGuideViewKey;
     int mScaleGuideStep = 0;
+    int mScaleGuideAnchor = 0;            // in Arpeggios: the progression chord whose run the position chooses
     std::vector<int> mScaleGuidePrevious; // the shape to lead the next chord from, sent once
     std::weak_ptr<ScaleNeck> mScaleNeck;
+    std::weak_ptr<RunTabView> mScaleRunTab;
+    std::weak_ptr<ProgressionTabView> mScaleProgressionTab;
+    guitarfx::uiclient::scaleguide::PlaybackMoment mScaleGuideMoment; // what Play lights now
     std::weak_ptr<Text> mScaleGuideLive;
     std::string mScaleGuideReadout;
     bool mScaleGuideListening = false, mScaleGuideChroma = false;

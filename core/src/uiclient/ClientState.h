@@ -14,6 +14,7 @@
 
 #include "presets/PresetTypes.h"
 #include "uiclient/EffectLayoutTypes.h"
+#include "uiclient/ScaleGuide.h"
 
 #include <nlohmann/json.hpp>
 
@@ -500,6 +501,10 @@ struct DemoState
     std::string title;
     std::string previewId; // what is playing: a clip's id, a riff take's id, or the captured take's
     std::string lastRenderPath;
+    // The Scale Guide's Play (`scaleGuidePlayback`): when each note falls, and the client's clock
+    // when that was told. Empty until the playing position's notes arrive.
+    scaleguide::Playback scaleGuide;
+    double scaleGuideAt = 0.0;
 };
 
 // ── Riffs (Topic::Riffs) ────────────────────────────────────────────────────────

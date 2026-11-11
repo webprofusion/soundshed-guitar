@@ -909,6 +909,7 @@ void Shell::SyncJam()
 
     SyncJamWebViews();
     SyncJamPlayerBar();
+    SyncScaleGuidePlayback();
     SyncScaleGuideListen();
 }
 } // namespace nanoq::ui

@@ -377,6 +377,25 @@ bool TestRenderedPreviewReportsOnlyWhenAsked()
     const auto heard = play(720);
     passed = passed && std::abs(heard[0] - 0.75f) < 1e-4f && std::abs(heard[719] - 0.5f) < 1e-3f;
 
+    // On the metronome's bar: 400 frames into a bar of 1000, the clip waits the other 600, over
+    // two blocks, and what was playing stops at once. With the click off it starts straight away.
+    guitarfx::TransportClock clock;
+    clock.samplesPerBar.store(1000.0);
+    clock.samplesSinceBar.store(400.0);
+    clock.running.store(true);
+    const double wait =
+        svc.StartPreviewFromSamples(std::vector<float>(4800, 0.125f), kSampleRate, "run", "Run", true, &clock);
+    passed = passed && std::abs(wait - 600.0 / kSampleRate) < 1e-9;
+    const auto first = play(512);
+    const auto second = play(512);
+    passed = passed && first[0] == 0.0f && first[511] == 0.0f && second[87] == 0.0f && second[88] == 0.125f;
+
+    clock.running.store(false);
+    passed = passed && svc.StartPreviewFromSamples(std::vector<float>(64, 0.125f), kSampleRate, "run", "Run", true,
+                                                   &clock) == 0.0;
+    play(64);
+    passed = passed && play(64)[0] == 0.0f;
+
     std::cout << (passed ? "  ok" : "  FAILED") << "\n";
     return passed;
 }

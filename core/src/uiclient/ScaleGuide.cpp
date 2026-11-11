@@ -107,6 +107,9 @@ Settings ParseSettings(const nlohmann::json& stored)
     s.match = OneOf(stored, "match", s.match, {"easy", "normal", "strict"});
     s.arpeggioStyle = OneOf(stored, "arpeggioStyle", s.arpeggioStyle, {"sweep", "two", "box"});
     s.arpeggioStrings = IntField(stored, "arpeggioStrings", s.arpeggioStrings, 0, kMaxArpeggioStrings);
+    s.arpeggioSlides = BoolField(stored, "arpeggioSlides", s.arpeggioSlides);
+    s.listenEverywhere = BoolField(stored, "listenEverywhere", s.listenEverywhere);
+    s.playVolume = IntField(stored, "playVolume", s.playVolume, 0, 100);
     return s;
 }
 
@@ -125,7 +128,10 @@ nlohmann::json SettingsJson(const Settings& s)
             {"listen", s.listen},
             {"match", s.match},
             {"arpeggioStyle", s.arpeggioStyle},
-            {"arpeggioStrings", s.arpeggioStrings}};
+            {"arpeggioStrings", s.arpeggioStrings},
+            {"arpeggioSlides", s.arpeggioSlides},
+            {"listenEverywhere", s.listenEverywhere},
+            {"playVolume", s.playVolume}};
 }
 
 Settings LoadSettings(const nlohmann::json& appSettings)
@@ -197,7 +203,7 @@ nlohmann::json ProgressionsJson(const std::vector<UserProgression>& progressions
 }
 
 nlohmann::json ViewRequest(const Settings& s, const std::vector<UserProgression>& progressions, int step,
-                           const std::vector<int>& previousFrets)
+                           const std::vector<int>& previousFrets, int anchorStep)
 {
     nlohmann::json request = {{"mode", s.mode},
                               {"key", s.key},
@@ -207,9 +213,11 @@ nlohmann::json ViewRequest(const Settings& s, const std::vector<UserProgression>
                               {"capo", s.capo},
                               {"position", s.position},
                               {"arpeggioStyle", s.arpeggioStyle},
-                              {"arpeggioStrings", s.arpeggioStrings}};
+                              {"arpeggioStrings", s.arpeggioStrings},
+                              {"arpeggioSlides", s.arpeggioSlides}};
 
-    if (s.mode != "chord")
+    // Chords and Arpeggios take a progression; a scale has none.
+    if (s.mode == "scale")
     {
         return request;
     }
@@ -239,7 +247,11 @@ nlohmann::json ViewRequest(const Settings& s, const std::vector<UserProgression>
 
     request["step"] = step;
 
-    if (!previousFrets.empty())
+    if (s.mode == "arpeggio")
+    {
+        request["anchorStep"] = anchorStep;
+    }
+    else if (!previousFrets.empty())
     {
         request["previousFrets"] = previousFrets;
     }
@@ -421,5 +433,70 @@ void NoteFollower::Reset()
     mCandidate.reset();
     mSeen = 0;
     mSilent = 0;
+}
+
+Playback ParsePlayback(const nlohmann::json& message)
+{
+    Playback out;
+
+    if (!message.is_object())
+    {
+        return out;
+    }
+
+    const auto number = [](const nlohmann::json& object, const char* key, double fallback) {
+        const auto it = object.find(key);
+        return it != object.end() && it->is_number() ? it->get<double>() : fallback;
+    };
+    out.delayMs = std::max(0.0, number(message, "delayMs", 0.0));
+    const auto notes = message.find("notes");
+
+    if (notes == message.end() || !notes->is_array())
+    {
+        return out;
+    }
+
+    for (const auto& n : *notes)
+    {
+        if (n.is_object())
+        {
+            out.notes.push_back({static_cast<int>(number(n, "string", 0.0)), static_cast<int>(number(n, "fret", 0.0)),
+                                 number(n, "startMs", 0.0), number(n, "lengthMs", 0.0),
+                                 static_cast<int>(number(n, "step", -1.0)),
+                                 static_cast<int>(number(n, "chord", -1.0))});
+        }
+    }
+
+    return out;
+}
+
+PlaybackMoment PlaybackAt(const Playback& playback, double elapsedMs)
+{
+    PlaybackMoment moment;
+    double chordFrom = -1.0;
+
+    for (const auto& note : playback.notes)
+    {
+        const double start = playback.delayMs + note.startMs;
+
+        // The chord of the latest note due, a little ahead of it.
+        if (note.chord >= 0 && elapsedMs >= start - kPlaybackStepLeadMs && start >= chordFrom)
+        {
+            moment.chord = note.chord;
+            chordFrom = start;
+        }
+
+        if (elapsedMs >= start && elapsedMs < start + note.lengthMs)
+        {
+            moment.places.emplace_back(note.string, note.fret);
+
+            if (note.step >= 0)
+            {
+                moment.steps.push_back(note.step);
+            }
+        }
+    }
+
+    return moment;
 }
 } // namespace guitarfx::uiclient::scaleguide

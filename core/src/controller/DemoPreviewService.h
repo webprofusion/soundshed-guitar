@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dsp/MultiPresetMixer.h"
+#include "dsp/TransportClock.h"
 #include "IPluginHost.h"
 
 #include <atomic>
@@ -37,8 +38,10 @@ class DemoPreviewService
     /// Plays a mono signal rendered at `sampleRate` into the input once. With `announce` the UI hears
     /// that it started and finished, as for any preview; without, it is a sound too short to report,
     /// such as one note. Whatever was playing gives way, its last moment fading under the new start.
-    void StartPreviewFromSamples(std::vector<float> samples, double sampleRate, const std::string& id,
-                                 const std::string& title, bool announce);
+    /// With `barClock`, and its metronome clicking, the signal waits for the next bar line so it is
+    /// in time with the click; what was playing then stops at once. Returns the wait, in seconds.
+    double StartPreviewFromSamples(std::vector<float> samples, double sampleRate, const std::string& id,
+                                   const std::string& title, bool announce, const TransportClock* barClock = nullptr);
     void StopPreview();
     void OnIdle();
     [[nodiscard]] bool IsPreviewActive() const;
@@ -116,5 +119,9 @@ class DemoPreviewService
     // Audio-thread only: how far through the wrap crossfade we are. Past the
     // carry's size means "not currently crossfading".
     std::size_t mCarryPos = 0;
+
+    // Audio-thread only, set under the DSP lock with the buffer: frames of silence still to go
+    // before a preview that is waiting for the metronome's bar line.
+    std::size_t mStartDelay = 0;
 };
 } // namespace guitarfx

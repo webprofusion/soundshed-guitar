@@ -3,10 +3,12 @@
  * guitarist already knows, the rules every run keeps on every tuning, and the view model.
  *
  * `ArpeggioTests --dump <tuning> <key 0-11> <chord> <style> <strings>` prints the runs found, for
- * tuning the search's costs.
+ * tuning the search's costs. `ArpeggioTests --progression <tuning> <key 0-11> <progression> <style>
+ * <slides 0|1>` prints a progression's arpeggios bar by bar.
  */
 
 #include "music/ScaleGuideView.h"
+#include "music/ScalePlayback.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -329,6 +331,157 @@ void TestView()
     Expect(view["mode"] == "scale", "an unknown mode is the scale view");
 }
 
+nlohmann::json ProgressionView(nlohmann::json request)
+{
+    request["mode"] = "arpeggio";
+    request["tuning"] = request.value("tuning", "std");
+    return music::BuildScaleGuideView(music::ParseScaleGuideRequest(request));
+}
+
+/// A progression's arpeggios: one run a chord, the shapes following each other, slides when asked.
+void TestProgression()
+{
+    auto view = ProgressionView({{"key", kC}, {"progression", "pop"}, {"position", 1}});
+    const auto whole = view["progressionRun"];
+    const auto chords = view["progression"]["chords"];
+    Expect(view["title"] == "C arpeggio" && chords.size() == 4, "the first chord shows, all four are listed");
+    Expect(whole["bars"].size() == 4 && whole["name"] == "Axis", "a bar for each chord");
+
+    int next = 0;
+
+    for (const auto& bar : whole["bars"])
+    {
+        Expect(bar["from"] == next && bar["count"].get<int>() > 0, "the bars follow one another");
+        next += bar["count"].get<int>();
+    }
+
+    Expect(next == static_cast<int>(whole["steps"].size()), "and cover every step");
+
+    bool slid = false;
+
+    for (const auto& step : whole["steps"])
+    {
+        Expect(step["note"].get<std::size_t>() < whole["notes"].size(), "a step plays one of the notes");
+        slid = slid || step["stroke"] == "slide";
+    }
+
+    Expect(!slid && whole["slides"] == false, "no slides unless asked for");
+    Expect(view["position"] == 1 && chords[0]["position"] == 1, "the first chord keeps the run chosen for it");
+    Expect(view["run"]["notes"][0]["fret"] == whole["notes"][0]["fret"], "the neck's run is the first bar's");
+
+    // The shapes stay near each other: no bar starts more than a few frets from the one before.
+    for (std::size_t bar = 1; bar < whole["bars"].size(); ++bar)
+    {
+        const auto& before =
+            whole["notes"][whole["steps"][whole["bars"][bar - 1]["from"].get<int>()]["note"].get<int>()];
+        const auto& after = whole["notes"][whole["steps"][whole["bars"][bar]["from"].get<int>()]["note"].get<int>()];
+        Expect(std::abs(after["fret"].get<int>() - before["fret"].get<int>()) <= 5, "each shape is near the last");
+    }
+
+    // Stepping on shows another chord and moves nothing.
+    auto stepped =
+        ProgressionView({{"key", kC}, {"progression", "pop"}, {"position", 1}, {"step", 2}, {"anchorStep", 0}});
+    Expect(stepped["title"] == "Am arpeggio" && stepped["progressionRun"] == whole, "stepping leaves the tab alone");
+    Expect(stepped["position"] == chords[2]["position"], "the chord takes its place in the walk");
+    Expect(stepped["progression"]["anchorStep"] == 0 && stepped["progression"]["anchorPosition"] == 1,
+           "and says which chord's run was chosen");
+    const int thirdFrom = whole["bars"][2]["from"].get<int>();
+    Expect(stepped["run"]["notes"][0]["fret"] == whole["notes"][whole["steps"][thirdFrom]["note"].get<int>()]["fret"],
+           "the neck's run is that chord's bar");
+
+    // A run chosen on a later chord: it keeps that run, the rest move to it.
+    auto moved =
+        ProgressionView({{"key", kC}, {"progression", "pop"}, {"position", 3}, {"step", 2}, {"anchorStep", 2}});
+    Expect(moved["position"] == 3 && moved["progression"]["chords"][2]["position"] == 3,
+           "a later chord can be the anchor");
+    Expect(moved["progressionRun"] != whole, "and the others follow it");
+
+    auto wholeNeck = ProgressionView({{"key", kC}, {"progression", "pop"}, {"position", 0}});
+    Expect(wholeNeck["position"] == 0 && !wholeNeck.contains("run"), "the whole neck still shows on its own");
+    Expect(wholeNeck["progressionRun"]["steps"].size() == whole["steps"].size(), "with the progression's tab under it");
+
+    // Slides: each chord starts on the string the last one ended on, at another fret.
+    view = ProgressionView({{"key", kC}, {"progression", "pop"}, {"position", 1}, {"arpeggioSlides", true}});
+    const auto joined = view["progressionRun"];
+    Expect(joined["slides"] == true, "slides asked for");
+
+    for (std::size_t bar = 1; bar < joined["bars"].size(); ++bar)
+    {
+        const int from = joined["bars"][bar]["from"].get<int>();
+        const auto& before = joined["notes"][joined["steps"][from - 1]["note"].get<int>()];
+        const auto& after = joined["notes"][joined["steps"][from]["note"].get<int>()];
+        Expect(joined["steps"][from]["stroke"] == "slide", "each new chord is slid into");
+        Expect(before["string"] == after["string"] && before["fret"] != after["fret"], "along one string");
+    }
+
+    Expect(joined["steps"][0]["stroke"] == "down", "the first note is picked");
+
+    const auto played = music::ScaleGuidePlaybackNotes(view, 120.0);
+    Expect(played.size() == joined["steps"].size(), "Play sounds the whole progression");
+    Expect(played.front().chord == 0 && played.back().chord == 3 &&
+               played.back().step + 1 == static_cast<int>(played.size()),
+           "each note says its chord and its step of the tab");
+    Expect(played[static_cast<std::size_t>(joined["bars"][1]["from"].get<int>())].legato,
+           "a slide is the fretting hand's");
+
+    // The other styles and a player's own chords, with a capo on.
+    view = ProgressionView({{"key", kA},
+                            {"progressionChords", {"i", "bVII", "bVI", "V"}},
+                            {"progressionName", "Mine"},
+                            {"position", 2},
+                            {"capo", 2},
+                            {"arpeggioStyle", "box"}});
+    Expect(view["progressionRun"]["bars"].size() == 4 && view["progression"]["id"] == "custom",
+           "a player's own, in boxes");
+
+    for (const auto& note : view["progressionRun"]["notes"])
+    {
+        Expect(note["fret"].get<int>() >= 2, "nothing behind the capo");
+    }
+
+    view = ProgressionView({{"key", kC}, {"progression", "pop"}, {"tuning", "uke"}, {"position", 1}});
+    Expect(view["progressionRun"]["steps"].empty() && view["progressionRun"]["bars"].size() == 4,
+           "no sweep on a ukulele: the bars stay, empty");
+
+    view = ProgressionView({{"key", kC}, {"chord", "m"}, {"position", 1}});
+    Expect(!view.contains("progression") && !view.contains("progressionRun"), "one chord has no progression");
+}
+
+int DumpProgression(const char* tuning, int key, const char* progression, const char* style, bool slides)
+{
+    const auto view = ProgressionView({{"tuning", tuning},
+                                       {"key", key},
+                                       {"progression", progression},
+                                       {"position", 1},
+                                       {"arpeggioStyle", style},
+                                       {"arpeggioSlides", slides}});
+
+    if (!view.contains("progressionRun"))
+    {
+        std::cerr << "unknown progression" << std::endl;
+        return 2;
+    }
+
+    const auto& whole = view["progressionRun"];
+
+    for (const auto& bar : whole["bars"])
+    {
+        std::cout << bar["name"].get<std::string>() << " (" << bar.value("run", std::string("no run")) << "):";
+
+        for (int i = bar["from"].get<int>(); i < bar["from"].get<int>() + bar["count"].get<int>(); ++i)
+        {
+            const auto& step = whole["steps"][i];
+            const auto& note = whole["notes"][step["note"].get<int>()];
+            std::cout << " " << (step["stroke"] == "slide" ? "~" : "") << note["string"].get<int>() << ":"
+                      << note["fret"].get<int>();
+        }
+
+        std::cout << std::endl;
+    }
+
+    return 0;
+}
+
 int Dump(const char* tuning, int key, const char* quality, const char* style, int strings)
 {
     if (music::FindTuning(tuning) == nullptr || music::FindChord(quality) == nullptr)
@@ -363,9 +516,15 @@ int main(int argc, char** argv)
         return Dump(argv[2], std::atoi(argv[3]), argv[4], argv[5], std::atoi(argv[6]));
     }
 
+    if (argc == 7 && std::string(argv[1]) == "--progression")
+    {
+        return DumpProgression(argv[2], std::atoi(argv[3]), argv[4], argv[5], std::atoi(argv[6]) != 0);
+    }
+
     TestGoldenRuns();
     TestRulesOnEveryTuning();
     TestView();
+    TestProgression();
 
     if (gFailures > 0)
     {

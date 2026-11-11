@@ -28,87 +28,85 @@
                 <!-- The Scale Guide (ts/scaleGuide/panel.ts): drawn from the engine's
                      scaleGuideView model; docs/plans/scale-guide.md. -->
                 <div class="scale-guide" id="scale-guide">
+                  <!-- Row 1: what kind of thing, and the actions on it. The instrument (tuning,
+                       capo, hand) is set once, so it folds into the button at the end. -->
                   <div class="sg-tabs" role="group" aria-label="Scales, chords or arpeggios">
                     <button type="button" class="sg-tab" data-sg-mode="scale">Scales</button>
                     <button type="button" class="sg-tab" data-sg-mode="chord">Chords</button>
                     <button type="button" class="sg-tab" data-sg-mode="arpeggio">Arpeggios</button>
                     <span class="sg-live" id="sg-live" hidden></span>
-                    <span class="sg-title" id="sg-title"></span>
+                    <span class="sg-actions">
+                      <button type="button" class="sg-listen" id="sg-listen" aria-pressed="false" title="Hears your guitar: marks each note you hit, and steps through a progression as you strum it">Listen</button>
+                      <button type="button" class="sg-listen sg-play" id="sg-play" data-sg-play aria-pressed="false" disabled title="Pick a position to hear it">Play</button>
+                      <input type="range" class="sg-volume" id="sg-volume" min="0" max="100" step="5" value="100" aria-label="Play volume" title="How loud Play's guitar is going into the preset, like its volume knob" />
+                      <details class="sg-setup" id="sg-setup">
+                        <summary class="sg-setup-button" title="Instrument: tuning, capo and hand">
+                          <svg class="sg-setup-icon" viewBox="0 0 24 40" aria-hidden="true">
+                            <path d="M7 2h10l1 14H6z" />
+                            <path d="M10.5 16h3v22h-3z" />
+                          </svg>
+                          <span id="sg-title"></span>
+                        </summary>
+                        <div class="sg-setup-panel">
+                          <span class="sg-field">
+                            <label class="sg-label" for="sg-tuning">Tuning</label>
+                            <select class="sg-select" id="sg-tuning"></select>
+                          </span>
+                          <span class="sg-field">
+                            <label class="sg-label" for="sg-capo">Capo</label>
+                            <select class="sg-select" id="sg-capo"></select>
+                          </span>
+                          <label class="sg-check"><input type="checkbox" id="sg-left-handed" /> Left-handed</label>
+                          <label class="sg-check" title="Listen marks a note everywhere it is on the neck. Off, it marks only the places in the chosen position, and nothing while Play is sounding."><input type="checkbox" id="sg-listen-everywhere" /> Listen marks the whole neck</label>
+                        </div>
+                      </details>
+                    </span>
                   </div>
-                  <div class="sg-card sg-controls">
-                    <div class="sg-controls-row sg-controls-pickers">
-                      <span class="sg-field sg-field-key">
+                  <div class="sg-controls">
+                    <!-- Row 2: what is showing, and for a progression where you are in it. -->
+                    <div class="sg-bar">
+                      <span class="sg-inline sg-field-key">
                         <label class="sg-label" for="sg-key" id="sg-key-label">Key</label>
                         <select class="sg-select sg-select-accent" id="sg-key"></select>
                       </span>
-                      <span class="sg-field sg-field-wide" id="sg-scale-field">
+                      <span class="sg-inline sg-field-wide" id="sg-scale-field">
                         <label class="sg-label" for="sg-scale">Scale</label>
                         <select class="sg-select" id="sg-scale"></select>
                       </span>
-                      <span class="sg-field sg-field-wide" id="sg-progression-field" hidden>
+                      <span class="sg-inline sg-field-wide" id="sg-progression-field" hidden>
                         <label class="sg-label" for="sg-progression">Play</label>
-                        <span class="sg-field-row">
-                          <select class="sg-select" id="sg-progression"></select>
-                          <button type="button" class="sg-button" id="sg-progression-edit" hidden>Edit</button>
-                        </span>
+                        <select class="sg-select" id="sg-progression"></select>
+                        <button type="button" class="sg-button" id="sg-progression-edit" hidden>Edit</button>
                       </span>
-                      <span class="sg-field sg-field-wide" id="sg-chord-field" hidden>
+                      <span class="sg-inline sg-field-wide" id="sg-chord-field" hidden>
                         <label class="sg-label" for="sg-chord">Chord</label>
                         <select class="sg-select" id="sg-chord"></select>
                       </span>
-                      <span class="sg-field sg-field-wide">
-                        <label class="sg-label" for="sg-tuning">Tuning</label>
-                        <select class="sg-select" id="sg-tuning"></select>
-                      </span>
-                      <span class="sg-field">
-                        <label class="sg-label" for="sg-capo">Capo</label>
-                        <select class="sg-select" id="sg-capo"></select>
-                      </span>
-                    </div>
-                    <div class="sg-controls-row sg-controls-view">
-                      <span class="sg-inline">
-                        <span class="sg-label" id="sg-labels-label">View</span>
-                        <span class="sg-segmented" role="group" aria-labelledby="sg-labels-label">
-                          <button type="button" class="sg-segment" data-sg-labels="name">Notes</button>
-                          <button type="button" class="sg-segment" data-sg-labels="interval">Intervals</button>
-                          <button type="button" class="sg-segment" data-sg-labels="degree">Degrees</button>
-                          <button type="button" class="sg-segment" data-sg-labels="order" data-sg-labels-arp hidden title="The order the run plays its notes">Order</button>
-                          <button type="button" class="sg-segment" data-sg-labels="finger" data-sg-labels-arp hidden title="Which finger plays each note">Fingers</button>
+                      <span class="sg-inline sg-inline-group" id="sg-arp-row" hidden>
+                        <span class="sg-inline">
+                          <span class="sg-label" id="sg-arp-style-label">Style</span>
+                          <span class="sg-segmented" role="group" aria-labelledby="sg-arp-style-label">
+                            <button type="button" class="sg-segment" data-sg-arp-style="sweep" title="One pick stroke across the strings, a note or two on each">Sweep</button>
+                            <button type="button" class="sg-segment" data-sg-arp-style="two" title="Two notes on every string, climbing the neck">2 per string</button>
+                            <button type="button" class="sg-segment" data-sg-arp-style="box" title="Every chord tone in one hand position">Box</button>
+                          </span>
+                        </span>
+                        <span class="sg-inline" id="sg-arp-strings-field">
+                          <span class="sg-label" id="sg-arp-strings-label">Strings</span>
+                          <span class="sg-segmented" id="sg-arp-strings" role="group" aria-labelledby="sg-arp-strings-label"></span>
                         </span>
                       </span>
-                      <span class="sg-inline">
-                        <span class="sg-label" id="sg-position-label">Position</span>
-                        <span class="sg-segmented" id="sg-positions" role="group" aria-labelledby="sg-position-label"></span>
-                      </span>
-                      <label class="sg-check"><input type="checkbox" id="sg-left-handed" /> Left-handed</label>
-                      <button type="button" class="sg-listen" id="sg-listen" aria-pressed="false" title="Hears your guitar: marks each note you hit, and steps through a progression as you strum it">Listen</button>
-                      <button type="button" class="sg-listen sg-play" id="sg-play" data-sg-play aria-pressed="false" disabled title="Pick a position to hear it">Play</button>
-                    </div>
-                    <div class="sg-controls-row sg-controls-view" id="sg-arp-row" hidden>
-                      <span class="sg-inline">
-                        <span class="sg-label" id="sg-arp-style-label">Style</span>
-                        <span class="sg-segmented" role="group" aria-labelledby="sg-arp-style-label">
-                          <button type="button" class="sg-segment" data-sg-arp-style="sweep" title="One pick stroke across the strings, a note or two on each">Sweep</button>
-                          <button type="button" class="sg-segment" data-sg-arp-style="two" title="Two notes on every string, climbing the neck">2 per string</button>
-                          <button type="button" class="sg-segment" data-sg-arp-style="box" title="Every chord tone in one hand position">Box</button>
+                      <span class="sg-inline sg-inline-group sg-controls-steps" id="sg-steps-row" hidden>
+                        <span class="sg-steps" id="sg-steps" role="group" aria-label="Chords of the progression"></span>
+                        <span class="sg-step-buttons">
+                          <button type="button" class="sg-button sg-button-icon" data-sg-step="prev" title="Back one chord (←)" aria-label="Back one chord">◀</button>
+                          <button type="button" class="sg-button sg-button-icon" data-sg-step="next" title="Forward one chord (→)" aria-label="Forward one chord">▶</button>
+                          <button type="button" class="sg-button sg-button-icon" data-sg-step="first" title="Restart from the top" aria-label="Restart from the top">↺</button>
                         </span>
-                      </span>
-                      <span class="sg-inline" id="sg-arp-strings-field">
-                        <span class="sg-label" id="sg-arp-strings-label">Strings</span>
-                        <span class="sg-segmented" id="sg-arp-strings" role="group" aria-labelledby="sg-arp-strings-label"></span>
+                        <span class="sg-round" id="sg-round" hidden></span>
                       </span>
                     </div>
-                    <div class="sg-controls-row sg-controls-steps" id="sg-steps-row" hidden>
-                      <span class="sg-label" id="sg-steps-label">Steps</span>
-                      <span class="sg-steps" id="sg-steps" role="group" aria-labelledby="sg-steps-label"></span>
-                      <span class="sg-step-buttons">
-                        <button type="button" class="sg-button sg-button-icon" data-sg-step="prev" title="Back one chord (←)" aria-label="Back one chord">◀</button>
-                        <button type="button" class="sg-button sg-button-icon" data-sg-step="next" title="Forward one chord (→)" aria-label="Forward one chord">▶</button>
-                        <button type="button" class="sg-button sg-button-icon" data-sg-step="first" title="Restart from the top" aria-label="Restart from the top">↺</button>
-                      </span>
-                      <span class="sg-round" id="sg-round" hidden></span>
-                    </div>
-                    <div class="sg-controls-row sg-editor" id="sg-editor" hidden>
+                    <div class="sg-card sg-editor" id="sg-editor" hidden>
                       <span class="sg-field">
                         <label class="sg-label" for="sg-editor-name">Name</label>
                         <input class="sg-input" id="sg-editor-name" maxlength="40" spellcheck="false" placeholder="My progression" />
@@ -129,6 +127,23 @@
                         <button type="button" class="sg-button sg-button-primary" id="sg-editor-save">Save</button>
                         <button type="button" class="sg-button" id="sg-editor-cancel">Cancel</button>
                         <button type="button" class="sg-button sg-button-danger" id="sg-editor-delete" hidden>Delete</button>
+                      </span>
+                    </div>
+                    <!-- Row 3, on the neck: which part of it shows, and what the dots say. -->
+                    <div class="sg-bar sg-bar-neck">
+                      <span class="sg-inline">
+                        <span class="sg-label" id="sg-position-label">Position</span>
+                        <span class="sg-segmented" id="sg-positions" role="group" aria-labelledby="sg-position-label"></span>
+                      </span>
+                      <span class="sg-inline sg-bar-end">
+                        <span class="sg-label" id="sg-labels-label">Dots</span>
+                        <span class="sg-segmented" role="group" aria-labelledby="sg-labels-label">
+                          <button type="button" class="sg-segment" data-sg-labels="name">Notes</button>
+                          <button type="button" class="sg-segment" data-sg-labels="interval">Intervals</button>
+                          <button type="button" class="sg-segment" data-sg-labels="degree">Degrees</button>
+                          <button type="button" class="sg-segment" data-sg-labels="order" data-sg-labels-arp hidden title="The order the run plays its notes">Order</button>
+                          <button type="button" class="sg-segment" data-sg-labels="finger" data-sg-labels-arp hidden title="Which finger plays each note">Fingers</button>
+                        </span>
                       </span>
                     </div>
                   </div>

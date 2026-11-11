@@ -79,3 +79,63 @@
   font-size: 13px;
   font-style: italic;
 }
+
+.sg-tab-slide {
+  stroke: var(--sg-dot-text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/* The note sounding, while Play follows the tab. */
+.sg-tab-fret.sg-tab-playing {
+  fill: var(--color-accent);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+/* ── A progression's arpeggios: one diagram, a bar for each chord, running on to new lines ── */
+.sg-tab-slides {
+  margin-left: auto;
+}
+
+.sg-prog-tab {
+  overflow-x: auto;
+}
+
+/* A chord's stretch of a line: it shows the chord on the neck and plays when clicked. */
+.sg-tab-bar {
+  cursor: pointer;
+}
+
+.sg-tab-bar-hit {
+  fill: transparent;
+}
+
+.sg-tab-bar:hover .sg-tab-bar-hit {
+  fill: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+
+.sg-tab-bar.active .sg-tab-bar-hit {
+  fill: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.sg-tab-chord {
+  fill: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sg-tab-chord-numeral {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.sg-tab-barline {
+  stroke: var(--sg-box-line);
+  stroke-width: 1.5;
+}
+
+.sg-tab-barline-end {
+  stroke-width: 3.5;
+}

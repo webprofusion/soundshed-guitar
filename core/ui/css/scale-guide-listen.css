@@ -8,8 +8,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 16px;
+  height: 36px;
+  padding: 0 14px;
   border: 1px solid var(--sg-line-strong);
   border-radius: 10px;
   background: transparent;
@@ -45,7 +45,7 @@
   align-items: baseline;
   gap: 8px;
   margin-left: auto;
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -54,8 +54,8 @@
   display: none;
 }
 
-.sg-live + .sg-title {
-  margin-left: 16px;
+.sg-live:not([hidden]) + .sg-actions {
+  margin-left: 0;
 }
 
 .sg-live b {
@@ -98,6 +98,31 @@
 .sg-play:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* Play's volume, beside it: a short slider, filled up to its thumb. */
+.scale-guide .sg-volume {
+  width: 72px;
+  height: 4px;
+  margin: 0 4px 0 -2px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--color-accent) var(--sg-volume, 100%), var(--sg-line-strong) var(--sg-volume, 100%));
+  appearance: none;
+  cursor: pointer;
+}
+
+.scale-guide .sg-volume::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: var(--sg-surface-raised);
+  appearance: none;
+}
+
+.scale-guide .sg-volume:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 60%, transparent);
+  outline-offset: 6px;
 }
 
 /* The tab card's own Play, at the end of its heading. */

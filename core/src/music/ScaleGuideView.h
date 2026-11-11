@@ -9,6 +9,7 @@
  * mirroring for a left-handed player or turning the neck over are the renderer's business alone.
  */
 
+#include "music/ArpeggioProgression.h"
 #include "music/Arpeggios.h"
 #include "music/Fretboard.h"
 
@@ -53,6 +54,11 @@ struct ScaleGuideRequest
     ArpeggioStyle arpeggioStyle = ArpeggioStyle::Sweep;
     /// How many strings an arpeggio plays, from the highest: 0 for the default.
     int arpeggioStrings = 0;
+    /// A progression's arpeggios joined by slides where one shape can be slid into from the last.
+    bool arpeggioSlides = false;
+    /// The progression chord whose arpeggio run `position` chooses, the rest following from it; -1
+    /// for the one at `step`.
+    int anchorStep = -1;
     /// The shape last shown, as frets per string: when set, a chord takes the shape nearest it.
     std::vector<int> previousFrets;
 };

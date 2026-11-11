@@ -630,6 +630,21 @@ void TestUiClientArpeggio()
     const auto request = sg::ViewRequest(settings, {}, 0);
     Expect(request["mode"] == "arpeggio" && request["arpeggioStyle"] == "two" && request["arpeggioStrings"] == 4,
            "the request carries them");
+    Expect(!request.contains("progression") && !request.contains("step"), "one chord sends no progression");
+
+    // Arpeggios over a progression: its id, the step, the anchor chord and the slides.
+    auto over = settings;
+    over.progression = "b:pop";
+    over.arpeggioSlides = true;
+    const auto whole = sg::ViewRequest(over, {}, 2, {0, 2, 2}, 1);
+    Expect(whole["progression"] == "pop" && whole["step"] == 2 && whole["anchorStep"] == 1 &&
+               whole["arpeggioSlides"] == true && !whole.contains("previousFrets"),
+           "arpeggios take a progression, with the chord the run was chosen for");
+    const auto walked = music::BuildScaleGuideView(music::ParseScaleGuideRequest(whole));
+    Expect(walked["progressionRun"]["bars"].size() == 4 && walked["progression"]["anchorStep"] == 1,
+           "and the engine answers with the whole of it");
+    over.mode = "scale";
+    Expect(!sg::ViewRequest(over, {}, 2).contains("progression"), "a scale never sends one");
 
     const auto view = music::BuildScaleGuideView(music::ParseScaleGuideRequest(request));
     Expect(view["arpeggio"]["strings"] == 4 && !view["arpeggio"]["runs"].empty(), "and the engine answers it");
@@ -727,6 +742,25 @@ void TestUiClient()
     }
 
     Expect(!follower.Current() && follower.Trail() == std::vector<int>({60, 57}), "silence leaves a trail");
+
+    // Play's notes as the engine times them: what sounds, and the chord to show, at a moment.
+    const auto playback = sg::ParsePlayback(nlohmann::json::parse(R"({"type":"scaleGuidePlayback","delayMs":500,
+        "notes":[{"string":0,"fret":3,"startMs":0,"lengthMs":200,"step":0,"chord":0},
+                 {"string":1,"fret":2,"startMs":200,"lengthMs":200,"step":1,"chord":0},
+                 {"string":1,"fret":5,"startMs":400,"lengthMs":200,"step":2,"chord":1}]})"));
+    Expect(playback.notes.size() == 3 && playback.delayMs == 500.0 && playback.notes[2].chord == 1,
+           "the playback message is read");
+    const auto waiting = sg::PlaybackAt(playback, 100.0);
+    Expect(waiting.places.empty() && waiting.chord == -1, "nothing shows while Play waits for the bar");
+    Expect(sg::PlaybackAt(playback, 430.0).chord == 0, "the first chord shows just ahead of its note");
+    const auto second = sg::PlaybackAt(playback, 750.0);
+    Expect(second.places == std::vector<std::pair<int, int>>({{1, 2}}) && second.steps == std::vector<int>({1}) &&
+               second.chord == 0,
+           "the second note sounds alone");
+    Expect(sg::PlaybackAt(playback, 830.0).chord == 1, "the next chord shows ahead of its first note");
+    const auto ended = sg::PlaybackAt(playback, 1200.0);
+    Expect(ended.places.empty() && ended.chord == 1, "nothing is lit after the last note");
+    Expect(sg::ParsePlayback(nlohmann::json::array()).notes.empty(), "a malformed message reads as nothing");
 }
 
 /// `--dump <tuning> <key 0-11> <chord>`: the shapes found, with fingers, for tuning the search.

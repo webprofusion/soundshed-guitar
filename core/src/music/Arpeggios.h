@@ -46,10 +46,12 @@ enum class PickStroke
     Down,
     Up,
     Hammer,
-    Pull
+    Pull,
+    /// Slid into from the note before, on the same string: only between a progression's shapes.
+    Slide
 };
 
-/// "down", "up", "hammer" or "pull".
+/// "down", "up", "hammer", "pull" or "slide".
 [[nodiscard]] std::string_view PickStrokeId(PickStroke stroke);
 
 struct ArpeggioNote

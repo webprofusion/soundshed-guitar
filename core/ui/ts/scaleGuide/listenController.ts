@@ -9,6 +9,7 @@ import { postMessage } from "../bridge.js";
 import type { IncomingPayload } from "../messages/types.js";
 import { matchChord, NoteFollower, readingMidi, StrumGate } from "./listen.js";
 import { noteReadout, setReadout, showMatch, showNotes } from "./listenView.js";
+import { isScaleGuidePlaying } from "./playback.js";
 import type { ScaleGuideSettings, ScaleGuideView } from "./types.js";
 
 export interface ListenHost {
@@ -81,7 +82,9 @@ export function renderListen(host: ListenHost): void {
   }
 
   const state = host.settings();
-  showNotes(neck, view, { labels: state.labels, leftHanded: state.leftHanded, width: neck.clientWidth }, listening && !chordMode ? [follower.current, ...follower.trail] : []);
+  // The guide's own Play lights the notes it sounds: hearing them too would mark each one all over the neck.
+  const heard = listening && !chordMode && (state.listenEverywhere || !isScaleGuidePlaying()) ? [follower.current, ...follower.trail] : [];
+  showNotes(neck, view, { labels: state.labels, leftHanded: state.leftHanded, width: neck.clientWidth }, heard, state.listenEverywhere);
   showMatch(root, view, null, state.match);
 
   if (!listening) {
