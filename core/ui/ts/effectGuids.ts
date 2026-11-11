@@ -40,6 +40,8 @@ export const EffectGuids = {
   kSustainer:            "7920e27e-6ad6-4585-b9f4-ccecc973569e",
   kVinyl:                "40cca7fd-9470-4c8b-b45a-cf0b41314459",
   kAcousticSim:          "863b7264-3b99-40d9-98fe-a4d0f6839b39",
+  kStutter:              "0aa79c02-53f6-4d34-af1c-41f5aa1fbe95",
+  kVowelFilter:          "4b90d9d9-48a1-4d1a-8778-ef466d8b0852",
 
   // EQ
   kEqParametric:         "4b4025ca-64cd-4180-be79-81873b618dba",
@@ -131,6 +133,8 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   sustainer:             EffectGuids.kSustainer,
   vinyl:                 EffectGuids.kVinyl,
   acoustic_sim:          EffectGuids.kAcousticSim,
+  stutter:               EffectGuids.kStutter,
+  vowel_filter:          EffectGuids.kVowelFilter,
   eq_parametric:         EffectGuids.kEqParametric,
   eq_graphic:            EffectGuids.kEqGraphic,
   pickup_match:          EffectGuids.kPickupMatch,

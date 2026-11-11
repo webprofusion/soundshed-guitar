@@ -216,6 +216,15 @@
     {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4, "presence": 0.58}},
     {"type": "eq_parametric", "preset": "tight-low-end"}
    ]
+  },
+  {
+   "name": "Robot Riff", "tags": ["metal", "industrial", "vowel"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -48}},
+    {"type": "amp_builtin", "preset": "tight-modern-rhythm", "params": {"gain": 0.82, "middle": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4}},
+    {"type": "vowel_filter", "preset": "robot-chatter", "params": {"mix": 0.45}}
+   ]
   }
  ]
 }

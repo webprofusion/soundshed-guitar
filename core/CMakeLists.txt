@@ -711,9 +711,11 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/effects/AcousticSimEffect.h
     src/dsp/effects/BitcrusherEffect.h
     src/dsp/effects/FuzzEffect.h
+    src/dsp/effects/StutterEffect.h
     src/dsp/effects/SustainerEffect.h
     src/dsp/effects/TapeSaturationEffect.h
     src/dsp/effects/VinylEffect.h
+    src/dsp/effects/VowelFilterEffect.h
     src/dsp/effects/BuiltinAmpEffect.h
     src/dsp/effects/BuiltinAmpOversampling.h
     src/dsp/effects/BuiltinAmpFilters.h

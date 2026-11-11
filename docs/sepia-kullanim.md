@@ -51,9 +51,9 @@ chorus, delay, reverb, Tape, Vinyl ve Bitcrusher **kabinden sonra** durur.
 |---|---|
 | Drive | Overdrive (7 model), Distortion (4 model), Fuzz (5 model), Multiband Distortion |
 | Dinamik | Noise Gate, kompresörler, limiter, gürültü azaltma, **Sustainer** |
-| Modülasyon | Chorus, Flanger, Phaser, Tremolo, Vibe, Rotary, Wah, Ring Mod |
+| Modülasyon | Chorus, Flanger, Phaser, Tremolo, Vibe, Rotary, Wah, Ring Mod, **Vowel Filter** |
 | Perde | Octave, Pitch Shift, Harmonizer, Transpose |
-| Zaman | Dijital, analog ve bant delay'leri, doubler, altı ayrı reverb |
+| Zaman | Dijital, analog ve bant delay'leri, doubler, **Stutter**, altı ayrı reverb |
 | EQ | Parametrik ve grafik EQ, Pickup Match, **Acoustic** |
 | Lo-fi | **Tape**, **Vinyl**, **Bitcrusher**; kabinde AM Radio, Telephone, Boombox, Practice Amp, VHS |
 
@@ -82,6 +82,14 @@ plağın donuk üst ucu.
 **Acoustic** (amfi yerine ya da temiz amfiden sonra). Elektro gitarı akustik gitara yaklaştırır:
 *Size* gövde boyu, *Body* gövde tınısı, *Top* parlaklık. Boyun manyetiğiyle en iyi sonucu verir.
 Bir EQ'dur; gerçek akustik gitarın yerini tutmaz.
+
+**Stutter** (kabinden sonra). Az önce çaldığın parçayı yakalayıp tempoya uygun biçimde tekrarlar;
+"takılan CD" etkisi. *Division* tekrar uzunluğu, *Chance* ne sıklıkla devreye gireceği, *Repeats*
+kaç kez tekrarlayacağı, *Reverse* tersten çalma olasılığı. Tempo alt çubuktaki BPM'den gelir.
+
+**Vowel Filter** (amfiden önce ya da sonra). Gitarı "u-o-a-e-i" diye konuşturan filtre; talk box
+ve wah arası bir ses. *Mode*: elle (Manual), kendiliğinden salınan (LFO) ya da vuruş gücüne göre
+açılan (Envelope). *Vowel* ağzın konumu, *Depth* ne kadar hareket edeceği, *Resonance* keskinlik.
 
 ## 5. Sık sorulanlar
 

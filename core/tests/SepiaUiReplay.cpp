@@ -141,9 +141,12 @@ int main(int argc, char** argv)
         controller.Initialize();
         controller.Prepare(48000.0, 256);
         controller.OnIdle();
-        controller.HandleUIMessage(
-            json{{"type", "loadPreset"}, {"presetId", argc > 2 ? argv[2] : "sepia-warm-clean-room"}}.dump());
-        controller.OnIdle();
+        // With no preset named, the engine is left as a fresh install starts: on its own choice.
+        if (argc > 2)
+        {
+            controller.HandleUIMessage(json{{"type", "loadPreset"}, {"presetId", argv[2]}}.dump());
+            controller.OnIdle();
+        }
 
         const auto flush = [&host] {
             for (const auto& message : host.sent)

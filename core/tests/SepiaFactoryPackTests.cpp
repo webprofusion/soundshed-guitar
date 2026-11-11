@@ -167,11 +167,12 @@ void TestSelfContained(const Pack& pack)
     auto& registry = guitarfx::EffectRegistry::Instance();
 
     Check(pack.document.value("resources", json::array()).empty(), "the archive lists no resources");
-    Check(pack.presets.size() >= 122, "at least a hundred and twenty-two presets", std::to_string(pack.presets.size()));
+    Check(pack.presets.size() >= 128, "at least a hundred and twenty-eight presets",
+          std::to_string(pack.presets.size()));
 
-    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 24},      {"Lo-Fi", 18},
-                                                         {"Shoegaze & Ambient", 18}, {"Blues & Classic Rock", 20},
-                                                         {"Grunge & Punk", 20},      {"Metal", 22}};
+    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 24},      {"Lo-Fi", 20},
+                                                         {"Shoegaze & Ambient", 19}, {"Blues & Classic Rock", 21},
+                                                         {"Grunge & Punk", 21},      {"Metal", 23}};
     std::map<std::string, std::size_t> counts;
 
     for (const auto& [id, group] : pack.groupOf)
@@ -284,6 +285,13 @@ class Rig
         mHost.reset();
         std::error_code ec;
         fs::remove_all(mProfile, ec);
+    }
+
+    /// The name of the preset the controller is on, as the header shows it.
+    [[nodiscard]] std::string ActiveName() const
+    {
+        const auto& active = mController->GetActivePreset();
+        return active ? active->name : std::string{};
     }
 
     [[nodiscard]] std::string LoadById(const std::string& id)
@@ -445,6 +453,8 @@ void TestOfferedById(const Pack& pack)
 {
     std::cout << "\nOffered by the app" << std::endl;
     Rig rig;
+    Check(rig.ActiveName() == "Warm Clean Room", "a fresh install opens on the pack's startup preset",
+          rig.ActiveName());
     int found = 0;
 
     for (const auto& preset : pack.presets)

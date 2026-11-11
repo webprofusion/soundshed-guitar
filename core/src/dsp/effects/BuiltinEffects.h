@@ -16,9 +16,11 @@
 #include "dsp/effects/GraphicEQEffect.h"
 #include "dsp/effects/DelayEffect.h"
 #include "dsp/effects/TapeDelayEffect.h"
+#include "dsp/effects/StutterEffect.h"
 #include "dsp/effects/SustainerEffect.h"
 #include "dsp/effects/TapeSaturationEffect.h"
 #include "dsp/effects/VinylEffect.h"
+#include "dsp/effects/VowelFilterEffect.h"
 #include "dsp/effects/AnalogDelayEffect.h"
 #include "dsp/effects/DoublerEffect.h"
 #include "dsp/effects/HarmonizerEffect.h"
@@ -122,6 +124,8 @@ inline void RegisterAllEffects()
     RegisterVinylEffect();
     RegisterSustainerEffect();
     RegisterAcousticSimEffect();
+    RegisterStutterEffect();
+    RegisterVowelFilterEffect();
 
     // EQ
     RegisterParametricEQEffect();

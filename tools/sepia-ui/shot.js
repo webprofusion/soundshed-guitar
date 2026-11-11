@@ -5,6 +5,7 @@
  *
  *   node tools/sepia-ui/shot.js <out.png> [--preset <id>] [--theme <name>] [--width N] [--height N]
  *                               [--click <selector>]... [--shot <file.png>] [--eval <js>] [--wait ms]
+ *                               [--trace]
  *
  * Steps run in the order given: --click clicks, --wait pauses, --shot saves a screenshot at that
  * point, --eval prints an expression's value. The final screenshot goes to <out.png>.
@@ -44,7 +45,9 @@ function option(name, fallback) {
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
 
-  const engine = spawn(REPLAY, ['--serve', option('--preset', 'sepia-warm-clean-room')], { stdio: ['pipe', 'pipe', 'ignore'] });
+  // No --preset: the engine starts as a fresh install does, on its configured startup preset.
+  const preset = option('--preset');
+  const engine = spawn(REPLAY, preset ? ['--serve', preset] : ['--serve'], { stdio: ['pipe', 'pipe', 'ignore'] });
   const pending = [];   // engine messages not yet delivered to the page
   let deliver = null;   // set once the page is up
   let settled = () => {};
@@ -62,11 +65,22 @@ function option(name, fallback) {
   let sent = 0;
   let received = 0;
   page.on('pageerror', (e) => errors.push(String(e).split('\n')[0]));
-  await page.exposeFunction('__sepiaSend', (message) => { sent += 1; engine.stdin.write(message.replace(/\n/g, ' ') + '\n'); });
-  await page.addInitScript(() => { window.IPlugSendMsg = (m) => window.__sepiaSend(JSON.stringify(m)); });
+  const trace = process.argv.includes('--trace');
+  const typeOf = (text) => { try { return JSON.parse(text).type; } catch { return '?'; } };
+  await page.exposeFunction('__sepiaSend', (message) => {
+    sent += 1;
+    if (trace) { console.log(`-> ${typeOf(message)}`); }
+    engine.stdin.write(message.replace(/\n/g, ' ') + '\n');
+  });
+  // The UI hands IPlugSendMsg its message already serialised.
+  await page.addInitScript(() => { window.IPlugSendMsg = (m) => window.__sepiaSend(typeof m === 'string' ? m : JSON.stringify(m)); });
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.waitForFunction(() => typeof window.IPlugReceiveData === 'function', null, { timeout: 15000 });
-  deliver = (line) => { received += 1; page.evaluate((m) => window.IPlugReceiveData(m), line).catch(() => {}); };
+  deliver = (line) => {
+    received += 1;
+    if (trace) { console.log(`<- ${typeOf(line)} (${line.length})`); }
+    page.evaluate((m) => window.IPlugReceiveData(m), line).catch((e) => console.error(`deliver: ${String(e).split('\n')[0]}`));
+  };
   pending.splice(0).forEach(deliver);
 
   /** Lets the page and the engine finish talking: quiet for 400 ms. */

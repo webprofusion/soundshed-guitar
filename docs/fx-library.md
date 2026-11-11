@@ -74,6 +74,8 @@ All UUID constants are defined in `core/src/dsp/EffectGuids.h`. The table below 
 | `kSustainer` | `7920e27e-6ad6-4585-b9f4-ccecc973569e` | `sustainer` |
 | `kVinyl` | `40cca7fd-9470-4c8b-b45a-cf0b41314459` | `vinyl` |
 | `kAcousticSim` | `863b7264-3b99-40d9-98fe-a4d0f6839b39` | `acoustic_sim` |
+| `kStutter` | `0aa79c02-53f6-4d34-af1c-41f5aa1fbe95` | `stutter` |
+| `kVowelFilter` | `4b90d9d9-48a1-4d1a-8778-ef466d8b0852` | `vowel_filter` |
 | `kEqParametric` | `4b4025ca-64cd-4180-be79-81873b618dba` | `eq_parametric` |
 | `kEqGraphic` | `ef8240ba-c973-4e09-ab65-4faf56a8ecbf` | `eq_graphic` |
 | `kPickupMatch` | `df1f4ed4-5d84-4a21-9474-ad6ab014fca5` | `pickup_match` |

@@ -189,6 +189,17 @@
     {"type": "cab_simple", "params": {"cabinet": 2, "speakerDrive": 0.4, "brightness": 0.4}},
     {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.1}}
    ]
+  },
+  {
+   "name": "Talk Box Lead", "tags": ["rock", "lead", "vowel"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -58}},
+    {"type": "vowel_filter", "preset": "talking-wah"},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.5, "tone": 0.55, "level": 3}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.78, "middle": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.5}},
+    {"type": "delay_analog", "preset": "dm2", "params": {"mix": 0.14}}
+   ]
   }
  ]
 }

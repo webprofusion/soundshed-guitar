@@ -164,6 +164,25 @@
     {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.35}},
     {"type": "tape_saturation", "preset": "cassette", "params": {"drive": 0.5}}
    ]
+  },
+  {
+   "name": "Broken Tape Loop", "tags": ["tape", "stutter"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "treble": 0.46}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.2}},
+    {"type": "stutter", "preset": "broken-cd", "params": {"chance": 0.2}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"wow": 0.5}}
+   ]
+  },
+  {
+   "name": "Glitch Garden", "tags": ["stutter", "ambient"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
+    {"type": "stutter", "preset": "sixteenth-machine", "params": {"chance": 0.3}},
+    {"type": "delay_digital", "preset": "ping-pong", "params": {"mix": 0.22}},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.16}}
+   ]
   }
  ]
 }

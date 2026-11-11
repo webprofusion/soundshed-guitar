@@ -9,6 +9,7 @@
  "Boombox Chorus": 1.55,
  "Boombox Demo": -3.92,
  "British Bite": -2.99,
+ "Broken Tape Loop": -1.47,
  "Camcorder Summer": 2.76,
  "Campfire Strum": 14.03,
  "Charity Shop LP": 2.74,
@@ -39,6 +40,7 @@
  "Glass Chime": 2.19,
  "Glassy Slapback": 3.62,
  "Glide Vibrato": 2.67,
+ "Glitch Garden": 5.8,
  "Hardcore Bark": -4.92,
  "Honey Compressor": 1.15,
  "Industrial Grind": -3.57,
@@ -73,6 +75,7 @@
  "Quiet Verse": 7.9,
  "Reverse Tide": 8.1,
  "Ring Bells": 6.71,
+ "Robot Riff": -4.19,
  "Rotary Rock": 0.86,
  "Rotor Lounge": 4.32,
  "Run-Out Groove": -3.55,
@@ -99,6 +102,8 @@
  "Surf Splash": 3.19,
  "Swedish Buzz": -6.31,
  "Symphonic Lead": -2.85,
+ "Talk Box Lead": -5.27,
+ "Talking Fuzz": -8.36,
  "Tape Deck Dream": 2.86,
  "Tape Halo": 2.85,
  "Thrash Gallop": -5.35,
@@ -120,5 +125,6 @@
  "Warm Breaker": -3.89,
  "Warm Clean Room": 1.51,
  "Watery Verse": 7.13,
- "Worn Out Mixtape": 3.98
+ "Worn Out Mixtape": 3.98,
+ "Yawning Clouds": -0.82
 }

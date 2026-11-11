@@ -175,23 +175,38 @@
     },
     "kTapeSaturation": {
       "guid": "7d0c1f52-6b1e-4c0a-9a3f-5e2b8c4d9f10",
-      "icon": "flame"
+      "icon": "flame",
+      "equipmentImage": "images/equipment/pedals/sepia-tape.png"
     },
     "kBitcrusher": {
       "guid": "b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45",
-      "icon": "flame"
+      "icon": "flame",
+      "equipmentImage": "images/equipment/pedals/sepia-bitcrusher.png"
     },
     "kSustainer": {
       "guid": "7920e27e-6ad6-4585-b9f4-ccecc973569e",
-      "icon": "bolt"
+      "icon": "bolt",
+      "equipmentImage": "images/equipment/pedals/sepia-sustainer.png"
     },
     "kVinyl": {
       "guid": "40cca7fd-9470-4c8b-b45a-cf0b41314459",
-      "icon": "wave"
+      "icon": "wave",
+      "equipmentImage": "images/equipment/pedals/sepia-vinyl.png"
     },
     "kAcousticSim": {
       "guid": "863b7264-3b99-40d9-98fe-a4d0f6839b39",
-      "icon": "guitar"
+      "icon": "guitar",
+      "equipmentImage": "images/equipment/pedals/sepia-acoustic.png"
+    },
+    "kStutter": {
+      "guid": "0aa79c02-53f6-4d34-af1c-41f5aa1fbe95",
+      "icon": "delay",
+      "equipmentImage": "images/equipment/pedals/sepia-stutter.png"
+    },
+    "kVowelFilter": {
+      "guid": "4b90d9d9-48a1-4d1a-8778-ef466d8b0852",
+      "icon": "megaphone",
+      "equipmentImage": "images/equipment/pedals/sepia-vowel-filter.png"
     },
     "kAmpBuiltin": {
       "guid": "1460a632-6690-4fef-ac6d-6432e3b983f8",

@@ -186,6 +186,16 @@
     {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.72, "treble": 0.6}},
     {"type": "cab_simple", "params": {"cabinet": 0, "speakerDrive": 0.45}}
    ]
+  },
+  {
+   "name": "Talking Fuzz", "tags": ["grunge", "fuzz", "vowel"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
+    {"type": "vowel_filter", "preset": "talking-wah", "params": {"sensitivity": 0.6}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.7, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}}
+   ]
   }
  ]
 }

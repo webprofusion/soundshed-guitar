@@ -17,7 +17,7 @@ Kontrol et:
 - [ ] Kurulum internetsiz tamamlandı.
 - [ ] Uygulama açıldı ve başlıkta "Sepia" yazıyor.
 - [ ] Açılışta "Warm Clean Room" preset'i yüklü.
-- [ ] Preset listesinde "Sepia Factory" altında altı grup ve toplam 120 preset var.
+- [ ] Preset listesinde "Sepia Factory" altında altı grup ve toplam 128 preset var.
 - [ ] Uygulama sıcak kahverengi-altın "Sepia" temasıyla açılıyor (Ayarlar'dan Light, Dark, Vintage seçilebiliyor).
 - [ ] Hiçbir preset "eksik dosya" ya da "model bulunamadı" uyarısı vermiyor.
 - [ ] Üst çubukta paylaşım (Tones) sekmesi yok, güncelleme bildirimi çıkmıyor.
@@ -70,6 +70,12 @@ Boş bir zincire tek tek ekle:
       hemen kesiliyor. Hızlı çalarken hiçbir şey eklemiyor. Akorlarda devreye girmemesi normal.
 - [ ] **Vinyl** (zincirin sonunda): Crackle ile çıtırtı, Dust ile hafif hışırtı geliyor; ikisi
       sıfırken ses temiz.
+- [ ] **Acoustic** (amfi yerine): ses akustik gitara yaklaşıyor mu, yoksa yalnızca inceliyor mu?
+      Boyun manyetiğiyle dene.
+- [ ] **Stutter** (kabinden sonra): çalarken ara sıra son çaldığın parçayı tekrar ediyor, tık
+      sesi yok; Chance sıfırken hiçbir şey yapmıyor.
+- [ ] **Vowel Filter**: sert vurunca "vah" diye açılıyor (Envelope); LFO modunda kendi kendine
+      "u-a-i" diye salınıyor.
 - [ ] **Simple Cabinet**: kabin listesinde AM Radio, Telephone, Boombox, Practice Amp ve VHS var
       ve her biri belirgin biçimde farklı.
 

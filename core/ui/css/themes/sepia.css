@@ -559,6 +559,12 @@ body.theme-sepia {
 /* Type that belongs on a print: the wordmark and the preset name in a book serif. Only fonts
    already on the machine, since the app is offline. */
 .theme-sepia {
+  /* variables.css derives these from the accent at :root, where they resolve to the base orange
+     and are inherited as that. Said again here so they follow this theme's gold. */
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --color-primary-dim: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  --border-browser-focus: var(--color-accent);
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --waveform-bg: rgba(236, 223, 201, 0.05);
   --waveform-lane-divider: rgba(236, 223, 201, 0.20);
@@ -613,4 +619,13 @@ body.theme-sepia::before {
   z-index: 0;
   background: radial-gradient(ellipse at 50% 35%, rgba(216, 166, 87, 0.05) 0%, transparent 55%),
     radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+/* Gold is a light colour: what sits on it is ink, not the cream used on the dark ground. */
+.theme-sepia .preset-lib-tab.active,
+.theme-sepia .preset-folder-item.active,
+.theme-sepia .setlist-item.active,
+.theme-sepia .setlist-slot.active,
+.theme-sepia .setlist-slot.active .setlist-slot-title {
+  color: #1a130d;
 }

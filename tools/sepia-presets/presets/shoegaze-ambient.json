@@ -179,6 +179,15 @@
     {"type": "delay_digital", "preset": "reverse-wash", "params": {"mix": 0.2}},
     {"type": "reverb_ambient", "preset": "dark-swell", "params": {"mix": 0.36}}
    ]
+  },
+  {
+   "name": "Yawning Clouds", "tags": ["ambient", "vowel"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.48, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1}},
+    {"type": "vowel_filter", "preset": "slow-yawn", "params": {"mix": 0.6}},
+    {"type": "reverb_ambient", "preset": "cloud", "params": {"mix": 0.4}}
+   ]
   }
  ]
 }
