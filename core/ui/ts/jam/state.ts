@@ -8,6 +8,7 @@
  * feature free of import cycles.
  */
 
+import { ONLINE_SERVICES_ENABLED } from "../apiConfig.js";
 import { updateAppSetting } from "../appSettingsStore.js";
 import { uiState } from "../state.js";
 import type { AppSettingValue, JamPlayerState, JamState, JamVideoSummary } from "../types.js";
@@ -260,7 +261,9 @@ export function findVideoById(videoId: string): JamVideoSummary | undefined {
 }
 
 export function isBackingTracksFeatureEnabled(): boolean {
-  return isFeatureEnabled(Features.Jam);
+  // Backing tracks are found through YouTube and played through the upstream project's embed
+  // page: an online service, and off with the rest of them.
+  return ONLINE_SERVICES_ENABLED && isFeatureEnabled(Features.Jam);
 }
 
 export function isRiffLibraryFeatureEnabled(): boolean {

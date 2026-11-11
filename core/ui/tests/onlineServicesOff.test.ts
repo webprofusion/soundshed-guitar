@@ -30,6 +30,12 @@ describe("online services", () => {
     expect(config.baseUrl).toBe(TONE3000_OFFICIAL_API_BASE);
   });
 
+  it("leave Jam on its offline tools: no YouTube backing-track search", async () => {
+    const { isBackingTracksFeatureEnabled, resolveJamSection } = await import("../ts/jam/state.js");
+    expect(isBackingTracksFeatureEnabled()).toBe(false);
+    expect(resolveJamSection("backingTracks")).not.toBe("backingTracks");
+  });
+
   it("name no upstream host anywhere in the UI source or markup", () => {
     const root = join(__dirname, "..");
     const files = [...sourceFiles(join(root, "ts")), ...sourceFiles(join(root, "ui-components")), join(root, "index.template.html")];
