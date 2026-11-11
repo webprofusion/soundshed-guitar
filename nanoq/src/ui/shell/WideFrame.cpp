@@ -41,6 +41,17 @@ std::string SourceLabel(const std::string& source)
 
     return {};
 }
+
+/// Whether the control bar's toolbar has room for NEW and PUBLISH spelt out: 406 px with them,
+/// and the middle of the bar is the window less the meters and the six cells either side of it
+/// (636 px). At 1024 wide (an iPad) that leaves 388, and the toolbar's end, the preset menu, lay
+/// under the EQ cell where no press reached it. The web UI drops the same two labels there.
+bool ToolbarLabelsFit(float viewWidth)
+{
+    constexpr float kHeaderSides = 2.0f * (28.0f + 30.0f + 14.0f) + 5.0f * 84.0f + 72.0f;
+    constexpr float kLabelledToolbar = 406.0f;
+    return viewWidth - kHeaderSides >= kLabelledToolbar + 8.0f;
+}
 } // namespace
 
 // ── Which layout ────────────────────────────────────────────────────────────────
@@ -96,12 +107,13 @@ Ptr Shell::BuildFrame()
 std::string Shell::TopBarSignature() const
 {
     const auto* summary = mState.FindPresetSummary(mState.activePresetId);
-    std::string s =
-        std::string(mWide ? "w" : "c") + std::to_string(static_cast<int>(mPage)) + "|" + mState.activePresetId + "|" +
-        PresetTitle(mState) + "|" + (mState.activePresetDirty ? "d" : "") + (mState.activePreset ? "p" : "") +
-        (guitarfx::uiclient::IsPresetFavorite(mState, mState.activePresetId) ? "f" : "") + "|" +
-        (summary != nullptr ? summary->source : std::string()) + "|" + (mPresetTrail.CanGoBack() ? "<" : "") +
-        (mPresetTrail.CanGoForward() ? ">" : "") + (mUpdate ? "|u" : "");
+    std::string s = std::string(mWide ? "w" : "c") + std::to_string(static_cast<int>(mPage)) + "|" +
+                    mState.activePresetId + "|" + PresetTitle(mState) + "|" + (mState.activePresetDirty ? "d" : "") +
+                    (mState.activePreset ? "p" : "") +
+                    (guitarfx::uiclient::IsPresetFavorite(mState, mState.activePresetId) ? "f" : "") + "|" +
+                    (summary != nullptr ? summary->source : std::string()) + "|" +
+                    (mPresetTrail.CanGoBack() ? "<" : "") + (mPresetTrail.CanGoForward() ? ">" : "") +
+                    (mUpdate ? "|u" : "") + (mWide && ToolbarLabelsFit(ViewSize().x) ? "|l" : "");
     return s;
 }
 
@@ -194,8 +206,21 @@ Ptr Shell::BuildHeader()
         return Pad(7, 6, 7, 6, FixedWidth(1, Fill(mTheme.Text().opacity(0.1f), std::make_shared<el::element>())));
     };
 
+    // NEW and PUBLISH are spelt out only where the bar has room for them (ToolbarLabelsFit).
+    const bool labelled = ToolbarLabelsFit(ViewSize().x);
+
     auto create = std::make_shared<IconButton>(mTheme, mIcons, "ui-new", IconButton::Look::Boxed);
-    create->Size(72, 28).IconSize(13).Label("NEW", 10.5f).Caret(true);
+    create->IconSize(13).Caret(true);
+
+    if (labelled)
+    {
+        create->Size(72, 28).Label("NEW", 10.5f);
+    }
+    else
+    {
+        create->Size(44, 28);
+    }
+
     create->onClick = [this, b = create.get()] { OpenNewPresetMenu(b->Bounds()); };
 
     // Edit and Save only for a preset that may be overwritten, as the web UI's toolbar.
@@ -224,7 +249,17 @@ Ptr Shell::BuildHeader()
 
     // Publish (#preset-publish): publishing is Soundshed Guitar's, and this says so.
     auto publish = std::make_shared<IconButton>(mTheme, mIcons, "ui-share", IconButton::Look::Accent);
-    publish->Size(84, 28).IconSize(13).Label("PUBLISH", 10.5f);
+    publish->IconSize(13);
+
+    if (labelled)
+    {
+        publish->Size(84, 28).Label("PUBLISH", 10.5f);
+    }
+    else
+    {
+        publish->Size(30, 28);
+    }
+
     publish->onClick = [this] { OpenPublishInfo(); };
 
     auto toolbar = Tight({create, HGap(6), edit, HGap(6), save, divider(), random, divider(), back, HGap(2), forward,

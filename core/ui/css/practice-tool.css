@@ -241,11 +241,15 @@
   box-shadow: 0 8px 18px rgba(11, 59, 112, 0.34);
 }
 
+/* The panel scrolls, so the loops and transport take the space left over but
+   never less than they need: allowed to shrink, the body went down to nothing
+   whenever the panel was short (1024x768 and smaller) and the transport's
+   sliders drew over the Links section below it. */
 .practice-tool-body {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   gap: 16px;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   min-height: 0;
 }
 

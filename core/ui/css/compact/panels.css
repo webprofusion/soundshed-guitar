@@ -256,6 +256,129 @@ html[data-density="compact"] .practice-tool-waveform {
   height: 130px;
 }
 
+/*
+  Scale Guide. At full size it is three rows of controls over the neck, about
+  150px before the neck starts, and its panel has a 420px floor: on a landscape
+  phone the neck began under the footer and nothing scrolled to it. Here the
+  panel scrolls as one, like a Tones section, and the controls take two rows:
+  the tabs with Listen, Play and the instrument, then Key, Scale, Position and
+  Dots wrapping as the width allows. The labels the pickers make plain go (they
+  stay for screen readers); Style and Strings in Arpeggios keep theirs.
+*/
+html[data-density="compact"] .jam-scales-panel.active {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container-type: size;
+}
+
+html[data-density="compact"] .scale-guide {
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+html[data-density="compact"] .sg-tabs {
+  gap: 0 14px;
+}
+
+html[data-density="compact"] .sg-tab {
+  padding: 6px 2px 8px;
+  font-size: 13px;
+}
+
+html[data-density="compact"] .sg-actions {
+  gap: 6px;
+  padding-bottom: 4px;
+}
+
+html[data-density="compact"] .sg-listen,
+html[data-density="compact"] .sg-setup-button {
+  height: 32px;
+}
+
+html[data-density="compact"] .sg-listen {
+  padding: 0 10px;
+}
+
+html[data-density="compact"] .scale-guide .sg-volume {
+  width: 56px;
+}
+
+/* A phone's width: the tuning's name put Listen and Play on a line of their own
+   under the tabs, a row the neck needs more. The button keeps its icon and its
+   tooltip, the neck names the strings, and a screen reader still hears it. */
+@media (max-width: 760px) {
+  html[data-density="compact"] .sg-setup-button {
+    padding-left: 10px;
+  }
+
+  html[data-density="compact"] #sg-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The two bars' items share one wrapping row; the progression editor, when it
+   is open, keeps a line of its own. */
+html[data-density="compact"] .sg-controls {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+html[data-density="compact"] .sg-controls > .sg-bar {
+  display: contents;
+}
+
+html[data-density="compact"] .sg-controls > .sg-editor {
+  flex: 1 1 100%;
+}
+
+html[data-density="compact"] .sg-controls .sg-inline > .sg-label:is(#sg-key-label, #sg-position-label, #sg-labels-label),
+html[data-density="compact"] .sg-controls .sg-field-wide > .sg-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+html[data-density="compact"] .scale-guide .sg-controls .sg-select {
+  height: 32px;
+  padding: 0 30px 0 10px;
+  font-size: 14px;
+}
+
+html[data-density="compact"] .sg-field-wide .sg-select {
+  max-width: 220px;
+}
+
+html[data-density="compact"] .sg-segment {
+  min-width: 30px;
+  padding: 4px 9px;
+}
+
+/*
+  The neck is no taller than what the stage has left under the two rows of
+  controls (about 90px), so on a landscape phone all six strings are on screen
+  at once; below 120px the panel scrolls instead. Landscape, it also fits the
+  width rather than scrolling sideways past 680px. A phone held upright keeps
+  the sideways scroll: fitted to 360px the neck's dots were too small to read.
+*/
+html[data-density="compact"] .sg-neck-svg {
+  max-height: max(120px, calc(100cqh - 90px));
+}
+
+html[data-density="compact"][data-compact-layout="rail"] .sg-neck-svg {
+  min-width: 0;
+}
+
 /* ── Settings ─────────────────────────────────────────────────────────────────
  *
  * The section rail already stacks at 980px. What is left is the row grid: a

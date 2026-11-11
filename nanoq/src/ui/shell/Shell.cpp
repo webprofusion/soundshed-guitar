@@ -506,12 +506,12 @@ void Shell::OnTick()
         mShowingStarting = false;
     }
 
-    // A new size: the regions laid out for the old one are looked at again (the chain and the
-    // pages only rebuild where their signatures see the change).
+    // A new size: the regions laid out for the old one are looked at again (the chain, the pages
+    // and the top bar only rebuild where their signatures see the change).
     if (const auto size = ViewSize(); size.x != mLastSize.x || size.y != mLastSize.y)
     {
         mLastSize = size;
-        mDirty |= kTransport | kChain | kPage;
+        mDirty |= kTransport | kChain | kPage | kTopBar;
     }
 
     if (mHistoryCommitAt > 0.0 && UiSession::Now() >= mHistoryCommitAt)

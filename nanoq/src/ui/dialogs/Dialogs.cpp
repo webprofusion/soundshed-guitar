@@ -70,7 +70,9 @@ void Shell::ShowDialog(DialogParts parts)
 
     // A window too short for the dialog scrolls its body under the header; a body that fills
     // the dialog scrolls in itself.
-    if (height < parts.height && !parts.stretch)
+    const bool scrolls = height < parts.height && !parts.stretch;
+
+    if (scrolls)
     {
         body = VScroll(body);
     }
@@ -78,8 +80,10 @@ void Shell::ShowDialog(DialogParts parts)
     column.push_back(body);
 
     // Takes any height the body leaves, so the card fills the dialog and the footer sits at its
-    // foot: a column of fixed rows is otherwise only as tall as its rows.
-    if (!parts.stretch)
+    // foot: a column of fixed rows is otherwise only as tall as its rows. Not beside a body that
+    // scrolls: that one takes the height itself, and the two would share it, leaving the body
+    // half the dialog to scroll in over an empty half.
+    if (!parts.stretch && !scrolls)
     {
         column.push_back(std::make_shared<el::element>());
     }

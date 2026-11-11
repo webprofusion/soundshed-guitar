@@ -311,7 +311,7 @@ el::view_limits ParamKnob::limits(const el::basic_context&) const
         return {{mBare, mBare}, {mBare, mBare}};
     }
 
-    const float w = mLarge ? kLargeCellWidth : kKnobCellWidth;
+    const float w = mCellWidth > 0.0f ? mCellWidth : (mLarge ? kLargeCellWidth : kKnobCellWidth);
     const float h = mLarge ? kLargeNameHeight + kLargeDiameter + kLargeValueHeight + 4.0f
                            : kKnobNameHeight + kKnobDiameter + kKnobValueHeight + 4.0f;
     return {{w, h}, {w, h}};

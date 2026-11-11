@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <cstdlib>
 
+#if defined(__APPLE__)
+    #include <TargetConditionals.h>
+#endif
+
 namespace nanoq::ui
 {
 bool DragScrollEnabled()
@@ -15,7 +19,9 @@ bool DragScrollEnabled()
             return value[0] != '0';
         }
 
-#if defined(__linux__)
+        // iOS as well: a touch reaches the view as the left button there too (base_view.mm), and
+        // the host's own scroll gesture takes two fingers.
+#if defined(__linux__) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
         return true;
 #else
         return false;

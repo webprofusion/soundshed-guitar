@@ -323,6 +323,14 @@ class ParamKnob : public el::element, public Drawn, public Focusable
         return *this;
     }
 
+    /// A narrower cell than the knob's own (60 px, 74 large), for a row short of room. The name
+    /// and value are drawn to the width given.
+    ParamKnob& CellWidth(float width)
+    {
+        mCellWidth = width;
+        return *this;
+    }
+
     std::function<void(double normalised)> onChange;
     std::function<void()> onReset;
     /// A right click (a long press on a touch screen), at a point in view coordinates: the
@@ -352,6 +360,7 @@ class ParamKnob : public el::element, public Drawn, public Focusable
     double mDefault = 0.0;
     float mBare = 0.0f; // the diameter of a bare knob; 0 for the named one
     bool mLarge = false;
+    float mCellWidth = 0.0f; // 0: the knob's own cell width
     int mKeySteps = 0;
     InlineEdit mEdit;
     double mDragStartValue = 0.0;

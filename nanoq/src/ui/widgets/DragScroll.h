@@ -13,9 +13,9 @@
 // chain card still moves, and a list scrolls from the gaps round them. A row that can be dragged
 // out of its list (EffectRow) is a TapTarget too: a drag across the list still reaches it.
 //
-// On Linux, where no one can tell a finger from a mouse. Off elsewhere, so a mouse drag on a list
-// does what it always did: SOUNDSHED_NANOQ_DRAGSCROLL=1 turns it on anywhere, for testing, and 0
-// turns it off.
+// On Linux, where no one can tell a finger from a mouse, and on iOS, where every pointer is a
+// finger. Off elsewhere, so a mouse drag on a list does what it always did:
+// SOUNDSHED_NANOQ_DRAGSCROLL=1 turns it on anywhere, for testing, and 0 turns it off.
 
 #include "ui/widgets/DragGesture.h"
 

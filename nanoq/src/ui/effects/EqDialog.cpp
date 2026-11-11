@@ -12,6 +12,7 @@
 #include "uiclient/PracticeTool.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace nanoq::ui
 {
@@ -19,12 +20,18 @@ using guitarfx::uiclient::Topic;
 
 namespace
 {
-constexpr float kBandKnob = 54.0f;
-constexpr float kBandCard = 3.0f * kBandKnob + 20.0f;
-constexpr float kCurveHeight = 150.0f;
+constexpr float kBandKnob = 60.0f;    // a knob's cell in a band card, where the dialog has the room
+constexpr float kMinBandKnob = 50.0f; // and the least it can be before the bands go two to a row
+constexpr float kBandCardSlack = 2.0f;
+constexpr float kBandGap = 18.0f;
+constexpr float kBandRowGap = 12.0f;
+constexpr float kSectionPad = 16.0f;
+constexpr float kCurveHeight = 150.0f;                       // the plot, where the window is tall enough
+constexpr float kMinCurveHeight = 96.0f;                     // and the least it gives up to before the dialog scrolls
+constexpr float kCurveChrome = 10.0f + 16.0f + 8.0f + 12.0f; // the curve card round its plot
 constexpr float kBandHeight = 10.0f + 24.0f + 8.0f + 63.0f + 8.0f; // a band card: padding, title, knobs
-constexpr float kCurveCard = 10.0f + 16.0f + 8.0f + kCurveHeight + 12.0f;
-constexpr float kSectionCard = 16.0f + 24.0f + 16.0f + kBandHeight + 18.0f;
+constexpr float kDialogMaxWidth = 900.0f;
+constexpr float kDialogPadX = 20.0f;
 } // namespace
 
 void Shell::OpenEqDialog(EqDialogSpec spec)
@@ -45,7 +52,22 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
     };
 
     // ── The bands, each in its card (.eq-band) ──
-    std::vector<Ptr> bandRow{Stretch()};
+    // Four across where the dialog is wide enough, their knobs drawn in a little where it nearly
+    // is (an 800 px window), and two rows of two below that. At their full width the four cards
+    // were wider than a small window's dialog, and nothing fixes a dialog's width below what it
+    // holds: the dialog took the whole window, and the window grew to hold it (800 x 480 went to
+    // 854 and stayed there).
+    const float dialogWidth = std::min(kDialogMaxWidth, std::max(280.0f, ViewSize().x - 32.0f));
+    const float bandRoom = dialogWidth - 2.0f * kDialogPadX - 2.0f * kSectionPad;
+    const auto knobFor = [bandRoom](int columns) {
+        const float card = (bandRoom - static_cast<float>(columns - 1) * kBandGap) / static_cast<float>(columns);
+        return std::min(kBandKnob, std::floor((card - kBandCardSlack) / 3.0f));
+    };
+    const int columns = knobFor(4) >= kMinBandKnob ? 4 : 2;
+    const float bandKnob = knobFor(columns);
+    const float bandCard = 3.0f * bandKnob + kBandCardSlack;
+
+    std::vector<Ptr> bandCards;
     const std::pair<const char*, const char*> bands[] = {
         {"low", "Low"}, {"lowMid", "Low Mid"}, {"highMid", "High Mid"}, {"high", "High"}};
 
@@ -89,7 +111,8 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
                              guitarfx::uiclient::FormatParamValue(info, v));
                 mSession.Repaint(*knob);
             });
-            knobs.push_back(FixedWidth(kBandKnob, Centred(knob)));
+            knob->CellWidth(bandKnob);
+            knobs.push_back(FixedWidth(bandKnob, Centred(knob)));
         }
 
         knobs.push_back(Stretch());
@@ -137,11 +160,46 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
 
         auto card = Over(Pad(0, 10, 0, 8, Col({FixedHeight(24, heading), VGap(8), FixedHeight(63, Row(knobs))})),
                          el::share(Surface(mTheme.ModalBg(), mTheme.ModalRule(), 8.0f)));
-        bandRow.push_back(FixedWidth(kBandCard, card));
-        bandRow.push_back(HGap(18));
+        bandCards.push_back(FixedWidth(bandCard, card));
     }
 
-    bandRow.back() = Stretch();
+    std::vector<Ptr> bandRows;
+
+    for (std::size_t first = 0; first < bandCards.size(); first += static_cast<std::size_t>(columns))
+    {
+        std::vector<Ptr> row{Stretch()};
+
+        for (std::size_t i = first; i < std::min(bandCards.size(), first + static_cast<std::size_t>(columns)); ++i)
+        {
+            if (i > first)
+            {
+                row.push_back(HGap(kBandGap));
+            }
+
+            row.push_back(bandCards[i]);
+        }
+
+        row.push_back(Stretch());
+
+        if (!bandRows.empty())
+        {
+            bandRows.push_back(VGap(kBandRowGap));
+        }
+
+        bandRows.push_back(FixedHeight(kBandHeight, Row(row)));
+    }
+
+    const float rowCount = static_cast<float>((bandCards.size() + static_cast<std::size_t>(columns) - 1) /
+                                              static_cast<std::size_t>(columns));
+    const float bandsHeight = rowCount * kBandHeight + (rowCount - 1.0f) * kBandRowGap;
+    const float sectionCard = kSectionPad + 24.0f + 16.0f + bandsHeight + 18.0f;
+
+    // The plot gives up height to a short window before the dialog has to scroll: at 800 x 480
+    // the bands were cut 50 px short of their card's foot.
+    const float aroundPlot = kDialogHeaderHeight + 2.0f * 18.0f + kCurveChrome + 16.0f + sectionCard;
+    const float curveHeight =
+        std::clamp(std::max(200.0f, ViewSize().y - 40.0f) - aroundPlot, kMinCurveHeight, kCurveHeight);
+    const float curveCard = kCurveChrome + curveHeight;
 
     // ── The EQ Curve card (.eq-visualizer) ──
     const auto small = [this](const std::string& text, HAlign align) {
@@ -153,15 +211,15 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
                           Col({FixedHeight(16, Row({small("EQ Curve", HAlign::Left), small("\xC2\xB1"
                                                                                            "12 dB",
                                                                                            HAlign::Right)})),
-                               VGap(8), FixedHeight(kCurveHeight, plot)})),
+                               VGap(8), FixedHeight(curveHeight, plot)})),
                       el::share(Surface(mTheme.ModalBg(), mTheme.ModalRule(), 8.0f)));
 
     // ── The Parametric EQ card (.eq-section) ──
     auto sectionTitle = std::make_shared<Text>(mTheme, "PARAMETRIC EQ", 14.0f, Weight::SemiBold);
     sectionTitle->Colour(mTheme.ModalText()).Alignment(HAlign::Centre);
-    auto section = Over(
-        Pad(16, 16, 16, 18, Col({FixedHeight(24, sectionTitle), VGap(16), FixedHeight(kBandHeight, Row(bandRow))})),
-        el::share(Surface(mTheme.ModalRaised(), mTheme.ModalRule(), 10.0f)));
+    auto section = Over(Pad(kSectionPad, kSectionPad, kSectionPad, 18,
+                            Col({FixedHeight(24, sectionTitle), VGap(16), FixedHeight(bandsHeight, Col(bandRows))})),
+                        el::share(Surface(mTheme.ModalRaised(), mTheme.ModalRule(), 10.0f)));
 
     // ── The header: Enabled, and Reset where the dialog has one ──
     auto enabled = std::make_shared<ToggleSwitch>(mTheme, spec.enabled());
@@ -194,12 +252,12 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
         header.push_back(reset);
     }
 
-    const float width = std::min(900.0f, ViewSize().x - 24.0f);
     ShowDialog({.title = spec.title,
-                .body = Col({FixedHeight(kCurveCard, curve), VGap(16), FixedHeight(kSectionCard, section)}),
+                .body = Col({FixedHeight(curveCard, curve), VGap(16), FixedHeight(sectionCard, section)}),
                 .headerExtras = header,
-                .width = width,
-                .height = kDialogHeaderHeight + 2.0f * 18.0f + kCurveCard + 16.0f + kSectionCard});
+                .width = dialogWidth,
+                .height = kDialogHeaderHeight + 2.0f * 18.0f + curveCard + 16.0f + sectionCard,
+                .padX = kDialogPadX});
 
     // The dialog's plot goes with it, and the spectrum watch back to the effect editor's.
     mOnOverlayClosed = [this, closed = std::move(spec.onClosed)] {

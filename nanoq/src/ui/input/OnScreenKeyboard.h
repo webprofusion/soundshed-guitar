@@ -5,7 +5,8 @@
 // Drawn with Elements inside the app, not a program beside it: the kiosk's bare X server has no
 // window manager to place a second window, and no program there would know where the field is.
 // Off unless SOUNDSHED_KIOSK is set, or SOUNDSHED_NANOQ_KEYBOARD says otherwise (Wanted), so the
-// desktop and DAW builds do no more than test one pointer.
+// desktop and DAW builds do no more than test one pointer. On on iOS, whose host view takes no
+// text from UIKit.
 //
 // It shows in the layer holding focus, and it is not a layer of its own: Elements ends the focus
 // of the layer on top the moment a press lands on any other layer, and the text box would lose
@@ -49,7 +50,8 @@ class OnScreenKeyboard
     }
 
     /// Whether this process should have one. SOUNDSHED_NANOQ_KEYBOARD=0 turns it off on a kiosk
-    /// with a real keyboard, =1 turns it on anywhere; unset, it follows SOUNDSHED_KIOSK.
+    /// with a real keyboard, =1 turns it on anywhere; unset, it follows SOUNDSHED_KIOSK, and is
+    /// on on iOS.
     [[nodiscard]] static bool Wanted();
 
     /// Each tick. `host` is the focused layer's router, `field` where its field is now (with the

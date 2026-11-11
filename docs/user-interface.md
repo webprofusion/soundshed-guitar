@@ -536,7 +536,10 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   the List layout (Tones Panel Notes) fits many more results.
   Jam shows four smaller backing-track cards to a row; Riff Library lists the riffs straight
   after New Riff, with the storage path last; and the Practice Tool drops its title and how-to
-  lines and has a 130px waveform.
+  lines and has a 130px waveform. The Scale Guide scrolls as one: its controls take two rows
+  (the tabs with Listen, Play and the instrument; then Key, Scale, Position and Dots, wrapping,
+  with the labels visually hidden), and the neck is no taller than the stage leaves under them.
+  On the rail the neck fits the width; held upright it keeps its sideways scroll.
 - **Touch screens.** Nothing that takes a tap may appear on `:hover` alone: iOS WebKit plays a
   tap as a hover first and, when that hover brings a button into view, holds the click back,
   so the tap only reveals it. Put such reveals under `@media (hover: hover)` (the chain's

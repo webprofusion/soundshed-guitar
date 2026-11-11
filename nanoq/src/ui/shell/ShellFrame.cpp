@@ -287,11 +287,16 @@ std::shared_ptr<IconButton> Shell::BuildThemeButton()
     themeButton->onClick = [this, t = themeButton.get()] {
         std::vector<MenuItem> items;
 
-        for (const auto& [id, label] :
-             {std::pair<const char*, const char*>{"dark", "Dark"}, {"light", "Light"}, {"classic", "Classic"}})
+        // A plain array and no structured binding: MSVC 19.52 rejects the braced range and the
+        // binding's capture here.
+        static const std::pair<const char*, const char*> kChoices[] = {
+            {"dark", "Dark"}, {"light", "Light"}, {"classic", "Classic"}};
+
+        for (const auto& choice : kChoices)
         {
+            const std::string id = choice.first;
             items.push_back(
-                {label, mState.theme == id, false, [this, id = std::string(id)] { mSession.Commands().SetTheme(id); }});
+                {choice.second, mState.theme == id, false, [this, id] { mSession.Commands().SetTheme(id); }});
         }
 
         OpenDropdown(t->Bounds(), std::move(items), 150.0f);
@@ -501,11 +506,14 @@ void Shell::OpenOptions(el::rect anchor)
     densityButton->onClick = [this, d = densityButton.get(), density] {
         std::vector<MenuItem> items;
 
-        for (const auto& [id, label] :
-             {std::pair<const char*, const char*>{"auto", "Auto layout"}, {"compact", "Compact"}, {"full", "Full"}})
+        static const std::pair<const char*, const char*> kChoices[] = {
+            {"auto", "Auto layout"}, {"compact", "Compact"}, {"full", "Full"}};
+
+        for (const auto& choice : kChoices)
         {
-            items.push_back({label, density == id, false,
-                             [this, id = std::string(id)] { mSession.Commands().SetSetting(kDensitySetting, id); }});
+            const std::string id = choice.first;
+            items.push_back({choice.second, density == id, false,
+                             [this, id] { mSession.Commands().SetSetting(kDensitySetting, id); }});
         }
 
         OpenDropdown(d->Bounds(), std::move(items), 150.0f);

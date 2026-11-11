@@ -72,6 +72,28 @@
   overflow-y: auto;
 }
 
+/* Full size, the popover opens under the whole control bar, 177px down, so
+   100vh - 130px ran it 47px off the bottom of a 1024x768 window. It stops 12px
+   short of the bottom instead. (Compact sets its own heights in compact/overlays.css.) */
+html:not([data-density="compact"]) .preset-library-popover.open {
+  max-height: calc(100vh - 190px);
+}
+
+/* When the window is short, the folder tree and the preset list give up height
+   and scroll, rather than the popover scrolling and the Setlists bar under them
+   dropping out of sight. Past a few cards' worth (the Setlists panel open on a
+   short window) the popover scrolls after all. */
+.preset-library-popover.open > .preset-library {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.preset-library-popover.open .preset-library-body {
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 140px;
+}
+
 .preset-library-header {
   display: flex;
   gap: 10px;

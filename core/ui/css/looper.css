@@ -46,6 +46,50 @@
   min-width: 0;
 }
 
+/* Full size, the whole strip in one row needs about 1230px; narrower, the modes
+   ran off the right edge (107px at 1024). Below that the modes and Layers wrap
+   onto a second row, kept to the right where they were. The waveform's basis
+   is its minimum, so the row breaks by what the controls need rather than by
+   the canvas's drawn width. Compact hides the modes and keeps one row (below). */
+html:not([data-density="compact"]) .looper-strip-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+html:not([data-density="compact"]) .looper-display {
+  flex-basis: 160px;
+}
+
+html:not([data-density="compact"]) .looper-modes {
+  margin-left: auto;
+}
+
+/* Left to wrap on its own, at 1180 only Layers went down, alone on a row. Under
+   the one-row width the modes and Layers go down together: the break is a line
+   of its own, so each row gap counts twice. */
+@media (max-width: 1239px) {
+  html:not([data-density="compact"]) .looper-strip-row {
+    row-gap: 3px;
+  }
+
+  html:not([data-density="compact"]) .looper-strip-row::after {
+    content: "";
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  html:not([data-density="compact"]) .looper-modes,
+  html:not([data-density="compact"]) .looper-layers-toggle {
+    order: 2;
+  }
+
+  /* Loops now ends the first row, so its list opens leftwards, not off the edge. */
+  html:not([data-density="compact"]) .looper-projects-body {
+    left: auto;
+    right: 0;
+  }
+}
+
 .looper-transport {
   display: flex;
   gap: 6px;

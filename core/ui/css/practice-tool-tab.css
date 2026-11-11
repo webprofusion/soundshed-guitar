@@ -14,13 +14,6 @@
   gap: 8px;
 }
 
-/* The panel scrolls. With a score open the section is tall, and the loops and
-   transport below (which otherwise take the space left over, down to nothing)
-   keep their own height and are scrolled to instead. */
-.practice-tool-panel:has(#practice-tool-tab-viewport:not([hidden]), #practice-tool-tab-video:not([hidden])) .practice-tool-body {
-  flex-shrink: 0;
-}
-
 .practice-tool-tab-section.is-drag-over {
   outline: 2px dashed var(--practice-field-focus);
   outline-offset: 2px;
