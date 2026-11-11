@@ -225,6 +225,32 @@
     {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.12}},
     {"type": "reverb_chamber", "preset": "small-chamber", "params": {"mix": 0.16}}
    ]
+  },
+  {
+   "name": "Crystal Clean", "tags": ["clean", "bright"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "transparent-leveler"},
+    {"type": "amp_builtin", "preset": "glass-clean"},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
+    {"type": "reverb_advanced", "preset": "bright-plate", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Late Night Jazz", "tags": ["clean", "jazz"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "warm-jazz"},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1, "micPosition": 0.7}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Chime Jangle", "tags": ["breakup", "jangle"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "chime-combo"},
+    {"type": "cab_simple", "params": {"cabinet": 2, "speakerDrive": 0.3, "brightness": 0.6}},
+    {"type": "tremolo", "preset": "classic-tremolo", "params": {"depth": 0.25}},
+    {"type": "reverb_spring", "preset": "amp-spring", "params": {"mix": 0.14}}
+   ]
   }
  ]
 }

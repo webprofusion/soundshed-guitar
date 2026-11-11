@@ -565,6 +565,17 @@ body.theme-sepia {
   --color-primary-hover: var(--color-accent-hover);
   --color-primary-dim: color-mix(in srgb, var(--color-accent) 22%, transparent);
   --border-browser-focus: var(--color-accent);
+  --color-accent-light: var(--color-accent-hover);
+  --blend-mapped-point-selectable: var(--color-accent);
+  --wash-tint: var(--color-accent);
+  --accent: var(--color-accent);
+  --accent-color: var(--color-accent);
+  --accent-dark: var(--color-accent-dark);
+  --accent-primary-rgb: var(--color-accent-rgb);
+  --border-accent: var(--color-accent);
+  --overlay-accent-light: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --sg-root-fill: var(--color-accent);
+  --sg-root-text: #1a130d;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --waveform-bg: rgba(236, 223, 201, 0.05);
   --waveform-lane-divider: rgba(236, 223, 201, 0.20);

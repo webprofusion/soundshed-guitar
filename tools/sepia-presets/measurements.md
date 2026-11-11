@@ -9,8 +9,8 @@ controller at 48 kHz over the three synthesised DI clips (equal RMS, -30 dBFS).
 - `comp`: how much of a 12 dB drop in playing level comes out, in dB. 12 is a clean amp;
   0 is fully saturated.
 
-Result: 29635 of 29635 checks pass; 128 preset changes made mid-note, none clicked; the
-slowest preset renders 14 times faster than real time on one core of the build machine.
+Result: 31300 of 31300 checks pass; 136 preset changes made mid-note, none clicked; the
+slowest preset renders 12 times faster than real time on one core of the build machine.
 
 ```
   preset                      chords    mute    lead    mean   peak   comp
@@ -38,6 +38,9 @@ slowest preset renders 14 times faster than real time on one core of the build m
   Pillow Talk                  -19.1   -20.2   -20.7   -20.0   -5.3   11.7
   Unplugged Evening            -20.6   -20.7   -18.7   -20.0   -1.7   12.0
   Campfire Strum               -20.6   -20.4   -19.1   -20.0   -1.6   11.3
+  Crystal Clean                -20.3   -20.1   -19.5   -20.0   -4.6   10.7
+  Late Night Jazz              -19.6   -20.4   -20.0   -20.0   -6.4   11.7
+  Chime Jangle                 -20.4   -20.3   -19.4   -20.0   -7.8   10.7
   Sunday Tape                  -20.2   -20.0   -19.8   -20.0  -10.3   10.8
   Camcorder Summer             -20.2   -20.2   -19.6   -20.0   -9.2   11.0
   Kitchen Radio                -20.9   -20.0   -19.1   -20.0  -13.8    9.1
@@ -98,6 +101,8 @@ slowest preset renders 14 times faster than real time on one core of the build m
   Echo Canyon Lead             -19.4   -19.6   -21.0   -20.0  -11.9    0.3
   Octave Fuzz Riff             -19.9   -19.7   -20.4   -20.0  -12.7    0.0
   Talk Box Lead                -19.7   -19.4   -20.9   -20.0  -14.1    1.9
+  Tweed Blues                  -19.8   -19.6   -20.6   -20.0  -11.0    8.7
+  Brit Crunch Rhythm           -19.3   -19.4   -21.3   -20.0  -11.4    7.0
   Seattle Rain                 -19.0   -19.2   -21.8   -20.0  -11.8    1.7
   Watery Verse                 -19.4   -20.1   -20.4   -20.0   -5.5   11.4
   Sludge Wall                  -18.5   -19.2   -22.3   -20.0  -10.3    0.2
@@ -142,6 +147,9 @@ slowest preset renders 14 times faster than real time on one core of the build m
   Progressive Clean Drive      -20.1   -19.5   -20.4   -20.0  -10.1    6.3
   Octave Down Djent            -19.9   -19.7   -20.4   -20.0  -13.1   -0.0
   Robot Riff                   -19.7   -19.8   -20.5   -20.0  -11.3    0.6
+  Hot Rod Rhythm               -19.1   -19.4   -21.4   -20.0  -12.2    1.5
+  Wall of Doom                 -18.2   -18.9   -22.9   -20.0   -7.7   -0.1
+  Liquid Solo                  -19.3   -19.8   -20.9   -20.0  -10.6    0.2
 ```
 
 ## Tone balance and speed
@@ -153,157 +161,166 @@ of them (a telephone preset has no low end).
 
 ```
 
-Clean & Indie  (median: low -6.0, low-mid -2.6, high-mid -7.9, high -26.4 dB)
+Clean & Indie  (median: low -6.1, low-mid -2.5, high-mid -7.6, high -25.8 dB)
   preset                             low   low-mid  high-mid      high   speed
-  Warm Clean Room                   -5.3      -2.2      -9.8     -32.4     44x
-  Glass Chime                       -6.6      -2.5      -6.7     -20.7     36x
+  Warm Clean Room                   -5.3      -2.2      -9.8     -32.4     43x
+  Glass Chime                       -6.6      -2.5      -6.7     -20.7     38x
   Slack Wobble                      -6.5      -2.0      -8.5     -30.0     28x
   Bedroom Window                    -4.5      -2.7      -9.7     -32.2     34x
-  Jangle Twelve                     -5.9      -2.7      -7.2     -20.6     42x
+  Jangle Twelve                     -5.9      -2.7      -7.2     -20.6     38x
   Edge of Sunday                    -7.7      -1.7      -8.3     -25.4     40x
-  Tremolo Porch                     -6.1      -2.0      -9.2     -27.2     39x
-  Dream Arpeggio                    -4.3      -2.9      -9.5     -25.2     41x
-  Dry Studio Clean                  -4.3      -2.9      -9.7     -27.6     81x
+  Tremolo Porch                     -6.1      -2.0      -9.2     -27.2     38x
+  Dream Arpeggio                    -4.3      -2.9      -9.5     -25.2     39x
+  Dry Studio Clean                  -4.3      -2.9      -9.7     -27.6     67x
   Rotor Lounge                      -5.8      -2.3      -8.2     -30.6     35x
-  Phase Daydream                    -5.0      -3.2      -6.8     -30.4     36x
-  Soft Focus Lead                   -4.6      -2.4     -10.8     -33.1     29x
+  Phase Daydream                    -5.0      -3.2      -6.8     -30.4     37x
+  Soft Focus Lead                   -4.6      -2.4     -10.8     -33.1     32x
   Honey Compressor                  -3.7      -3.3     -10.0     -30.8     40x
-  Auto Wah Funk                    -17.0      -5.3      -1.7     -23.0     55x  <-
+  Auto Wah Funk                    -17.0      -5.3      -1.7     -23.0     58x  <-
   Twelve String Shimmer             -8.8      -2.9      -4.7     -17.2     28x  <-
-  Vinyl Sunday                      -8.4      -1.7      -7.5     -25.1     43x
-  Glassy Slapback                   -7.7      -2.7      -5.5     -20.4     63x
+  Vinyl Sunday                      -8.4      -1.7      -7.5     -25.1     45x
+  Glassy Slapback                   -7.7      -2.7      -5.5     -20.4     54x
   Country Snap                      -7.0      -2.1      -7.4     -22.5     40x
-  Lush Plate                        -6.3      -2.3      -7.6     -25.8     48x
-  Jazz Box                          -4.9      -2.3     -10.4     -37.6     48x  <-
-  Flanged Skies                     -6.6      -2.2      -7.5     -27.1     35x
-  Pillow Talk                       -3.4      -3.2     -11.8     -34.7     35x  <-
-  Unplugged Evening                 -6.3      -2.6      -6.9     -20.4     58x
-  Campfire Strum                    -5.0      -3.3      -6.8     -20.6     57x
+  Lush Plate                        -6.3      -2.3      -7.6     -25.8     47x
+  Jazz Box                          -4.9      -2.3     -10.4     -37.6     45x  <-
+  Flanged Skies                     -6.6      -2.2      -7.5     -27.1     32x
+  Pillow Talk                       -3.4      -3.2     -11.8     -34.7     32x  <-
+  Unplugged Evening                 -6.3      -2.6      -6.9     -20.4     60x
+  Campfire Strum                    -5.0      -3.3      -6.8     -20.6     51x
+  Crystal Clean                     -7.0      -2.7      -6.0     -19.6     39x
+  Late Night Jazz                   -4.9      -2.2     -11.1     -38.1     42x  <-
+  Chime Jangle                      -6.5      -2.5      -6.7     -22.0     33x
 
 Lo-Fi  (median: low -7.5, low-mid -1.8, high-mid -8.3, high -29.1 dB)
   preset                             low   low-mid  high-mid      high   speed
-  Sunday Tape                       -9.5      -1.2      -9.1     -29.2     33x
-  Camcorder Summer                  -7.2      -1.8      -8.3     -30.4     29x
-  Kitchen Radio                    -15.0      -1.7      -5.4     -29.5     45x
+  Sunday Tape                       -9.5      -1.2      -9.1     -29.2     31x
+  Camcorder Summer                  -7.2      -1.8      -8.3     -30.4     26x
+  Kitchen Radio                    -15.0      -1.7      -5.4     -29.5     41x
   Answering Machine                -16.4      -1.2      -6.6     -28.4     43x  <-
-  Boombox Demo                      -7.5      -1.8      -7.9     -22.9     29x
-  Eight Bit Garage                 -10.7      -1.0      -9.3     -22.0     68x
-  Worn Out Mixtape                  -5.1      -2.3      -9.8     -32.4     27x
-  Dusty Sampler                     -7.6      -1.7      -8.1     -28.9     39x
-  Charity Shop LP                   -5.9      -2.1      -9.2     -31.6     47x
-  Run-Out Groove                   -10.1      -1.0      -9.5     -29.2     41x
-  Voicemail Blues                  -17.0      -1.1      -6.9     -28.4     45x  <-
-  Shortwave                        -14.1      -2.3      -4.4     -31.1     43x
-  Pawn Shop Amp                    -10.4      -1.0      -9.2     -27.2     39x
-  VHS Rental                        -7.4      -1.8      -8.0     -29.6     38x
-  Game Cartridge                    -5.8      -2.2      -9.1     -20.7     70x  <-
-  Skipping Record                   -4.7      -2.9      -8.3     -25.3     86x
-  Tape Deck Dream                   -4.3      -2.6     -10.8     -33.7     31x
-  Boombox Chorus                    -5.8      -2.4      -8.1     -26.2     43x
-  Broken Tape Loop                  -9.0      -0.9     -11.5     -32.9     41x
-  Glitch Garden                     -6.8      -2.4      -6.8     -22.7     46x
+  Boombox Demo                      -7.5      -1.8      -7.9     -22.9     28x
+  Eight Bit Garage                 -10.7      -1.0      -9.3     -22.0     67x
+  Worn Out Mixtape                  -5.1      -2.3      -9.8     -32.4     26x
+  Dusty Sampler                     -7.6      -1.7      -8.1     -28.9     35x
+  Charity Shop LP                   -5.9      -2.1      -9.2     -31.6     44x
+  Run-Out Groove                   -10.1      -1.0      -9.5     -29.2     40x
+  Voicemail Blues                  -17.0      -1.1      -6.9     -28.4     44x  <-
+  Shortwave                        -14.1      -2.3      -4.4     -31.1     40x
+  Pawn Shop Amp                    -10.4      -1.0      -9.2     -27.2     32x
+  VHS Rental                        -7.4      -1.8      -8.0     -29.6     37x
+  Game Cartridge                    -5.8      -2.2      -9.1     -20.7     66x  <-
+  Skipping Record                   -4.7      -2.9      -8.3     -25.3     78x
+  Tape Deck Dream                   -4.3      -2.6     -10.8     -33.7     30x
+  Boombox Chorus                    -5.8      -2.4      -8.1     -26.2     40x
+  Broken Tape Loop                  -9.0      -0.9     -11.5     -32.9     42x
+  Glitch Garden                     -6.8      -2.4      -6.8     -22.7     44x
 
 Shoegaze & Ambient  (median: low -5.8, low-mid -2.3, high-mid -9.4, high -28.1 dB)
   preset                             low   low-mid  high-mid      high   speed
-  Wall of Haze                      -3.4      -3.0     -13.9     -32.2     22x
-  Glide Vibrato                     -6.9      -1.6     -10.1     -29.7     42x
-  Open Sky Pad                      -6.3      -1.9      -9.4     -27.3     45x
-  Shimmer Cathedral                 -5.9      -2.2      -8.7     -28.0     44x
-  Reverse Tide                      -4.7      -2.8      -8.8     -28.6     44x
-  Fuzz Blanket                      -5.3      -2.3      -9.4     -23.8     21x
+  Wall of Haze                      -3.4      -3.0     -13.9     -32.2     20x
+  Glide Vibrato                     -6.9      -1.6     -10.1     -29.7     39x
+  Open Sky Pad                      -6.3      -1.9      -9.4     -27.3     44x
+  Shimmer Cathedral                 -5.9      -2.2      -8.7     -28.0     42x
+  Reverse Tide                      -4.7      -2.8      -8.8     -28.6     40x
+  Fuzz Blanket                      -5.3      -2.3      -9.4     -23.8     19x
   Tape Halo                         -5.8      -1.9     -10.0     -34.2     29x
-  Deep Space Drone                  -3.4      -3.0     -14.6     -36.3     22x  <-
-  Feedback Garden                   -4.7      -2.3     -11.6     -28.1     22x
-  Choir of Glass                    -7.0      -2.2      -7.1     -23.3     28x
-  First Light Bloom                 -6.6      -2.3      -7.3     -23.1     27x
-  Cloud Nine Pad                    -4.6      -2.7      -9.2     -26.7     26x
-  Octave Shimmer Wash               -5.1      -2.6      -8.7     -27.5     27x
-  Pitch Black Sea                   -3.5      -3.2     -11.5     -37.2     29x  <-
-  Phase Drift                       -6.5      -2.3      -7.3     -30.1     18x
-  Tremolo Fog                       -8.0      -1.6      -8.4     -33.6     32x
-  Ring Bells                        -6.3      -2.3      -7.6     -26.3     41x
-  Static Bloom                      -4.5      -2.5     -11.0     -25.9     20x
-  Yawning Clouds                    -7.1      -1.2     -14.0     -39.8     44x  <-
+  Deep Space Drone                  -3.4      -3.0     -14.6     -36.3     19x  <-
+  Feedback Garden                   -4.7      -2.3     -11.6     -28.1     20x
+  Choir of Glass                    -7.0      -2.2      -7.1     -23.3     22x
+  First Light Bloom                 -6.6      -2.3      -7.3     -23.1     26x
+  Cloud Nine Pad                    -4.6      -2.7      -9.2     -26.7     25x
+  Octave Shimmer Wash               -5.1      -2.6      -8.7     -27.5     22x
+  Pitch Black Sea                   -3.5      -3.2     -11.5     -37.2     28x  <-
+  Phase Drift                       -6.5      -2.3      -7.3     -30.1     16x
+  Tremolo Fog                       -8.0      -1.6      -8.4     -33.6     31x
+  Ring Bells                        -6.3      -2.3      -7.6     -26.3     39x
+  Static Bloom                      -4.5      -2.5     -11.0     -25.9     19x
+  Yawning Clouds                    -7.1      -1.2     -14.0     -39.8     42x  <-
 
-Blues & Classic Rock  (median: low -6.7, low-mid -2.1, high-mid -8.5, high -24.4 dB)
+Blues & Classic Rock  (median: low -6.6, low-mid -2.1, high-mid -8.5, high -24.4 dB)
   preset                             low   low-mid  high-mid      high   speed
-  Smoky Bar Blues                   -7.7      -1.7      -8.0     -25.6     40x
-  Tweed Howl                        -6.7      -2.1      -8.1     -20.4     38x
-  Mid Hump Lead                    -10.1      -1.5      -7.3     -21.5     27x
-  Stack on Seven                    -5.6      -2.1      -9.7     -25.1     68x
-  British Bite                      -8.7      -2.4      -5.5     -18.0     25x
-  Southern Slide                    -4.4      -2.5     -11.5     -32.7     32x  <-
-  Arena Rhythm                      -4.8      -2.4     -10.3     -24.9     38x
-  Vibe Machine                      -8.1      -2.1      -6.4     -24.4     17x
-  Surf Splash                       -7.2      -1.7      -9.1     -28.3     39x
-  Singing Sustain                   -5.2      -2.4      -9.2     -23.6     37x
-  Parked Wah Lead                  -14.7      -1.3      -6.6     -24.4     54x  <-
-  Slide Sustain                     -5.3      -2.2      -9.8     -31.0     31x
-  Lone Star Shuffle                 -7.7      -2.0      -7.2     -19.6     28x
-  Clean Boost Combo                 -7.5      -1.7      -8.5     -23.5     26x
-  Warm Breaker                      -6.0      -1.9      -9.9     -29.9     29x
-  Open Push                         -6.7      -2.0      -8.3     -21.9     41x
-  Rotary Rock                       -3.1      -3.7     -11.0     -28.9     32x
-  Seventies Phase                   -4.1      -3.5      -7.9     -26.7     67x
-  Echo Canyon Lead                  -6.6      -2.0      -8.5     -22.9     26x
-  Octave Fuzz Riff                  -5.8      -3.3      -6.1     -16.5     19x
-  Talk Box Lead                     -8.6      -1.2      -9.9     -22.0     34x
+  Smoky Bar Blues                   -7.7      -1.7      -8.0     -25.6     33x
+  Tweed Howl                        -6.7      -2.1      -8.1     -20.4     31x
+  Mid Hump Lead                    -10.1      -1.5      -7.3     -21.5     22x
+  Stack on Seven                    -5.6      -2.1      -9.7     -25.1     54x
+  British Bite                      -8.7      -2.4      -5.5     -18.0     20x
+  Southern Slide                    -4.4      -2.5     -11.5     -32.7     29x  <-
+  Arena Rhythm                      -4.8      -2.4     -10.3     -24.9     40x
+  Vibe Machine                      -8.1      -2.1      -6.4     -24.4     16x
+  Surf Splash                       -7.2      -1.7      -9.1     -28.3     36x
+  Singing Sustain                   -5.2      -2.4      -9.2     -23.6     35x
+  Parked Wah Lead                  -14.7      -1.3      -6.6     -24.4     49x  <-
+  Slide Sustain                     -5.3      -2.2      -9.8     -31.0     27x
+  Lone Star Shuffle                 -7.7      -2.0      -7.2     -19.6     21x
+  Clean Boost Combo                 -7.5      -1.7      -8.5     -23.5     23x
+  Warm Breaker                      -6.0      -1.9      -9.9     -29.9     27x
+  Open Push                         -6.7      -2.0      -8.3     -21.9     38x
+  Rotary Rock                       -3.1      -3.7     -11.0     -28.9     30x
+  Seventies Phase                   -4.1      -3.5      -7.9     -26.7     56x
+  Echo Canyon Lead                  -6.6      -2.0      -8.5     -22.9     25x
+  Octave Fuzz Riff                  -5.8      -3.3      -6.1     -16.5     17x
+  Talk Box Lead                     -8.6      -1.2      -9.9     -22.0     29x
+  Tweed Blues                       -6.1      -1.9      -9.8     -26.8     36x
+  Brit Crunch Rhythm                -5.1      -2.3      -9.9     -25.4     39x
 
 Grunge & Punk  (median: low -5.8, low-mid -2.8, high-mid -8.6, high -22.8 dB)
   preset                             low   low-mid  high-mid      high   speed
-  Seattle Rain                      -3.9      -3.4      -8.9     -22.2     30x
-  Watery Verse                      -4.5      -2.8      -9.1     -27.5     42x
-  Sludge Wall                       -3.1      -3.3     -13.4     -27.8     29x
+  Seattle Rain                      -3.9      -3.4      -8.9     -22.2     27x
+  Watery Verse                      -4.5      -2.8      -9.1     -27.5     37x
+  Sludge Wall                       -3.1      -3.3     -13.4     -27.8     28x
   Alley Distortion                  -6.6      -2.2      -7.4     -24.1     30x
-  Basement Show                     -5.8      -2.1      -9.3     -23.2     69x
-  Three Chord Riot                  -4.7      -2.7      -9.1     -21.7     41x
-  Quiet Loud Switch                 -9.3      -1.7      -7.1     -19.9     21x
-  Detuned Dirge                     -2.8      -3.8     -12.8     -30.9     43x  <-
-  Garage Fuzz Tone                  -9.6      -4.0      -3.3     -15.7     26x
-  Post Punk Wire                    -4.5      -3.1      -8.1     -22.8     37x
-  Feedback Squeal                   -7.6      -2.3      -6.6     -18.9     29x
-  Underwater Chorus                 -2.4      -5.5      -8.6     -23.6     30x
-  Skate Punk Tight                  -8.7      -2.6      -5.2     -17.2     40x
-  Hardcore Bark                     -5.1      -3.0      -7.5     -19.0     68x
-  Octave Down Sludge                -2.9      -3.6     -12.8     -27.1     19x
-  Wah Riot                         -14.6      -2.9      -3.7     -16.6     27x  <-
-  Garage Tape Fuzz                 -12.3      -2.2      -4.8     -21.8     27x
-  Jangle Punk                       -7.4      -1.8      -8.2     -24.4     78x
-  Quiet Verse                       -3.9      -3.1     -10.0     -27.9     37x
+  Basement Show                     -5.8      -2.1      -9.3     -23.2     67x
+  Three Chord Riot                  -4.7      -2.7      -9.1     -21.7     33x
+  Quiet Loud Switch                 -9.3      -1.7      -7.1     -19.9     19x
+  Detuned Dirge                     -2.8      -3.8     -12.8     -30.9     39x  <-
+  Garage Fuzz Tone                  -9.6      -4.0      -3.3     -15.7     23x
+  Post Punk Wire                    -4.5      -3.1      -8.1     -22.8     31x
+  Feedback Squeal                   -7.6      -2.3      -6.6     -18.9     26x
+  Underwater Chorus                 -2.4      -5.5      -8.6     -23.6     28x
+  Skate Punk Tight                  -8.7      -2.6      -5.2     -17.2     39x
+  Hardcore Bark                     -5.1      -3.0      -7.5     -19.0     62x
+  Octave Down Sludge                -2.9      -3.6     -12.8     -27.1     17x
+  Wah Riot                         -14.6      -2.9      -3.7     -16.6     24x  <-
+  Garage Tape Fuzz                 -12.3      -2.2      -4.8     -21.8     22x
+  Jangle Punk                       -7.4      -1.8      -8.2     -24.4     63x
+  Quiet Verse                       -3.9      -3.1     -10.0     -27.9     34x
   Noise Rock Ring                   -6.2      -2.1      -8.8     -22.6     14x
-  Talking Fuzz                      -5.8      -1.5     -14.1     -28.4     29x
+  Talking Fuzz                      -5.8      -1.5     -14.1     -28.4     23x
 
-Metal  (median: low -5.9, low-mid -2.6, high-mid -7.7, high -20.2 dB)
+Metal  (median: low -5.8, low-mid -2.6, high-mid -7.8, high -21.4 dB)
   preset                             low   low-mid  high-mid      high   speed
-  Tight Modern Rhythm               -7.5      -2.5      -6.0     -18.8     41x
-  Djent Machine                    -11.2      -2.5      -4.6     -17.9     42x
+  Tight Modern Rhythm               -7.5      -2.5      -6.0     -18.8     36x
+  Djent Machine                    -11.2      -2.5      -4.6     -17.9     40x
   Scooped Thrash                    -3.2      -4.8      -7.5     -18.9     76x
-  Old School Death                  -6.7      -2.1      -7.8     -20.2     27x
-  Vintage High Gain                 -4.2      -2.8     -10.3     -23.7     70x
-  Doom Monolith                     -3.3      -3.4     -11.3     -28.0     23x
-  Black Frost Tremolo               -4.3      -4.4      -6.2     -16.0     42x
+  Old School Death                  -6.7      -2.1      -7.8     -20.2     25x
+  Vintage High Gain                 -4.2      -2.8     -10.3     -23.7     58x
+  Doom Monolith                     -3.3      -3.4     -11.3     -28.0     20x
+  Black Frost Tremolo               -4.3      -4.4      -6.2     -16.0     36x
   Singing Metal Lead                -7.3      -1.9      -7.9     -22.2     27x
   Shred Legato                      -4.5      -2.7     -10.0     -27.7     39x
-  Metalcore Chug                    -9.6      -3.2      -4.1     -15.8     40x
-  Clean Before the Storm            -4.3      -2.7     -10.6     -26.9     42x
-  Industrial Grind                  -5.5      -3.0      -6.9     -18.6     56x
-  Endless Solo                      -7.4      -1.9      -7.7     -21.4     25x
-  Parked Wah Shred                 -12.1      -2.1      -5.2     -18.1     60x
-  Thrash Gallop                     -7.0      -3.5      -4.9     -15.4     42x
-  Low Tuned Bounce                  -4.3      -3.3      -8.1     -20.1     77x
-  Power Ballad Clean                -5.0      -3.0      -7.5     -24.2     36x
-  Symphonic Lead                    -5.0      -2.5      -9.1     -23.8     36x
-  Stoner Fuzz                       -5.9      -2.1      -9.2     -26.9     22x
-  Swedish Buzz                      -5.9      -2.6      -7.4     -18.2     26x
-  Progressive Clean Drive           -6.5      -1.9      -8.7     -23.4     30x
-  Octave Down Djent                -10.4      -2.6      -4.7     -18.2     31x
-  Robot Riff                        -8.8      -1.5      -8.0     -22.9     60x
+  Metalcore Chug                    -9.6      -3.2      -4.1     -15.8     38x
+  Clean Before the Storm            -4.3      -2.7     -10.6     -26.9     40x
+  Industrial Grind                  -5.5      -3.0      -6.9     -18.6     51x
+  Endless Solo                      -7.4      -1.9      -7.7     -21.4     22x
+  Parked Wah Shred                 -12.1      -2.1      -5.2     -18.1     53x
+  Thrash Gallop                     -7.0      -3.5      -4.9     -15.4     39x
+  Low Tuned Bounce                  -4.3      -3.3      -8.1     -20.1     74x
+  Power Ballad Clean                -5.0      -3.0      -7.5     -24.2     35x
+  Symphonic Lead                    -5.0      -2.5      -9.1     -23.8     29x
+  Stoner Fuzz                       -5.9      -2.1      -9.2     -26.9     20x
+  Swedish Buzz                      -5.9      -2.6      -7.4     -18.2     25x
+  Progressive Clean Drive           -6.5      -1.9      -8.7     -23.4     28x
+  Octave Down Djent                -10.4      -2.6      -4.7     -18.2     29x
+  Robot Riff                        -8.8      -1.5      -8.0     -22.9     61x
+  Hot Rod Rhythm                    -5.1      -2.7      -8.4     -21.3     75x
+  Wall of Doom                      -2.1      -4.6     -13.6     -32.1     42x  <-
+  Liquid Solo                       -5.7      -2.4      -8.2     -22.4     39x
 
-14 band(s) more than 8 dB from their group's median:
-  Auto Wah Funk (Clean & Indie): low -11.1 dB
-  Twelve String Shimmer (Clean & Indie): high +9.2 dB
-  Jazz Box (Clean & Indie): high -11.1 dB
-  Pillow Talk (Clean & Indie): high -8.3 dB
+16 band(s) more than 8 dB from their group's median:
+  Auto Wah Funk (Clean & Indie): low -10.9 dB
+  Twelve String Shimmer (Clean & Indie): high +8.6 dB
+  Jazz Box (Clean & Indie): high -11.8 dB
+  Pillow Talk (Clean & Indie): high -8.9 dB
+  Late Night Jazz (Clean & Indie): high -12.3 dB
   Answering Machine (Lo-Fi): low -8.9 dB
   Voicemail Blues (Lo-Fi): low -9.4 dB
   Game Cartridge (Lo-Fi): high +8.4 dB
@@ -314,4 +331,5 @@ Metal  (median: low -5.9, low-mid -2.6, high-mid -7.7, high -20.2 dB)
   Parked Wah Lead (Blues & Classic Rock): low -8.0 dB
   Detuned Dirge (Grunge & Punk): high -8.1 dB
   Wah Riot (Grunge & Punk): low -8.7 dB
+  Wall of Doom (Metal): high -10.8 dB
 ```

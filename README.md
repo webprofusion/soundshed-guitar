@@ -21,7 +21,9 @@ with or endorsed by that project. See [Copyright](#copyright).
 - **Acoustic.** Voices an electric toward a steel-string acoustic.
 - **Stutter.** Catches a slice of what was just played and repeats it in time.
 - **Vowel Filter.** A filter shaped like a mouth: by hand, by LFO, or by how hard you pick.
-- **A hundred and twenty-eight factory presets** from indie cleans and lo-fi to grunge and metal,
+- **Eight more amp voicings** for the built-in amp, from Glass Clean and Warm Jazz to Doom Wall
+  and Liquid Lead: sixteen in all, in the amp's Presets menu.
+- **A hundred and thirty-six factory presets** from indie cleans and lo-fi to grunge and metal,
   level-matched, built only from the built-in amp, cabinets and effects. Nothing to download.
 - **Its own look.** A Sepia theme (the default) alongside the Light, Dark and Vintage ones.
 

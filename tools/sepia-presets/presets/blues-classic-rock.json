@@ -200,6 +200,23 @@
     {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.5}},
     {"type": "delay_analog", "preset": "dm2", "params": {"mix": 0.14}}
    ]
+  },
+  {
+   "name": "Tweed Blues", "tags": ["blues", "breakup"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "tweed-breakup"},
+    {"type": "cab_simple", "params": {"cabinet": 4, "speakerDrive": 0.45}},
+    {"type": "reverb_spring", "preset": "short-spring", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Brit Crunch Rhythm", "tags": ["rock", "crunch"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -58}},
+    {"type": "amp_builtin", "preset": "british-crunch"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4, "speakerDrive": 0.35}},
+    {"type": "reverb_room", "preset": "live-room", "params": {"mix": 0.08}}
+   ]
   }
  ]
 }

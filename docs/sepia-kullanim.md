@@ -45,6 +45,24 @@ kabin → efektler → Output**. Bir kutuya tıklayınca düğmeleri altta açı
 Genel kural: gate, kompresör, wah, overdrive, distortion, fuzz ve Sustainer **amfiden önce**;
 chorus, delay, reverb, Tape, Vinyl ve Bitcrusher **kabinden sonra** durur.
 
+### Amfi karakterleri
+
+Zincirdeki amfiye ("Heavy American") tıkla, sağ üstteki **Presets** menüsünü aç. On altı hazır
+amfi karakteri var:
+
+| Temiz | Kırılan | Crunch | Yüksek gain |
+|---|---|---|---|
+| Clean Channel | Edge of Breakup | Classic Crunch | Tight Modern Rhythm |
+| Glass Clean | Chime Combo | British Crunch | Tight Djent |
+| Warm Jazz | Tweed Breakup | | Scooped Thrash |
+| | | | Vintage High Gain |
+| | | | Hot-Rodded Stack |
+| | | | Doom Wall |
+| | | | Singing Lead |
+| | | | Liquid Lead |
+
+Bir karakter seçtikten sonra Gain, Bass, Middle, Treble düğmeleriyle istediğin gibi ayarlarsın.
+
 ### Pedal türleri
 
 | Tür | Pedallar |

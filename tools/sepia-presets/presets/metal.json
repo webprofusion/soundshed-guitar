@@ -225,6 +225,33 @@
     {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4}},
     {"type": "vowel_filter", "preset": "robot-chatter", "params": {"mix": 0.45}}
    ]
+  },
+  {
+   "name": "Hot Rod Rhythm", "tags": ["metal", "hard-rock"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -52}},
+    {"type": "amp_builtin", "preset": "hot-rodded-stack"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.45}}
+   ]
+  },
+  {
+   "name": "Wall of Doom", "tags": ["metal", "doom"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -50}},
+    {"type": "amp_builtin", "preset": "doom-wall"},
+    {"type": "cab_simple", "params": {"cabinet": 0, "size": 0.75, "micType": 1}},
+    {"type": "reverb_room", "preset": "large-room", "params": {"mix": 0.08}}
+   ]
+  },
+  {
+   "name": "Liquid Solo", "tags": ["metal", "lead"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -52}},
+    {"type": "amp_builtin", "preset": "liquid-lead"},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.55}},
+    {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.22}},
+    {"type": "reverb_advanced", "preset": "concert-hall", "params": {"mix": 0.16}}
+   ]
   }
  ]
 }

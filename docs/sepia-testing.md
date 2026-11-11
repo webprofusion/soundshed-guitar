@@ -8,7 +8,7 @@ Her adımda sorun varsa **hangi preset**, **ne yaptın**, **ne duydun** yazman y
 ## 1. Kurulum (Windows)
 
 1. GitHub'da fork'un **Actions** sekmesinden son başarılı "Build Windows" çalışmasını aç ve
-   `windows-x64-installer` dosyasını indir.
+   `windows-x64-avx2-installer` dosyasını indir (zip; içinden kurulum dosyası çıkar).
 2. Bilgisayarın internet bağlantısını kapat ve kurulumu çalıştır.
 3. **Sepia** uygulamasını aç.
 
@@ -17,7 +17,7 @@ Kontrol et:
 - [ ] Kurulum internetsiz tamamlandı.
 - [ ] Uygulama açıldı ve başlıkta "Sepia" yazıyor.
 - [ ] Açılışta "Warm Clean Room" preset'i yüklü.
-- [ ] Preset listesinde "Sepia Factory" altında altı grup ve toplam 128 preset var.
+- [ ] Preset listesinde "Sepia Factory" altında altı grup ve toplam 136 preset var.
 - [ ] Uygulama sıcak kahverengi-altın "Sepia" temasıyla açılıyor (Ayarlar'dan Light, Dark, Vintage seçilebiliyor).
 - [ ] Hiçbir preset "eksik dosya" ya da "model bulunamadı" uyarısı vermiyor.
 - [ ] Üst çubukta paylaşım (Tones) sekmesi yok, güncelleme bildirimi çıkmıyor.
