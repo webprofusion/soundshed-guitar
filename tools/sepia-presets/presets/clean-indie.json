@@ -114,6 +114,98 @@
     {"type": "delay_analog", "preset": "memory-man", "params": {"mix": 0.22}},
     {"type": "reverb_chamber", "preset": "dark-chamber", "params": {"mix": 0.2}}
    ]
+  },
+  {
+   "name": "Honey Compressor", "tags": ["clean", "compressed"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "parallel-bloom"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.36, "bass": 0.55, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 4, "micType": 1}},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Auto Wah Funk", "tags": ["clean", "wah"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "funk-clean"},
+    {"type": "wah", "params": {"control": 1, "sensitivity": 0.45, "q": 6}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bright": 1, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.4}}
+   ]
+  },
+  {
+   "name": "Twelve String Shimmer", "tags": ["clean", "octave"],
+   "chain": [
+    {"type": "pitch_shift", "preset": "octave-up-blend"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "bright": 1, "treble": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2, "brightness": 0.6}},
+    {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.22}},
+    {"type": "reverb_advanced", "preset": "bright-plate", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Vinyl Sunday", "tags": ["clean", "vinyl"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "bass": 0.55, "treble": 0.46}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 2, "micDistance": 0.3}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.18}},
+    {"type": "vinyl", "preset": "well-loved"}
+   ]
+  },
+  {
+   "name": "Glassy Slapback", "tags": ["clean", "slapback"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.54, "bright": 1, "treble": 0.62, "bass": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
+    {"type": "eq_parametric", "preset": "glassy-clean"},
+    {"type": "delay_tape", "preset": "slapback", "params": {"mix": 0.22}}
+   ]
+  },
+  {
+   "name": "Country Snap", "tags": ["clean", "country"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "chicken-pickin"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.6, "bright": 1, "treble": 0.66, "middle": 0.5, "bass": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "brightness": 0.7}},
+    {"type": "delay_digital", "preset": "slapback", "params": {"mix": 0.18}},
+    {"type": "reverb_spring", "preset": "short-spring", "params": {"mix": 0.12}}
+   ]
+  },
+  {
+   "name": "Lush Plate", "tags": ["clean", "plate"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.42, "treble": 0.54}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 2, "micPosition": 0.55}},
+    {"type": "reverb_advanced", "preset": "bright-plate", "params": {"mix": 0.3}}
+   ]
+  },
+  {
+   "name": "Jazz Box", "tags": ["clean", "jazz"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.3, "bass": 0.6, "middle": 0.55, "treble": 0.3, "presence": 0.3}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1, "micPosition": 0.8}},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.12}}
+   ]
+  },
+  {
+   "name": "Flanged Skies", "tags": ["clean", "flanger"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "treble": 0.52}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micPosition": 0.6}},
+    {"type": "flanger", "preset": "classic-flanger", "params": {"mix": 0.3}},
+    {"type": "delay_analog", "preset": "clean-analog", "params": {"mix": 0.16}},
+    {"type": "reverb_chamber", "preset": "small-chamber", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Pillow Talk", "tags": ["clean", "soft"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "smooth-opto"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.32, "bass": 0.58, "treble": 0.38, "presence": 0.35}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1}},
+    {"type": "tremolo", "preset": "slow-throb", "params": {"depth": 0.3}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.28}}
+   ]
   }
  ]
 }

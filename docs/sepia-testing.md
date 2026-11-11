@@ -17,7 +17,8 @@ Kontrol et:
 - [ ] Kurulum internetsiz tamamlandı.
 - [ ] Uygulama açıldı ve başlıkta "Sepia" yazıyor.
 - [ ] Açılışta "Warm Clean Room" preset'i yüklü.
-- [ ] Preset listesinde "Sepia Factory" altında altı grup ve toplam 60 preset var.
+- [ ] Preset listesinde "Sepia Factory" altında altı grup ve toplam 120 preset var.
+- [ ] Uygulama sıcak kahverengi-altın "Sepia" temasıyla açılıyor (Ayarlar'dan Light, Dark, Vintage seçilebiliyor).
 - [ ] Hiçbir preset "eksik dosya" ya da "model bulunamadı" uyarısı vermiyor.
 - [ ] Üst çubukta paylaşım (Tones) sekmesi yok, güncelleme bildirimi çıkmıyor.
 
@@ -52,6 +53,10 @@ Her grubu sırayla gez. Her preset için:
 | Tight Modern Rhythm, Djent Machine, Metalcore Chug | Düşük teller çamurlu mu, sıkı mı? |
 | Wall of Haze, Fuzz Blanket | Akorlar seçiliyor mu, tamamen bulanık mı? |
 | Singing Metal Lead, Shred Legato | Tek notalar uzuyor mu, tiz mi, yumuşak mı? |
+| Endless Solo, Slide Sustain, Feedback Garden | Sustainer notayı doğal biçimde uzatıyor mu, yapay bir "bip" gibi mi duruyor? |
+| Feedback Squeal, Static Bloom | Üst harmoniğe dönen feedback hoş mu, rahatsız edici mi? |
+| Vinyl Sunday, Charity Shop LP, Run-Out Groove | Çıtırtı plak gibi mi, yoksa arıza gibi mi? |
+| Auto Wah Funk, Wah Riot | Wah vuruşa tepki veriyor mu? |
 
 ## 4. Yeni efektler
 
@@ -60,6 +65,11 @@ Boş bir zincire tek tek ekle:
 - [ ] **Tape**: Wow ve Flutter sıfırken perde sabit; yükseltince dalgalanıyor. Hiss açıkken
       hafif bir tıslama var, sıfırda yok. Yankı duyulmuyor.
 - [ ] **Bitcrusher**: Bits düştükçe ses kabalaşıyor; Downsample arttıkça metalik çınlama geliyor.
+- [ ] **Sustainer** (amfiden önce): bir notayı basılı tut; yaklaşık bir saniye sonra nota
+      "feedback" gibi kabarıp tel söndükten sonra da sürüyor. Yeni bir notaya vurunca eski ses
+      hemen kesiliyor. Hızlı çalarken hiçbir şey eklemiyor. Akorlarda devreye girmemesi normal.
+- [ ] **Vinyl** (zincirin sonunda): Crackle ile çıtırtı, Dust ile hafif hışırtı geliyor; ikisi
+      sıfırken ses temiz.
 - [ ] **Simple Cabinet**: kabin listesinde AM Radio, Telephone, Boombox, Practice Amp ve VHS var
       ve her biri belirgin biçimde farklı.
 

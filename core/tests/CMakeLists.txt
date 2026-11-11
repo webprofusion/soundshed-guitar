@@ -142,6 +142,8 @@ set(TEST_SOURCES
     RingModEffectTests.cpp
     TapeSaturationEffectTests.cpp
     BitcrusherEffectTests.cpp
+    SustainerEffectTests.cpp
+    VinylEffectTests.cpp
     SepiaEffectCatalog.cpp
     SepiaFactoryPackTests.cpp
     OfflineBrandingTests.cpp

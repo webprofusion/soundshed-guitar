@@ -165,11 +165,11 @@ void TestSelfContained(const Pack& pack)
     auto& registry = guitarfx::EffectRegistry::Instance();
 
     Check(pack.document.value("resources", json::array()).empty(), "the archive lists no resources");
-    Check(pack.presets.size() >= 60, "at least sixty presets", std::to_string(pack.presets.size()));
+    Check(pack.presets.size() >= 120, "at least a hundred and twenty presets", std::to_string(pack.presets.size()));
 
-    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 12},     {"Lo-Fi", 8},
-                                                         {"Shoegaze & Ambient", 8}, {"Blues & Classic Rock", 10},
-                                                         {"Grunge & Punk", 10},     {"Metal", 12}};
+    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 22},        {"Lo-Fi", 18},
+                                                         {"Shoegaze & Ambient", 18},   {"Blues & Classic Rock", 20},
+                                                         {"Grunge & Punk", 20},        {"Metal", 22}};
     std::map<std::string, std::size_t> counts;
 
     for (const auto& [id, group] : pack.groupOf)

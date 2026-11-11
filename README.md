@@ -15,8 +15,12 @@ with or endorsed by that project. See [Copyright](#copyright).
 - **Tape.** Cassette and video tape character without an echo: saturation, wow and flutter,
   hiss, dropouts and a worn top end.
 - **Bitcrusher.** Fewer bits and a lower sample rate, aliasing left in.
-- **Sixty factory presets** from indie cleans and lo-fi to grunge and metal, level-matched,
-  built only from the built-in amp, cabinets and effects. Nothing to download.
+- **Sustainer.** A held note blooms into feedback and carries on after the string fades, as
+  it does in front of a loud amp.
+- **Vinyl.** A worn record's crackle, dust and duller top end.
+- **A hundred and twenty factory presets** from indie cleans and lo-fi to grunge and metal,
+  level-matched, built only from the built-in amp, cabinets and effects. Nothing to download.
+- **Its own look.** A Sepia theme (the default) alongside the Light, Dark and Vintage ones.
 
 ## What Sepia leaves out
 

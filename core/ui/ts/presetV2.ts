@@ -366,6 +366,8 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kFuzz },
   { type: EffectGuids.kTapeSaturation },
   { type: EffectGuids.kBitcrusher },
+  { type: EffectGuids.kVinyl },
+  { type: EffectGuids.kSustainer },
   // Amp
   { type: EffectGuids.kAmpBuiltin },
   { type: EffectGuids.kAmpNamOptimized },

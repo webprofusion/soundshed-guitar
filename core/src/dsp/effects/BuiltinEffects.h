@@ -15,7 +15,9 @@
 #include "dsp/effects/GraphicEQEffect.h"
 #include "dsp/effects/DelayEffect.h"
 #include "dsp/effects/TapeDelayEffect.h"
+#include "dsp/effects/SustainerEffect.h"
 #include "dsp/effects/TapeSaturationEffect.h"
+#include "dsp/effects/VinylEffect.h"
 #include "dsp/effects/AnalogDelayEffect.h"
 #include "dsp/effects/DoublerEffect.h"
 #include "dsp/effects/HarmonizerEffect.h"
@@ -116,6 +118,8 @@ inline void RegisterAllEffects()
     RegisterFuzzEffect();
     RegisterTapeSaturationEffect();
     RegisterBitcrusherEffect();
+    RegisterVinylEffect();
+    RegisterSustainerEffect();
 
     // EQ
     RegisterParametricEQEffect();

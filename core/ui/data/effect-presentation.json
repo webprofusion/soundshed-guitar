@@ -181,6 +181,14 @@
       "guid": "b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45",
       "icon": "flame"
     },
+    "kSustainer": {
+      "guid": "7920e27e-6ad6-4585-b9f4-ccecc973569e",
+      "icon": "bolt"
+    },
+    "kVinyl": {
+      "guid": "40cca7fd-9470-4c8b-b45a-cf0b41314459",
+      "icon": "wave"
+    },
     "kAmpBuiltin": {
       "guid": "1460a632-6690-4fef-ac6d-6432e3b983f8",
       "icon": "amp"

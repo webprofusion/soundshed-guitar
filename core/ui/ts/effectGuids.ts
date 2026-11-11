@@ -37,6 +37,8 @@ export const EffectGuids = {
   kFuzz:                 "3a38b19c-1d97-4989-b5bb-12bcc59d1e6b",
   kTapeSaturation:       "7d0c1f52-6b1e-4c0a-9a3f-5e2b8c4d9f10",
   kBitcrusher:           "b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45",
+  kSustainer:            "7920e27e-6ad6-4585-b9f4-ccecc973569e",
+  kVinyl:                "40cca7fd-9470-4c8b-b45a-cf0b41314459",
 
   // EQ
   kEqParametric:         "4b4025ca-64cd-4180-be79-81873b618dba",
@@ -125,6 +127,8 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   fuzz:                  EffectGuids.kFuzz,
   tape_saturation:       EffectGuids.kTapeSaturation,
   bitcrusher:            EffectGuids.kBitcrusher,
+  sustainer:             EffectGuids.kSustainer,
+  vinyl:                 EffectGuids.kVinyl,
   eq_parametric:         EffectGuids.kEqParametric,
   eq_graphic:            EffectGuids.kEqGraphic,
   pickup_match:          EffectGuids.kPickupMatch,

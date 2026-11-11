@@ -116,6 +116,106 @@
     {"type": "bitcrusher", "preset": "subtle-grit", "params": {"bits": 9, "downsample": 3, "mix": 0.5}},
     {"type": "flanger", "preset": "metallic-comb", "params": {"mix": 0.15}}
    ]
+  },
+  {
+   "name": "Endless Solo", "tags": ["metal", "lead", "sustainer"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -52}},
+    {"type": "sustainer", "preset": "endless-note"},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.25, "tone": 0.55, "level": 5}},
+    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.85}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.55}},
+    {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.22}},
+    {"type": "reverb_chamber", "preset": "echo-chamber", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Parked Wah Shred", "tags": ["metal", "lead", "wah"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -50}},
+    {"type": "wah", "params": {"control": 0, "position": 0.6, "q": 6}},
+    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.88, "middle": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.5}},
+    {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Thrash Gallop", "tags": ["metal", "thrash"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "staccato-chug", "params": {"threshold": -48}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.15, "tone": 0.62, "level": 6}},
+    {"type": "amp_builtin", "preset": "scooped-thrash", "params": {"gain": 0.82, "middle": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "presence": 0.6, "micPosition": 0.4}}
+   ]
+  },
+  {
+   "name": "Low Tuned Bounce", "tags": ["metal", "nu"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -48}},
+    {"type": "amp_builtin", "preset": "tight-modern-rhythm", "params": {"gain": 0.9, "bass": 0.55, "middle": 0.4, "character": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "size": 0.7, "micPosition": 0.45}}
+   ]
+  },
+  {
+   "name": "Power Ballad Clean", "tags": ["metal", "clean"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "transparent-leveler"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.36, "bright": 1, "treble": 0.58}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 2}},
+    {"type": "chorus", "preset": "lush-chorus", "params": {"mix": 0.35}},
+    {"type": "delay_digital", "preset": "dotted-eighth", "params": {"mix": 0.25}},
+    {"type": "reverb_advanced", "preset": "lush-hall", "params": {"mix": 0.28}}
+   ]
+  },
+  {
+   "name": "Symphonic Lead", "tags": ["metal", "lead"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -50}},
+    {"type": "compressor_vca", "preset": "lead-sustain"},
+    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.82, "treble": 0.5, "presence": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1, "micPosition": 0.6}},
+    {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.2}},
+    {"type": "reverb_advanced", "preset": "concert-hall", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Stoner Fuzz", "tags": ["metal", "stoner"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -50}},
+    {"type": "fuzz", "params": {"model": 0, "drive": 0.8, "tone": 0.45, "bass": 0.6}},
+    {"type": "amp_builtin", "preset": "vintage-high-gain", "params": {"gain": 0.5, "bass": 0.6, "treble": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "size": 0.7, "micType": 1}}
+   ]
+  },
+  {
+   "name": "Swedish Buzz", "tags": ["metal", "death"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -46}},
+    {"type": "distortion", "params": {"model": 3, "drive": 0.7, "tone": 0.6, "low": 3, "mid": -2, "high": 4}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.6, "middle": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4, "bass": 0.55}}
+   ]
+  },
+  {
+   "name": "Progressive Clean Drive", "tags": ["metal", "prog"],
+   "chain": [
+    {"type": "overdrive", "params": {"model": 3, "drive": 0.45, "tone": 0.55}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.75, "middle": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 2}},
+    {"type": "delay_digital", "preset": "ping-pong", "params": {"mix": 0.2}},
+    {"type": "reverb_advanced", "preset": "wide-room", "params": {"mix": 0.18}}
+   ]
+  },
+  {
+   "name": "Octave Down Djent", "tags": ["metal", "djent", "octave"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "staccato-chug", "params": {"threshold": -46}},
+    {"type": "pitch_shift", "preset": "octave-down", "params": {"mix": 0.3}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.1, "tone": 0.65, "level": 7}},
+    {"type": "amp_builtin", "preset": "tight-djent", "params": {"gain": 0.8}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4, "presence": 0.58}},
+    {"type": "eq_parametric", "preset": "tight-low-end"}
+   ]
   }
  ]
 }

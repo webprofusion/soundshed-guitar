@@ -80,6 +80,105 @@
     {"type": "delay_analog", "preset": "runaway", "params": {"feedback": 0.7, "mix": 0.25}},
     {"type": "reverb_ambient", "preset": "deep-shimmer", "params": {"mix": 0.45}}
    ]
+  },
+  {
+   "name": "Feedback Garden", "tags": ["shoegaze", "sustainer"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -56}},
+    {"type": "sustainer", "preset": "endless-note", "params": {"amount": 0.45}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.7, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.62, "middle": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1}},
+    {"type": "reverb_ambient", "preset": "wide-bloom", "params": {"mix": 0.38}}
+   ]
+  },
+  {
+   "name": "Choir of Glass", "tags": ["ambient", "choir"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "smooth-opto"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.42, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
+    {"type": "reverb_verbal", "preset": "choir", "params": {"mix": 0.4}}
+   ]
+  },
+  {
+   "name": "First Light Bloom", "tags": ["ambient", "bloom"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "treble": 0.54}},
+    {"type": "cab_simple", "params": {"cabinet": 4, "micType": 2, "micDistance": 0.3}},
+    {"type": "delay_analog", "preset": "memory-man", "params": {"mix": 0.18}},
+    {"type": "reverb_verbal", "preset": "slow-bloom", "params": {"mix": 0.42}}
+   ]
+  },
+  {
+   "name": "Cloud Nine Pad", "tags": ["ambient", "cloud"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "clean-sustain"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "bass": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 2}},
+    {"type": "chorus", "preset": "lush-chorus", "params": {"mix": 0.25}},
+    {"type": "reverb_verbal", "preset": "cloud-nine", "params": {"mix": 0.45}}
+   ]
+  },
+  {
+   "name": "Octave Shimmer Wash", "tags": ["ambient", "shimmer"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "bright": 1, "treble": 0.56}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 1}},
+    {"type": "reverb_verbal", "preset": "octave-shimmer", "params": {"mix": 0.4}}
+   ]
+  },
+  {
+   "name": "Pitch Black Sea", "tags": ["ambient", "octave"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bass": 0.58, "treble": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1, "micPosition": 0.6}},
+    {"type": "pitch_shift", "preset": "octave-down", "params": {"mix": 0.35}},
+    {"type": "delay_tape", "preset": "dub", "params": {"mix": 0.22}},
+    {"type": "reverb_chamber", "preset": "dark-chamber", "params": {"mix": 0.34}}
+   ]
+  },
+  {
+   "name": "Phase Drift", "tags": ["shoegaze", "phaser"],
+   "chain": [
+    {"type": "fuzz", "params": {"model": 0, "drive": 0.45, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.66}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micPosition": 0.55}},
+    {"type": "phaser", "params": {"rate": 0.18, "depth": 0.85, "feedback": 0.45, "mix": 0.5}},
+    {"type": "reverb_ambient", "preset": "cloud", "params": {"mix": 0.36}}
+   ]
+  },
+  {
+   "name": "Tremolo Fog", "tags": ["ambient", "tremolo"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.7, "treble": 0.48}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "tremolo", "preset": "deep-harmonic"},
+    {"type": "delay_analog", "preset": "memory-man", "params": {"mix": 0.26}},
+    {"type": "reverb_chamber", "preset": "large-chamber", "params": {"mix": 0.3}}
+   ]
+  },
+  {
+   "name": "Ring Bells", "tags": ["ambient", "ring"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micType": 2}},
+    {"type": "ring_mod", "preset": "bell-tones", "params": {"mix": 0.3}},
+    {"type": "delay_digital", "preset": "ping-pong", "params": {"mix": 0.3}},
+    {"type": "reverb_ambient", "preset": "shimmer", "params": {"mix": 0.32}}
+   ]
+  },
+  {
+   "name": "Static Bloom", "tags": ["shoegaze", "sustainer"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -58}},
+    {"type": "sustainer", "preset": "octave-bloom"},
+    {"type": "fuzz", "params": {"model": 2, "drive": 0.75, "tone": 0.6}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.58, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.45}},
+    {"type": "delay_digital", "preset": "reverse-wash", "params": {"mix": 0.2}},
+    {"type": "reverb_ambient", "preset": "dark-swell", "params": {"mix": 0.36}}
+   ]
   }
  ]
 }
