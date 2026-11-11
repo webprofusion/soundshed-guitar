@@ -75,59 +75,59 @@ def propose(rng, preset):
     moves = []
 
     if cab is not None:
-        params = cab.setdefault("params", {})
+        cab_params = cab.setdefault("params", {})
 
         # The lo-fi speakers are what a lo-fi preset is; only guitar cabinets are swapped.
-        if params.get("cabinet", 0) in GUITAR_CABS:
+        if cab_params.get("cabinet", 0) in GUITAR_CABS:
             def swap_cab():
-                params["cabinet"] = rng.choice([c for c in GUITAR_CABS if c != params.get("cabinet", 0)])
+                cab_params["cabinet"] = rng.choice([c for c in GUITAR_CABS if c != cab_params.get("cabinet", 0)])
                 return "cabinet"
             moves.append(swap_cab)
 
         def mic():
-            params["micType"] = rng.choice([t for t in (0, 1, 2) if t != params.get("micType", 0)])
-            nudge(rng, params, "micPosition", 0.1, 0.9, 0.5, 0.35)
+            cab_params["micType"] = rng.choice([t for t in (0, 1, 2) if t != cab_params.get("micType", 0)])
+            nudge(rng, cab_params, "micPosition", 0.1, 0.9, 0.5, 0.35)
             return "microphone"
 
         def box():
-            nudge(rng, params, "size", 0.2, 0.85, 0.5, 0.3)
-            nudge(rng, params, "mids", 0.2, 0.8, 0.5, 0.3)
+            nudge(rng, cab_params, "size", 0.2, 0.85, 0.5, 0.3)
+            nudge(rng, cab_params, "mids", 0.2, 0.8, 0.5, 0.3)
             return "cabinet size and mids"
 
         def top():
-            nudge(rng, params, "brightness", 0.2, 0.85, 0.5, 0.3)
-            nudge(rng, params, "presence", 0.2, 0.85, 0.5, 0.3)
+            nudge(rng, cab_params, "brightness", 0.2, 0.85, 0.5, 0.3)
+            nudge(rng, cab_params, "presence", 0.2, 0.85, 0.5, 0.3)
             return "cabinet top end"
 
         def room():
-            params["micDistance"] = round(rng.uniform(0.25, 0.6), 2) if params.get("micDistance", 0.0) < 0.2 else 0.0
+            cab_params["micDistance"] = round(rng.uniform(0.25, 0.6), 2) if cab_params.get("micDistance", 0.0) < 0.2 else 0.0
             return "microphone distance"
 
         moves += [mic, box, top, room]
 
     if amp is not None:
-        params = amp.setdefault("params", {})
+        amp_params = amp.setdefault("params", {})
 
         def stack():
-            nudge(rng, params, "bass", 0.2, 0.8, 0.5, 0.25)
-            nudge(rng, params, "middle", 0.15, 0.85, 0.5, 0.3)
-            nudge(rng, params, "treble", 0.2, 0.8, 0.5, 0.25)
+            nudge(rng, amp_params, "bass", 0.2, 0.8, 0.5, 0.25)
+            nudge(rng, amp_params, "middle", 0.15, 0.85, 0.5, 0.3)
+            nudge(rng, amp_params, "treble", 0.2, 0.8, 0.5, 0.25)
             return "tone stack"
 
         def contour():
-            nudge(rng, params, "contour", 0.0, 0.85, 0.2, 0.4)
-            nudge(rng, params, "presence", 0.2, 0.8, 0.5, 0.25)
+            nudge(rng, amp_params, "contour", 0.0, 0.85, 0.2, 0.4)
+            nudge(rng, amp_params, "presence", 0.2, 0.8, 0.5, 0.25)
             return "contour and presence"
 
         moves += [stack, contour]
 
     if acoustic is not None:
-        params = acoustic.setdefault("params", {})
+        body_params = acoustic.setdefault("params", {})
 
         def body():
-            params["size"] = rng.choice([s for s in (0, 1, 2) if s != params.get("size", 1)])
-            nudge(rng, params, "body", 0.2, 0.9, 0.6, 0.3)
-            nudge(rng, params, "top", 0.2, 0.9, 0.6, 0.3)
+            body_params["size"] = rng.choice([s for s in (0, 1, 2) if s != body_params.get("size", 1)])
+            nudge(rng, body_params, "body", 0.2, 0.9, 0.6, 0.3)
+            nudge(rng, body_params, "top", 0.2, 0.9, 0.6, 0.3)
             return "acoustic body"
 
         moves.append(body)
