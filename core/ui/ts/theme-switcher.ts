@@ -1,18 +1,21 @@
 /**
  * Theme Switcher
- * Manages switching between light, dark, and classic themes
+ * Manages switching between the sepia (default), light, dark, and classic themes
  */
 
-export type ThemeName = 'light' | 'dark' | 'classic';
+export type ThemeName = 'sepia' | 'light' | 'dark' | 'classic';
 
-const THEME_LIST: ThemeName[] = ['light', 'dark', 'classic'];
+/** What a fresh install opens in, and what an unknown stored value falls back to. */
+export const DEFAULT_THEME: ThemeName = 'sepia';
+
+const THEME_LIST: ThemeName[] = ['sepia', 'light', 'dark', 'classic'];
 const LEGACY_THEME_MAP: Record<string, ThemeName> = {
   default: 'dark',
   gritty: 'dark',
 };
 
 export class ThemeSwitcher {
-  private currentTheme: ThemeName = 'dark';
+  private currentTheme: ThemeName = DEFAULT_THEME;
   private body: HTMLElement;
 
   constructor() {
@@ -24,7 +27,7 @@ export class ThemeSwitcher {
     if (THEME_LIST.includes(theme as ThemeName)) {
       return theme as ThemeName;
     }
-    return LEGACY_THEME_MAP[theme] ?? 'dark';
+    return LEGACY_THEME_MAP[theme] ?? DEFAULT_THEME;
   }
 
   /**
@@ -32,7 +35,7 @@ export class ThemeSwitcher {
    */
   setTheme(theme: ThemeName, persist: boolean = true): void {
     // Remove all theme classes
-    this.body.classList.remove('theme-light', 'theme-dark', 'theme-classic');
+    this.body.classList.remove('theme-sepia', 'theme-light', 'theme-dark', 'theme-classic');
     
     // Add new theme class
     this.body.classList.add(`theme-${theme}`);
@@ -76,6 +79,7 @@ export class ThemeSwitcher {
   getThemeDisplayName(theme?: ThemeName): string {
     const t = theme || this.currentTheme;
     const names: Record<ThemeName, string> = {
+      sepia: 'Sepia',
       light: 'Light',
       dark: 'Dark',
       classic: 'Vintage'

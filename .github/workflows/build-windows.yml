@@ -231,7 +231,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $version = (Get-Content '.\juce\VERSION' -Raw).Trim()
           $variantSuffix = switch ('${{ matrix.avx }}') { 'noavx' { '-noavx' } 'avx' { '-avx' } default { '' } }
-          $assetName = "SoundshedGuitar-$version-Windows-${{ matrix.arch }}$variantSuffix-setup.exe"
+          $assetName = "Sepia-$version-Windows-${{ matrix.arch }}$variantSuffix-setup.exe"
           $assetPath = Join-Path $PWD $assetName
           Copy-Item '${{ steps.installer.outputs.installer_path }}' $assetPath -Force
 

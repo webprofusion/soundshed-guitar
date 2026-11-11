@@ -478,7 +478,7 @@ bool TestProfileUnderNonAsciiUserName()
 {
 #ifdef _WIN32
     const fs::path sandbox = FreshSandbox(guitarfx::util::PathFromUtf8("\xC5\x9Eule G\xC3\xB6khan"));
-    const fs::path profile = sandbox / "Soundshed Guitar";
+    const fs::path profile = sandbox / "Sepia";
     const ScopedProfileRoot profileRoot(sandbox);
 
     if (const auto resolved = guitarfx::FileSystem{}.ResolvePlatformRootDirectory(); resolved != profile)

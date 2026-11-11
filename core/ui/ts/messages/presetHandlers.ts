@@ -177,7 +177,9 @@ export function onPresetArchiveSessionFailed(payload: IncomingPayload): void {
 }
 
 export function onPresetList(payload: IncomingPayload): void {
-  const presetListPayload = payload as { presets?: Array<{ id: string; name: string; category?: string; source?: string }> };
+  const presetListPayload = payload as {
+    presets?: Array<{ id: string; name: string; category?: string; source?: string; tags?: string[]; description?: string }>;
+  };
   if (Array.isArray(presetListPayload.presets)) {
     appendLog(`preset list received ← ${presetListPayload.presets.length} presets`);
     const cachedBeforeUpdate = new Set(uiState.presetCache.keys());
@@ -185,14 +187,21 @@ export function onPresetList(payload: IncomingPayload): void {
     for (const p of presetListPayload.presets) {
       const incomingCategory = p.category ?? "Factory";
       const existingCached = uiState.presetCache.get(p.id);
+      // The list carries each preset's tags and description so the library can filter and
+      // search presets whose bodies have not been loaded yet, which is most of them.
+      const listed = {
+        ...(Array.isArray(p.tags) ? { tags: p.tags } : {}),
+        ...(typeof p.description === "string" && p.description ? { description: p.description } : {}),
+      };
       const nextPreset: Preset = existingCached
         ? {
             ...existingCached,
             name: p.name,
             category: incomingCategory,
             source: p.source,
+            ...listed,
           }
-        : { id: p.id, name: p.name, category: incomingCategory, source: p.source } as Preset;
+        : { id: p.id, name: p.name, category: incomingCategory, source: p.source, ...listed } as Preset;
       cachePreset(nextPreset, p.id);
       nextPresets.push(nextPreset);
     }

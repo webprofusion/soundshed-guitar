@@ -1,8 +1,9 @@
 import type { Tone3000Architecture, Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
+import { ONLINE_SERVICES_ENABLED } from "./apiConfig.js";
 import { uiState } from "./state.js";
 
 export const TONE3000_OFFICIAL_API_BASE = "https://www.tone3000.com/api/v1";
-export const SOUNDSHED_TONE3000_PROXY_API_BASE = "https://api-guitar.soundshed.com/v1/resourcesearch";
+export const SOUNDSHED_TONE3000_PROXY_API_BASE = "https://api.sepia.invalid/v1/resourcesearch";
 const TONE3000_USE_SOUNDSHED_API_SETTING = "tone3000.useSoundshedToneSearchApi";
 const TONE3000_API_MODE_SETTING = "tone3000.apiMode";
 const TONE3000_PROXY_API_BASE_SETTING = "tone3000.proxyApiBaseUrl";
@@ -62,7 +63,8 @@ function toApiBaseUrl(candidate: string, fallback: string): string {
 }
 
 export function getTone3000ApiClientConfig(): Tone3000ApiClientConfig {
-  const useSoundshedProxy = getBooleanSetting(TONE3000_USE_SOUNDSHED_API_SETTING);
+  // The relay is the upstream project's own service; without it only the official API is left.
+  const useSoundshedProxy = ONLINE_SERVICES_ENABLED && getBooleanSetting(TONE3000_USE_SOUNDSHED_API_SETTING);
   const proxyBaseOverride = toApiBaseUrl(getStringSetting(TONE3000_PROXY_API_BASE_SETTING), "");
   if (useSoundshedProxy) {
     return {

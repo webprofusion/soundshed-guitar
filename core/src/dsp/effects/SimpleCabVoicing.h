@@ -56,12 +56,13 @@ enum Param : int
     kParamCount
 };
 
-inline constexpr const char* kCabinetLabels[] = {"4x12 Closed", "1x12 Open", "2x12 Open", "2x12 Closed", "4x10 Open"};
+inline constexpr const char* kCabinetLabels[] = {"4x12 Closed", "1x12 Open", "2x12 Open", "2x12 Closed",  "4x10 Open",
+                                                 "AM Radio",    "Telephone", "Boombox",   "Practice Amp", "VHS"};
 inline constexpr const char* kMicTypeLabels[] = {"Dynamic", "Ribbon", "Condenser"};
 
 /// In `Param` order, which is also the order the UI lays the controls out in.
 inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
-    {"cabinet", "Cabinet", 0.0, 0.0, 4.0, "enum", "Cabinet", false, 1.0, kCabinetLabels},
+    {"cabinet", "Cabinet", 0.0, 0.0, 9.0, "enum", "Cabinet", false, 1.0, kCabinetLabels},
     {"size", "Size", 0.5, 0.0, 1.0, "amount", "Cabinet", false, 0.0, {}},
     {"bass", "Bass", 0.5, 0.0, 1.0, "amount", "Cabinet", false, 0.0, {}},
     {"mids", "Mids", 0.5, 0.0, 1.0, "amount", "Cabinet", false, 0.0, {}},
@@ -98,6 +99,13 @@ enum class Cabinet : int
     Open2x12,
     Closed2x12,
     Open4x10,
+    // Not guitar cabinets: small, band-limited speakers, for lo-fi tones. Appended, so the
+    // indices stored in presets keep their meaning.
+    AmRadio,
+    Telephone,
+    Boombox,
+    PracticeAmp,
+    Vhs,
     Count
 };
 
@@ -196,6 +204,18 @@ inline constexpr std::array<CabinetVoicing, static_cast<int>(Cabinet::Count)> kC
     // 4x10 open back, tweed style: a higher, lighter low end, scooped low mids and the
     // brightest top of the set.
     {100.0, 50.0, 160.0, 0.8, 3.5, 6.0, 450.0, -1.5, 2800.0, 1700.0, 0.0, 8.0, 5200.0, 2400.0, 0.35},
+    // AM radio: a three-inch speaker in a plastic case. Nothing below 300 Hz or above 2.6 kHz,
+    // and a honk in between.
+    {300.0, 80.0, 420.0, 1.0, 0.0, 3.0, 800.0, 2.0, 1300.0, 600.0, 4.5, 6.0, 2400.0, 800.0, 0.20},
+    // Telephone: the 300 Hz to 3.4 kHz voice band, flat across it.
+    {440.0, 80.0, 500.0, 0.8, 0.0, 2.0, 1000.0, 0.0, 1800.0, 800.0, -1.0, 4.0, 3000.0, 800.0, 0.20},
+    // Boombox: a ported five-inch woofer, boomy around 170 Hz, with a dull paper-cone top.
+    {160.0, 50.0, 170.0, 1.2, 4.0, 5.0, 500.0, -1.5, 2500.0, 1500.0, 0.0, 6.0, 5200.0, 2000.0, 0.25},
+    // Practice amp: a six-inch speaker in a small open box. Boxy low mids and little else.
+    {210.0, 60.0, 240.0, 1.0, 1.0, 4.0, 450.0, 3.0, 2000.0, 1200.0, -1.0, 7.0, 3600.0, 1500.0, 0.25},
+    // VHS: a video tape's linear audio track. Only the band limits; the Tape effect supplies
+    // the wow, hiss and saturation that go with them.
+    {120.0, 40.0, 150.0, 0.6, 0.0, 2.0, 500.0, 0.0, 2500.0, 1000.0, -2.0, 4.0, 4200.0, 1600.0, 0.30},
 }};
 // clang-format on
 

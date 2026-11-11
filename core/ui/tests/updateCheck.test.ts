@@ -14,7 +14,7 @@ const fragment = (path: string) => readFileSync(join(__dirname, "..", "ui-compon
 
 const originalFetch = globalThis.fetch;
 
-function answer(latestVersion: string, downloadUrl = "https://guitar.soundshed.com/download") {
+function answer(latestVersion: string, downloadUrl = "https://example.com/download") {
   return vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
     ok: true,
     data: {
@@ -51,7 +51,20 @@ afterEach(() => {
 });
 
 describe("update check", () => {
-  it("shows the header button for a newer release, and it opens the dialog", async () => {
+  it("makes no request at all while online services are off", async () => {
+    globalThis.fetch = answer("9.9.9");
+    const { triggerUpdateCheck, uiState } = await load();
+    triggerUpdateCheck();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(headerButton().hidden || headerButton().style.display === "none" || !headerButton().classList.contains("visible")).toBe(true);
+    // Nor does it mint the instance id the upstream check sends along.
+    expect(uiState.appSettings["app.instanceId"]).toBe("test-instance");
+  });
+
+  // Sepia: this exercises an upstream online service, which is switched off here
+  // (ONLINE_SERVICES_ENABLED in ts/apiConfig.ts). Kept, skipped, for when a fork runs its own.
+  it.skip("shows the header button for a newer release, and it opens the dialog", async () => {
     const fetchMock = answer("1.5.0");
     globalThis.fetch = fetchMock;
     const { triggerUpdateCheck } = await load();
@@ -71,13 +84,15 @@ describe("update check", () => {
     expect(document.getElementById("update-modal-version")?.textContent).toBe("1.5.0");
     expect(document.getElementById("update-modal-current")?.textContent).toBe("1.4.0");
     expect(document.getElementById("update-modal-notes")?.querySelector("h2")?.textContent).toBe("What's new");
-    expect(document.getElementById("update-modal-download")?.getAttribute("href")).toBe("https://guitar.soundshed.com/download");
+    expect(document.getElementById("update-modal-download")?.getAttribute("href")).toBe("https://example.com/download");
 
     (document.getElementById("update-modal-later") as HTMLButtonElement).click();
     expect(modal().style.display).toBe("none");
   });
 
-  it("stays quiet when the server's latest is not newer", async () => {
+  // Sepia: this exercises an upstream online service, which is switched off here
+  // (ONLINE_SERVICES_ENABLED in ts/apiConfig.ts). Kept, skipped, for when a fork runs its own.
+  it.skip("stays quiet when the server's latest is not newer", async () => {
     globalThis.fetch = answer("1.4.0");
     const { uiState, triggerUpdateCheck } = await load();
 
@@ -89,7 +104,9 @@ describe("update check", () => {
     expect(uiState.availableUpdate ?? null).toBeNull();
   });
 
-  it("never links the download to anything but http(s)", async () => {
+  // Sepia: this exercises an upstream online service, which is switched off here
+  // (ONLINE_SERVICES_ENABLED in ts/apiConfig.ts). Kept, skipped, for when a fork runs its own.
+  it.skip("never links the download to anything but http(s)", async () => {
     globalThis.fetch = answer("1.5.0", "javascript:alert(1)");
     const { uiState, triggerUpdateCheck } = await load();
 
@@ -104,7 +121,9 @@ describe("update check", () => {
     expect(download.style.display).toBe("none");
   });
 
-  it("checks once the setting is turned back on, not only at the next launch", async () => {
+  // Sepia: this exercises an upstream online service, which is switched off here
+  // (ONLINE_SERVICES_ENABLED in ts/apiConfig.ts). Kept, skipped, for when a fork runs its own.
+  it.skip("checks once the setting is turned back on, not only at the next launch", async () => {
     globalThis.fetch = answer("1.5.0");
     const { uiState, triggerUpdateCheck } = await load({ "app.instanceId": "test-instance", "app.updateCheckEnabled": false });
 

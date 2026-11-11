@@ -230,9 +230,23 @@ void TestFactoryPresetsReachTheirGain()
     constexpr int frames = 48128;
     // Least and most THD each preset may show on the quiet tone, as a fraction.
     const std::map<std::string, std::pair<double, double>> bounds = {
-        {"clean-channel", {0.0, 0.02}},       {"edge-of-breakup", {0.02, 0.10}}, {"classic-crunch", {0.10, 0.30}},
-        {"tight-modern-rhythm", {0.35, 1.0}}, {"tight-djent", {0.45, 1.0}},      {"scooped-thrash", {0.30, 1.0}},
-        {"vintage-high-gain", {0.30, 1.0}},   {"singing-lead", {0.35, 1.0}},
+        {"clean-channel", {0.0, 0.02}},
+        {"edge-of-breakup", {0.02, 0.10}},
+        {"classic-crunch", {0.10, 0.30}},
+        {"tight-modern-rhythm", {0.35, 1.0}},
+        {"tight-djent", {0.45, 1.0}},
+        {"scooped-thrash", {0.30, 1.0}},
+        {"vintage-high-gain", {0.30, 1.0}},
+        {"singing-lead", {0.35, 1.0}},
+        // Sepia's eight.
+        {"glass-clean", {0.0, 0.02}},
+        {"warm-jazz", {0.0, 0.02}},
+        {"chime-combo", {0.015, 0.10}},
+        {"tweed-breakup", {0.04, 0.20}},
+        {"british-crunch", {0.10, 0.30}},
+        {"hot-rodded-stack", {0.30, 1.0}},
+        {"doom-wall", {0.25, 1.0}},
+        {"liquid-lead", {0.30, 1.0}},
     };
 
     const auto presets =

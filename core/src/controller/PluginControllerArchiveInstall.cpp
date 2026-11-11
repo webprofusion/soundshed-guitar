@@ -210,7 +210,7 @@ void PluginController::HandleInstallPresetArchivesRequest(const nlohmann::json& 
     }
 
     // A remote model or IR is shared as a reference, not a file: it has to be in the library
-    // already (installed in Soundshed Guitar, which can download it from its provider).
+    // already (installed in Sepia, which can download it from its provider).
     std::unordered_map<std::string, std::string> remoteIds;
     std::vector<std::string> missingRemote;
     std::vector<std::string> missingProviders;
@@ -259,7 +259,7 @@ void PluginController::HandleInstallPresetArchivesRequest(const nlohmann::json& 
 
         fail(onlyTone3000 ? "Needs Tone3000 models" : "Needs remote models",
              "This tone uses " + from + " that are not in your library (" + join(missingRemote) +
-                 "). Install it in Soundshed Guitar, which can download them.");
+                 "). Install it in Sepia, which can download them.");
         return;
     }
 

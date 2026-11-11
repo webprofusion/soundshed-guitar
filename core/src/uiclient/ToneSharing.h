@@ -1,11 +1,11 @@
 #pragma once
 
 /**
- * ToneSharing.h - The Soundshed tone sharing service (https://api-guitar.soundshed.com/v1),
+ * ToneSharing.h - The Soundshed tone sharing service (https://api.sepia.invalid/v1),
  * as a native UI reads it: the shapes of its answers, the paths it is asked, and what the
  * library says is already installed.
  *
- * Soundshed Guitar's web UI talks to the service from TypeScript (core/ui/ts/toneSharingPanel/);
+ * Sepia's web UI talks to the service from TypeScript (core/ui/ts/toneSharingPanel/);
  * this is the same contract for a UI that has no browser. It makes no requests itself - the
  * UI's HTTP client does, and hands the status and body here - so it stays testable without a
  * network. Installing what is downloaded is the engine's job ("installPresetArchives"), and the
@@ -21,8 +21,8 @@
 
 namespace guitarfx::uiclient::tones
 {
-inline constexpr const char* kApiBase = "https://api-guitar.soundshed.com/v1";
-inline constexpr const char* kApiOrigin = "https://api-guitar.soundshed.com";
+inline constexpr const char* kApiBase = "https://api.sepia.invalid/v1";
+inline constexpr const char* kApiOrigin = "https://api.sepia.invalid";
 
 /// App settings the web UI's tone sharing panel keeps, read and written the same way here.
 inline constexpr const char* kSessionSettingKey = "toneSharing.sessionId";

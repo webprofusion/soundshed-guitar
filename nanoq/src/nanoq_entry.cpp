@@ -31,7 +31,7 @@ plugin_info const& info()
         NANOQ_ID,
         NANOQ_NAME,
         "Soundshed",
-        "https://soundshed.com",
+        "https://github.com/justsomeone-e/soundshed-guitar",
         "",
         "",
         NANOQ_VERSION,

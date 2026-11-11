@@ -18,8 +18,8 @@ set "WORKSPACE_ROOT=%SCRIPT_DIR%..\.."
 
 :: --- Project identity (must match juce\CMakeLists.txt) -------------------
 set "PROJECT_NAME=SoundshedGuitar"
-set "PRODUCT_NAME=Soundshed Guitar"
-set "COMPANY_NAME=Soundshed"
+set "PRODUCT_NAME=Sepia"
+set "COMPANY_NAME=Sepia Audio Project"
 
 :: --- Inno Setup compiler path --------------------------------------------
 set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"

@@ -68,6 +68,14 @@ describe("the shared presentation table reproduces the web UI's old tables", () 
       fx_nam: "../images/equipment/pedals/colourful-pedal2.png",
       [EffectGuids.kWasmHost]: "../images/equipment/pedals/colourful-pedal2.png",
       wasm_host: "../images/equipment/pedals/colourful-pedal2.png",
+      // Sepia's own pedals, each with its own drawing (tools/sepia-ui/render-pedals.js).
+      [EffectGuids.kTapeSaturation]: "../images/equipment/pedals/sepia-tape.png",
+      [EffectGuids.kBitcrusher]: "../images/equipment/pedals/sepia-bitcrusher.png",
+      [EffectGuids.kSustainer]: "../images/equipment/pedals/sepia-sustainer.png",
+      [EffectGuids.kVinyl]: "../images/equipment/pedals/sepia-vinyl.png",
+      [EffectGuids.kAcousticSim]: "../images/equipment/pedals/sepia-acoustic.png",
+      [EffectGuids.kStutter]: "../images/equipment/pedals/sepia-stutter.png",
+      [EffectGuids.kVowelFilter]: "../images/equipment/pedals/sepia-vowel-filter.png",
     });
   });
 

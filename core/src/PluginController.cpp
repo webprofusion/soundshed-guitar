@@ -739,7 +739,7 @@ void PluginController::HandleGetPresetListRequest()
 
 void PluginController::HandleGetThemeRequest()
 {
-    std::string theme = "dark";
+    std::string theme = "sepia";
 
     const auto appThemeIt = mAppSettings.find("theme");
 
@@ -756,7 +756,7 @@ void PluginController::HandleGetThemeRequest()
 
 void PluginController::HandleSetThemeRequest(const nlohmann::json& payload)
 {
-    mAppSettings["theme"] = payload.value("theme", "dark");
+    mAppSettings["theme"] = payload.value("theme", "sepia");
     SaveAppSettings();
 }
 

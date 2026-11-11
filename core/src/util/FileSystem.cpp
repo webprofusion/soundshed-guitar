@@ -70,21 +70,21 @@ std::filesystem::path FileSystem::ResolvePlatformRootDirectory() const
 
     if (const auto appData = ReadEnvironmentPath("APPDATA"); !appData.empty())
     {
-        return appData / "Soundshed Guitar";
+        return appData / "Sepia";
     }
 
 #elif defined(__APPLE__)
 
     if (const auto home = ReadEnvironmentPath("HOME"); !home.empty())
     {
-        return home / "Library" / "Soundshed Guitar";
+        return home / "Library" / "Sepia";
     }
 
 #else
 
     if (const auto home = ReadEnvironmentPath("HOME"); !home.empty())
     {
-        return home / ".config" / "Soundshed Guitar";
+        return home / ".config" / "Sepia";
     }
 
 #endif

@@ -3,6 +3,7 @@
 // Include all effect implementations
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/effects/AcousticSimEffect.h"
 #include "dsp/effects/GainEffect.h"
 #include "dsp/effects/MultibandCompressorEffect.h"
 #include "dsp/effects/MultibandDistortionEffect.h"
@@ -15,6 +16,11 @@
 #include "dsp/effects/GraphicEQEffect.h"
 #include "dsp/effects/DelayEffect.h"
 #include "dsp/effects/TapeDelayEffect.h"
+#include "dsp/effects/StutterEffect.h"
+#include "dsp/effects/SustainerEffect.h"
+#include "dsp/effects/TapeSaturationEffect.h"
+#include "dsp/effects/VinylEffect.h"
+#include "dsp/effects/VowelFilterEffect.h"
 #include "dsp/effects/AnalogDelayEffect.h"
 #include "dsp/effects/DoublerEffect.h"
 #include "dsp/effects/HarmonizerEffect.h"
@@ -29,6 +35,7 @@
 #include "dsp/effects/CompressorEffect.h"
 #include "dsp/effects/OverdriveEffect.h"
 #include "dsp/effects/DistortionEffect.h"
+#include "dsp/effects/BitcrusherEffect.h"
 #include "dsp/effects/FuzzEffect.h"
 #include "dsp/effects/BuiltinAmpEffect.h"
 #include "dsp/effects/ChorusEffect.h"
@@ -112,6 +119,13 @@ inline void RegisterAllEffects()
     RegisterDistortionEffect();
     RegisterMultibandDistortionEffect();
     RegisterFuzzEffect();
+    RegisterTapeSaturationEffect();
+    RegisterBitcrusherEffect();
+    RegisterVinylEffect();
+    RegisterSustainerEffect();
+    RegisterAcousticSimEffect();
+    RegisterStutterEffect();
+    RegisterVowelFilterEffect();
 
     // EQ
     RegisterParametricEQEffect();

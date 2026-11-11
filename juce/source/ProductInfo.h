@@ -1,6 +1,6 @@
 #pragma once
 
-// The standalone window's limits and the names Soundshed Guitar holds on this machine.
+// The standalone window's limits and the names Sepia holds on this machine.
 // Soundshed Nano Q (nanoq/) shares the engine and the profile but is its own CMake project.
 
 namespace soundshed::product
@@ -18,5 +18,10 @@ inline constexpr int defaultWindowHeight = 900;
 
 /// Held for the life of the standalone app, so two copies never run at once: they would
 /// fight over the audio device, and the app-wide UI settings would go to whichever wrote last.
-inline constexpr const char* standaloneLockName = "SoundshedGuitarStandaloneApp";
+inline constexpr const char* standaloneLockName = "SepiaStandaloneApp";
+
+/// Whether the standalone app registers a URL scheme with the system. The upstream app claims
+/// soundshed:// for its tone sharing links; Sepia has no such service and must not take the
+/// scheme from a Soundshed Guitar installed alongside it.
+inline constexpr bool registersUrlScheme = false;
 } // namespace soundshed::product

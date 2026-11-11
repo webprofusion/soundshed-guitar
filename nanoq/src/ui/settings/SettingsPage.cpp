@@ -32,8 +32,8 @@ constexpr int kPresetSwitchTailDefault = 2;
 constexpr const char* kNamSlimmableSizeSetting = "audio.nam.slimmableSize";
 constexpr const char* kNamOversamplingSetting = "audio.nam.oversampling";
 constexpr const char* kNamAntiAliasPhaseSetting = "audio.nam.antiAliasPhase";
-constexpr const char* kWebsite = "https://soundshed.com";
-constexpr const char* kGuides = "https://guitar.soundshed.com";
+constexpr const char* kWebsite = "https://github.com/justsomeone-e/soundshed-guitar";
+constexpr const char* kGuides = "https://github.com/justsomeone-e/soundshed-guitar";
 constexpr float kLabelWidth = 230.0f; // the longest label, INTERFACE CALIBRATION LEVEL, on one line
 
 using frame::BoolSetting;
@@ -435,8 +435,8 @@ Ptr Shell::BuildSettingsPage()
               "did not run in the last block (bypassed, or fed no signal) rather than a measured zero.");
 
         beginCard("More Guides");
-        describe("Full walkthroughs and release notes are at guitar.soundshed.com.");
-        card.push_back(FixedHeight(40, button("guitar.soundshed.com", [&commands] { commands.OpenUrl(kGuides); })));
+        describe("Full walkthroughs and release notes are at github.com/justsomeone-e/soundshed-guitar.");
+        card.push_back(FixedHeight(40, button("github.com/justsomeone-e/soundshed-guitar", [&commands] { commands.OpenUrl(kGuides); })));
         endCard();
 
         beginCard("About");
@@ -452,7 +452,7 @@ Ptr Shell::BuildSettingsPage()
         // app down with it.
         line("Profile", guitarfx::util::PathToUtf8(ProfileFolder()));
         card.push_back(VGap(6));
-        card.push_back(FixedHeight(40, button("soundshed.com", [&commands] { commands.OpenUrl(kWebsite); })));
+        card.push_back(FixedHeight(40, button("Project page", [&commands] { commands.OpenUrl(kWebsite); })));
         describe("Riff capture, plugin hosting, preset blending and publishing are in Soundshed Guitar, which shares "
                  "this app's presets, library and settings.");
         endCard();

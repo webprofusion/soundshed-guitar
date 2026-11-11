@@ -424,7 +424,7 @@ nlohmann::json SearchCacheJson(const std::string& query, const std::vector<Video
 
 std::string EmbedUrl(const std::string& videoId)
 {
-    return "https://api-guitar.soundshed.com/v1/embed/youtube?v=" + tones::EncodeQueryValue(videoId);
+    return "https://api.sepia.invalid/v1/embed/youtube?v=" + tones::EncodeQueryValue(videoId);
 }
 
 std::string WatchUrl(const std::string& videoId)
@@ -439,7 +439,7 @@ bool StaysInWebView(const std::string& url)
 
     // The player's wrapper page (juce/source/PluginEditor.cpp keeps it in the web view for the
     // same reason).
-    if (starts("https://api-guitar.soundshed.com/") && lower.find("/embed/") != std::string::npos)
+    if (starts("https://api.sepia.invalid/") && lower.find("/embed/") != std::string::npos)
     {
         return true;
     }

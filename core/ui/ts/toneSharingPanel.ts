@@ -15,6 +15,7 @@
  * scripts/check-cycles.js collapses a feature's own modules for this reason.
  */
 
+import { ONLINE_SERVICES_ENABLED } from "./apiConfig.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import { isToneBuilderOffered, refreshToneBuilderStatus, TONE_BUILDER_STATUS_EVENT } from "./toneBuilder/availability.js";
 import { loadAuthSession } from "./toneSharingPanel/account.js";
@@ -103,7 +104,7 @@ export async function ensureToneSharingSignedIn(): Promise<boolean> {
 let toneSharingPanelInitialized = false;
 
 export function initializeToneSharingPanel(): void {
-  if (!element("panel-sharing")) {
+  if (!ONLINE_SERVICES_ENABLED || !element("panel-sharing")) {
     return;
   }
 

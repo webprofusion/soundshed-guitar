@@ -76,7 +76,7 @@ void WriteLegacyTreeMarker(const std::filesystem::path& settingsDirectory, const
         marker << "The JSON files in this folder were imported into a database on " << NowMillis() << " (unix ms).\n\n"
                << "  database: " << util::PathToUtf8(dbPath) << "\n"
                << "  items:    " << itemsImported << "\n\n"
-               << "They are kept only so an older build of Soundshed Guitar can still read them.\n"
+               << "They are kept only so an older build of Sepia can still read them.\n"
                << "The running app no longer reads or writes them, so they are frozen at the\n"
                << "state the library was in at the moment of the upgrade. Editing them has no\n"
                << "effect; deleting them loses the ability to downgrade, nothing else.\n";

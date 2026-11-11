@@ -29,7 +29,7 @@ fi
 
 # Prevent overlapping runs from racing on the same build directory.
 if command -v flock >/dev/null 2>&1; then
-    BUILD_LOCK_FILE="/tmp/soundshed-guitar-build_linux.lock"
+    BUILD_LOCK_FILE="/tmp/sepia-build_linux.lock"
     exec 9>"${BUILD_LOCK_FILE}"
     if ! flock -n 9; then
         echo "Another build_linux.sh process is already running for this repository." >&2
@@ -49,9 +49,9 @@ BUILD_DIR_OVERRIDE=""
 TOOLCHAIN_FILE_OVERRIDE=""
 BUILD_JOBS="${GUITARFX_BUILD_JOBS:-}"
 LV2_BUILD_JOBS="${GUITARFX_LV2_BUILD_JOBS:-1}"
-PRODUCT="Soundshed Guitar"
-LINUX_STANDALONE_DIR_NAME="soundshed-guitar"
-LINUX_STANDALONE_EXECUTABLE_NAME="soundshed-guitar"
+PRODUCT="Sepia"
+LINUX_STANDALONE_DIR_NAME="sepia"
+LINUX_STANDALONE_EXECUTABLE_NAME="sepia"
 CLAP_BUNDLE_DIR_NAME="${PRODUCT// /}.clap"
 VERSION="$(cat "${SCRIPT_DIR}/juce/VERSION" 2>/dev/null || echo "1.0.0")"
 UI_DIR="${SCRIPT_DIR}/core/ui"
@@ -434,13 +434,13 @@ build_for_arch() {
     local toolchain_file="$4"
     local artefacts_release="${build_dir}/SoundshedGuitar_artefacts/Release"
     local artefacts_fallback="${build_dir}/SoundshedGuitar_artefacts"
-    local app_dst="${dist_dir}/opt/Soundshed/${LINUX_STANDALONE_DIR_NAME}"
+    local app_dst="${dist_dir}/opt/Sepia/${LINUX_STANDALONE_DIR_NAME}"
     local vst3_dst="${dist_dir}/usr/lib/vst3"
     local clap_dst="${dist_dir}/usr/lib/clap"
     local lv2_dst="${dist_dir}/usr/lib/lv2"
 
     echo "═══════════════════════════════════════════════════"
-    echo "  Soundshed Guitar — Linux Distribution Build"
+    echo "  Sepia — Linux Distribution Build"
     echo "  Host arch: ${HOST_ARCH}"
     echo "  Target arch: ${target_arch}"
     echo "  Build dir: ${build_dir}"
@@ -562,7 +562,7 @@ build_for_arch() {
     echo "═══════════════════════════════════════════════════"
 
     if [[ "$BUILD_ZIP" == true ]]; then
-        local zip_path="${SCRIPT_DIR}/SoundshedGuitar-${VERSION}-Linux-${target_arch}.zip"
+        local zip_path="${SCRIPT_DIR}/Sepia-${VERSION}-Linux-${target_arch}.zip"
 
         echo ""
         echo "▶ Creating zip archive for ${target_arch}…"

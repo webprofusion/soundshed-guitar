@@ -57,9 +57,9 @@ Type: filesandordirs; Name: "{code:GetVst3Dir}"
 Type: filesandordirs; Name: "{code:GetClapBinaryPath}"
 ; The editor's WebView2 profile (cache and storage; see juce/source/WebView2UserData.h),
 ; plus the per-launch profiles builds before September 2026 left under %TEMP%.
-Type: filesandordirs; Name: "{localappdata}\Soundshed Guitar\WebView2*"
-Type: filesandordirs; Name: "{%TEMP}\SoundshedGuitarWebView2"
-Type: filesandordirs; Name: "{%TEMP}\SoundshedGuitarWebView2Check"
+Type: filesandordirs; Name: "{localappdata}\Sepia\WebView2*"
+Type: filesandordirs; Name: "{%TEMP}\SepiaWebView2"
+Type: filesandordirs; Name: "{%TEMP}\SepiaWebView2Check"
 
 [Registry]
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "StandaloneDir"; ValueData: "{code:GetStandaloneDir}"; Flags: uninsdeletekeyifempty

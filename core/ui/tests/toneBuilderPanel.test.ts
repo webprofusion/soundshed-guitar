@@ -253,7 +253,9 @@ describe("the Tone Builder", () => {
     expect(findCommunityMatches).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the pack artwork and text, redraws it, and publishes it as the pack thumbnail", async () => {
+  // Sepia: this exercises an upstream online service, which is switched off here
+  // (ONLINE_SERVICES_ENABLED in ts/apiConfig.ts). Kept, skipped, for when a fork runs its own.
+  it.skip("shows the pack artwork and text, redraws it, and publishes it as the pack thumbnail", async () => {
     signedIn.mockResolvedValue(true);
     ensureEffectCatalogue.mockResolvedValue("hash");
     startToneBuilderJob.mockResolvedValue({ jobId: "job-6" });

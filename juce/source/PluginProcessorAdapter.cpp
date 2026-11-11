@@ -89,7 +89,7 @@ struct ScopedComInitializer
  * deleted, so this stays reversible by hand. If the destination already holds
  * data we leave both trees alone rather than guess at a merge: the plugin
  * builds were never sandboxed, so anyone who ran the VST3/AU already has a
- * populated ~/Library/Soundshed Guitar that must not be clobbered.
+ * populated ~/Library/Sepia that must not be clobbered.
  */
 void migrateDataOutOfSandboxContainerOnce(const juce::File& destination)
 {
@@ -1421,6 +1421,12 @@ void PluginProcessorAdapter::ensureStandaloneProtocolHandlerRegistration()
         return;
     }
 
+    // See ProductInfo.h: the scheme belongs to the upstream app.
+    if (!soundshed::product::registersUrlScheme)
+    {
+        return;
+    }
+
 #if JUCE_WINDOWS
     static constexpr const wchar_t* protocolRoot = L"Software\\Classes\\soundshed";
 
@@ -1458,7 +1464,7 @@ void PluginProcessorAdapter::ensureStandaloneProtocolHandlerRegistration()
     const juce::String command = "\"" + executablePath + "\" \"%1\"";
 
     const auto keyPaths = std::vector<std::tuple<const wchar_t*, const wchar_t*, juce::String>>{
-        {protocolRoot, nullptr, "URL:Soundshed Protocol"},
+        {protocolRoot, nullptr, "URL:Sepia Protocol"},
         {protocolRoot, L"URL Protocol", ""},
         {L"Software\\Classes\\soundshed\\DefaultIcon", nullptr, executablePath + ",0"},
         {L"Software\\Classes\\soundshed\\shell\\open\\command", nullptr, command},

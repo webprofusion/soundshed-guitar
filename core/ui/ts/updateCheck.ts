@@ -3,7 +3,7 @@ import { requestAppInfo } from "./bridge.js";
 import { updateAppSetting } from "./appSettingsStore.js";
 import { appendLog } from "./logging.js";
 import { showNotification } from "./notifications.js";
-import { getApiBaseUrl } from "./apiConfig.js";
+import { getApiBaseUrl, ONLINE_SERVICES_ENABLED } from "./apiConfig.js";
 import { refreshSettingsUpdateBanner } from "./settings/updateBanner.js";
 import { escapeHtml } from "./utils.js";
 
@@ -19,6 +19,7 @@ let hasCheckedForUpdates = false;
  */
 export function triggerUpdateCheck(): void {
   if (hasCheckedForUpdates) return;
+  if (!ONLINE_SERVICES_ENABLED) return;
 
   const rawEnabled = uiState.appSettings[UPDATE_CHECK_ENABLED_SETTING];
   const updateCheckEnabled = rawEnabled === undefined ? true : (rawEnabled === true || rawEnabled === "true");
@@ -159,7 +160,7 @@ function showHeaderUpdateButton(version: string): void {
   if (versionEl) {
     versionEl.textContent = version;
   }
-  const label = `Soundshed Guitar ${version} is available`;
+  const label = `Sepia ${version} is available`;
   button.title = label;
   button.setAttribute("aria-label", label);
   button.hidden = false;

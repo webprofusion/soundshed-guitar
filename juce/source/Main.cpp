@@ -400,7 +400,7 @@ class MainWindow : public juce::DocumentWindow
         // whenever the display changes, which is what a rotation looks like from here.
         // It is what JUCE's own StandaloneFilterWindow does on iOS.
         //
-        // Soundshed Guitar also hides the status bar, which on an iPad otherwise draws its
+        // Sepia also hides the status bar, which on an iPad otherwise draws its
         // clock and battery over the header's title and settings button. The Info.plist's
         // UIStatusBarHidden cannot do it: JUCE turns on view-controller-based status bar
         // appearance, and its view controller hides the bar only for the kiosk component.
@@ -755,7 +755,7 @@ class SoundshedGuitarApplication : public juce::JUCEApplication
             // Not systemRequestedQuit(): there is no window or plugin state to save yet.
             juce::AlertWindow::showMessageBoxAsync(
                 juce::MessageBoxIconType::WarningIcon, getApplicationName(),
-                "Soundshed Guitar is already running.\n\n"
+                "Sepia is already running.\n\n"
                 "Two copies would share one profile and one audio device, so only one "
                 "can run at a time. Close the other one, then start this again.",
                 "OK", nullptr, juce::ModalCallbackFunction::create([](int) { quit(); }));

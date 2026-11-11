@@ -197,7 +197,8 @@ bool IsBlockedSelfHostedPluginCandidate(const juce::PluginDescription& descripti
     const std::string pluginFormat = FromJuceString(description.pluginFormatName);
     const std::string pathText = ToDisplayPath(resolvedPath);
 
-    return ContainsCaseInsensitive(pluginName, "soundshed");
+    // Its own name, and the upstream app's: hosting either inside itself only loops.
+    return ContainsCaseInsensitive(pluginName, "soundshed") || ContainsCaseInsensitive(pluginName, "sepia");
 }
 
 std::string BuildPluginStableId(const juce::PluginDescription& description, const std::filesystem::path& pluginPath)
@@ -1537,7 +1538,7 @@ bool JuceHostedPluginEffect::LoadPluginFromPath(const std::filesystem::path& pat
 
     if (IsBlockedSelfHostedPluginCandidate(*selected, resolvedPath))
     {
-        SetError("Soundshed Guitar cannot be loaded inside the hosted plugin slot."
+        SetError("Sepia cannot be loaded inside the hosted plugin slot."
                  " Please choose a different plugin.",
                  "plugin-blocked-self");
         ReleaseHostedPlugin();

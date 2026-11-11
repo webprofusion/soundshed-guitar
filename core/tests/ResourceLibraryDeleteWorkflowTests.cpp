@@ -92,9 +92,9 @@ void SetSettingsEnvRoot(const fs::path& root)
 #else
     setenv("HOME", root.string().c_str(), 1);
 #endif
-    // The tests read and write <root>/Soundshed Guitar, which is where APPDATA puts it on Windows;
+    // The tests read and write <root>/Sepia, which is where APPDATA puts it on Windows;
     // macOS would look under Library/, Linux under .config/.
-    guitarfx::FileSystem::SetPlatformRootOverride(root / "Soundshed Guitar");
+    guitarfx::FileSystem::SetPlatformRootOverride(root / "Sepia");
 }
 
 std::optional<nlohmann::json> FindLastMessageOfType(const std::vector<std::string>& messages, const std::string& type)
@@ -127,7 +127,7 @@ bool LibraryIndexContains(const fs::path& sandbox, const std::string& resourceTy
     guitarfx::storage::JsonStore store;
     std::string error;
 
-    if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
+    if (!store.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error))
     {
         std::cerr << "Could not open the document store: " << error << "\n";
         return false;
@@ -776,7 +776,7 @@ bool TestCleanupKeepsResourceUsedOnlyInLaterScene()
         storage::JsonStore store;
         std::string error;
 
-        if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error) ||
+        if (!store.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error) ||
             !PresetStorage::SaveToStore(store, preset))
         {
             std::cerr << "Could not store the later-scene preset: " << error << "\n";
@@ -1051,7 +1051,7 @@ bool TestDeleteReadsStoredPresetsFresh()
         storage::JsonStore store;
         std::string error;
 
-        if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error) ||
+        if (!store.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error) ||
             !PresetStorage::SaveToStore(store, preset))
         {
             std::cerr << "Could not store the other instance's preset: " << error << "\n";
@@ -1074,7 +1074,7 @@ std::optional<nlohmann::json> StoredResourceRow(const fs::path& sandbox, const s
     guitarfx::storage::JsonStore store;
     std::string error;
 
-    if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
+    if (!store.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error))
     {
         std::cerr << "Could not open the document store: " << error << "\n";
         return std::nullopt;
@@ -1106,7 +1106,7 @@ bool TestStartupBackfillsNamMetadataOnce()
         guitarfx::storage::JsonStore store;
         std::string error;
 
-        if (!store.Open(sandbox / "Soundshed Guitar" / "data" / "v1" / "soundshed.db", error))
+        if (!store.Open(sandbox / "Sepia" / "data" / "v1" / "soundshed.db", error))
         {
             std::cerr << "Could not open the document store: " << error << "\n";
             return false;

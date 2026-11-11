@@ -4,7 +4,7 @@
  * EffectPresentation.h - How effects and categories look: icon, colour, panel background and
  * stock artwork.
  *
- * One table for both UIs, core/ui/data/effect-presentation.json. Soundshed Guitar's web UI
+ * One table for both UIs, core/ui/data/effect-presentation.json. Sepia's web UI
  * reads it through a generated TypeScript module; Soundshed Nano Q reads the shipped
  * copy under resources/ui/data at startup. Keeping it in one file is what stops a new effect
  * getting an icon in one UI and a gear in the other.

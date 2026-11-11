@@ -90,7 +90,7 @@ class UiCommands
     void MoveSetlistSlot(const std::string& setlistId, int fromIndex, int toIndex);
     void RemoveSetlistSlot(const std::string& setlistId, int index);
 
-    // ── Multi-Rig (awareness only: rigs are built in Soundshed Guitar) ──────
+    // ── Multi-Rig (awareness only: rigs are built in Sepia) ──────
     void FocusMixerPreset(const std::string& presetId);
     void RemoveActivePreset(const std::string& presetId);
 

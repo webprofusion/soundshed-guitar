@@ -2,7 +2,7 @@
  * PresetEditCommandsTests.cpp - The engine-owned preset edits give the result the web UI's
  * own edits gave.
  *
- * Soundshed Guitar's web UI used to edit its copy of a preset and send it back whole; both
+ * Sepia's web UI used to edit its copy of a preset and send it back whole; both
  * UIs now ask the engine instead (controller/PluginControllerPresetEdits.cpp). These run each
  * command against a headless controller and check the preset, document or setting it leaves
  * behind against what the old path, or the web UI's rules (core/ui/ts/presetScenes.ts,

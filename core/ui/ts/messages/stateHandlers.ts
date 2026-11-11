@@ -35,7 +35,7 @@ import { applyMonoOutputUnityInstance } from "../settings/monoOutputUnity.js";
 import { applyEnginePresetDirty, clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, uiState } from "../state.js";
 import { replaceMixerState } from "../mixerStore.js";
 import { cachePreset, putLibraryPresetFirst, setActivePresetId, setActivePresetSceneId, setPresetLoadingId, showAllLibraryPresets } from "../presetLibraryStore.js";
-import { themeSwitcher } from "../theme-switcher.js";
+import { DEFAULT_THEME, themeSwitcher } from "../theme-switcher.js";
 import { applyToneSharingAppSettings } from "../toneSharingPanel.js";
 import type { AppSettings, AppSettingValue, AutomationSlot, BlendLibrary, CustomEffectLibrary, GlobalSignalChainConfig, MixerPresetState, MixerState, Preset, PresetArchiveSessionState, ResourceLibrary, RiffLibrary, UiSettings, UiViewState } from "../types.js";
 import { triggerUpdateCheck } from "../updateCheck.js";
@@ -300,7 +300,8 @@ export function onAppInfo(payload: IncomingPayload): void {
 
 export function onTheme(payload: IncomingPayload): void {
   const themePayload = payload as { theme?: string };
-  const theme = themePayload.theme === "light" || themePayload.theme === "classic" ? themePayload.theme : "dark";
+  const known = ["sepia", "light", "dark", "classic"] as const;
+  const theme = known.find((name) => name === themePayload.theme) ?? DEFAULT_THEME;
   themeSwitcher.applyTheme(theme);
 }
 

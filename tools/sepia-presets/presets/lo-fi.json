@@ -1,0 +1,188 @@
+{
+ "group": "Lo-Fi",
+ "presets": [
+  {
+   "name": "Sunday Tape", "tags": ["tape", "clean"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.42, "treble": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 8}},
+    {"type": "tape_saturation", "preset": "cassette"},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.16}}
+   ]
+  },
+  {
+   "name": "Camcorder Summer", "tags": ["vhs", "chorus"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 9}},
+    {"type": "chorus", "preset": "warble", "params": {"mix": 0.4}},
+    {"type": "tape_saturation", "preset": "vhs"},
+    {"type": "reverb_spring", "preset": "dark-spring", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Kitchen Radio", "tags": ["radio"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 5}},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"drive": 0.5, "hiss": 0.3, "tone": 0.35}}
+   ]
+  },
+  {
+   "name": "Answering Machine", "tags": ["telephone"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "peak-catcher"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.55, "middle": 0.65}},
+    {"type": "cab_simple", "params": {"cabinet": 6}},
+    {"type": "tape_saturation", "preset": "worn-cassette", "params": {"wow": 0.4, "dropout": 0.3}}
+   ]
+  },
+  {
+   "name": "Boombox Demo", "tags": ["boombox", "crunch"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.72}},
+    {"type": "cab_simple", "params": {"cabinet": 7, "speakerDrive": 0.5}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"drive": 0.65}},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.1}}
+   ]
+  },
+  {
+   "name": "Eight Bit Garage", "tags": ["bitcrusher"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.8, "treble": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.4}},
+    {"type": "bitcrusher", "preset": "8-bit", "params": {"mix": 0.6}}
+   ]
+  },
+  {
+   "name": "Worn Out Mixtape", "tags": ["tape", "warble"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bass": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "chorus", "preset": "ce2", "params": {"mix": 0.2}},
+    {"type": "tape_saturation", "preset": "worn-cassette"},
+    {"type": "delay_tape", "preset": "worn-tape", "params": {"mix": 0.2}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.18}}
+   ]
+  },
+  {
+   "name": "Dusty Sampler", "tags": ["sampler", "clean"],
+   "chain": [
+    {"type": "compressor_opto", "preset": "gentle-leveler"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "treble": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 9, "bass": 0.6}},
+    {"type": "bitcrusher", "preset": "sampler"},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"wow": 0.3, "hiss": 0.25, "tone": 0.4}},
+    {"type": "delay_digital", "preset": "lo-fi-echo", "params": {"mix": 0.18}}
+   ]
+  },
+  {
+   "name": "Charity Shop LP", "tags": ["vinyl", "clean"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "middle": 0.56}},
+    {"type": "cab_simple", "params": {"cabinet": 1, "micType": 1}},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.14}},
+    {"type": "vinyl", "preset": "charity-shop"}
+   ]
+  },
+  {
+   "name": "Run-Out Groove", "tags": ["vinyl", "tape"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.3}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"hiss": 0.2}},
+    {"type": "vinyl", "preset": "run-out-groove"}
+   ]
+  },
+  {
+   "name": "Voicemail Blues", "tags": ["telephone", "breakup"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.7, "middle": 0.65}},
+    {"type": "cab_simple", "params": {"cabinet": 6}},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"drive": 0.4, "tone": 0.4}}
+   ]
+  },
+  {
+   "name": "Shortwave", "tags": ["radio", "ring"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 5}},
+    {"type": "ring_mod", "preset": "stereo-warble", "params": {"mix": 0.15}},
+    {"type": "tape_saturation", "preset": "clean-reel", "params": {"drive": 0.35, "hiss": 0.5, "wow": 0.5, "tone": 0.3}}
+   ]
+  },
+  {
+   "name": "Pawn Shop Amp", "tags": ["practice", "crunch"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.75, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.6}},
+    {"type": "reverb_spring", "preset": "dark-spring", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "VHS Rental", "tags": ["vhs", "delay"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.45, "treble": 0.48}},
+    {"type": "cab_simple", "params": {"cabinet": 9, "bass": 0.55}},
+    {"type": "chorus", "preset": "lush-chorus", "params": {"mix": 0.3}},
+    {"type": "tape_saturation", "preset": "vhs", "params": {"dropout": 0.5}},
+    {"type": "delay_digital", "preset": "lo-fi-echo", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Game Cartridge", "tags": ["bitcrusher", "crunch"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.82, "middle": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "speakerDrive": 0.3}},
+    {"type": "bitcrusher", "preset": "8-bit", "params": {"bits": 6, "downsample": 4, "mix": 0.6}}
+   ]
+  },
+  {
+   "name": "Skipping Record", "tags": ["vinyl", "tremolo"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.48, "bass": 0.52}},
+    {"type": "cab_simple", "params": {"cabinet": 4}},
+    {"type": "tremolo", "preset": "half-time-chop", "params": {"mix": 0.55}},
+    {"type": "vinyl", "preset": "charity-shop", "params": {"crackle": 0.85}}
+   ]
+  },
+  {
+   "name": "Tape Deck Dream", "tags": ["tape", "ambient"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "treble": 0.46}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 1}},
+    {"type": "chorus", "preset": "ce2", "params": {"mix": 0.24}},
+    {"type": "tape_saturation", "preset": "worn-cassette", "params": {"dropout": 0.2}},
+    {"type": "reverb_ambient", "preset": "tight-ambience", "params": {"mix": 0.22}}
+   ]
+  },
+  {
+   "name": "Boombox Chorus", "tags": ["boombox", "chorus"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.52, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 7}},
+    {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.35}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"drive": 0.5}}
+   ]
+  },
+  {
+   "name": "Broken Tape Loop", "tags": ["tape", "stutter"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.46, "treble": 0.46}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.2}},
+    {"type": "stutter", "preset": "broken-cd", "params": {"chance": 0.2}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"wow": 0.5}}
+   ]
+  },
+  {
+   "name": "Glitch Garden", "tags": ["stutter", "ambient"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.44, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2}},
+    {"type": "stutter", "preset": "sixteenth-machine", "params": {"chance": 0.3}},
+    {"type": "delay_digital", "preset": "ping-pong", "params": {"mix": 0.22}},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.16}}
+   ]
+  }
+ ]
+}

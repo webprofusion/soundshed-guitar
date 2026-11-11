@@ -126,7 +126,7 @@ jobs:
       - name: Merge build artifacts
         uses: actions/upload-artifact/merge@v7
         with:
-          name: SoundshedGuitar-${{ steps.version.outputs.version }}-all-platforms
+          name: Sepia-${{ steps.version.outputs.version }}-all-platforms
           pattern: "{windows-*,macos-*,linux-*}"
           separate-directories: true
           delete-merged: true

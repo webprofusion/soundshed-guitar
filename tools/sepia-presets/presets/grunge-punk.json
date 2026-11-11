@@ -1,0 +1,201 @@
+{
+ "group": "Grunge & Punk",
+ "presets": [
+  {
+   "name": "Seattle Rain", "tags": ["grunge"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
+    {"type": "distortion", "params": {"model": 1, "drive": 0.65, "tone": 0.5, "level": 2}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.62, "middle": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0}}
+   ]
+  },
+  {
+   "name": "Watery Verse", "tags": ["grunge", "clean"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "treble": 0.52}},
+    {"type": "cab_simple", "params": {"cabinet": 3}},
+    {"type": "chorus", "preset": "small-clone", "params": {"mix": 0.5}},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.12}}
+   ]
+  },
+  {
+   "name": "Sludge Wall", "tags": ["grunge", "fuzz"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -50}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.85, "tone": 0.4, "bass": 0.6}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.6, "bass": 0.45}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1, "bass": 0.55}}
+   ]
+  },
+  {
+   "name": "Alley Distortion", "tags": ["grunge", "distortion"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
+    {"type": "distortion", "params": {"model": 0, "drive": 0.7, "tone": 0.45}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.6, "middle": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "speakerDrive": 0.4}}
+   ]
+  },
+  {
+   "name": "Basement Show", "tags": ["punk"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -56}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.95, "bass": 0.45, "middle": 0.7, "treble": 0.62, "powerDrive": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.4, "speakerDrive": 0.55}}
+   ]
+  },
+  {
+   "name": "Three Chord Riot", "tags": ["punk"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -55}},
+    {"type": "overdrive", "params": {"model": 5, "drive": 0.5, "level": 4}},
+    {"type": "amp_builtin", "preset": "vintage-high-gain", "params": {"gain": 0.55, "middle": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "presence": 0.6}}
+   ]
+  },
+  {
+   "name": "Quiet Loud Switch", "tags": ["alternative"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
+    {"type": "distortion", "params": {"model": 2, "drive": 0.7, "tone": 0.55}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.7, "treble": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "speakerDrive": 0.45}},
+    {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.08}}
+   ]
+  },
+  {
+   "name": "Detuned Dirge", "tags": ["grunge", "heavy"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -52}},
+    {"type": "amp_builtin", "preset": "vintage-high-gain", "params": {"gain": 0.7, "bass": 0.6, "middle": 0.45, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "size": 0.7, "micType": 1}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.08}}
+   ]
+  },
+  {
+   "name": "Garage Fuzz Tone", "tags": ["garage", "fuzz"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -50}},
+    {"type": "fuzz", "params": {"model": 3, "drive": 0.7, "tone": 0.6}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.55, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 4, "speakerDrive": 0.4}},
+    {"type": "reverb_spring", "preset": "short-spring", "params": {"mix": 0.12}}
+   ]
+  },
+  {
+   "name": "Post Punk Wire", "tags": ["post-punk", "clean"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "funk-clean"},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.58, "bright": 1, "bass": 0.4, "treble": 0.68, "presence": 0.65}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "brightness": 0.7}},
+    {"type": "chorus", "preset": "ce2", "params": {"mix": 0.32}},
+    {"type": "delay_digital", "preset": "dd3", "params": {"time": 240, "mix": 0.18}},
+    {"type": "reverb_room", "preset": "bright-room", "params": {"mix": 0.12}}
+   ]
+  },
+  {
+   "name": "Feedback Squeal", "tags": ["grunge", "sustainer"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -56}},
+    {"type": "sustainer", "preset": "harmonic-squeal"},
+    {"type": "distortion", "params": {"model": 0, "drive": 0.65, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.68, "middle": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.45}}
+   ]
+  },
+  {
+   "name": "Underwater Chorus", "tags": ["grunge", "chorus"],
+   "chain": [
+    {"type": "distortion", "params": {"model": 1, "drive": 0.5, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.55, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "micPosition": 0.55}},
+    {"type": "chorus", "preset": "lush-chorus", "params": {"mix": 0.45}}
+   ]
+  },
+  {
+   "name": "Skate Punk Tight", "tags": ["punk", "fast"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -52}},
+    {"type": "overdrive", "params": {"model": 0, "drive": 0.2, "tone": 0.6, "level": 6}},
+    {"type": "amp_builtin", "preset": "tight-modern-rhythm", "params": {"gain": 0.7, "middle": 0.65}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "presence": 0.58}}
+   ]
+  },
+  {
+   "name": "Hardcore Bark", "tags": ["punk", "hardcore"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "high-gain-tight", "params": {"threshold": -50}},
+    {"type": "amp_builtin", "preset": "scooped-thrash", "params": {"gain": 0.78, "middle": 0.6, "contour": 0.2}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.35, "speakerDrive": 0.4}}
+   ]
+  },
+  {
+   "name": "Octave Down Sludge", "tags": ["grunge", "octave"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -52}},
+    {"type": "octave", "params": {"octaveUp": 0.0, "octaveDown": 0.6, "mix": 0.4}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.8, "tone": 0.42, "bass": 0.6}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.64, "bass": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "size": 0.75, "micType": 1}}
+   ]
+  },
+  {
+   "name": "Wah Riot", "tags": ["punk", "wah"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
+    {"type": "wah", "params": {"control": 1, "sensitivity": 0.4, "q": 7}},
+    {"type": "distortion", "params": {"model": 0, "drive": 0.6, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.64}},
+    {"type": "cab_simple", "params": {"cabinet": 3, "speakerDrive": 0.35}}
+   ]
+  },
+  {
+   "name": "Garage Tape Fuzz", "tags": ["garage", "tape"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -52}},
+    {"type": "fuzz", "params": {"model": 3, "drive": 0.75, "tone": 0.55}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.6, "bright": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.5}},
+    {"type": "tape_saturation", "preset": "cassette", "params": {"drive": 0.7, "hiss": 0.2}}
+   ]
+  },
+  {
+   "name": "Jangle Punk", "tags": ["punk", "jangle"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.86, "bright": 1, "treble": 0.65, "bass": 0.42}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "speakerDrive": 0.5, "brightness": 0.6}}
+   ]
+  },
+  {
+   "name": "Quiet Verse", "tags": ["alternative", "clean"],
+   "chain": [
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bass": 0.52, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 2}},
+    {"type": "chorus", "preset": "ce2", "params": {"mix": 0.3}},
+    {"type": "delay_analog", "preset": "dm2", "params": {"mix": 0.16}},
+    {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.14}}
+   ]
+  },
+  {
+   "name": "Noise Rock Ring", "tags": ["noise", "ring"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -52}},
+    {"type": "ring_mod", "preset": "harmonic-ring", "params": {"mix": 0.35}},
+    {"type": "distortion", "params": {"model": 2, "drive": 0.75, "tone": 0.55}},
+    {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.72, "treble": 0.6}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "speakerDrive": 0.45}}
+   ]
+  },
+  {
+   "name": "Talking Fuzz", "tags": ["grunge", "fuzz", "vowel"],
+   "chain": [
+    {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
+    {"type": "vowel_filter", "preset": "talking-wah", "params": {"sensitivity": 0.6}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.7, "tone": 0.5}},
+    {"type": "amp_builtin", "preset": "edge-of-breakup", "params": {"gain": 0.62}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}}
+   ]
+  }
+ ]
+}

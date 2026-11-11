@@ -15,13 +15,13 @@
 // process at startup.
 namespace guitarfx::webview2
 {
-inline constexpr const char* kAppDataFolderName = "Soundshed Guitar";
+inline constexpr const char* kAppDataFolderName = "Sepia";
 inline constexpr const char* kProfileFolderName = "WebView2";
 
 // The %TEMP% folders the per-launch scheme wrote into: one profile per launch
 // under the first, and a single probe profile for areOptionsSupported.
-inline constexpr const char* kLegacyProfileRoot = "SoundshedGuitarWebView2";
-inline constexpr const char* kLegacyProbeFolder = "SoundshedGuitarWebView2Check";
+inline constexpr const char* kLegacyProfileRoot = "SepiaWebView2";
+inline constexpr const char* kLegacyProbeFolder = "SepiaWebView2Check";
 
 /** The profile folder for this process.
 

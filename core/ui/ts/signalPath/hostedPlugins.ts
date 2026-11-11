@@ -228,12 +228,14 @@ export function isBlockedHostedPluginLibraryEntry(resourceId: string): boolean {
     return false;
   }
 
-  return containsCaseInsensitive(resource.name, "soundshed")
-    || containsCaseInsensitive(resource.filePath, "soundshed")
-    || containsCaseInsensitive(resource.id, "soundshed")
-    || containsCaseInsensitive(resource.metadata?.pluginName, "soundshed")
-    || containsCaseInsensitive(resource.metadata?.pluginIdentifier, "soundshed")
-    || containsCaseInsensitive(resource.metadata?.pluginStableId, "soundshed");
+  // Its own name, and the upstream app's: hosting either inside itself only loops.
+  return ["soundshed", "sepia"].some((name) =>
+    containsCaseInsensitive(resource.name, name)
+    || containsCaseInsensitive(resource.filePath, name)
+    || containsCaseInsensitive(resource.id, name)
+    || containsCaseInsensitive(resource.metadata?.pluginName, name)
+    || containsCaseInsensitive(resource.metadata?.pluginIdentifier, name)
+    || containsCaseInsensitive(resource.metadata?.pluginStableId, name));
 }
 
 export function getHostedPluginFavoriteIds(resources?: LibraryResource[]): Set<string> {

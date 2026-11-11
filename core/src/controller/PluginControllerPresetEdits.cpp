@@ -1,7 +1,7 @@
 /**
  * PluginControllerPresetEdits.cpp - Preset edits the engine owns, whichever UI asks.
  *
- * Soundshed Guitar's web UI used to make these edits to its own copy of the preset (or of a
+ * Sepia's web UI used to make these edits to its own copy of the preset (or of a
  * metadata document) and send the result back whole; Soundshed Nano Q asks for them by
  * name. Doing them here means the two UIs cannot write a preset, a scene list or a favourites
  * document differently (docs/plans/native-ui.md, rule C3):

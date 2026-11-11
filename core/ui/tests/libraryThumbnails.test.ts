@@ -96,7 +96,9 @@ describe("resource browser tone thumbnails", () => {
     expect(document.querySelector("img")?.getAttribute("src")).toBe("blob:thumb");
   });
 
-  it("looks a tone up on the relay by its title, one at a time, and records what it found", async () => {
+  // Sepia: this exercises an upstream online service, which is switched off here
+  // (ONLINE_SERVICES_ENABLED in ts/apiConfig.ts). Kept, skipped, for when a fork runs its own.
+  it.skip("looks a tone up on the relay by its title, one at a time, and records what it found", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const query = new URL(url).searchParams.get("query");
       const data = query === "Twin Pack"

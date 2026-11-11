@@ -140,6 +140,18 @@ set(TEST_SOURCES
     RiffCaptureNoticeTests.cpp
     RiffRecorderTests.cpp
     RingModEffectTests.cpp
+    TapeSaturationEffectTests.cpp
+    BitcrusherEffectTests.cpp
+    SustainerEffectTests.cpp
+    VinylEffectTests.cpp
+    AcousticSimEffectTests.cpp
+    StutterEffectTests.cpp
+    VowelFilterEffectTests.cpp
+    SepiaEffectCatalog.cpp
+    SepiaFactoryPackTests.cpp
+    OfflineBrandingTests.cpp
+    SimpleCabLoFiTests.cpp
+    SepiaUiReplay.cpp
     DispersalEffectTests.cpp
     EffectEdgeCaseSweepTests.cpp
     PitchTrackingEqEffectTests.cpp
@@ -341,3 +353,6 @@ target_link_libraries(EffectPresetWorkflowTests PRIVATE guitarfx_miniz)
 
 # The default-settings audio snapshot tools/audio-ab compares between versions. Built, not registered.
 include(AudioSnapshot.cmake)
+
+# OfflineBrandingTests reads the brand macros themselves, which the core keeps private.
+target_include_directories(OfflineBrandingTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../config)
