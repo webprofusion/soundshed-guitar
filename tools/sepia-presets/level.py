@@ -3,7 +3,8 @@
 
 `SepiaFactoryPackTests --measure out.json` renders each preset over the three DI clips and
 writes its loudness on each. This moves each preset's end-of-chain trim by the difference
-between the pack's target and the mean of its three loudnesses. Rebuild the pack and measure
+between the pack's target and the mean of its three loudnesses, and records how saturated each
+preset measured in gain.json (which the pack builder tags presets from). Rebuild the pack and measure
 again afterwards: a trim after a compressor or a reverb lands where it was aimed, so one pass
 is normally enough and a second confirms it.
 
@@ -34,6 +35,12 @@ def main():
         error = target - sum(loudness) / len(loudness)
         worst = max(worst, abs(error))
         levels[preset["name"]] = round(levels.get(preset["name"], 0.0) + error, 2)
+
+    # How saturated each preset measured: how much of a 12 dB drop in playing comes out. The
+    # pack builder turns it into the browser's clean / crunch / high-gain tag.
+    gain_path = Path(__file__).parent / "gain.json"
+    gain = {preset["name"]: round(preset["followedDb"], 1) for preset in measured["presets"] if "followedDb" in preset}
+    gain_path.write_text(json.dumps(dict(sorted(gain.items())), indent=1) + "\n", encoding="utf-8")
 
     names = {preset["name"] for preset in measured["presets"]}
     levels = {name: value for name, value in sorted(levels.items()) if name in names}

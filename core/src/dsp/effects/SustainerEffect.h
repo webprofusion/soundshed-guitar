@@ -24,9 +24,15 @@
  *     tone fades in at Amount times the pick's level, an octave or more up if Harmonic says so.
  *   - When the string has faded under Sensitivity the tone carries on for Hold, then lets go.
  *
- * Notes shorter than Bloom are left alone, so fast playing is untouched, and a chord has no single
- * pitch to follow, so it gets none either. The pitch is glided, so vibrato and bends carry over.
- * The tracker is monophonic and listens to the input only, never to its own tone.
+ * Notes shorter than Bloom are left alone, so fast playing is untouched. The pitch is glided, so
+ * vibrato and bends carry over. The tracker is monophonic and listens to the input only, never
+ * to its own tone.
+ *
+ * Chords: a tracker that hears one pitch hears a ringing chord as its root, or as the note an
+ * octave under the root that the chord's notes are all harmonics of. So a held chord blooms on
+ * its root, as it tends to in front of a real amp. What it must not do is add the octave below:
+ * a tone under the guitar's own range is only rumble, so nothing blooms on a pitch below
+ * kLowestHz.
  */
 
 #include "dsp/EffectGuids.h"
@@ -70,6 +76,9 @@ inline constexpr double kSwellMs = 250.0;
 inline constexpr double kLetGoMs = 45.0;
 /// Vibrato and bends are followed this fast; any faster and the tracker's own jitter is heard.
 inline constexpr double kPitchGlideMs = 18.0;
+/// Nothing blooms on a tracked pitch below this: under a guitar's low D (73.4 Hz), where what
+/// the tracker has found is the common fundamental of a chord and not a note being played.
+inline constexpr double kLowestHz = 70.0;
 /// A pick is the fast envelope standing this far clear of the slow one.
 inline constexpr float kPickRatio = 2.5f;
 /// Picks closer together than this are one pick: the envelopes need that long to settle.
@@ -299,7 +308,7 @@ class SustainerEffect : public EffectProcessor
             }
 
             const bool playing = slow > threshold;
-            const bool pitched = mTracker.HasPitch() && mTracker.FrequencyHz() > 0.0;
+            const bool pitched = mTracker.HasPitch() && mTracker.FrequencyHz() >= sustainer::kLowestHz;
 
             if (playing)
             {

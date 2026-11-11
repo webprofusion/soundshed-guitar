@@ -38,6 +38,7 @@ with or endorsed by that project. See [Copyright](#copyright).
 How the factory pack is built and measured: [tools/sepia-presets](tools/sepia-presets/README.md).
 What still needs a guitar and ears: [docs/sepia-testing.md](docs/sepia-testing.md).
 How to use it, in Turkish: [docs/sepia-kullanim.md](docs/sepia-kullanim.md).
+What Sepia adds, in Turkish: [docs/sepia-neler-var.md](docs/sepia-neler-var.md).
 
 ## Features
 

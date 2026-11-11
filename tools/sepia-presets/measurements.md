@@ -9,7 +9,7 @@ controller at 48 kHz over the three synthesised DI clips (equal RMS, -30 dBFS).
 - `comp`: how much of a 12 dB drop in playing level comes out, in dB. 12 is a clean amp;
   0 is fully saturated.
 
-Result: 31300 of 31300 checks pass; 136 preset changes made mid-note, none clicked; the
+Result: 31459 of 31459 checks pass; 136 preset changes made mid-note, none clicked; the
 slowest preset renders 12 times faster than real time on one core of the build machine.
 
 ```

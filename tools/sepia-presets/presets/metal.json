@@ -121,7 +121,7 @@
    "name": "Endless Solo", "tags": ["metal", "lead", "sustainer"],
    "chain": [
     {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -52}},
-    {"type": "sustainer", "preset": "endless-note"},
+    {"type": "sustainer", "preset": "endless-note", "params": {"bloom": 0.45}},
     {"type": "overdrive", "params": {"model": 0, "drive": 0.25, "tone": 0.55, "level": 5}},
     {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.85}},
     {"type": "cab_simple", "params": {"cabinet": 0, "micPosition": 0.55}},

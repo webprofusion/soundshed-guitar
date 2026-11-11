@@ -6,6 +6,7 @@ The factory pack is generated, not hand-edited. Everything it is made from is in
 |---|---|
 | `presets/*.json` | One file per group. Each preset is a serial chain of effects. |
 | `levels.json` | Each preset's end-of-chain level trim in dB. Written by `level.py`. |
+| `gain.json` | How saturated each preset measured, which becomes its clean / crunch / high-gain tag. Written by `level.py`. |
 | `build_pack.py` | Turns the two above into `core/ui/presets/factory/Sepia-Factory.soundshed.presets`. |
 | `make_di.py` | Synthesises the three guitar DI clips the pack is measured with. |
 | `level.py` | Updates `levels.json` from a measurement so all presets are equally loud. |

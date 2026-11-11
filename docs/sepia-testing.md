@@ -67,7 +67,8 @@ Boş bir zincire tek tek ekle:
 - [ ] **Bitcrusher**: Bits düştükçe ses kabalaşıyor; Downsample arttıkça metalik çınlama geliyor.
 - [ ] **Sustainer** (amfiden önce): bir notayı basılı tut; yaklaşık bir saniye sonra nota
       "feedback" gibi kabarıp tel söndükten sonra da sürüyor. Yeni bir notaya vurunca eski ses
-      hemen kesiliyor. Hızlı çalarken hiçbir şey eklemiyor. Akorlarda devreye girmemesi normal.
+      hemen kesiliyor. Hızlı çalarken hiçbir şey eklemiyor. Uzun tutulan akorda kök sesi öne
+      çıkarabilir; rahatsız ediyorsa bana yaz.
 - [ ] **Vinyl** (zincirin sonunda): Crackle ile çıtırtı, Dust ile hafif hışırtı geliyor; ikisi
       sıfırken ses temiz.
 - [ ] **Acoustic** (amfi yerine): ses akustik gitara yaklaşıyor mu, yoksa yalnızca inceliyor mu?

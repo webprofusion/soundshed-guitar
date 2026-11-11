@@ -86,7 +86,9 @@ kulaklıktaki karşılığıdır.
 - *Bloom:* devreye girmeden önce notayı ne kadar tutman gerektiği.
 - *Hold:* tel söndükten sonra kaç saniye süreceği.
 - *Harmonic:* aynı nota, bir oktav üstü ya da daha yukarısı.
-- Yeni bir notaya vurunca eski ses kesilir. Hızlı çalarken ve akorlarda devreye girmez.
+- Yeni bir notaya vurunca eski ses kesilir. Hızlı çalarken devreye girmez.
+- Uzun tutulan bir akorda akorun kök sesini öne çıkarabilir (gerçek amfideki feedback gibi).
+  Bunu istemiyorsan Bloom'u uzat ya da akor çalarken pedalı kapat.
 
 **Tape** (kabinden sonra). Kaset ve video bandı karakteri: *Drive* doygunluk, *Wow* ve *Flutter*
 perde dalgalanması, *Hiss* tıslama, *Dropout* anlık ses düşmeleri, *Tone* üst uç kaybı.

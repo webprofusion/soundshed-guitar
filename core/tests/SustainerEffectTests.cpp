@@ -253,6 +253,29 @@ void TestTransparency()
     const auto note = Note(220.0, 0.3, 0.8, 4.0);
     Check(Play({{"amount", 0.0}}, note) == note, "Amount at zero passes the input exactly");
 
+    // A power chord (root, fifth, octave) is periodic at the octave below its root, which is
+    // what a pitch tracker finds. Whatever blooms, it is never down there.
+    std::vector<float> chord(static_cast<std::size_t>(4.0 * kSampleRate), 0.0f);
+
+    for (const double hz : {110.0, 165.0, 220.0})
+    {
+        const auto partial = Note(hz, 0.15, 3.0, 4.0);
+
+        for (std::size_t n = 0; n < chord.size(); ++n)
+        {
+            chord[n] += partial[n];
+        }
+    }
+
+    const auto chordAdded = Difference(Play({{"bloom", 0.4}, {"amount", 1.0}}, chord), chord);
+    Check(ToDb(AmplitudeAt(chordAdded, 55.0, 2.5)) < -80.0, "a chord never blooms an octave under its root",
+          Num(ToDb(AmplitudeAt(chordAdded, 55.0, 2.5)), 1) + " dB at 55 Hz, " +
+              Num(ToDb(AmplitudeAt(chordAdded, 110.0, 2.5)), 1) + " dB at its root");
+
+    // And a real low note still does: a seven-string's low B is under the floor, a low D is not.
+    const auto lowD = Note(73.4, 0.3, 3.0, 4.0);
+    Check(ToDb(Rms(Difference(Play({{"bloom", 0.4}}, lowD), lowD), 96000)) > -40.0, "a low D still blooms");
+
     // Quiet noise is not a note: nothing blooms on hum or hiss.
     const auto hiss = Noise(4.0, 0.02);
     Check(MaxDifference(Play({{"bloom", 0.3}}, hiss), hiss) == 0.0, "noise with no pitch gets no tone");

@@ -49,6 +49,38 @@ ZIP_DATE = (2026, 11, 10, 0, 0, 0)
 GROUP_ORDER = ["Clean & Indie", "Lo-Fi", "Shoegaze & Ambient", "Blues & Classic Rock", "Grunge & Punk", "Metal"]
 
 
+# The preset browser filters by these (core/ui/ts/presetTags.ts). Every preset gets the ones
+# that are true of it, so the filter bar finds factory presets as it finds a user's own.
+LEAD_WORDS = ("lead", "solo", "shred", "legato", "slide")
+RHYTHM_WORDS = ("rhythm", "chug", "riff", "gallop", "djent", "bounce", "bark", "crunch")
+
+
+def browser_tags(name, group, own_tags, followed_db):
+    """The standard tags for a preset: how much gain it measured, its role, and its mood."""
+    tags = set()
+    words = name.lower().split() + [tag.lower() for tag in own_tags]
+
+    # followed_db is how much of a 12 dB drop in playing level reaches the output: about 12 for
+    # a clean amp, about 0 for one that is saturated. None until the pack has been measured.
+    # A preset that already says which it is keeps its word: a compressor in front of a clean
+    # amp flattens the playing as a crunch does, and the measurement cannot tell them apart.
+    if not {"clean", "crunch", "high-gain"} & {tag.lower() for tag in own_tags} and followed_db is not None:
+        tags.add("clean" if followed_db >= 8.0 else "crunch" if followed_db >= 3.0 else "high-gain")
+
+    if any(word in words for word in LEAD_WORDS):
+        tags.add("lead")
+
+    if any(word in words for word in RHYTHM_WORDS):
+        tags.add("rhythm")
+
+    if group == "Shoegaze & Ambient":
+        tags.update(("ambient", "atmospheric"))
+    elif group == "Lo-Fi":
+        tags.add("atmospheric")
+
+    return tags
+
+
 class PackError(Exception):
     pass
 
@@ -136,7 +168,7 @@ def build_graph(preset, by_alias, where, level_db):
     return {"edges": edges, "nodes": nodes}
 
 
-def build(definitions_dir, by_alias, levels):
+def build(definitions_dir, by_alias, levels, gain):
     groups = {}
 
     for path in sorted(Path(definitions_dir).glob("*.json")):
@@ -179,7 +211,11 @@ def build(definitions_dir, by_alias, levels):
                     "modifiedAt": STAMP,
                     "name": name,
                     "scenes": [{"graph": graph, "id": "scene-1", "title": "Scene 1"}],
-                    "tags": sorted(set(preset.get("tags", [])) | {slug(group)}),
+                    "tags": sorted(
+                        set(preset.get("tags", []))
+                        | {slug(group)}
+                        | browser_tags(name, group, preset.get("tags", []), gain.get(name))
+                    ),
                     "version": 2,
                 }
             )
@@ -223,7 +259,9 @@ def main():
     try:
         levels_path = Path(args.levels)
         levels = json.loads(levels_path.read_text(encoding="utf-8")) if levels_path.exists() else {}
-        pack = build(args.presets, load_catalog(args.catalog), levels)
+        gain_path = levels_path.with_name("gain.json")
+        gain = json.loads(gain_path.read_text(encoding="utf-8")) if gain_path.exists() else {}
+        pack = build(args.presets, load_catalog(args.catalog), levels, gain)
     except PackError as error:
         sys.exit(f"error: {error}")
 

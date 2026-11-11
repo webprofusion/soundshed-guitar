@@ -205,6 +205,15 @@ void TestSelfContained(const Pack& pack)
         }
 
         Check(preset.scenes.size() == 1, preset.name + " has one scene");
+
+        // The browser's filter bar: each preset says how much gain it has, exactly once.
+        const auto tagged = [&preset](const char* tag) {
+            return std::find(preset.tags.begin(), preset.tags.end(), tag) != preset.tags.end();
+        };
+        Check(static_cast<int>(tagged("clean")) + static_cast<int>(tagged("crunch")) +
+                      static_cast<int>(tagged("high-gain")) ==
+                  1,
+              preset.name + " is tagged clean, crunch or high-gain, and only one of them");
         bool gateFirst = false;
         std::string first;
 
@@ -568,6 +577,8 @@ json TestLevels(const Pack& pack, bool measureOnly)
         {
             Check(followed < 6.0, preset.name + " is high gain: it flattens a 12 dB drop to under 6",
                   Num(followed) + " dB");
+            Check(std::find(preset.tags.begin(), preset.tags.end(), "high-gain") != preset.tags.end(),
+                  preset.name + " is tagged high-gain, as it measures");
             Check(idle.rmsDbfs < -70.0, preset.name + " is quiet with nothing played", Num(idle.rmsDbfs) + " dBFS");
         }
 
