@@ -19,6 +19,7 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -415,6 +416,84 @@ Balance MeasureBalance(const audio_snapshot::Render& render)
     return {db(sums[0]), db(sums[1]), db(sums[2]), db(sums[3])};
 }
 
+/// What sets one preset apart from another by ear, as numbers: the spectrum in eight octave
+/// bands (dB relative to the whole), how wide it is, how much its level moves, and how long it
+/// rings on after the playing stops. tools/sepia-presets/similarity.py compares presets by it.
+struct Fingerprint
+{
+    std::array<double, 8> octaves{}; ///< 100 Hz to 12.8 kHz
+    double widthDb = -200.0;         ///< side against mid: -200 is mono
+    double movementDb = 0.0;         ///< spread of the level over 50 ms steps
+};
+
+Fingerprint MeasureFingerprint(const audio_snapshot::Render& render)
+{
+    Fingerprint print;
+    double total = 1.0e-30;
+    std::array<double, 8> sums{};
+
+    for (int band = 0; band < 8; ++band)
+    {
+        const double hz = 100.0 * std::pow(2.0, band);
+        const double w = 2.0 * 3.14159265358979323846 * hz / kSampleRate;
+        const double alpha = std::sin(w) / (2.0 * 1.4);
+        const double a0 = 1.0 + alpha;
+        const guitarfx::BiquadCoefficients bandPass{alpha / a0, 0.0, -alpha / a0, -2.0 * std::cos(w) / a0,
+                                                    (1.0 - alpha) / a0};
+        guitarfx::biquad::State state;
+
+        for (std::size_t n = 0; n < render.left.size(); ++n)
+        {
+            const double value = state.Process(bandPass, 0.5 * (render.left[n] + render.right[n]));
+            sums[static_cast<std::size_t>(band)] += value * value;
+        }
+
+        total += sums[static_cast<std::size_t>(band)];
+    }
+
+    for (int band = 0; band < 8; ++band)
+    {
+        print.octaves[static_cast<std::size_t>(band)] =
+            10.0 * std::log10(std::max(sums[static_cast<std::size_t>(band)] / total, 1.0e-12));
+    }
+
+    double mid = 1.0e-30;
+    double side = 0.0;
+    std::vector<double> steps;
+    double stepSum = 0.0;
+
+    for (std::size_t n = 0; n < render.left.size(); ++n)
+    {
+        const double m = 0.5 * (render.left[n] + render.right[n]);
+        const double d = 0.5 * (render.left[n] - render.right[n]);
+        mid += m * m;
+        side += d * d;
+        stepSum += m * m + d * d;
+
+        if ((n + 1) % 2400 == 0)
+        {
+            steps.push_back(10.0 * std::log10(std::max(stepSum / 2400.0, 1.0e-12)));
+            stepSum = 0.0;
+        }
+    }
+
+    print.widthDb = 10.0 * std::log10(std::max(side / mid, 1.0e-20));
+    double mean = 0.0;
+
+    for (const double step : steps)
+    {
+        mean += step / static_cast<double>(steps.size());
+    }
+
+    for (const double step : steps)
+    {
+        print.movementDb += (step - mean) * (step - mean) / static_cast<double>(steps.size());
+    }
+
+    print.movementDb = std::sqrt(print.movementDb);
+    return print;
+}
+
 struct Level
 {
     std::optional<double> lufs;
@@ -513,11 +592,19 @@ json TestLevels(const Pack& pack, bool measureOnly)
             audioSeconds += static_cast<double>(render.left.size()) / kSampleRate;
             const auto level = Measure(render);
             const auto balance = MeasureBalance(render);
-            rig.Settle(1.5);
+            const auto print = MeasureFingerprint(render);
+            // What is still sounding in the second after the playing stops: delay and reverb.
+            const std::vector<float> second(static_cast<std::size_t>(kSampleRate), 0.0f);
+            const double tailDb = Measure(rig.Play(second)).rmsDbfs - level.rmsDbfs;
+            rig.Settle(0.5);
             entry["clips"].push_back({{"clip", name},
                                       {"lufs", level.lufs ? json(*level.lufs) : json(nullptr)},
                                       {"peakDbfs", level.peakDbfs},
-                                      {"bandsDb", {balance.low, balance.lowMid, balance.highMid, balance.high}}});
+                                      {"bandsDb", {balance.low, balance.lowMid, balance.highMid, balance.high}},
+                                      {"octavesDb", print.octaves},
+                                      {"widthDb", print.widthDb},
+                                      {"movementDb", print.movementDb},
+                                      {"tailDb", tailDb}});
             Check(level.finite, preset.name + " stays finite on " + name);
             perClip.push_back(level.lufs.value_or(-200.0));
             peak = std::max(peak, level.peakDbfs);
