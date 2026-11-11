@@ -169,8 +169,8 @@ void TestDustAndWear()
     for (const double sampleRate : {44100.0, 48000.0, 96000.0})
     {
         const double rmsDb = ToDb(Rms(Surface(With({{"dust", 1.0}}), 4.0, sampleRate), 4800));
-        Check(rmsDb > -66.0 && rmsDb < -52.0, "full Dust at " + Num(sampleRate, 0) + " Hz sits between -66 and -52 dBFS",
-              Num(rmsDb, 1) + " dBFS");
+        Check(rmsDb > -66.0 && rmsDb < -52.0,
+              "full Dust at " + Num(sampleRate, 0) + " Hz sits between -66 and -52 dBFS", Num(rmsDb, 1) + " dBFS");
     }
 
     for (const auto& [wear, cornerHz] : std::vector<std::pair<double, double>>{{1.0, 3500.0}, {0.5, 7483.0}})

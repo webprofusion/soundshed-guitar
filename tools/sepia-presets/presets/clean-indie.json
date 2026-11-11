@@ -137,8 +137,8 @@
    "name": "Twelve String Shimmer", "tags": ["clean", "octave"],
    "chain": [
     {"type": "pitch_shift", "preset": "octave-up-blend"},
-    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "bright": 1, "treble": 0.6}},
-    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2, "brightness": 0.6}},
+    {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.4, "bright": 1, "treble": 0.5}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "micType": 2, "brightness": 0.45}},
     {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.22}},
     {"type": "reverb_advanced", "preset": "bright-plate", "params": {"mix": 0.2}}
    ]
@@ -205,6 +205,25 @@
     {"type": "cab_simple", "params": {"cabinet": 3, "micType": 1}},
     {"type": "tremolo", "preset": "slow-throb", "params": {"depth": 0.3}},
     {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.28}}
+   ]
+  },
+  {
+   "name": "Unplugged Evening", "tags": ["acoustic", "clean"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "peak-catcher"},
+    {"type": "acoustic_sim", "preset": "dreadnought"},
+    {"type": "limiter_brickwall", "params": {"ceiling": -10, "release": 80}},
+    {"type": "reverb_room", "preset": "warm-room", "params": {"mix": 0.2}}
+   ]
+  },
+  {
+   "name": "Campfire Strum", "tags": ["acoustic", "strum"],
+   "chain": [
+    {"type": "compressor_vca", "preset": "transparent-leveler"},
+    {"type": "acoustic_sim", "preset": "jumbo-strum"},
+    {"type": "limiter_brickwall", "params": {"ceiling": -10, "release": 80}},
+    {"type": "chorus", "preset": "studio-chorus", "params": {"mix": 0.12}},
+    {"type": "reverb_chamber", "preset": "small-chamber", "params": {"mix": 0.16}}
    ]
   }
  ]

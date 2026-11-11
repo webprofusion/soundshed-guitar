@@ -189,6 +189,10 @@
       "guid": "40cca7fd-9470-4c8b-b45a-cf0b41314459",
       "icon": "wave"
     },
+    "kAcousticSim": {
+      "guid": "863b7264-3b99-40d9-98fe-a4d0f6839b39",
+      "icon": "guitar"
+    },
     "kAmpBuiltin": {
       "guid": "1460a632-6690-4fef-ac6d-6432e3b983f8",
       "icon": "amp"

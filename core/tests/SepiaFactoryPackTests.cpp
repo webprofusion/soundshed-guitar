@@ -19,6 +19,7 @@
  */
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -34,6 +35,7 @@
 
 #include "AudioSnapshotChains.h"
 #include "controller/internal/PresetArchiveSupport.h"
+#include "dsp/BiquadDesign.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/Loudness.h"
 #include "dsp/effects/BuiltinEffects.h"
@@ -165,11 +167,11 @@ void TestSelfContained(const Pack& pack)
     auto& registry = guitarfx::EffectRegistry::Instance();
 
     Check(pack.document.value("resources", json::array()).empty(), "the archive lists no resources");
-    Check(pack.presets.size() >= 120, "at least a hundred and twenty presets", std::to_string(pack.presets.size()));
+    Check(pack.presets.size() >= 122, "at least a hundred and twenty-two presets", std::to_string(pack.presets.size()));
 
-    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 22},        {"Lo-Fi", 18},
-                                                         {"Shoegaze & Ambient", 18},   {"Blues & Classic Rock", 20},
-                                                         {"Grunge & Punk", 20},        {"Metal", 22}};
+    const std::map<std::string, std::size_t> expected = {{"Clean & Indie", 24},      {"Lo-Fi", 18},
+                                                         {"Shoegaze & Ambient", 18}, {"Blues & Classic Rock", 20},
+                                                         {"Grunge & Punk", 20},      {"Metal", 22}};
     std::map<std::string, std::size_t> counts;
 
     for (const auto& [id, group] : pack.groupOf)
@@ -337,6 +339,66 @@ std::vector<float> LoadClip(const std::string& name)
     return std::vector<float>(samples.begin(), samples.end());
 }
 
+/// Where a render's energy sits, as four bands' levels in dB relative to the whole: what makes
+/// a tone boomy, boxy, harsh or fizzy, to the extent a number can say.
+struct Balance
+{
+    double low = -200.0;     ///< under 250 Hz
+    double lowMid = -200.0;  ///< 250 Hz to 1 kHz
+    double highMid = -200.0; ///< 1 to 4 kHz
+    double high = -200.0;    ///< over 4 kHz
+};
+
+Balance MeasureBalance(const audio_snapshot::Render& render)
+{
+    // Fourth-order Butterworth splits at 250 Hz, 1 kHz and 4 kHz.
+    const double edges[3] = {250.0, 1000.0, 4000.0};
+    double sums[4] = {0.0, 0.0, 0.0, 0.0};
+    double total = 0.0;
+
+    for (int band = 0; band < 4; ++band)
+    {
+        guitarfx::BiquadCoefficients sections[4];
+        int count = 0;
+
+        for (int half = 0; half < 2; ++half)
+        {
+            const double q = guitarfx::biquad::ButterworthSectionQ(4, half);
+
+            if (band > 0)
+            {
+                sections[count++] = guitarfx::biquad::HighPass(edges[band - 1], q, kSampleRate);
+            }
+
+            if (band < 3)
+            {
+                sections[count++] = guitarfx::biquad::LowPass(edges[band], q, kSampleRate);
+            }
+        }
+
+        guitarfx::biquad::State states[4];
+
+        for (const float sample : render.left)
+        {
+            double value = sample;
+
+            for (int i = 0; i < count; ++i)
+            {
+                value = states[i].Process(sections[i], value);
+            }
+
+            sums[band] += value * value;
+        }
+
+        total += sums[band];
+    }
+
+    const auto db = [total](double sum) {
+        return 10.0 * std::log10(std::max(sum / std::max(total, 1.0e-30), 1.0e-20));
+    };
+    return {db(sums[0]), db(sums[1]), db(sums[2]), db(sums[3])};
+}
+
 struct Level
 {
     std::optional<double> lufs;
@@ -405,6 +467,8 @@ json TestLevels(const Pack& pack, bool measureOnly)
     }
 
     json measured = json::array();
+    double slowest = 1.0e9;
+    std::string slowestName;
     Rig rig;
     std::printf("  %-26s %7s %7s %7s %7s %6s %6s\n", "preset", "chords", "mute", "lead", "mean", "peak", "comp");
 
@@ -418,16 +482,24 @@ json TestLevels(const Pack& pack, bool measureOnly)
         json entry = {{"name", preset.name}, {"group", group}, {"clips", json::array()}};
         double sum = 0.0;
         double peak = -200.0;
+        double renderSeconds = 0.0;
+        double audioSeconds = 0.0;
         int counted = 0;
         std::vector<double> perClip;
 
         for (const char* name : kClips)
         {
-            const auto level = Measure(rig.Play(clips[name]));
+            const auto started = std::chrono::steady_clock::now();
+            const auto render = rig.Play(clips[name]);
+            renderSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+            audioSeconds += static_cast<double>(render.left.size()) / kSampleRate;
+            const auto level = Measure(render);
+            const auto balance = MeasureBalance(render);
             rig.Settle(1.5);
             entry["clips"].push_back({{"clip", name},
                                       {"lufs", level.lufs ? json(*level.lufs) : json(nullptr)},
-                                      {"peakDbfs", level.peakDbfs}});
+                                      {"peakDbfs", level.peakDbfs},
+                                      {"bandsDb", {balance.low, balance.lowMid, balance.highMid, balance.high}}});
             Check(level.finite, preset.name + " stays finite on " + name);
             perClip.push_back(level.lufs.value_or(-200.0));
             peak = std::max(peak, level.peakDbfs);
@@ -446,6 +518,16 @@ json TestLevels(const Pack& pack, bool measureOnly)
         rig.Settle(1.0);
         const double followed = loud - quiet;
         const double mean = counted > 0 ? sum / counted : -200.0;
+        // How many times faster than real time it renders here: one stream, one core.
+        const double speed = audioSeconds / std::max(renderSeconds, 1.0e-9);
+        entry["realtimeFactor"] = speed;
+
+        if (speed < slowest)
+        {
+            slowest = speed;
+            slowestName = preset.name;
+        }
+
         entry["meanLufs"] = mean;
         entry["peakDbfs"] = peak;
         entry["followedDb"] = followed;
@@ -488,6 +570,10 @@ json TestLevels(const Pack& pack, bool measureOnly)
         }
     }
 
+    std::printf("  slowest preset: %s, %.0fx real time\n", slowestName.c_str(), slowest);
+    // A preset that cannot render several times faster than real time on one core of a build
+    // machine will not hold a 64-sample buffer on a laptop.
+    Check(slowest > 4.0, "every preset renders well ahead of real time", slowestName + " at " + Num(slowest, 1) + "x");
     return measured;
 }
 

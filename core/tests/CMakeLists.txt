@@ -144,6 +144,7 @@ set(TEST_SOURCES
     BitcrusherEffectTests.cpp
     SustainerEffectTests.cpp
     VinylEffectTests.cpp
+    AcousticSimEffectTests.cpp
     SepiaEffectCatalog.cpp
     SepiaFactoryPackTests.cpp
     OfflineBrandingTests.cpp

@@ -39,6 +39,7 @@ export const EffectGuids = {
   kBitcrusher:           "b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45",
   kSustainer:            "7920e27e-6ad6-4585-b9f4-ccecc973569e",
   kVinyl:                "40cca7fd-9470-4c8b-b45a-cf0b41314459",
+  kAcousticSim:          "863b7264-3b99-40d9-98fe-a4d0f6839b39",
 
   // EQ
   kEqParametric:         "4b4025ca-64cd-4180-be79-81873b618dba",
@@ -129,6 +130,7 @@ export const EFFECT_ALIAS_MAP: Record<string, string> = {
   bitcrusher:            EffectGuids.kBitcrusher,
   sustainer:             EffectGuids.kSustainer,
   vinyl:                 EffectGuids.kVinyl,
+  acoustic_sim:          EffectGuids.kAcousticSim,
   eq_parametric:         EffectGuids.kEqParametric,
   eq_graphic:            EffectGuids.kEqGraphic,
   pickup_match:          EffectGuids.kPickupMatch,

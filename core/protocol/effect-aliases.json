@@ -96,6 +96,10 @@
       "guid": "40cca7fd-9470-4c8b-b45a-cf0b41314459",
       "aliases": ["vinyl"]
     },
+    "kAcousticSim": {
+      "guid": "863b7264-3b99-40d9-98fe-a4d0f6839b39",
+      "aliases": ["acoustic_sim"]
+    },
     "kEqParametric": {
       "guid": "4b4025ca-64cd-4180-be79-81873b618dba",
       "aliases": ["eq_parametric"]

@@ -51,7 +51,7 @@
    "chain": [
     {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.8, "treble": 0.55}},
     {"type": "cab_simple", "params": {"cabinet": 8, "speakerDrive": 0.4}},
-    {"type": "bitcrusher", "preset": "8-bit", "params": {"mix": 0.8}}
+    {"type": "bitcrusher", "preset": "8-bit", "params": {"mix": 0.6}}
    ]
   },
   {
@@ -134,7 +134,7 @@
    "chain": [
     {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.82, "middle": 0.6}},
     {"type": "cab_simple", "params": {"cabinet": 3, "speakerDrive": 0.3}},
-    {"type": "bitcrusher", "preset": "8-bit", "params": {"bits": 6, "downsample": 6, "mix": 0.85}}
+    {"type": "bitcrusher", "preset": "8-bit", "params": {"bits": 6, "downsample": 4, "mix": 0.6}}
    ]
   },
   {

@@ -177,7 +177,8 @@ void TestBloomAndHold()
     }
 
     const double toneStep = 0.15 * 2.0 * kPi * 220.0 / kSampleRate;
-    Check(worst < 1.5 * toneStep, "the tone comes and goes without a click", Num(worst / toneStep, 2) + "x its own step");
+    Check(worst < 1.5 * toneStep, "the tone comes and goes without a click",
+          Num(worst / toneStep, 2) + "x its own step");
 }
 
 void TestHarmonic()

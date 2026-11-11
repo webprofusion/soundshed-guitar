@@ -52,6 +52,7 @@ constexpr const char* kTapeSaturation = "7d0c1f52-6b1e-4c0a-9a3f-5e2b8c4d9f10";
 constexpr const char* kBitcrusher = "b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45";
 constexpr const char* kSustainer = "7920e27e-6ad6-4585-b9f4-ccecc973569e";
 constexpr const char* kVinyl = "40cca7fd-9470-4c8b-b45a-cf0b41314459";
+constexpr const char* kAcousticSim = "863b7264-3b99-40d9-98fe-a4d0f6839b39";
 
 // ── EQ ────────────────────────────────────────────────────────────────
 constexpr const char* kEqParametric = "4b4025ca-64cd-4180-be79-81873b618dba";

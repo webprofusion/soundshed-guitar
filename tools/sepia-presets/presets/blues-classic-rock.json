@@ -184,9 +184,9 @@
    "name": "Octave Fuzz Riff", "tags": ["rock", "fuzz", "octave"],
    "chain": [
     {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -54}},
-    {"type": "fuzz", "params": {"model": 4, "drive": 0.65, "tone": 0.6}},
+    {"type": "fuzz", "params": {"model": 4, "drive": 0.65, "tone": 0.45}},
     {"type": "amp_builtin", "preset": "classic-crunch", "params": {"gain": 0.58, "bass": 0.45}},
-    {"type": "cab_simple", "params": {"cabinet": 2, "speakerDrive": 0.4}},
+    {"type": "cab_simple", "params": {"cabinet": 2, "speakerDrive": 0.4, "brightness": 0.4}},
     {"type": "reverb_room", "preset": "small-room", "params": {"mix": 0.1}}
    ]
   }

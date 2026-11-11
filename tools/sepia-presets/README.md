@@ -9,6 +9,7 @@ The factory pack is generated, not hand-edited. Everything it is made from is in
 | `build_pack.py` | Turns the two above into `core/ui/presets/factory/Sepia-Factory.soundshed.presets`. |
 | `make_di.py` | Synthesises the three guitar DI clips the pack is measured with. |
 | `level.py` | Updates `levels.json` from a measurement so all presets are equally loud. |
+| `tone_report.py` | Prints each preset's tonal balance and render speed, and flags the odd ones out. |
 | `measurements.md` | The last measurement of the built pack. |
 
 ## Rules for a preset

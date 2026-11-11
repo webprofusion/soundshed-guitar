@@ -49,7 +49,7 @@
    "name": "Doom Monolith", "tags": ["metal", "doom"],
    "chain": [
     {"type": "dynamics_gate", "preset": "standard-gate", "params": {"threshold": -48}},
-    {"type": "fuzz", "params": {"model": 1, "drive": 0.9, "tone": 0.35, "bass": 0.7}},
+    {"type": "fuzz", "params": {"model": 1, "drive": 0.9, "tone": 0.42, "bass": 0.7}},
     {"type": "amp_builtin", "preset": "vintage-high-gain", "params": {"gain": 0.6, "bass": 0.65, "treble": 0.42}},
     {"type": "cab_simple", "params": {"cabinet": 0, "size": 0.8, "micType": 1}},
     {"type": "reverb_room", "preset": "large-room", "params": {"mix": 0.1}}
@@ -172,8 +172,8 @@
    "chain": [
     {"type": "dynamics_gate", "preset": "natural-decay", "params": {"threshold": -50}},
     {"type": "compressor_vca", "preset": "lead-sustain"},
-    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.82, "treble": 0.5, "presence": 0.5}},
-    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1, "micPosition": 0.6}},
+    {"type": "amp_builtin", "preset": "singing-lead", "params": {"gain": 0.82, "treble": 0.56, "presence": 0.55}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 0, "micPosition": 0.6}},
     {"type": "delay_digital", "preset": "ducked-lead", "params": {"mix": 0.2}},
     {"type": "reverb_advanced", "preset": "concert-hall", "params": {"mix": 0.2}}
    ]

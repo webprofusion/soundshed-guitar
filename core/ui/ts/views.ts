@@ -1,3 +1,4 @@
+import { ONLINE_SERVICES_ENABLED } from "./apiConfig.js";
 import { renderDemoAudioControls, bindDemoAudioControls } from "./demoAudio.js";
 import { uiState, setFocusedMixerPresetId } from "./state.js";
 import { addMixerSlot, removeMixerSlot, setMixerMixGainDb, updateMixerSlot } from "./mixerStore.js";
@@ -364,10 +365,14 @@ export function renderPresetList(
       return;
     }
 
+    // The way out of an empty library is Tone Sharing, which exists only where online services do.
+    const browseCta = ONLINE_SERVICES_ENABLED
+      ? '<button type="button" class="btn btn-secondary" data-empty-preset-cta="tone-sharing">Browse Tone Sharing</button>'
+      : "";
     presetListElement.innerHTML = `
       <div class="preset-library-empty">
         <p>No presets available yet.</p>
-        <button type="button" class="btn btn-secondary" data-empty-preset-cta="tone-sharing">Browse Tone Sharing</button>
+        ${browseCta}
       </div>
     `;
 

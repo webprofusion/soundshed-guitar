@@ -73,6 +73,7 @@ All UUID constants are defined in `core/src/dsp/EffectGuids.h`. The table below 
 | `kBitcrusher` | `b61e2a94-3f7d-4e58-8c12-0a9d6f3e7b45` | `bitcrusher` |
 | `kSustainer` | `7920e27e-6ad6-4585-b9f4-ccecc973569e` | `sustainer` |
 | `kVinyl` | `40cca7fd-9470-4c8b-b45a-cf0b41314459` | `vinyl` |
+| `kAcousticSim` | `863b7264-3b99-40d9-98fe-a4d0f6839b39` | `acoustic_sim` |
 | `kEqParametric` | `4b4025ca-64cd-4180-be79-81873b618dba` | `eq_parametric` |
 | `kEqGraphic` | `ef8240ba-c973-4e09-ab65-4faf56a8ecbf` | `eq_graphic` |
 | `kPickupMatch` | `df1f4ed4-5d84-4a21-9474-ad6ab014fca5` | `pickup_match` |

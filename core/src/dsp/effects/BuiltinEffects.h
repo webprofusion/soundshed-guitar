@@ -3,6 +3,7 @@
 // Include all effect implementations
 #include "dsp/EffectProcessor.h"
 #include "dsp/EffectGuids.h"
+#include "dsp/effects/AcousticSimEffect.h"
 #include "dsp/effects/GainEffect.h"
 #include "dsp/effects/MultibandCompressorEffect.h"
 #include "dsp/effects/MultibandDistortionEffect.h"
@@ -120,6 +121,7 @@ inline void RegisterAllEffects()
     RegisterBitcrusherEffect();
     RegisterVinylEffect();
     RegisterSustainerEffect();
+    RegisterAcousticSimEffect();
 
     // EQ
     RegisterParametricEQEffect();

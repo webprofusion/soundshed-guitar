@@ -171,7 +171,7 @@
    "name": "Quiet Verse", "tags": ["alternative", "clean"],
    "chain": [
     {"type": "amp_builtin", "preset": "clean-channel", "params": {"gain": 0.5, "bass": 0.52, "treble": 0.5}},
-    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 1}},
+    {"type": "cab_simple", "params": {"cabinet": 0, "micType": 2}},
     {"type": "chorus", "preset": "ce2", "params": {"mix": 0.3}},
     {"type": "delay_analog", "preset": "dm2", "params": {"mix": 0.16}},
     {"type": "reverb_room", "preset": "studio-room", "params": {"mix": 0.14}}

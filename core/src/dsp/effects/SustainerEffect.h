@@ -178,8 +178,9 @@ class SustainerEffect : public EffectProcessor
         }
         else if (key == "bloom")
         {
-            mBloom.store(static_cast<float>(std::clamp(value, sustainer::kMinBloomSeconds, sustainer::kMaxBloomSeconds)),
-                         std::memory_order_relaxed);
+            mBloom.store(
+                static_cast<float>(std::clamp(value, sustainer::kMinBloomSeconds, sustainer::kMaxBloomSeconds)),
+                std::memory_order_relaxed);
         }
         else if (key == "hold")
         {
@@ -263,8 +264,7 @@ class SustainerEffect : public EffectProcessor
         const double bloomSamples = mBloom.load(std::memory_order_relaxed) * mSampleRate;
         const double holdSamples = mHold.load(std::memory_order_relaxed) * mSampleRate;
         const float threshold = std::pow(10.0f, mSensitivityDb.load(std::memory_order_relaxed) / 20.0f);
-        const double ratio =
-            sustainer::kHarmonicRatios[std::clamp(mHarmonic.load(std::memory_order_relaxed), 0, 3)];
+        const double ratio = sustainer::kHarmonicRatios[std::clamp(mHarmonic.load(std::memory_order_relaxed), 0, 3)];
         // Kept clear of Nyquist at low sample rates, where the top harmonic of a high note is not.
         const double highestHz = 0.45 * mSampleRate;
 
@@ -336,7 +336,8 @@ class SustainerEffect : public EffectProcessor
             {
                 const double target = std::min(mTracker.FrequencyHz() * ratio, highestHz);
                 // The first pitch of a note is taken as it is; after that it glides.
-                mFrequency = (mGain < 1.0e-4f || mFrequency <= 0.0) ? target : mFrequency + mGlide * (target - mFrequency);
+                mFrequency =
+                    (mGain < 1.0e-4f || mFrequency <= 0.0) ? target : mFrequency + mGlide * (target - mFrequency);
             }
 
             const float gainTarget = (mBloomed && mFrequency > 0.0) ? 1.0f : 0.0f;

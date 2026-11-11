@@ -10,6 +10,11 @@
  * theme or layout is checked without building the JUCE app (see tools/sepia-ui/shot.js).
  *
  *   SepiaUiReplay <requests.json> <responses.json> [presetId]
+ *   SepiaUiReplay --serve [presetId]
+ *
+ * --serve keeps the engine up and talks over the standard streams, so the page is live and can be
+ * clicked through: each line read is one UI message, and each message the engine sends back is
+ * written as one line. A line "." is written when a request has been fully answered.
  *
  * With no arguments it only checks that a controller starts and answers, which is what ctest runs.
  */
@@ -120,13 +125,54 @@ int main(int argc, char** argv)
     audio_snapshot::SetSettingsEnvRoot(profile);
     json requests = json::array();
 
-    if (argc > 1)
+    if (argc > 1 && std::string(argv[1]) != "--serve")
     {
         std::ifstream in(argv[1], std::ios::binary);
         requests = json::parse(in, nullptr, false);
     }
 
     int failures = 0;
+    const bool serve = argc > 1 && std::string(argv[1]) == "--serve";
+
+    if (serve)
+    {
+        RecordingHost host(profile);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+        controller.Prepare(48000.0, 256);
+        controller.OnIdle();
+        controller.HandleUIMessage(
+            json{{"type", "loadPreset"}, {"presetId", argc > 2 ? argv[2] : "sepia-warm-clean-room"}}.dump());
+        controller.OnIdle();
+
+        const auto flush = [&host] {
+            for (const auto& message : host.sent)
+            {
+                std::cout << message << "\n";
+            }
+
+            host.sent.clear();
+            std::cout << "." << std::endl;
+        };
+
+        flush();
+        std::string line;
+
+        while (std::getline(std::cin, line))
+        {
+            if (!line.empty())
+            {
+                controller.HandleUIMessage(line);
+                controller.OnIdle();
+            }
+
+            flush();
+        }
+
+        fs::remove_all(profile, ec);
+        return 0;
+    }
+
     {
         RecordingHost host(profile);
         guitarfx::PluginController controller(host);

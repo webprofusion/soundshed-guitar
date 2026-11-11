@@ -368,6 +368,7 @@ const EFFECT_STUBS: EffectStub[] = [
   { type: EffectGuids.kBitcrusher },
   { type: EffectGuids.kVinyl },
   { type: EffectGuids.kSustainer },
+  { type: EffectGuids.kAcousticSim },
   // Amp
   { type: EffectGuids.kAmpBuiltin },
   { type: EffectGuids.kAmpNamOptimized },
