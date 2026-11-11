@@ -1,0 +1,616 @@
+/* ===== Sepia Theme =====
+ * The app's own look: an old photographic print. Near-black warm browns for the ground, cream
+ * for type, and one muted gold for whatever is live. Nothing is pure black, white or saturated.
+ * Structure follows classic.css (it began as a copy), so a token added there has a twin here.
+ * Per-theme token overrides. Base/default tokens live in variables.css.
+ */
+
+.theme-sepia {
+  /* Accent - a muted gold, the highlight of a toned print */
+  --color-accent: #d8a657;
+  --color-accent-hover: #e6b96f;
+  --color-accent-dark: #b98a3e;
+  --color-accent-rgb: 216, 166, 87;
+
+  /* Success/Info - restrained seafoam (70s pedal indicator aesthetic) */
+  --color-success: #9cb380;
+  --color-success-light: #adc292;
+  --color-success-glow: rgba(156, 179, 128, 0.35);
+  --color-info: #8fa9a8;
+  --color-info-light: #a1b9b8;
+
+  /* Background Colors - flat, intentional: charcoal-brown tolex, warm metal surfaces */
+  --bg-primary: #171310;
+  --bg-secondary: #211b16;
+  --bg-tertiary: #2c241d;
+  --bg-surface: #211b16;
+  --bg-elevated: #2c241d;
+
+  --bg-panel: #211b16;
+  --bg-card: #211b16;
+  --bg-input: #100d0b;
+
+  /* Dark Backgrounds - deep, solid surfaces (no gradients) */
+  --bg-dark-primary: #171310;
+  --bg-dark-secondary: #211b16;
+  --bg-dark-tertiary: #2c241d;
+  --bg-dark-surface: #211b16;
+
+  --bg-footer: #211b16;
+  --bg-header-dark: #171310;
+
+  --bg-fx-primary: #171310;
+  --bg-fx-secondary: #211b16;
+  --bg-fx-categories: #100d0b;
+
+  /* Text Colors - cream/off-white (like silk-screen labels on gear) */
+  --text-primary: #ecdfc9;
+  --text-secondary: #d2c3a9;
+  --text-tertiary: #b5a68d;
+  --text-muted: #9a8b74;
+
+  --text-dark-primary: #ecdfc9;
+  --text-dark-secondary: #d2c3a9;
+  --text-dark-tertiary: #b5a68d;
+  --text-dark-muted: #9a8b74;
+  --text-dark-dimmed: #7d6f5c;
+  --text-dark-disabled: #5d5244;
+
+  /* Borders - warm gray (brushed metal, knob edges) */
+  --border-light: #4f4336;
+  --border-medium: #3f3429;
+  --border-strong: #2c241d;
+  --border-dark: #211b16;
+  --border-darker: #171310;
+
+  --border-dark-light: #4f4336;
+  --border-dark-medium: #3f3429;
+  --border-dark-strong: #4f4336;
+
+  /* Controls - flat knob surfaces, no gradients */
+  --control-bg: #2c241d;
+  --control-border: #4f4336;
+  --control-indicator: #ecdfc9;
+  --knob-border-highlight: rgba(236, 223, 201, 0.24);
+  --knob-border-shadow: rgba(23, 19, 16, 0.34);
+
+  /* Knob styling - solid studio-metal surface; the value arc fades from dark
+     wood up into a warm yellow-green. */
+  --control-knob-bg: #4a3d31;
+  --knob-ring-start: #6e4f25;
+  --knob-ring-end: #ecc987;
+  --knob-ring-track: rgba(255, 244, 220, 0.15);
+
+  /* Toggle */
+  --toggle-bg: #2c241d;
+  --toggle-border: #3f3429;
+  --toggle-active: #d8a657;
+
+  /* Shadows - minimal, subtle (studio gear is confident, not dramatic) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.24);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.24);
+  --shadow-xl: 0 6px 12px rgba(0, 0, 0, 0.28);
+
+  --shadow-inset-light: inset 0 1px 0 rgba(236, 223, 201, 0.15);
+  --shadow-inset-dark: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+
+  /* Overlays - restrained */
+  --overlay-light: rgba(236, 223, 201, 0.08);
+  --overlay-medium: rgba(236, 223, 201, 0.12);
+  --overlay-dark: rgba(0, 0, 0, 0.2);
+  --overlay-darker: rgba(0, 0, 0, 0.4);
+
+  /* Special - preset colors */
+  --color-preset-bg: #ecdfc9;
+  --color-preset-border: #7d6f5c;
+  --color-preset-favorite: #d8a657;
+  --color-preset-text: #171310;
+
+  --amp-glow: none;
+
+  /* Node Colors - audio I/O indication */
+  --node-input: #9cb380;
+  --node-input-hover: #adc292;
+  --node-output: #d8a657;
+  --node-output-hover: #e6b96f;
+
+  --bg-browser-shell: rgba(23, 19, 16, 0.6);
+  --bg-browser-header: rgba(33, 27, 22, 0.7);
+  --bg-browser-sidebar: rgba(28, 23, 19, 0.65);
+  --bg-browser-card: rgba(44, 36, 29, 0.4);
+  --bg-browser-input: rgba(16, 13, 11, 0.85);
+  --bg-browser-hover: rgba(236, 223, 201, 0.08);
+  --bg-browser-selected: rgba(216, 166, 87, 0.18);
+  --border-browser: rgba(79, 67, 54, 0.5);
+  --border-browser-strong: rgba(99, 85, 74, 0.65);
+
+  /* Shared UI Tokens */
+  --accent-primary: var(--color-accent);
+  --bg-control: #211b16;
+  --button-bg: #2c241d;
+  --button-text: #ecdfc9;
+  --button-border: #4f4336;
+  --button-bg-hover: #3f3429;
+  --button-border-hover: #63554a;
+
+  /* Modal Surface Tokens */
+  --modal-bg: #171310;
+  --modal-bg-raised: #211b16;
+  --modal-text: #ecdfc9;
+  --modal-text-secondary: #d2c3a9;
+  --modal-text-muted: #9a8b74;
+  --modal-border: #4f4336;
+  --modal-border-medium: #3f3429;
+  --modal-close-hover: rgba(236, 223, 201, 0.08);
+  --modal-input-bg: #100d0b;
+  --modal-input-text: #ecdfc9;
+  --modal-input-border: #3f3429;
+  --modal-input-placeholder: #9a8b74;
+
+  --eq-curve-grid: rgba(236, 223, 201, 0.12);
+  --eq-curve-response: rgba(216, 166, 87, 0.94);
+  --eq-curve-handle-stroke: rgba(23, 19, 16, 0.88);
+  --eq-curve-tooltip-bg: rgba(16, 13, 11, 0.92);
+  --eq-curve-tooltip-text: #ecdfc9;
+  --eq-curve-spectrum-fill-top: rgba(236, 215, 176, 0.22);
+  --eq-curve-spectrum-fill-bottom: rgba(236, 215, 176, 0.03);
+  --eq-curve-spectrum-line: rgba(236, 215, 176, 0.36);
+
+  --performance-plot-line: rgba(216, 166, 87, 0.95);
+  --performance-plot-fill: rgba(216, 166, 87, 0.16);
+  --performance-plot-grid: rgba(154, 139, 116, 0.22);
+
+  /* Scrollbars */
+  --sb-track: var(--bg-secondary);
+  --sb-track-border: var(--border-light);
+  --sb-thumb: var(--border-medium);
+  --sb-thumb-border: var(--border-light);
+  --sb-thumb-hover: var(--color-accent);
+  --sb-thumb-hover-border: var(--border-light);
+
+  --panel-inset-bg: linear-gradient(180deg, #120f0c 0%, #1a1511 100%);
+  --panel-inset-border: rgba(0, 0, 0, 0.38);
+  --panel-inset-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 236, 200, 0.07);
+}
+
+body.theme-sepia {
+  background-color: #171310;
+}
+
+.theme-sepia select {
+  color-scheme: dark;
+}
+
+.theme-sepia select option,
+.theme-sepia select optgroup {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.theme-sepia .footer-bpm-panel {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-panel), #fff 5%) 0%, var(--bg-panel) 100%);
+  border-color: var(--border-dark-light);
+  box-shadow: 0 8px 18px rgba(12, 9, 7, 0.24);
+}
+
+.theme-sepia .footer-bpm-field input {
+  border-color: var(--border-dark-medium);
+  background: color-mix(in srgb, var(--bg-dark-secondary), #fff 6%);
+  color: var(--text-dark-primary);
+}
+
+
+/* ===== From settings.css ===== */
+.theme-sepia .settings-row select,
+.theme-sepia .settings-section select {
+  color-scheme: dark;
+}
+
+.theme-sepia .equipment-library-filters select {
+  color-scheme: dark;
+}
+
+
+/* ===== From modals.css ===== */
+.theme-sepia .save-preset-modal .form-group select {
+  color-scheme: dark;
+}
+
+.theme-sepia .save-preset-modal .form-group select option,
+.theme-sepia .save-preset-modal .form-group select optgroup {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+
+/* ===== From amp.css ===== */
+
+.theme-sepia .effect-visualization::before {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.theme-sepia .effect-visualization::after {
+  opacity: var(--effect-visual-icon-opacity, 0.08);
+}
+
+.theme-sepia .effect-visualization-overlay {
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .effect-visualization-placeholder p {
+  color: var(--text-dark-tertiary);
+}
+
+
+/* ===== From fx-library.css ===== */
+.theme-sepia .fx-selector-panel,
+.theme-sepia .fx-flyout {
+  background: #171310;
+  border-top-color: #3f3429;
+  border-bottom-color: #3f3429;
+}
+
+.theme-sepia .fx-selector-header,
+.theme-sepia .fx-flyout-header {
+  background: #211b16;
+  border-bottom-color: #3f3429;
+  box-shadow: inset 0 1px 0 rgba(236, 223, 201, 0.08);
+}
+
+.theme-sepia .fx-selector-close {
+  background: #211b16;
+  border-color: #3f3429;
+  color: var(--text-dark-secondary);
+  box-shadow: inset 0 1px 0 rgba(236, 223, 201, 0.08);
+}
+
+.theme-sepia .fx-selector-close:hover {
+  border-color: var(--color-accent);
+  background: rgba(216, 166, 87, 0.12);
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .fx-selector-categories {
+  background: #100d0b;
+  border-right-color: #3f3429;
+}
+
+.theme-sepia .fx-selector-search {
+  border-bottom-color: #3f3429;
+}
+
+.theme-sepia .fx-selector-search input {
+  background: #100d0b;
+  border-color: #3f3429;
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .fx-selector-search input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(216, 166, 87, 0.2);
+}
+
+.theme-sepia .fx-category:hover {
+  background: rgba(236, 223, 201, 0.08);
+}
+
+.theme-sepia .fx-category.active {
+  background: rgba(216, 166, 87, 0.15);
+}
+
+.theme-sepia .fx-category-count {
+  background: rgba(236, 223, 201, 0.12);
+  color: var(--text-dark-tertiary);
+}
+
+.theme-sepia .fx-item {
+  background: #211b16;
+  border-color: #3f3429;
+  box-shadow: inset 0 1px 0 rgba(236, 223, 201, 0.08);
+}
+
+.theme-sepia .fx-item:hover {
+  background: #2c241d;
+  border-color: #4f4336;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.theme-sepia .fx-item-type {
+  color: var(--text-dark-muted);
+}
+
+
+/* ===== From navigation.css ===== */
+.theme-sepia .icon-bar {
+  background: #211b16;
+  border-bottom: 1px solid #3f3429;
+  box-shadow:
+    inset 0 1px 0 rgba(236, 223, 201, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.theme-sepia .icon-btn {
+  background: transparent;
+  border: 1px solid rgba(79, 67, 54, 0.5);
+  color: var(--text-dark-secondary);
+  box-shadow: inset 0 1px 0 rgba(236, 223, 201, 0.08);
+}
+
+.theme-sepia .icon-btn:hover {
+  background: rgba(236, 223, 201, 0.08);
+  border-color: rgba(79, 67, 54, 0.8);
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .icon-btn.active {
+  background: rgba(216, 166, 87, 0.18);
+  border-color: rgba(216, 166, 87, 0.7);
+  color: var(--text-dark-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 223, 201, 0.1),
+    0 0 0 1px rgba(216, 166, 87, 0.15);
+}
+
+.theme-sepia .control-bar {
+  background: #2c241d;
+  border-bottom: 1px solid #3f3429;
+  box-shadow:
+    inset 0 1px 0 rgba(236, 223, 201, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.theme-sepia .preset-selector {
+  background: rgba(33, 27, 22, 0.85);
+  border-color: #3f3429;
+  box-shadow: inset 0 1px 0 rgba(236, 223, 201, 0.08);
+}
+
+.theme-sepia .preset-chooser-label {
+  background: #211b16;
+  color: var(--text-dark-primary);
+  border-color: #3f3429;
+}
+
+.theme-sepia .preset-chooser-label:hover {
+  background: #2c241d;
+}
+
+.theme-sepia .preset-favorite {
+  background: rgba(33, 27, 22, 0.9);
+  border-color: rgba(79, 67, 54, 0.4);
+}
+
+.theme-sepia .preset-selector-status {
+  border-color: rgba(79, 67, 54, 0.3);
+  background: rgba(33, 27, 22, 0.4);
+}
+
+.theme-sepia .preset-toolbar-separator {
+  background: rgba(188, 138, 91, 0.28);
+}
+
+.theme-sepia .preset-extra-actions-menu {
+  background: rgba(33, 27, 22, 0.95);
+  border-color: rgba(79, 67, 54, 0.4);
+}
+
+.theme-sepia .preset-extra-action-item {
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .preset-extra-action-item:hover {
+  background: rgba(236, 223, 201, 0.08);
+  border-color: rgba(79, 67, 54, 0.3);
+}
+
+.theme-sepia .preset-action-btn {
+  color: var(--text-dark-tertiary);
+}
+
+.theme-sepia .preset-action-btn:hover {
+  background: rgba(236, 223, 201, 0.08);
+  border-color: rgba(216, 166, 87, 0.6);
+  color: var(--text-dark-primary);
+}
+
+/* Classic theme nav bar */
+.theme-sepia .nav-tab {
+  color: rgba(255, 234, 196, 0.6) !important;
+}
+
+.theme-sepia .nav-tab:hover {
+  color: rgba(255, 244, 220, 0.9) !important;
+}
+
+.theme-sepia .nav-tab.active {
+  color: var(--color-accent) !important;
+  border-bottom-color: var(--color-accent) !important;
+}
+
+
+.theme-sepia .nav-settings-btn {
+  border-color: rgba(188, 138, 91, 0.35) !important;
+  color: rgba(255, 234, 196, 0.6) !important;
+}
+
+
+/* ===== From signal-path.css ===== */
+.theme-sepia .node-param-tabs {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.theme-sepia .node-param-tab {
+  color: var(--text-dark-tertiary);
+}
+
+.theme-sepia .node-param-tab.is-active {
+  background: transparent;
+  color: var(--color-accent);
+}
+
+.theme-sepia .default-effect-shell {
+  border-color: rgba(236, 223, 201, 0.12);
+  background: #211b16;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.theme-sepia .default-effect-shell-equipment-panel {
+  border-color: rgba(236, 223, 201, 0.12);
+  background: #100d0b;
+  box-shadow: none;
+}
+
+.theme-sepia .default-effect-shell-title {
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .default-effect-shell-subtitle,
+.theme-sepia .default-effect-shell .node-param-label,
+.theme-sepia .default-effect-shell .node-param-group-title,
+.theme-sepia .default-effect-shell .eq-visualizer-header,
+.theme-sepia .default-effect-shell .mixer-inputs-header,
+.theme-sepia .default-effect-shell .node-resource-selector > label {
+  color: rgba(249, 228, 187, 0.68);
+}
+
+.theme-sepia .default-effect-shell-chip,
+.theme-sepia .default-effect-shell .resource-picker-btn,
+.theme-sepia .default-effect-shell .resource-clear-btn,
+.theme-sepia .default-effect-shell .resource-browse-btn,
+.theme-sepia .default-effect-shell .blend-open-btn {
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .default-effect-shell .default-effect-section {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.theme-sepia .default-effect-shell .eq-visualizer {
+  background: #171310;
+}
+
+.theme-sepia .default-effect-shell.neural-model-effect .node-param-tabs {
+  margin-top: 4px;
+}
+
+.theme-sepia .default-effect-shell .plugin-host-load-error {
+  background: rgba(46, 29, 13, 0.82);
+  border-color: rgba(236, 171, 72, 0.5);
+  color: var(--text-dark-primary);
+}
+
+.theme-sepia .default-effect-shell .plugin-host-load-error-detail {
+  color: var(--text-dark-tertiary);
+}
+
+.theme-sepia .node-param-group-title {
+  color: var(--text-dark-secondary);
+}
+
+.theme-sepia .eq-visualizer {
+  background: #171310;
+}
+
+.theme-sepia .eq-visualizer-header {
+  color: var(--text-dark-muted);
+}
+
+.theme-sepia .eq-curve-canvas {
+  background: rgba(16, 13, 11, 0.9);
+}
+
+.theme-sepia .node-param-label {
+  color: var(--text-dark-muted);
+}
+
+.theme-sepia .default-effect-shell .plugin-host-list {
+  background: rgba(24, 22, 18, 0.55);
+  border-color: rgba(150, 130, 90, 0.3);
+}
+
+.theme-sepia .default-effect-shell .plugin-host-item.is-selected {
+  background: rgba(150, 130, 90, 0.25);
+  border-color: rgba(196, 168, 110, 0.6);
+}
+
+/* Theme-classic controls inside a custom backdrop */
+.custom-layout-backdrop.theme-sepia .resource-picker-btn,
+.custom-layout-backdrop.theme-sepia .resource-clear-btn,
+.custom-layout-backdrop.theme-sepia .resource-browse-btn,
+.custom-layout-backdrop.theme-sepia .node-param-group-block,
+.custom-layout-backdrop.theme-sepia .eq-visualizer,
+.custom-layout-backdrop.theme-sepia .mixer-inputs-section,
+.custom-layout-backdrop.theme-sepia .node-resource-selector {
+  border-color: rgba(236, 223, 201, 0.12);
+  background: rgba(33, 27, 22, 0.8);
+  color: var(--text-dark-primary);
+}
+
+/* ── Sepia's own touches ──────────────────────────────────────────────────── */
+
+/* Type that belongs on a print: the wordmark and the preset name in a book serif. Only fonts
+   already on the machine, since the app is offline. */
+.theme-sepia {
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --waveform-bg: rgba(236, 223, 201, 0.05);
+  --waveform-lane-divider: rgba(236, 223, 201, 0.20);
+  --waveform-lane-center: rgba(236, 223, 201, 0.09);
+  --waveform-empty-text: rgba(236, 223, 201, 0.55);
+  --waveform-trace: rgba(214, 200, 176, 0.92);
+  --waveform-trace-recording: rgba(201, 104, 72, 0.95);
+  --waveform-playhead: rgba(236, 223, 201, 0.85);
+  --waveform-playhead-recording: rgba(201, 104, 72, 0.9);
+  --waveform-range-active: rgba(216, 166, 87, 0.95);
+  --waveform-range-active-tint: rgba(216, 166, 87, 0.18);
+  --waveform-range-candidate: rgba(236, 223, 201, 0.85);
+  --waveform-range-candidate-tint: rgba(236, 223, 201, 0.12);
+  --waveform-selected-handle-ring: rgba(255, 248, 232, 0.95);
+}
+
+.theme-sepia .app-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--color-accent);
+}
+
+.theme-sepia .preset-chooser-label,
+.theme-sepia .preset-title,
+.theme-sepia .mixer-row-name {
+  font-family: var(--font-display);
+  font-size: 1.08em;
+  letter-spacing: 0.01em;
+}
+
+.theme-sepia .footer-bar {
+  border-top: 1px solid var(--border-dark-medium);
+  box-shadow:
+    inset 0 1px 0 var(--overlay-light),
+    inset 0 -1px 0 var(--overlay-dark);
+}
+
+body.theme-sepia .film-grain {
+  background-image: url("../images/themes/vintage-film-grain.png");
+  background-repeat: repeat;
+  background-size: 48px 48px;
+}
+
+/* A soft vignette, as the edges of an old print darken. Over the ground only: it sits behind
+   every panel and takes no pointer events. */
+body.theme-sepia::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 35%, rgba(216, 166, 87, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+}

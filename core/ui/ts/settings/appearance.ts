@@ -104,6 +104,7 @@ export function initThemeSelect(): void {
   themeSelectInitialized = true;
 
   const themes: Array<{ value: ThemeName; label: string }> = [
+    { value: "sepia", label: "Sepia" },
     { value: "light", label: "Light" },
     { value: "dark", label: "Dark" },
     { value: "classic", label: "Vintage" },

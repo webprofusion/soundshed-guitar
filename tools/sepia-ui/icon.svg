@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Sepia's mark: a tape reel seen as an old print. Original artwork for this project. -->
+  <defs>
+    <radialGradient id="ground" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#3a2d21"/>
+      <stop offset="0.6" stop-color="#211911"/>
+      <stop offset="1" stop-color="#120d09"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0cf8f"/>
+      <stop offset="1" stop-color="#c08d3f"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="212" fill="url(#ground)"/>
+  <rect x="32" y="32" width="960" height="960" rx="212" fill="none" stroke="#5a4733" stroke-width="6"/>
+  <!-- reel -->
+  <circle cx="512" cy="512" r="330" fill="none" stroke="url(#gold)" stroke-width="34"/>
+  <circle cx="512" cy="512" r="268" fill="none" stroke="#ecdfc9" stroke-opacity="0.16" stroke-width="6"/>
+  <g fill="#ecdfc9" fill-opacity="0.9">
+    <circle cx="512" cy="300" r="58"/>
+    <circle cx="328.4" cy="618" r="58"/>
+    <circle cx="695.6" cy="618" r="58"/>
+  </g>
+  <circle cx="512" cy="512" r="74" fill="url(#gold)"/>
+  <circle cx="512" cy="512" r="26" fill="#1a130d"/>
+</svg>
