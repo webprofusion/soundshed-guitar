@@ -178,7 +178,7 @@ jobs:
         id: zip
         run: |
           set -euo pipefail
-          ZIP_PATH="$(ls -1t SoundshedGuitar-*-Linux-${{ matrix.arch }}.zip | head -n1)"
+          ZIP_PATH="$(ls -1t Sepia-*-Linux-${{ matrix.arch }}.zip | head -n1)"
           test -n "$ZIP_PATH"
           echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
           echo "zip_name=$(basename "$ZIP_PATH")" >> "$GITHUB_OUTPUT"
