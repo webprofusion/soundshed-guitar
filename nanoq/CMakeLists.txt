@@ -329,6 +329,9 @@ make_clapfirst_plugins(
     PLUGIN_FORMATS ${Q_PLUG_PLUGIN_FORMATS}
     STANDALONE_CONFIGURATIONS
         standalone "${NANOQ_NAME}" "${NANOQ_ID}"
+    # The standalone app's icon (made by tools/gen-nanoq-icons.mjs; iOS takes its asset catalog).
+    STANDALONE_MACOS_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/NanoQ.icns"
+    STANDALONE_WINDOWS_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/NanoQ.ico"
     ASSET_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/products"
     AUV2_MANUFACTURER_NAME "Soundshed"
     AUV2_MANUFACTURER_CODE "Shed"
@@ -336,6 +339,28 @@ make_clapfirst_plugins(
     AUV2_INSTRUMENT_TYPE "aufx")
 
 q_plug_separate_import_libs(nanoq)
+
+# clap-wrapper copies the macOS icon into the standalone's bundle as Resources/Icon.icns, but its
+# Info.plist template leaves CFBundleIconFile empty, so the app would still show the generic icon.
+# Name the file in a copy of that template. Done at configure time, where CMake writes a bundle's
+# Info.plist: a POST_BUILD edit would be undone by the next configure without a relink.
+if(APPLE AND TARGET nanoq_standalone)
+    get_target_property(_nanoq_sa_plist_in nanoq_standalone MACOSX_BUNDLE_INFO_PLIST)
+    file(READ "${_nanoq_sa_plist_in}" _nanoq_sa_plist)
+    string(REGEX REPLACE "(<key>CFBundleIconFile</key>[ \t\r\n]*<string>)(</string>)" "\\1Icon\\2"
+        _nanoq_sa_plist "${_nanoq_sa_plist}")
+    set(_nanoq_sa_plist_out "${CMAKE_CURRENT_BINARY_DIR}/nanoq_standalone_Info.plist.in")
+    # Its ${MACOSX_BUNDLE_...} placeholders stay for CMake to fill in, so a plain write, made
+    # only when the text changes.
+    set(_nanoq_sa_plist_old "")
+    if(EXISTS "${_nanoq_sa_plist_out}")
+        file(READ "${_nanoq_sa_plist_out}" _nanoq_sa_plist_old)
+    endif()
+    if(NOT _nanoq_sa_plist_old STREQUAL _nanoq_sa_plist)
+        file(WRITE "${_nanoq_sa_plist_out}" "${_nanoq_sa_plist}")
+    endif()
+    set_target_properties(nanoq_standalone PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${_nanoq_sa_plist_out}")
+endif()
 
 # The standalone app's audio and MIDI device controls (src/StandaloneDevices.h): the backend over
 # clap-wrapper's standalone host is built into the standalone executable only, where that host

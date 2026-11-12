@@ -160,6 +160,11 @@ The tree is `nanoq/ios/build` (`build-legacy` for iOS 12), the app
 caveats (registering the device by hand, `ios-deploy`, launching on the device), are as in
 [ios-build.md](../ios-build.md).
 
+The app icon is `nanoq/resources/icon/AppIcon.xcassets`, every slot an iOS 12 app needs.
+It and the desktop standalone's `NanoQ.icns` and `NanoQ.ico` are made from
+`nanoq/resources/icon/nanoq-icon.svg` by `node tools/gen-nanoq-icons.mjs` (macOS, with
+`rsvg-convert`). Commit what that writes.
+
 `SOUNDSHED_NANOQ_PROFILE` reaches the app through simctl's `SIMCTL_CHILD_` prefix; the
 Simulator's app can write to a host path, so the profile and logs (`logs/nanoq.log`,
 `data/v1/logs/session-log.txt`) can be read from the Mac directly.

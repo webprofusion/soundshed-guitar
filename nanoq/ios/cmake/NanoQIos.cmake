@@ -16,8 +16,12 @@ set(_nanoq_ios_sources
     # The CLAP entry the app calls, as clap-wrapper compiles it into each format on the desktop.
     "${CMAKE_CURRENT_SOURCE_DIR}/src/clap_entry.cpp")
 set(_nanoq_ios_launch "${_nanoq_ios}/app/LaunchScreen.storyboard")
+# The app icon (made by tools/gen-nanoq-icons.mjs). Xcode compiles the catalog with actool, which
+# adds CFBundleIcons to the Info.plist itself.
+set(_nanoq_ios_icons "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/AppIcon.xcassets")
 
-add_executable(nanoq_ios MACOSX_BUNDLE ${_nanoq_ios_sources} ${_nanoq_ios_launch})
+add_executable(nanoq_ios MACOSX_BUNDLE ${_nanoq_ios_sources} ${_nanoq_ios_launch} ${_nanoq_ios_icons})
+set_source_files_properties("${_nanoq_ios_icons}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 set_source_files_properties(
     "${_nanoq_ios}/app/NanoQApp.mm" "${_nanoq_ios}/app/ClapHost.mm" "${_nanoq_ios}/app/AudioIO.mm"
     "${_nanoq_ios}/app/AppLog.mm"
@@ -47,6 +51,7 @@ set_target_properties(nanoq_ios PROPERTIES
     # Xcode compiles the storyboard into the bundle's Copy Bundle Resources phase.
     RESOURCE "${_nanoq_ios_launch}"
     XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${NANOQ_ID}"
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
     XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "${CMAKE_OSX_DEPLOYMENT_TARGET}"
     XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"

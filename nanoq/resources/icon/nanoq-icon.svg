@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Soundshed Nano Q's app icon. A speaker in an orange Q whose tail is a lightning bolt (the
+       Soundshed S's), over a metal NANO plate like the Soundshed icon's name plate. Full bleed and
+       opaque, as iOS wants it (iOS rounds the corners itself); the desktop icons frame it in a
+       rounded square. tools/gen-nanoq-icons.mjs makes every platform's icon files from this. -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="72%">
+      <stop offset="0" stop-color="#3b302a"/>
+      <stop offset="0.55" stop-color="#1a1513"/>
+      <stop offset="1" stop-color="#0a0908"/>
+    </radialGradient>
+    <!-- Soundshed's accent (the web UI's color-accent, #e07848), lit from above. -->
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6a777"/>
+      <stop offset="0.45" stop-color="#e07848"/>
+      <stop offset="1" stop-color="#b24c1c"/>
+    </linearGradient>
+    <linearGradient id="ringEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd9bd" stop-opacity="0.9"/>
+      <stop offset="0.5" stop-color="#ffd9bd" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="cone" cx="50%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#4d423b"/>
+      <stop offset="0.7" stop-color="#241e1b"/>
+      <stop offset="1" stop-color="#141110"/>
+    </radialGradient>
+    <radialGradient id="cap" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#8a7a70"/>
+      <stop offset="0.6" stop-color="#3a312c"/>
+      <stop offset="1" stop-color="#1c1715"/>
+    </radialGradient>
+    <pattern id="grille" width="22" height="19" patternUnits="userSpaceOnUse">
+      <circle cx="5.5" cy="4.75" r="3.4" fill="#000" fill-opacity="0.45"/>
+      <circle cx="16.5" cy="14.25" r="3.4" fill="#000" fill-opacity="0.45"/>
+    </pattern>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1e2"/>
+      <stop offset="0.5" stop-color="#ffc08f"/>
+      <stop offset="1" stop-color="#f08a50"/>
+    </linearGradient>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9e4df"/>
+      <stop offset="0.5" stop-color="#b9b1aa"/>
+      <stop offset="1" stop-color="#857c75"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#e07848" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#e07848" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="490" cy="450" r="430" fill="url(#glow)"/>
+
+  <!-- The speaker: surround, cone behind a grille, dust cap. -->
+  <circle cx="490" cy="450" r="236" fill="#0f0d0c"/>
+  <circle cx="490" cy="450" r="214" fill="url(#cone)"/>
+  <circle cx="490" cy="450" r="214" fill="url(#grille)"/>
+  <circle cx="490" cy="450" r="214" fill="none" stroke="#3a312c" stroke-width="10"/>
+  <circle cx="490" cy="450" r="160" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="6"/>
+  <circle cx="490" cy="450" r="118" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="5"/>
+  <circle cx="490" cy="450" r="76" fill="url(#cap)"/>
+  <circle cx="490" cy="450" r="76" fill="none" stroke="#000" stroke-opacity="0.5" stroke-width="5"/>
+
+  <!-- The Q's ring. -->
+  <circle cx="490" cy="450" r="276" fill="none" stroke="#0a0908" stroke-width="104"/>
+  <circle cx="490" cy="450" r="276" fill="none" stroke="url(#ring)" stroke-width="84"/>
+  <circle cx="490" cy="450" r="316" fill="none" stroke="url(#ringEdge)" stroke-width="4"/>
+
+  <!-- The Q's tail: a lightning bolt across the ring, down and right. -->
+  <g transform="translate(618 548) rotate(-50) scale(1.08)">
+    <path d="M28 0 H126 L84 128 H140 L14 330 L50 170 H0 Z"
+          fill="url(#bolt)" stroke="#0a0908" stroke-width="16" stroke-linejoin="round"
+          paint-order="stroke"/>
+  </g>
+
+  <!-- The NANO plate. Letters drawn as shapes, so no font is needed to render it. -->
+  <rect x="318" y="852" width="388" height="96" rx="14" fill="#0a0908"/>
+  <rect x="324" y="858" width="376" height="84" rx="10" fill="url(#plate)"/>
+  <circle cx="342" cy="900" r="6" fill="#5a524c"/>
+  <circle cx="682" cy="900" r="6" fill="#5a524c"/>
+  <g transform="translate(376 872)" fill="#1a1513">
+    <path d="M0 56V0H14L38 36V0H52V56H38L14 20V56Z"/>
+    <path fill-rule="evenodd" d="M70 56L92 0H106L128 56H114L109.5 43H88.5L84 56ZM92.5 31H105.5L99 12Z"/>
+    <path d="M146 56V0H160L184 36V0H198V56H184L160 20V56Z"/>
+    <circle cx="244" cy="28" r="21" fill="none" stroke="#1a1513" stroke-width="14"/>
+  </g>
+</svg>
