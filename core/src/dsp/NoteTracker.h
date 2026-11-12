@@ -72,7 +72,11 @@ class NoteTracker
     {
         mSampleRate = sampleRate > 0.0 ? sampleRate : 48000.0;
         mTracker.Prepare(mSampleRate);
-        mHighPass = biquad::HighPass(kAttackHighPassHz, 0.7071067811865476, mSampleRate);
+        // Notes are played from this, so a new one read a few milliseconds sooner is worth more
+        // than its first reading being exact: the tracker's long window takes over within a few
+        // detections, and the move comes out as a glide.
+        mTracker.SetFastNoteChanges(true);
+        mHighPass =biquad::HighPass(kAttackHighPassHz, 0.7071067811865476, mSampleRate);
         mFastCoef = SmoothingCoefficient(kAttackFastSeconds);
         mSlowCoef = SmoothingCoefficient(kAttackSlowSeconds);
         mLevelRelease = static_cast<float>(std::exp(-1.0 / (kLevelReleaseSeconds * mSampleRate)));
@@ -96,6 +100,7 @@ class NoteTracker
         mArmed = true;
         mSinceAttack = mRefractorySamples;
         mDetectionsSeen = mTracker.DetectionCount();
+        mSinceDetection = 0;
         mLastRaw = 0.0;
         ClearNote();
     }
@@ -127,6 +132,16 @@ class NoteTracker
         return mTracker.LowestFrequencyHz();
     }
 
+    /// Whether a note's start pitch has to say which note it is (the default), or only has to be
+    /// near it. A first reading taken as the note begins can be half a semitone out, which rounds
+    /// to the note next door; with this on, one that far off a note's centre waits for the next
+    /// detection, up to 5 ms. A caller that follows the pitch on from the start, as a pitch bend
+    /// does, loses nothing by starting on the early reading and can turn it off.
+    void SetExactStarts(bool on)
+    {
+        mExactStarts = on;
+    }
+
     /// Feeds `numSamples` of mono input, calling `sink(const Event&)` for each decision, with the
     /// event's sampleOffset set to its index in `input`. A null input counts as silence.
     template <typename Sink> void Process(const float* input, int numSamples, Sink&& sink)
@@ -136,6 +151,7 @@ class NoteTracker
             const float raw = input ? input[i] : 0.0f;
             const float x = IsFinite(raw) ? raw : 0.0f;
             mTracker.Push(x);
+            ++mSinceDetection;
             FollowLevels(x);
 
             if (mSinceAttack < mRefractorySamples)
@@ -158,6 +174,7 @@ class NoteTracker
             {
                 mDetectionsSeen = mTracker.DetectionCount();
                 OnDetection(i, sink);
+                mSinceDetection = 0;
             }
 
             CheckLevelStop(i, sink);
@@ -235,6 +252,9 @@ class NoteTracker
     static constexpr double kStableSemitones = 0.25;
     /// The tracker takes a move of up to a semitone straight away; one bigger it had to confirm.
     static constexpr double kJumpSemitones = 1.0;
+    /// An early reading (PitchTracker::IsRoughEstimate) further than this from a whole note waits
+    /// for one more detection before it starts the note.
+    static constexpr double kRoughOffCentreSemitones = 0.2;
 
     /// Whether a move of `semitones` is within half a semitone of a whole number of octaves.
     [[nodiscard]] static bool IsOctaves(double semitones)
@@ -242,6 +262,14 @@ class NoteTracker
         const double octaves = std::abs(semitones) / 12.0;
         const double nearest = std::round(octaves);
         return nearest >= 1.0 && std::abs(octaves - nearest) * 12.0 < 0.5;
+    }
+
+    /// The time `detections` of the tracker's usual 5 ms detections span, in samples, less half a
+    /// detection for rounding. The tracker detects more often while it looks for a note, so what
+    /// was once counted in detections is timed.
+    [[nodiscard]] int HeldFor(int detections) const
+    {
+        return (detections - 1) * mHopSamples - mHopSamples / 2;
     }
 
     [[nodiscard]] int SecondsToSamples(double seconds) const
@@ -329,6 +357,7 @@ class NoteTracker
         mPendingAge = 0;
         mPendingPeak = std::max(magnitude, mLevel);
         mPendingOverNote = mSounding;
+        mWaitedForBetter = false;
         mSwellHits = 0;
     }
 
@@ -397,7 +426,7 @@ class NoteTracker
         }
         else
         {
-            mUnpitchedSamples += mHopSamples;
+            mUnpitchedSamples += mSinceDetection;
         }
 
         if (mPending)
@@ -408,6 +437,17 @@ class NoteTracker
 
                 if (!samePitch || mPendingAge >= mSamePitchSettleSamples)
                 {
+                    // An early reading well off a note's centre may belong to the note either
+                    // side: 54 cents sharp, 2.5 ms into a high E, is the F above. One more
+                    // detection settles which, and costs a note that is in tune nothing.
+                    const bool offCentre = std::abs(accepted - std::round(accepted)) > kRoughOffCentreSemitones;
+
+                    if (mExactStarts && mTracker.IsRoughEstimate() && offCentre && !mWaitedForBetter)
+                    {
+                        mWaitedForBetter = true;
+                        return;
+                    }
+
                     Start(sink, offset, accepted, mPendingPeak);
                     return;
                 }
@@ -449,9 +489,14 @@ class NoteTracker
 
             if (std::abs(accepted - mPitch) > kJumpSemitones)
             {
-                if (IsOctaves(accepted - mPitch) && ++mOctaveHits < kOctaveDetections)
+                if (IsOctaves(accepted - mPitch))
                 {
-                    return;
+                    mOctaveSamples = mOctaveHits++ > 0 ? mOctaveSamples + mSinceDetection : 0;
+
+                    if (mOctaveSamples < HeldFor(kOctaveDetections))
+                    {
+                        return;
+                    }
                 }
 
                 mOctaveHits = 0;
@@ -475,7 +520,9 @@ class NoteTracker
         // to see, still becomes a note once its pitch has held for a few detections.
         if (settled && mLevel >= mOnLevel)
         {
-            if (++mSwellHits >= kSwellDetections)
+            mSwellSamples = mSwellHits++ > 0 ? mSwellSamples + mSinceDetection : 0;
+
+            if (mSwellSamples >= HeldFor(kSwellDetections))
             {
                 Start(sink, offset, accepted, mLevel);
             }
@@ -556,5 +603,10 @@ class NoteTracker
     int mMutedSamples = 0;
     int mSoundingSamples = 0; ///< since the note started, up to mMuteAfterSamples
     int mOctaveHits = 0;
+    bool mExactStarts = true;
+    bool mWaitedForBetter = false; ///< this attack's note has already waited on an early reading
+    int mSinceDetection = 0; ///< samples since the tracker's last detection
+    int mOctaveSamples = 0;  ///< how long an octave move has held
+    int mSwellSamples = 0;   ///< how long an unpicked pitch has held
 };
 } // namespace guitarfx

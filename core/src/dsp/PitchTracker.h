@@ -57,7 +57,9 @@ static_assert(std::size(kLowestNoteHz) == std::size(kLowestNoteLabels));
  *   recent audio. The lag search stops just past the first dip, so it costs least on high notes.
  * - A lag is accepted at the first dip of the normalised difference function below 0.2, the
  *   usual YIN rule, which favours the fundamental over its subharmonics. A first dip above
- *   2 kHz finds nothing, rather than its subharmonic an octave down.
+ *   2 kHz finds nothing, rather than its subharmonic an octave down. A first dip that is shallow
+ *   gives way to a markedly deeper one at twice its lag: the note an octave below, whose second
+ *   harmonic outweighs its fundamental.
  * - An estimate within a semitone of the current pitch is taken straight away, so bends and
  *   vibrato are followed. A bigger jump, including a first note, must be seen on two successive
  *   detections before it is accepted, which throws out a single stray octave.
@@ -108,6 +110,8 @@ class PitchTracker
         mDecimatedRate = mSampleRate / mDecimation;
         mMinLag = std::max(2, static_cast<int>(std::floor(mDecimatedRate / kMaxHz)));
         mHop = std::max(1, static_cast<int>(std::lround(kHopSeconds * mDecimatedRate)));
+        mSearchHop = std::max(1, static_cast<int>(std::lround(kSearchHopSeconds * mDecimatedRate)));
+        mWeakSpan = std::max(1, static_cast<int>(std::lround(kWeakSeconds * mDecimatedRate)));
         mRefineReach = std::min(mDecimation / 2 + 2, (kMaxRefineLags - 3) / 2);
 
         // Sized for the full guitar range whatever the lowest frequency is now, so that narrowing
@@ -117,6 +121,7 @@ class PitchTracker
         mDecimated.Assign(2 * longestLag + 2);
         mFull.Assign(longestLag * mDecimation + (longestLag + 2) * mDecimation + mRefineReach + 2);
         mNormalised.assign(static_cast<std::size_t>(longestLag + 2), 1.0f);
+        mShortNormalised.assign(static_cast<std::size_t>(longestLag + 2), 1.0f);
 
         mLowPass[0] = biquad::LowPass(kLowPassHz, biquad::ButterworthSectionQ(4, 0), mSampleRate);
         mLowPass[1] = biquad::LowPass(kLowPassHz, biquad::ButterworthSectionQ(4, 1), mSampleRate);
@@ -152,6 +157,33 @@ class PitchTracker
         return mLowestHz;
     }
 
+    /// Reads a new note sooner, for a caller that plays notes rather than measures pitch. Three
+    /// things, none of which touches how a note already being followed is read:
+    ///
+    /// - A detection's window is twice the longest period tracked, and until a new note fills the
+    ///   newer half of it and one of its own periods more, the window reads the note before, or
+    ///   nothing. Each detection also looks at the newest quarter of that half alone, and a clean
+    ///   pitch found there that is not the one being tracked is taken as the estimate
+    ///   (DetectNewNote).
+    /// - While no pitch is being followed (the last detection found none, or found one that is
+    ///   still to be confirmed) a detection runs every kSearchHopSeconds, not every 5 ms.
+    /// - A hard-picked, palm-muted note whose dip never passes the threshold is taken once its
+    ///   deepest dip has held its lag (FindSteadyWeakDip).
+    ///
+    /// A new pitch still has to be seen again 5 ms after it was first seen. On the GuitarSet solos
+    /// (12,000 single notes of real playing) Guitar to MIDI's note starts 13.4 ms after the string
+    /// sounds at the median where it took 17.4, and 41 ms into the hard low demo riffs where it
+    /// took 53; Synth Voice is on a new note's pitch within 13.6 ms nine times in ten where it
+    /// took 19.9. The early readings are good to a third of a semitone, not to a cent
+    /// (IsRoughEstimate), so one is never the pitch held, and the long window takes over as soon
+    /// as it reads the note. Off by default: a tuner wants the long window's reading only. Costs
+    /// about half as much again on notes, and up to four times as much on noise or chords, where
+    /// it is always searching. Does not allocate or reset.
+    void SetFastNoteChanges(bool on)
+    {
+        mFastNoteChanges = on;
+    }
+
     /// How much of the newest audio a detection judges, in seconds: the longest period tracked.
     /// A note is only read reliably once it fills most of this.
     [[nodiscard]] double HalfWindowSeconds() const
@@ -176,6 +208,12 @@ class PitchTracker
         mDetections = 0;
         mKeptCount = 0;
         mSinceHold = mHalf;
+        mSearching = false;
+        mRough = false;
+        mClock = 0;
+        mCandidateSince = 0;
+        mWeakFrequency = 0.0;
+        mWeakSince = 0;
     }
 
     void Process(const float* input, int numSamples)
@@ -209,11 +247,13 @@ class PitchTracker
 
         mDecimationCount = 0;
         mDecimated.Push(y);
+        ++mClock;
 
-        if (++mHopCount >= mHop)
+        if (++mHopCount >= ((mFastNoteChanges && mSearching) ? mSearchHop : mHop))
         {
+            const int elapsed = mHopCount;
             mHopCount = 0;
-            Detect();
+            Detect(elapsed);
         }
     }
 
@@ -228,6 +268,16 @@ class PitchTracker
     [[nodiscard]] bool HasPitch() const
     {
         return mDetected;
+    }
+
+    /// Whether the latest detection's estimate is an early one: made within a half-window of a
+    /// detection that found no pitch, so over a window the note does not yet fill, or one of
+    /// SetFastNoteChanges()' readings off the short window or a weak dip that held its lag. It is
+    /// the right note, but read through the pick, the silence before it or whatever else is
+    /// sounding it can be half a semitone out, where a settled one is within a few cents.
+    [[nodiscard]] bool IsRoughEstimate() const
+    {
+        return mDetected && mRough;
     }
 
     /// The latest detection's own estimate, before the note-change check; 0 when it found none.
@@ -252,7 +302,23 @@ class PitchTracker
     static constexpr double kDecimatedRate = 12000.0;
     static constexpr double kLowPassHz = 2000.0;
     static constexpr double kHopSeconds = 0.005;
+    /// SetFastNoteChanges(): how often a detection runs while no pitch is being followed (a note
+    /// just picked, or one not yet confirmed). A new note's first reading then waits 0.6 ms for a
+    /// detection on average, not 2.5.
+    static constexpr double kSearchHopSeconds = 0.00125;
+    /// SetFastNoteChanges(): a deepest dip under this that has held its lag for kWeakSeconds is a
+    /// note, though it never passed kDipThreshold (FindSteadyWeakDip).
+    static constexpr float kWeakDipThreshold = 0.45f;
+    static constexpr double kWeakSeconds = 0.01;
     static constexpr float kDipThreshold = 0.2f;
+    /// A first dip shallower than this is passed over for one at twice its lag that is deeper by
+    /// as much: the note an octave below, whose second harmonic made the first dip.
+    static constexpr float kOctaveMargin = 0.05f;
+    /// SetFastNoteChanges(): the short window, as a share of the half-window, and the dip it needs.
+    /// A quarter of a cycle of a low note can pass for periodic by chance, and a palm-muted chug
+    /// does at 0.1, so the dip has to be far cleaner than the long window's.
+    static constexpr double kShortWindowFraction = 0.25;
+    static constexpr float kShortDipThreshold = 0.07f;
     static constexpr float kGateRms = 0.0017783f; ///< -55 dBFS
     /// The newest quarter of the window below this fraction of the power of the same span a whole
     /// number of periods earlier means a note stopping.
@@ -320,6 +386,7 @@ class PitchTracker
         mMaxLag = LongestLag(mLowestHz);
         mHalf = mMaxLag;
         mWindowSize = mHalf + mMaxLag + 2;
+        mShortHalf = std::max(8, static_cast<int>(std::lround(kShortWindowFraction * mHalf)));
     }
 
     /// The sum of squared differences between `count` samples at `a` and at `b`.
@@ -375,12 +442,14 @@ class PitchTracker
         return std::clamp(0.5 * (left - right) / curvature, -1.0, 1.0);
     }
 
-    void Detect()
+    /// One detection, `elapsed` decimated samples after the one before.
+    void Detect(int elapsed)
     {
         ++mDetections;
         mDetected = false;
+        mRough = false;
         mRawFrequency = 0.0;
-        mSinceHold = std::min(mSinceHold + mHop, mHalf);
+        mSinceHold = std::min(mSinceHold + elapsed, mHalf);
 
         // A non-finite input leaves the low-pass state poisoned; start again rather than hold it.
         if (!IsFinite(mFilter[0].s1) || !IsFinite(mFilter[0].s2) || !IsFinite(mFilter[1].s1) ||
@@ -402,6 +471,7 @@ class PitchTracker
         {
             mConfidence = 0.0f;
             Hold();
+            mSearching = false; // silence: nothing to look for
             return;
         }
 
@@ -445,32 +515,67 @@ class PitchTracker
             }
         }
 
-        if (lag == 0)
+        // A first dip that only just passes may be the second harmonic's, at half the period: a
+        // note with a strong octave partial, or one picked while the octave above still rings,
+        // nearly repeats there. Where the signal repeats markedly better at twice the lag, that is
+        // the note. A clean note's dip is under the margin, so it is never looked at again.
+        if (lag != 0 && DipDepth(normalised, lag) > kOctaveMargin && 2 * lag + 1 <= maxLag)
+        {
+            for (int tau = lag + 2; tau <= 2 * lag + 2; ++tau)
+            {
+                const float difference = SquaredDifference(recent, recent - tau, half);
+                running += difference;
+                normalised[tau] = running > 0.0f ? difference * static_cast<float>(tau) / running : 1.0f;
+            }
+
+            lag = OctaveBelow(normalised, lag);
+        }
+
+        const bool passed = lag != 0;
+        const bool weak = !passed && mFastNoteChanges && FindSteadyWeakDip(normalised, lag);
+
+        if (passed)
+        {
+            mWeakFrequency = 0.0;
+        }
+
+        bool found = lag != 0;
+        double coarse = 0.0;
+        float level = 0.0f;
+        float confidence = 0.0f;
+
+        if (found)
+        {
+            confidence = 1.0f - normalised[lag];
+            coarse = lag + ParabolicOffset(normalised[lag - 1], normalised[lag], normalised[lag + 1]);
+
+            // A note that has just stopped leaves the newest part of the window near silent, and
+            // YIN run over that reads several cents out, so skip it. Against the window's mean
+            // power, as it was once judged, a quarter shorter than a period (below about 90 Hz)
+            // read as stopping or not by where in the cycle it fell: a steady low sawtooth or
+            // pluck lost up to a quarter of its detections.
+            level = LevelChange(recent + half, coarse);
+            found = level >= kStoppingPowerRatio;
+        }
+
+        // A weak dip is no evidence that the note before is still sounding, so it does not get to
+        // overrule the short window as a dip that passed does.
+        if (mFastNoteChanges && DetectNewNote(recent + half, (found && !weak) ? coarse : 0.0))
+        {
+            return;
+        }
+
+        if (!found)
         {
             mConfidence = 0.0f;
             Hold();
             return;
         }
 
-        mConfidence = 1.0f - normalised[lag];
-        const double coarse = lag + ParabolicOffset(normalised[lag - 1], normalised[lag], normalised[lag + 1]);
-
-        // A note that has just stopped leaves the newest part of the window near silent, and YIN
-        // run over that reads several cents out, so skip it. Against the window's mean power, as
-        // it was once judged, a quarter shorter than a period (below about 90 Hz) read as stopping
-        // or not by where in the cycle it fell: a steady low sawtooth or pluck lost up to a
-        // quarter of its detections.
-        const float level = LevelChange(recent + half, coarse);
-
-        if (!(level >= kStoppingPowerRatio))
-        {
-            mConfidence = 0.0f;
-            Hold();
-            return;
-        }
+        mConfidence = confidence;
 
         // Step 4: interpolate the decimated lag, then refine it at the full rate.
-        const double frequency = mSampleRate / RefinePeriod(coarse * mDecimation);
+        const double frequency = mSampleRate / RefinePeriod(coarse * mDecimation, mHalf * mDecimation);
 
         if (!(frequency >= mLowestHz && frequency <= kMaxHz))
         {
@@ -480,7 +585,182 @@ class PitchTracker
 
         mRawFrequency = frequency;
         mDetected = true;
-        Accept(frequency, mSinceHold < mHalf ? 0.0f : level);
+        // Within a half-window of a detection that found nothing, the window is still partly the
+        // silence or the scrape before the note.
+        mRough = weak || mSinceHold < mHalf;
+
+        if (weak && !(mFrequency > 0.0 && std::abs(Semitones(mFrequency, frequency)) <= kContinuousSemitones))
+        {
+            // Its lag has already held for kWeakSeconds: that was the second look.
+            mCandidate = frequency;
+            mCandidateHits = kConfirmations - 1;
+            mCandidateSince = mClock - mHop;
+        }
+
+        // A weak dip is read through whatever else is in the window: never the pitch to hold.
+        Accept(frequency, (weak || mSinceHold < mHalf) ? 0.0f : level);
+    }
+
+    /// SetFastNoteChanges(): no dip passed the threshold, but the deepest one is under
+    /// kWeakDipThreshold and has sat within half a semitone of the same lag for kWeakSeconds.
+    /// That is a hard-picked, palm-muted low note: a pulse at the right period from the first
+    /// cycle, each one duller and quieter than the last, so that for some 45 ms only half of it
+    /// repeats and no lag gets under 0.2, though the deepest dip is the note's all along. A scrape
+    /// or a chord's deepest dip wanders. Sets `lag` and returns true once it has held.
+    [[nodiscard]] bool FindSteadyWeakDip(const float* normalised, int& lag)
+    {
+        int best = mMinLag;
+
+        for (int tau = mMinLag + 1; tau <= mMaxLag; ++tau)
+        {
+            if (normalised[tau] < normalised[best])
+            {
+                best = tau;
+            }
+        }
+
+        if (best == mMinLag || best == mMaxLag || !(normalised[best] < kWeakDipThreshold))
+        {
+            mWeakFrequency = 0.0;
+            return false;
+        }
+
+        const double frequency =
+            mDecimatedRate / (best + ParabolicOffset(normalised[best - 1], normalised[best], normalised[best + 1]));
+
+        if (!(mWeakFrequency > 0.0 && std::abs(Semitones(mWeakFrequency, frequency)) <= kCandidateSemitones))
+        {
+            mWeakSince = mClock;
+        }
+
+        mWeakFrequency = frequency;
+
+        if (mClock - mWeakSince < mWeakSpan)
+        {
+            return false;
+        }
+
+        lag = best;
+        return true;
+    }
+
+    /// How deep the dip at `lag` goes between the lags: the minimum of the parabola through it and
+    /// its neighbours. A high note's period is only six to eight decimated samples, and its dip
+    /// read at the nearest whole lag is well short of the bottom.
+    [[nodiscard]] static float DipDepth(const float* normalised, int lag)
+    {
+        const double left = normalised[lag - 1];
+        const double middle = normalised[lag];
+        const double right = normalised[lag + 1];
+        return static_cast<float>(middle - 0.25 * (left - right) * ParabolicOffset(left, middle, right));
+    }
+
+    /// The lag an octave below `lag` (twice it, give or take one) when the signal repeats better
+    /// there by more than kOctaveMargin; `lag` otherwise. `normalised` must reach 2 * lag + 2.
+    [[nodiscard]] static int OctaveBelow(const float* normalised, int lag)
+    {
+        int twice = 2 * lag - 1;
+
+        for (int tau = 2 * lag; tau <= 2 * lag + 1; ++tau)
+        {
+            if (normalised[tau] < normalised[twice])
+            {
+                twice = tau;
+            }
+        }
+
+        return DipDepth(normalised, lag) - DipDepth(normalised, twice) > kOctaveMargin ? twice : lag;
+    }
+
+    /// SetFastNoteChanges(): YIN again over only the newest quarter of the half-window, across the
+    /// whole lag range, looking for a note the long window cannot read yet. Takes the detection
+    /// (true) when it finds a pitch over a semitone from the one being tracked that the long
+    /// window either did not find or disagrees with; `fullLag` is the long window's lag, 0 for
+    /// none. Where the newest audio still repeats at the long window's period the old note is
+    /// still sounding, and the long window, which reads it better, keeps the detection.
+    [[nodiscard]] bool DetectNewNote(const float* end, double fullLag)
+    {
+        const int span = mShortHalf;
+        const float* recent = end - span;
+
+        if (!(Energy(recent, span) > kGateRms * kGateRms * static_cast<float>(span)))
+        {
+            return false;
+        }
+
+        float* normalised = mShortNormalised.data();
+        float running = 0.0f;
+        normalised[0] = 1.0f;
+
+        for (int tau = 1; tau <= mMaxLag + 1; ++tau)
+        {
+            const float difference = SquaredDifference(recent, recent - tau, span);
+            running += difference;
+            normalised[tau] = running > 0.0f ? difference * static_cast<float>(tau) / running : 1.0f;
+        }
+
+        int lag = 0;
+
+        for (int tau = 1; tau <= mMaxLag && lag == 0; ++tau)
+        {
+            if (normalised[tau] < kShortDipThreshold)
+            {
+                if (tau < mMinLag)
+                {
+                    return false;
+                }
+
+                lag = tau;
+
+                while (lag < mMaxLag && normalised[lag + 1] < normalised[lag])
+                {
+                    ++lag;
+                }
+            }
+        }
+
+        if (lag == 0)
+        {
+            return false;
+        }
+
+        if (2 * lag + 1 <= mMaxLag && DipDepth(normalised, lag) > kOctaveMargin)
+        {
+            lag = OctaveBelow(normalised, lag);
+        }
+
+        const double coarse = lag + ParabolicOffset(normalised[lag - 1], normalised[lag], normalised[lag + 1]);
+        const double coarseHz = mDecimatedRate / coarse;
+
+        if (mFrequency > 0.0 && std::abs(Semitones(mFrequency, coarseHz)) <= kContinuousSemitones)
+        {
+            return false; // the note being tracked: the long window's to read
+        }
+
+        if (fullLag > 0.0)
+        {
+            const int at = std::clamp(static_cast<int>(std::lround(fullLag)), 1, mMaxLag);
+            const bool stillThere = std::min({normalised[at - 1], normalised[at], normalised[at + 1]}) < kDipThreshold;
+
+            if (stillThere || std::abs(Semitones(mDecimatedRate / fullLag, coarseHz)) <= kCandidateSemitones)
+            {
+                return false;
+            }
+        }
+
+        const double frequency = mSampleRate / RefinePeriod(coarse * mDecimation, span * mDecimation);
+
+        if (!(frequency >= mLowestHz && frequency <= kMaxHz))
+        {
+            return false;
+        }
+
+        mConfidence = 1.0f - normalised[lag];
+        mRawFrequency = frequency;
+        mDetected = true;
+        mRough = true;
+        Accept(frequency, 0.0f); // read off a short window: never the pitch to hold
+        return true;
     }
 
     /// The power of the newest quarter of the half-window that ends at `end`, over that of the
@@ -513,6 +793,14 @@ class PitchTracker
     void Hold()
     {
         mSinceHold = 0;
+        mSearching = true;
+
+        // Detecting every kSearchHopSeconds, two estimates either side of one that found nothing
+        // are no longer two in a row: the candidate starts again.
+        if (mFastNoteChanges)
+        {
+            mCandidateHits = 0;
+        }
 
         if (mKeptCount < 2)
         {
@@ -545,8 +833,8 @@ class PitchTracker
     }
 
     /// The full-rate lag with the highest normalised cross-correlation within about a decimated
-    /// sample of `estimate`, interpolated. The span is the decimated window's, so both judge the
-    /// same stretch of audio.
+    /// sample of `estimate`, interpolated, over the newest `span` full-rate samples: the stretch of
+    /// audio the decimated window that made the estimate judged.
     ///
     /// Normalised correlation ignores a level difference between the two copies being compared.
     /// A decaying note's older copy is louder than its newer one, and a squared difference then
@@ -554,9 +842,8 @@ class PitchTracker
     /// release, which is the estimate that gets held when the note stops. For an exponential
     /// decay the correlation peaks exactly at the period. It is accumulated in double, since
     /// near a long period neighbouring lags differ by parts in 10^5.
-    [[nodiscard]] double RefinePeriod(double estimate) const
+    [[nodiscard]] double RefinePeriod(double estimate, int span) const
     {
-        const int span = mHalf * mDecimation;
         const int longest = (mMaxLag + 1) * mDecimation;
         const int centre = std::clamp(static_cast<int>(std::lround(estimate)), mRefineReach + 1, longest);
         const int first = centre - mRefineReach - 1; // one below the search, for the parabola
@@ -597,9 +884,12 @@ class PitchTracker
         {
             mFrequency = frequency;
             mCandidateHits = 0;
+            mSearching = false;
             Keep(frequency, level);
             return;
         }
+
+        mSearching = true;
 
         if (mCandidateHits > 0 && std::abs(Semitones(mCandidate, frequency)) <= kCandidateSemitones)
         {
@@ -608,12 +898,18 @@ class PitchTracker
         else
         {
             mCandidateHits = 1;
+            mCandidateSince = mClock;
         }
 
         mCandidate = frequency;
 
-        if (mCandidateHits >= kConfirmations)
+        // Seen again, and a whole hop after it was first seen: at the usual hop that is the next
+        // detection, as it always was. While searching, detections come four times as often and
+        // their windows mostly overlap, so two in a row say little more than one; the wait is
+        // what makes the second look a look at new audio.
+        if (mCandidateHits >= kConfirmations && mClock - mCandidateSince >= mHop)
         {
+            mSearching = false;
             mFrequency = frequency;
             mCandidateHits = 0;
             mKeptCount = 0;
@@ -636,6 +932,9 @@ class PitchTracker
     MirroredRing mDecimated;
     MirroredRing mFull;
     std::vector<float> mNormalised; ///< YIN's cumulative-mean normalised difference, by lag
+    std::vector<float> mShortNormalised; ///< the same over the short window (SetFastNoteChanges)
+    int mShortHalf = 0;
+    bool mFastNoteChanges = false;
 
     BiquadCoefficients mLowPass[2];
     biquad::State mFilter[2];
@@ -659,5 +958,14 @@ class PitchTracker
     std::array<KeptEstimate, kKeptEstimates> mKept{}; ///< the current note's latest, oldest first
     int mKeptCount = 0;
     int mSinceHold = 0; ///< decimated samples since a detection found no pitch, up to a half-window
+
+    int mSearchHop = 15;
+    int mWeakSpan = 120;
+    bool mSearching = false;          ///< the last detection did not follow the accepted pitch
+    bool mRough = false;              ///< the latest estimate is an early one (IsRoughEstimate)
+    std::int64_t mClock = 0;          ///< decimated samples since Reset()
+    std::int64_t mCandidateSince = 0; ///< when the candidate was first seen
+    double mWeakFrequency = 0.0;      ///< the deepest dip's pitch while none passes; 0 for none
+    std::int64_t mWeakSince = 0;
 };
 } // namespace guitarfx

@@ -99,6 +99,8 @@ class SynthSawEffect : public EffectProcessor
         mSampleRate = sampleRate;
         mMaxBlockSize = maxBlockSize;
         mTracker.Prepare(sampleRate);
+        // The voice plays the pitch, so it should move to a new note as soon as one can be read.
+        mTracker.SetFastNoteChanges(true);
         // The oscillators are PolyBLEP, so they stay clean up to near Nyquist: only the ceiling
         // a phase increment can reach is a hard limit, not the tracker's top note.
         mMaxOutputFrequency = kMaxOutputFrequencyRatio * sampleRate;

@@ -9,6 +9,8 @@
  *     though a quarter of the window is shorter than their period
  *   - a note change is followed within 50 ms, vibrato is followed continuously, and a note's
  *     pitch is held through silence however the stop falls between two detections
+ *   - a note whose octave partial is far louder than its fundamental still reads as itself
+ *   - with fast note changes on, a new note is followed sooner and a steady one reads the same
  *   - white noise never produces a pitch, and a NaN on the input does not stick
  *   - on the DI guitar recording, the decimated tracker agrees with brute-force full-rate YIN
  *     frame by frame
@@ -426,6 +428,162 @@ void TestResponse()
           "worst " + Num(worstHeld) + " cents, " + whereHeld);
 }
 
+/// A steady tone from its partials' amplitudes, first the fundamental's.
+std::vector<float> Partials(double frequency, double seconds, double sampleRate, std::initializer_list<double> amplitudes)
+{
+    std::vector<float> signal(static_cast<std::size_t>(seconds * sampleRate));
+
+    for (std::size_t n = 0; n < signal.size(); ++n)
+    {
+        const double t = static_cast<double>(n) / sampleRate;
+        double value = 0.0;
+        int k = 1;
+
+        for (const double amplitude : amplitudes)
+        {
+            value += amplitude * std::sin(2.0 * kPi * k * frequency * t + 0.3 * k);
+            ++k;
+        }
+
+        signal[n] = static_cast<float>(0.3 * value);
+    }
+
+    return signal;
+}
+
+/// A note whose octave partial is 14 dB over its fundamental nearly repeats at half its period:
+/// YIN's first dip under the threshold is there, an octave high. On the GuitarSet solos that was
+/// a fifth of all the time Guitar to MIDI spent on a wrong pitch, mostly notes from E3 to D#4.
+void TestWeakFundamental()
+{
+    std::cout << "\nWeak fundamental" << std::endl;
+    int found = 0;
+    int right = 0;
+
+    for (const double sampleRate : {44100.0, 48000.0, 96000.0})
+    {
+        for (const double frequency : {82.41, 110.0, 146.83, 196.0, 261.63, 392.0, 523.25})
+        {
+            PitchTracker tracker;
+            tracker.Prepare(sampleRate);
+            const auto tone = Partials(frequency, 0.5, sampleRate, {0.2, 1.0, 0.1});
+            std::uint64_t seen = 0;
+
+            for (std::size_t n = 0; n < tone.size(); ++n)
+            {
+                tracker.Push(tone[n]);
+
+                // Past the first 50 ms: until the window holds two periods, only the octave shows.
+                if (tracker.DetectionCount() != seen && n > static_cast<std::size_t>(0.05 * sampleRate))
+                {
+                    seen = tracker.DetectionCount();
+                    found += tracker.HasPitch() ? 1 : 0;
+                    right += (tracker.HasPitch() && std::abs(Cents(tracker.RawFrequencyHz(), frequency)) < 20.0) ? 1 : 0;
+                }
+            }
+        }
+    }
+
+    Check(found > 1500 && right == found, "a note with a far louder octave partial reads as itself, not an octave up",
+          std::to_string(right) + " of " + std::to_string(found) + " detections");
+}
+
+/// SetFastNoteChanges(): a new note is read off the newest audio alone and looked for four times
+/// as often, so sooner, and a steady one is left to the long window, so as before.
+void TestFastNoteChanges()
+{
+    std::cout << "\nFast note changes" << std::endl;
+    constexpr double kSampleRate = 48000.0;
+    constexpr double kChanges[][2] = {{110.0, 164.81},  {82.41, 329.63}, {659.26, 82.41}, {392.0, 196.0},
+                                      {1318.5, 110.0}, {196.0, 220.0},  {329.63, 392.0}, {246.94, 196.0}};
+    int sooner = 0;
+    int later = 0;
+    int slowest = 0;
+
+    for (const auto& change : kChanges)
+    {
+        int samples[2] = {};
+
+        for (int fast = 0; fast < 2; ++fast)
+        {
+            PitchTracker tracker;
+            tracker.Prepare(kSampleRate);
+            tracker.SetLowestFrequency(70.0);
+            tracker.SetFastNoteChanges(fast != 0);
+            const auto first = Tone(change[0], 0.5, kSampleRate, Kind::Pluck);
+            tracker.Process(first.data(), static_cast<int>(first.size()));
+            samples[fast] = SamplesToFollow(tracker, Tone(change[1], 0.3, kSampleRate, Kind::Pluck), change[1]);
+        }
+
+        sooner += (samples[1] >= 0 && samples[1] < samples[0]) ? 1 : 0;
+        later += (samples[1] < 0 || samples[1] > samples[0]) ? 1 : 0;
+        slowest = samples[1] < 0 ? 1 << 30 : std::max(slowest, samples[1]);
+    }
+
+    Check(later == 0 && sooner >= 4, "a note change is followed sooner, and never later",
+          std::to_string(sooner) + " of " + std::to_string(std::size(kChanges)) + " sooner, " + std::to_string(later) +
+              " later");
+    Check(slowest <= 0.025 * kSampleRate, "within 25 ms for a guitar in drop D",
+          "slowest " + Num(slowest / 48.0, 1) + " ms");
+
+    // A steady note is read by the long window alone. Its detections fall at other instants,
+    // since the search at its start runs four times as often and leaves the 5 ms grid elsewhere,
+    // so the two agree to a fraction of a cent rather than to the bit.
+    double worstCents = 0.0;
+    int plainFound = 0;
+    int fastFound = 0;
+
+    for (const double frequency : {46.0, 82.41, 110.0, 196.0, 440.0, 987.77, 1480.0})
+    {
+        for (const Kind kind : {Kind::Sine, Kind::Saw, Kind::Pluck})
+        {
+            PitchTracker plain;
+            PitchTracker fast;
+            plain.Prepare(kSampleRate);
+            fast.Prepare(kSampleRate);
+            fast.SetFastNoteChanges(true);
+            const auto tone = Tone(frequency, 1.0, kSampleRate, kind);
+            std::uint64_t plainSeen = 0;
+            std::uint64_t fastSeen = 0;
+
+            for (std::size_t n = 0; n < tone.size(); ++n)
+            {
+                plain.Push(tone[n]);
+                fast.Push(tone[n]);
+
+                // Past the note's start, which is the part it is there to change.
+                if (n <= static_cast<std::size_t>(0.1 * kSampleRate))
+                {
+                    plainSeen = plain.DetectionCount();
+                    fastSeen = fast.DetectionCount();
+                    continue;
+                }
+
+                if (plain.FrequencyHz() > 0.0 && fast.FrequencyHz() > 0.0)
+                {
+                    worstCents = std::max(worstCents, std::abs(Cents(fast.FrequencyHz(), plain.FrequencyHz())));
+                }
+
+                if (plain.DetectionCount() != plainSeen)
+                {
+                    plainSeen = plain.DetectionCount();
+                    plainFound += plain.HasPitch() ? 1 : 0;
+                }
+
+                if (fast.DetectionCount() != fastSeen)
+                {
+                    fastSeen = fast.DetectionCount();
+                    fastFound += fast.HasPitch() ? 1 : 0;
+                }
+            }
+        }
+    }
+
+    Check(worstCents < 1.0 && fastFound >= plainFound, "a steady note reads within a cent of what it does with it off",
+          "worst " + Num(worstCents) + " cents, found on " + std::to_string(fastFound) + " detections against " +
+              std::to_string(plainFound));
+}
+
 void TestRejection()
 {
     std::cout << "\nNoise and bad input" << std::endl;
@@ -509,6 +667,26 @@ double ReferenceYin(const std::vector<float>& signal, std::size_t end, double sa
                    normalised[static_cast<std::size_t>(tau + 1)] < normalised[static_cast<std::size_t>(tau)])
             {
                 ++tau;
+            }
+
+            // The tracker's octave check: a shallow first dip gives way to a markedly deeper one
+            // at twice its lag.
+            if (normalised[static_cast<std::size_t>(tau)] > 0.05 && 2 * tau + 1 <= maxLag)
+            {
+                int twice = 2 * tau - 1;
+
+                for (int other = 2 * tau; other <= 2 * tau + 1; ++other)
+                {
+                    if (normalised[static_cast<std::size_t>(other)] < normalised[static_cast<std::size_t>(twice)])
+                    {
+                        twice = other;
+                    }
+                }
+
+                if (normalised[static_cast<std::size_t>(tau)] - normalised[static_cast<std::size_t>(twice)] > 0.05)
+                {
+                    tau = twice;
+                }
             }
 
             const double left = normalised[static_cast<std::size_t>(tau - 1)];
@@ -628,6 +806,8 @@ int main()
     TestLowNotes();
     TestBassRange();
     TestResponse();
+    TestWeakFundamental();
+    TestFastNoteChanges();
     TestRejection();
     TestRealGuitar();
     ReportCost();

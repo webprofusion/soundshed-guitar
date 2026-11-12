@@ -2585,6 +2585,81 @@ The same `dsp/PitchTracker.h` (see *Pitch tracker* under Ring Modulator) follows
 three more features, each of which used to run a brute-force YIN of its own. The Pitch Tracking
 EQ (`eq_pitch_tracking`) uses it too, to place its bands.
 
+**Scored on annotated playing (2026-11-11).** The single-line takes of GuitarSet (180 solos, six
+players, pickup signal; 12,018 notes with no other note sounding, each with its annotated pitch)
+went through Synth Voice and Guitar to MIDI, with the two hard-picked demo riffs beside them.
+Times are from where the note starts to sound: a pick marker is often the pick touching the
+string, or a fret click, with the pluck 15–30 ms behind it. Timed from the marker, one note in
+seven waited over 25 ms for a first reading with nothing yet to read, and the 90th percentile
+came out at 39.8 ms where it is 27.1.
+
+| | Before | After |
+|---|---|---|
+| Guitar to MIDI, sound to note, median | 17.4 ms | 13.4 ms |
+| ...at the 90th percentile | 27.1 ms | 23.0 ms |
+| ...below E3 / from E3 / from E4, median | 23.3 / 19.2 / 14.8 ms | 19.3 / 14.2 / 12.1 ms |
+| Time on the note's pitch / a wrong one / silent | 87.3 / 9.5 / 3.2% | 89.2 / 8.4 / 2.4% |
+| First note over 2.5 semitones out | 1.4% | 1.8% |
+| First note off pitch at all (mostly a slide or bend in) | 3.1% | 4.2% |
+| Hard low riffs, sound to note, median | 52.8 ms | 41.4 ms |
+| Hard low riffs, time on the pitch / silent | 67 / 21% | 83 / 3% |
+| Synth Voice (Glide 0) within 50 cents of a new note, from its annotated onset, median / 90th percentile | 5.8 / 19.9 ms | 3.7 / 13.6 ms |
+| Synth Voice an octave out | 2.5% | 1.4% |
+| Tracker's first right reading / accepted, median | 12.5 / 16.1 ms | 8.3 / 12.6 ms |
+
+Four things changed in the tracker. The first is for every user of it; the rest are
+`SetFastNoteChanges`, on for Synth Voice and the note tracker only, and leave a steady note to
+the long window as before (within a cent: its detections fall at other instants).
+
+- *Octave check.* A note whose octave partial far outweighs its fundamental, or one picked
+  while the octave above still rings, nearly repeats at half its period, and YIN's first dip
+  under the threshold is then an octave high. A first dip shallower than 0.05 (read between the
+  lags, since a high note's period is only six to eight decimated samples) now gives way to one
+  at twice the lag that is deeper by as much. This was a fifth of the time Guitar to MIDI
+  sounded a wrong pitch, and most of Synth Voice's octave errors (4.5% of the time from E3 to
+  D#4).
+- *A short window for a new note.* A detection's window is twice the longest period tracked, so
+  a new note is not read until it fills the newer half and one of its own periods more: 14 ms
+  plus a period in drop D, whatever the note. Each detection also runs YIN over the newest
+  quarter of that half alone, across the whole lag range, and takes a clean pitch found there (a
+  dip under 0.07) when it is not the note being tracked and the newest audio no longer repeats
+  at the long window's period.
+- *Detections four times as often while searching.* While no pitch is being followed (a note
+  just picked, or one not yet confirmed) a detection runs every 1.25 ms, so a first reading
+  waits 0.6 ms for one on average, not 2.5. A new pitch must still be seen again a full 5 ms
+  after it was first seen: the windows of two detections 1.25 ms apart mostly overlap, and
+  accepting on those started junk notes on the riffs' pick noise.
+- *A weak dip that holds its lag.* A hard-picked, palm-muted low note is a pulse at the right
+  period from its first cycle, but each pulse is duller and quieter than the last: for some
+  45 ms only about half of it repeats and no lag gets under 0.2, with either a squared
+  difference or a normalised correlation. The deepest dip is the note's throughout, though, so a
+  deepest dip under 0.45 that stays within half a semitone for 10 ms is now taken.
+
+How much is left. A string's pitch is not in the signal until one period after the pluck, and
+the first right reading now comes 8.3 ms after the sound starts at the median (13.9, 9.2 and
+7.0 ms by register), about a period plus the short window. Published figures for hex-pickup
+hardware are 7 to 14 ms to detect and 8 to 16 ms to MIDI, and for a mono converter 5 ms at the
+top of the neck to 19 ms on the low E. The 4 ms between first reading and note is the second
+look. Shortening it was measured and left out, each step costing wrong first notes: confirming
+after 3.75 ms (12.3 ms median, 2.1% of first notes over 2.5 semitones out), after 2.5 ms
+(wrong notes on 2 of the 18 riff notes), on the very next 1.25 ms detection (11.5 to 12.7 ms;
+2 to 6 of 18), a looser short-window dip of 0.1 or 0.15, a looser YIN threshold of 0.3 or 0.4, a
+confirmation scaled to the note's period, and a detection band narrowed to 500–1200 Hz (no
+faster on the riffs, worse elsewhere). Methods that guess from a single period are documented
+at 15–22% wrong first guesses.
+
+In Notes mode a first reading has to say which note it is, and one taken as the note begins
+can be half a semitone out (54 cents sharp, 2.5 ms into a high E, rounds to the F above). So
+there an early reading (`PitchTracker::IsRoughEstimate`) more than 20 cents off a note's centre
+waits for the next detection (`NoteTracker::SetExactStarts`): 13.8 ms at the median, 25.4 ms at
+the 90th percentile, a first note off pitch on 4.7% (3.7% before; 5.1% without the wait). With
+the bend following the pitch the early reading is a bend of that much for a few milliseconds,
+and nothing waits.
+
+Cost: Guitar to MIDI takes 2.0 µs per 64-sample block on these takes (1.2 before, Release
+flags), and 4.9 µs on white noise (1.2), where it is always searching. The record, harness, scripts and sources are in the private repo under
+`research/pitch-tracking-2026-11-11/`.
+
 | Feature | How it uses the tracker |
 |---|---|
 | Synth Voice (`synth_saw`) | The mono input feeds the tracker, and its accepted pitch is what the oscillator glides to over Glide. After an onset (the input envelope rising by 15% in a sample) the glide runs four times faster until two confident detections, about 10 ms. While the tracker finds no pitch (silence, noise, a note dying away) the oscillator goes, over Glide, to the pitch the tracker holds: the note's own from before it began to stop. It used to keep the last estimate it was given, which may already have heard the start of the silence, and a low note's tail could settle over 30 cents out (13 cents at the default Glide); wherever the stop falls it now settles within 1.5 cents. It sounds only while the envelope is above Gate. Notes from 45 Hz to 2 kHz. At 48 kHz in 64-sample blocks of the DI demo, built for Release, it costs 2.2 µs per block on average and 8.3 µs at the 99th percentile, 1.7 and 7.7 µs of that the tracker's; with voice 2 on, 2.4 and 8.4 µs, where working out the frequency ratios with `std::pow` on every sample made it 3.7 and 10. Built without fast math (`/fp:fast`), the tracker's sums go unvectorised and everything costs about five times as much. A note change reaches the oscillator in 13–60 ms. The old detector cost 50 and 130 µs (2.2 ms at 192 kHz, against that block's 333 µs deadline), took up to 83 ms, and stopped at 50 Hz. |
@@ -2648,6 +2723,14 @@ the previous note carries on. `OnsetPitchEstimator`, which the harmonizer uses, 
 these notes early. Power chords, most of Guitar Riff 03, have no single period in the tracker's
 range: a note often stops 100 ms into the chord and returns as its root a few hundred
 milliseconds later, if at all. `NoteTrackerTests` holds the single-note riffs to this.
+
+Those figures are from before the 2026-11-11 pass and are timed from the pick marker, which on
+about half of the riff notes is the pick touching the string 16–32 ms ahead of the pluck. See
+*Scored on annotated playing* under Pitch tracking for the current ones, timed from where the note
+sounds: 13.4 ms at the median on 12,000 annotated notes, and 41 ms on these riffs, whose notes
+are now taken once their deepest dip has held its lag. Chords are not scored there, and the
+steady weak dip does make more notes of them: the DI take comes out as 536 notes where it
+was 412. Nobody has yet listened to whether those are the roots.
 
 **Routing**: the notes reach every Plugin Host downstream, however many nodes lie between, and
 none on a parallel branch that does not pass through this node; they stop at a composite's

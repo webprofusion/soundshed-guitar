@@ -273,7 +273,11 @@ void TestPhrases()
         {
             const auto melody = Melody(staccato);
             const Score c = ScorePhrase(melody, Run(RenderPhrase(melody, EndOf(melody), rate), rate));
-            Check(c.found == c.notes && c.extra == 0 && c.worstLatencyMs <= 30.0 && c.worstCents < 20.0,
+            // Over a ringing note the start is read off the pitch tracker's short window
+            // (SetFastNoteChanges), a few milliseconds of audio that still holds the note before:
+            // right to the note, within a quarter-tone, and glided in by the next detection.
+            Check(c.found == c.notes && c.extra == 0 && c.worstLatencyMs <= 30.0 &&
+                      c.worstCents < (staccato ? 20.0 : 45.0),
                   std::string(staccato ? "a staccato melody" : "a melody picked over ringing notes") + at, Describe(c));
         }
     }

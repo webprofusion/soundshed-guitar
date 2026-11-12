@@ -94,10 +94,12 @@ constexpr double kThruRampSeconds = 0.005;
  *   nearest note and bends on from there.
  *
  * Lowest Note narrows the pitch tracker to the guitar's lowest string: the higher it is, the
- * sooner a note is recognised. At the drop-D default a note from C#3 up starts about 30 ms after
- * the pick on the demo riffs. A low note picked hard takes about 55 ms: for its first 50 ms the
- * string is not periodic enough for the tracker to read, and the note starts one detection after
- * the tracker first reads it. Guitar Thru passes the guitar on, for an instrument layered with
+ * sooner a note is recognised. At the drop-D default, on 12,000 single notes of real playing, a
+ * note starts 13 ms after the string sounds at the median: 19 ms below E3, 14 ms from E3, 12 ms
+ * from E4 up, and within 23 ms nine times in ten. A string's pitch is not in the signal until
+ * one period after the pluck, 12 ms on a low E. A low note picked hard and palm-muted takes
+ * about 40 ms: for its first 45 ms only half of each cycle repeats. Notes waits up to 5 ms more
+ * where the first reading is too far off a note's centre to say which note it is. Guitar Thru passes the guitar on, for an instrument layered with
  * it or a chain that carries on; off, only the instrument (through its Plugin Host's Mix) is
  * heard.
  *
@@ -300,6 +302,9 @@ class GuitarToMidiEffect : public EffectProcessor
             Choice(guitar_to_midi::kBendRange), 0, static_cast<int>(std::size(guitar_to_midi::kBendRanges)) - 1))];
         mChannel = std::clamp(Choice(guitar_to_midi::kChannel), 1, 16) - 1;
         mTranspose = Choice(guitar_to_midi::kTranspose);
+        // With the bend following the pitch, a first reading a third of a semitone out is a bend
+        // of that much for a few milliseconds; rounded to a note, it can be the wrong one.
+        mTracker.SetExactStarts(!mBendMode);
     }
 
     [[nodiscard]] bool NoteSettingsChanged() const
