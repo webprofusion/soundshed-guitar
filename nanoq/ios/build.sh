@@ -126,6 +126,11 @@ else
     fi
 fi
 
+# Regenerate the Xcode project first if CMake's inputs changed (the sources are a
+# GLOB ... CONFIGURE_DEPENDS). Inside the main build ZERO_CHECK regenerates it too, but only after
+# xcodebuild has loaded the old project, so the first build after a source file moves fails on
+# the old path ("Build input file cannot be found") and only the next one works.
+cmake --build "${BUILD_DIR}" --config "$CONFIG" --target ZERO_CHECK -- -sdk "$SDK" -quiet
 cmake --build "${BUILD_DIR}" --config "$CONFIG" --target "$TARGET" -- "${xcode_args[@]}" -quiet
 
 # The Xcode generator puts an iOS app under <config>-<sdk>.
