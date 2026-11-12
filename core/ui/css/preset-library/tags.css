@@ -48,7 +48,7 @@ html[data-density="compact"] .preset-library-popover .preset-tag-filter-chip {
 }
 
 @media (pointer: coarse) {
-  html[data-density="compact"] .preset-library-popover .preset-tag-filter-chip {
+  :is(html, html[data-density="compact"]) .preset-library-popover .preset-tag-filter-chip {
     min-height: 28px;
     padding: 0 12px;
   }

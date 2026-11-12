@@ -204,11 +204,13 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         }
     };
 
-    // The panel's size: over the full layout's editor (the web UI's FX Library), else under the
+    // The panel's size: over a split stage's editor (the web UI's FX Library), else under the
     // preset bar, filling the stage.
     const auto view = ViewSize();
     const float stageWidth = view.x - StageLeft();
-    const bool overEditor = mWide && mEditorArea.height() > 200.0f;
+    // The compact frame's split stage has a stage-high panel to fall back on, so its editor must
+    // hold the panel's least height (300) to be used: a shorter one put the panel over the footer.
+    const bool overEditor = PlayStageShown() && mEditorArea.height() > (mWide ? 200.0f : 324.0f);
     const float width =
         overEditor ? std::min(860.0f, mEditorArea.width() - 24.0f) : std::min(860.0f, stageWidth - 24.0f);
     const float top = overEditor ? mEditorArea.top + 8.0f : metrics::kTopBarHeight + 8.0f;

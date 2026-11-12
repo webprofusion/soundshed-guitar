@@ -217,8 +217,14 @@ std::string Shell::EffectPageSignature() const
     std::string s =
         node->id + "|" + node->type + "|" + NodeDisplayName(mState, *node) + "|" + (node->enabled ? "1" : "0") + "|" +
         (mShowAdvanced ? "adv" : "main") + "|" + std::to_string(static_cast<int>(width / 24.0f)) + "x" +
-        std::to_string(static_cast<int>(ViewSize().y / 24.0f)) + "|" + NodeArchitectureBadge(mState, *node) + "|cm" +
+        std::to_string(static_cast<int>(StageHeight() / 24.0f)) + "|" + NodeArchitectureBadge(mState, *node) + "|cm" +
         node->channelMode + (mState.appSettings.value("audio.signalPath.channelModeControl", false) ? "+" : "-");
+
+    // Split, the editor has what the chain leaves (Rebuild builds the chain first).
+    if (PlayStageShown())
+    {
+        s += "|split" + std::to_string(static_cast<int>(mChainAreaHeight));
+    }
 
     const auto* type = mState.FindEffectType(node->type);
 
@@ -336,11 +342,11 @@ Ptr Shell::BuildEffectPage()
         customControls && std::any_of(layout->controls.begin(), layout->controls.end(),
                                       [](const LayoutControl& c) { return IsLayoutResourceControl(c); });
 
-    // The full layout centres the editor under the chain, no wider than the web UI's panel.
-    const float stageWidth = mWide ? std::min(StageWidth(), 900.0f) : StageWidth();
-    const float stageHeight = mWide ? ViewSize().y - metrics::kTabBarHeight - metrics::kHeaderHeight -
-                                          mChainAreaHeight - metrics::kWideFooterHeight
-                                    : ViewSize().y - metrics::kTopBarHeight - metrics::kFooterHeight;
+    // Split (the full layout, the compact frame's split), the editor is centred under the chain,
+    // no wider than the web UI's panel, in what the chain and the bar under it leave.
+    const bool split = PlayStageShown();
+    const float stageWidth = split ? std::min(StageWidth(), 900.0f) : StageWidth();
+    const float stageHeight = split ? StageHeight() - mChainAreaHeight - 10.0f : StageHeight();
 
     // ── Which controls: this tab's, and only those whose condition holds ──
     std::vector<EffectParamInfo> params;
@@ -587,12 +593,13 @@ Ptr Shell::BuildEffectPage()
         groupsWidth += groupWidth(g) + (groupsWidth > 0.0f ? kGroupGap : 0.0f);
     }
 
-    // The full layout shows the effect's artwork in a column left of its controls; compact, as
-    // in the web UI, leaves it to the chain card.
+    // Split, the effect's artwork stands in a column left of its controls where the stage leaves
+    // the controls room beside it (the full layout always does); staged, as in the web UI's
+    // compact layout, it is left to the chain card.
     std::shared_ptr<artist::image> stockArt;
     std::string artUrl;
 
-    if (mWide && !boundary && type != nullptr && layout == nullptr)
+    if (split && stageWidth >= 860.0f && !boundary && type != nullptr && layout == nullptr)
     {
         stockArt = mImages.Find(mPresentation.EquipmentImage(node->type, category));
 

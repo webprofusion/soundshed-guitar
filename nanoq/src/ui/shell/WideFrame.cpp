@@ -8,6 +8,7 @@
 
 #include "ui/chain/ChainWires.h"
 #include "ui/shell/FrameParts.h"
+#include "ui/widgets/DragScroll.h"
 
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/PresetBrowse.h"
@@ -60,8 +61,21 @@ bool Shell::WantsWide() const
         return false;
     }
 
+    // A touch-first device (an iPad, the kiosk) keeps the compact frame, split, up to an iPad Pro
+    // 11 in landscape: the full layout's controls are sized for a mouse.
     const auto size = ViewSize();
+
+    if (TouchFirst())
+    {
+        return size.x > metrics::kTouchCompactMaxWidth && size.y > metrics::kTouchCompactMaxHeight;
+    }
+
     return size.x > metrics::kCompactMaxWidth && size.y > metrics::kCompactMaxHeight;
+}
+
+bool Shell::WantsSplit() const
+{
+    return ViewSize().y >= metrics::kCompactSplitMinHeight;
 }
 
 Ptr Shell::BuildFrame()
@@ -87,9 +101,11 @@ Ptr Shell::BuildFrame()
 std::string Shell::TopBarSignature() const
 {
     const auto* summary = mState.FindPresetSummary(mState.activePresetId);
-    std::string s = std::string(mWide ? "w" : "c") + std::to_string(static_cast<int>(mPage)) + "|" +
-                    mState.activePresetId + "|" + PresetTitle(mState) + "|" + (mState.activePresetDirty ? "d" : "") +
-                    (mState.activePreset ? "p" : "") +
+    std::string s = std::string(mWide    ? "w"
+                                : mSplit ? "s"
+                                         : "c") +
+                    std::to_string(static_cast<int>(mPage)) + "|" + mState.activePresetId + "|" + PresetTitle(mState) +
+                    "|" + (mState.activePresetDirty ? "d" : "") + (mState.activePreset ? "p" : "") +
                     (guitarfx::uiclient::IsPresetFavorite(mState, mState.activePresetId) ? "f" : "") + "|" +
                     (summary != nullptr ? summary->source : std::string()) + "|" +
                     (mPresetTrail.CanGoBack() ? "<" : "") + (mPresetTrail.CanGoForward() ? ">" : "") +
@@ -305,7 +321,8 @@ Ptr Shell::BuildHeader()
 Ptr Shell::BuildPlayStage()
 {
     // The chain, as tall as its lines (BuildChain), with the scene chips over it and the add
-    // button at its right; the selected effect's editor takes the rest.
+    // button at its right; the selected effect's editor takes the rest. The compact frame's
+    // split stage is this one too, between its rail, preset bar and footer.
     auto add = std::make_shared<RoundAdd>(mTheme, 24.0f);
     add->onClick = [this, a = add.get()] { OpenAddMenu(a->Bounds()); };
     auto chain = Over(Col({mSceneSlot, mChainSlot, FixedHeight(30, Pad(0, 0, 0, 6, Row({Stretch(), add, HGap(14)})))}),
@@ -320,7 +337,7 @@ Ptr Shell::BuildPlayStage()
 
         if (mChainDragStart < 0.0f)
         {
-            mChainDragStart = mChainAreaHeight - 24.0f - 30.0f;
+            mChainDragStart = mChainAreaHeight - SceneRowHeight() - 30.0f;
             mChainDragIcons = IconChain();
         }
 

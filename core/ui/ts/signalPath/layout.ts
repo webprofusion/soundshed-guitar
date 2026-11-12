@@ -1,4 +1,4 @@
-import { isCompact } from "../compactMode.js";
+import { isCompact, isCompactSplit } from "../compactMode.js";
 import { getCurrentUiSettings } from "../windowSettings.js";
 import { updateUiSettings } from "../windowSettings.js";
 import {
@@ -16,6 +16,9 @@ export const SIGNAL_PATH_MODE_GESTURE_THRESHOLD = 12;
 
 /** The most of the window a wrapped chain takes before it scrolls instead. */
 const SIGNAL_PATH_WRAP_MAX_SHARE = 0.5;
+
+/** The most of a compact split's stage the chain takes; the editor has the rest. */
+const SIGNAL_PATH_SPLIT_MAX_SHARE = 0.45;
 
 export type SignalPathDensity = "compact" | "full";
 
@@ -58,6 +61,27 @@ export function syncSignalPathResizeHandleAria(height: number): void {
 }
 
 /**
+ * The tallest a wrapped chain's scroll area may grow. Half the window at full
+ * density. In a compact split the chrome above the stage is small and the stage is
+ * most of the window, so half the window let a long chain take most of the stage
+ * and squeeze the editor under it: there the chain takes at most
+ * SIGNAL_PATH_SPLIT_MAX_SHARE of the stage it shares with the editor, and scrolls
+ * past that.
+ */
+function wrappedChainMaxHeight(bar: HTMLElement, scroll: HTMLElement): number {
+  if (isCompactSplit()) {
+    const stage = bar.closest<HTMLElement>(".signal-path-stage");
+    const main = document.querySelector<HTMLElement>(".main-content");
+    if (stage && main) {
+      // What the bar spends round the scroll area: padding, scene badges, the handle.
+      const chrome = Math.max(0, stage.offsetHeight - scroll.clientHeight);
+      return Math.floor((stage.offsetHeight + main.offsetHeight) * SIGNAL_PATH_SPLIT_MAX_SHARE) - chrome;
+    }
+  }
+  return Math.floor(window.innerHeight * SIGNAL_PATH_WRAP_MAX_SHARE);
+}
+
+/**
  * Apply the signal-chain mode selected by the splitter gesture. Node
  * dimensions remain fixed and never react to the available panel space.
  */
@@ -88,7 +112,7 @@ export function updateSignalPathLayoutAdapt(): void {
   const contentHeight = Math.max(minimumHeight, Math.ceil(scroll.scrollHeight));
   // A wrapped chain grows to show every line, up to half the window; past that it scrolls.
   const viewportHeight = wrap
-    ? Math.min(contentHeight, Math.max(minimumHeight, Math.floor(window.innerHeight * SIGNAL_PATH_WRAP_MAX_SHARE)))
+    ? Math.min(contentHeight, Math.max(minimumHeight, wrappedChainMaxHeight(bar, scroll)))
     : contentHeight;
   bar.style.setProperty("--signal-path-scroll-height", `${viewportHeight}px`);
   updateSignalChainWrapRoutes(nodes, scheduleSignalPathLayoutAdapt);

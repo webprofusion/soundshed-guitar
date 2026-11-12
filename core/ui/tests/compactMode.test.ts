@@ -44,11 +44,46 @@ describe("compactSplitForViewport", () => {
     expect(compactSplitForViewport(600, 800)).toBe(true);
   });
 
-  it("keeps the tabs on a phone held upright, a short window and the rail", async () => {
+  it("keeps the tabs on a phone held upright and a short stacked window", async () => {
     const { compactSplitForViewport } = await loadCompactMode();
     expect(compactSplitForViewport(390, 844)).toBe(false);
     expect(compactSplitForViewport(700, 780)).toBe(false);
-    expect(compactSplitForViewport(900, 820)).toBe(false);
+  });
+
+  it("splits the rail on a tablet in landscape and a 600px-tall panel", async () => {
+    const { compactSplitForViewport } = await loadCompactMode();
+    expect(compactSplitForViewport(1024, 768)).toBe(true);
+    expect(compactSplitForViewport(1194, 834)).toBe(true);
+    expect(compactSplitForViewport(900, 820)).toBe(true);
+    expect(compactSplitForViewport(1024, 600)).toBe(true);
+    expect(compactSplitForViewport(800, 600)).toBe(true);
+  });
+
+  it("keeps the rail's turn-taking on phones and short panels", async () => {
+    const { compactSplitForViewport } = await loadCompactMode();
+    expect(compactSplitForViewport(844, 390)).toBe(false);
+    expect(compactSplitForViewport(667, 375)).toBe(false);
+    expect(compactSplitForViewport(800, 480)).toBe(false);
+    expect(compactSplitForViewport(1024, 599)).toBe(false);
+  });
+});
+
+describe("densityForViewportSize", () => {
+  it("keeps 980x620 for a mouse", async () => {
+    const { densityForViewportSize } = await loadCompactMode();
+    expect(densityForViewportSize(1280, 800, false)).toBe("full");
+    expect(densityForViewportSize(1024, 768, false)).toBe("full");
+    expect(densityForViewportSize(980, 900, false)).toBe("compact");
+    expect(densityForViewportSize(1280, 620, false)).toBe("compact");
+  });
+
+  it("gives a finger the compact shell up to 1200x850", async () => {
+    const { densityForViewportSize } = await loadCompactMode();
+    expect(densityForViewportSize(1024, 768, true)).toBe("compact");
+    expect(densityForViewportSize(1180, 820, true)).toBe("compact");
+    expect(densityForViewportSize(1194, 834, true)).toBe("compact");
+    expect(densityForViewportSize(768, 1024, true)).toBe("compact");
+    expect(densityForViewportSize(1366, 1024, true)).toBe("full");
   });
 });
 
@@ -72,11 +107,39 @@ describe("initCompactMode", () => {
     expect(isCompactStaged()).toBe(false);
 
     const seen = captureNextDensityChange();
-    setViewport(960, 760);
+    setViewport(960, 560);
     initCompactMode();
     expect(root.dataset.compactSplit).toBeUndefined();
     expect(isCompactStaged()).toBe(true);
     expect(seen).toHaveLength(1);
+  });
+
+  it("follows a coarse pointer: an iPad in landscape is compact and split", async () => {
+    setViewport(1024, 768);
+    const listeners: Array<() => void> = [];
+    let coarse = true;
+    const matchMedia = vi.fn((query: string) => ({
+      get matches() { return query === "(pointer: coarse)" && coarse; },
+      media: query,
+      addEventListener: (_type: string, listener: () => void) => listeners.push(listener),
+      removeEventListener: vi.fn(),
+    }));
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      const { initCompactMode, isCompactSplit } = await loadCompactMode();
+      initCompactMode();
+      expect(root.dataset.density).toBe("compact");
+      expect(root.dataset.compactLayout).toBe("rail");
+      expect(isCompactSplit()).toBe(true);
+      expect(listeners).toHaveLength(1);
+
+      // A mouse plugged in: the same window goes back to the full shell.
+      coarse = false;
+      initCompactMode();
+      expect(root.dataset.density).toBe("full");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("never splits at full density", async () => {

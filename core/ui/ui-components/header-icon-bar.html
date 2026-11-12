@@ -33,7 +33,18 @@
           </svg>
           <span class="nav-tab-label" data-compact-stage-detail-label>Effect</span>
         </button>
-        <button class="icon-btn nav-tab" data-panel="visualizer" title="Play">PLAY</button>
+        <!-- On the rail Play is shown only when the chain and the effect share the
+             stage (data-compact-split): with nothing to take turns between, Chain
+             and Effect give way to it, wearing the chain's glyph. -->
+        <button class="icon-btn nav-tab" data-panel="visualizer" title="Play">
+          <svg class="nav-tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="2" y="9" width="5" height="6" rx="1.2" />
+            <rect x="9.5" y="7" width="5" height="10" rx="1.2" />
+            <rect x="17" y="9" width="5" height="6" rx="1.2" />
+            <path d="M7 12h2.5M14.5 12H17" />
+          </svg>
+          <span class="nav-tab-label">PLAY</span>
+        </button>
         <button class="icon-btn nav-tab" data-panel="sharing" title="Tones">
           <svg class="nav-tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M9 17.5V5.5l11-2v12" />

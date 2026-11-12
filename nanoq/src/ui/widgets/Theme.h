@@ -299,6 +299,16 @@ inline constexpr float kWideFooterHeight = 44.0f;
 /// The web UI goes compact at or below either (COMPACT_MAX_WIDTH, COMPACT_MAX_HEIGHT).
 inline constexpr float kCompactMaxWidth = 980.0f;
 inline constexpr float kCompactMaxHeight = 620.0f;
+/// On a touch-first device (TouchFirst) Auto keeps the compact frame up to an iPad Air or Pro 11
+/// in landscape: at or below either. The full layout's mouse-sized controls are for larger.
+inline constexpr float kTouchCompactMaxWidth = 1200.0f;
+inline constexpr float kTouchCompactMaxHeight = 850.0f;
+/// From this view height the compact frame shows the chain over the editor, as the full layout
+/// does ("split"); below it the two take turns. The web UI's rule (compactMode.ts) is the same.
+inline constexpr float kCompactSplitMinHeight = 600.0f;
+/// The looper strip over the footer, open: compact and full.
+inline constexpr float kLooperStripHeight = 46.0f;
+inline constexpr float kWideLooperStripHeight = 50.0f;
 /// The smallest window the compact layout still fits.
 inline constexpr float kMinWidth = 640.0f;
 inline constexpr float kMinHeight = 400.0f;

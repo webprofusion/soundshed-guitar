@@ -103,10 +103,12 @@ std::string Shell::ChainSignature() const
         return {};
     }
 
-    // The width decides where lines wrap, so a resize past a break redraws.
+    // The width decides where lines wrap, so a resize past a break redraws; the stage's height
+    // (the looper strip's coming and going too) whether the chain scrolls, and the split its cap.
     std::string s = mSelectedNode + "|" + mState.activePresetId + "|" + mState.activeSceneId + "|" +
                     std::to_string(static_cast<int>(ViewSize().x / 16.0f)) + "x" +
-                    std::to_string(mWide ? static_cast<int>(ViewSize().y / 24.0f) : 0);
+                    std::to_string(static_cast<int>(StageHeight() / 24.0f)) + (Split() ? "s" : "t") +
+                    (mWide ? "w" : "");
 
     for (const auto& node : mState.activePreset->graph.nodes)
     {
@@ -130,7 +132,8 @@ std::string Shell::ChainSignature() const
 
 bool Shell::IconChain() const
 {
-    if (!mWide)
+    // Tiles are chosen by dragging the bar under a split chain; staged, the chain is cards.
+    if (!Split())
     {
         return false;
     }
@@ -600,9 +603,9 @@ Ptr Shell::BuildChain()
 
     // The block sits in the middle of the stage, between the scene chips and the add button; it
     // scrolls when taller than that, and sideways when the wrap is off.
-    if (mWide)
+    if (Split())
     {
-        // The full layout's chain is as tall as its lines, up to a third of the window, so the
+        // The split stage's chain is as tall as its lines, up to a third of the window, so the
         // editor under it keeps the rest; past that it scrolls.
         const float wanted = total + 24.0f;
         // Unless the bar under it was dragged (chainAreaHeight), up to a third of the window;
@@ -625,11 +628,13 @@ Ptr Shell::BuildChain()
         }
 
         const float floor = rowHeight + 24.0f;
-        const float most = limit > 0.0f ? std::clamp(limit, floor, std::max(floor, ViewSize().y - 360.0f))
+        // Dragged, it leaves the stage 146 px for the rest (the full layout's window less 360 px,
+        // as it was, with the bars taken out, so it holds for the compact frame's too).
+        const float most = limit > 0.0f ? std::clamp(limit, floor, std::max(floor, StageHeight() - 146.0f))
                                         : std::max(floor, ViewSize().y / 3.0f);
         // Dragged, the chain gets that room whatever it holds (centred in it, or scrolling).
         const float area = limit > 0.0f ? most : std::min(wanted, most);
-        mChainAreaHeight = area + 24.0f + 30.0f; // the scene chips, the add button
+        mChainAreaHeight = area + SceneRowHeight() + 30.0f; // the scene chips (and rig tabs), the add button
         const auto centred = [area](Ptr block, float height) -> Ptr {
             if (height >= area)
             {
@@ -654,7 +659,8 @@ Ptr Shell::BuildChain()
         return centred(PadXY(0, 12, Col(rows)), wanted);
     }
 
-    const float stageHeight = ViewSize().y - metrics::kTopBarHeight - metrics::kFooterHeight - 24.0f - 44.0f;
+    // Staged: the stage less the scene chips (and rig tabs) and the add button's row under it.
+    const float stageHeight = StageHeight() - SceneRowHeight() - 44.0f;
 
     if (!mWrapChain)
     {

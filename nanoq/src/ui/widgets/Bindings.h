@@ -57,13 +57,33 @@ class Bindings
     /// Shows what changed, and forgets the bindings whose widgets are gone. UI thread, per tick.
     void Sync()
     {
-        std::erase_if(mBindings, [this](const auto& b) { return !b->Sync(mSession, true); });
+        // By index, with the dead ones dropped afterwards, and never a pass inside a pass. A
+        // binding's `show` runs widget code, and if that ever binds something (the list grows
+        // and moves) or lets a tick run inside this one, a pass that held iterators into the
+        // list would destroy a binding twice.
+        if (mSyncing)
+        {
+            return;
+        }
+
+        mSyncing = true;
+
+        for (std::size_t i = 0; i < mBindings.size(); ++i)
+        {
+            if (!mBindings[i]->Sync(mSession, true))
+            {
+                mBindings[i].reset();
+            }
+        }
+
+        std::erase_if(mBindings, [](const auto& b) { return !b; });
+        mSyncing = false;
     }
 
     /// Whether the user is dragging a bound widget: nothing is rebuilt meanwhile.
     [[nodiscard]] bool Dragging() const
     {
-        return std::any_of(mBindings.begin(), mBindings.end(), [](const auto& b) { return b->Dragging(); });
+        return std::any_of(mBindings.begin(), mBindings.end(), [](const auto& b) { return b && b->Dragging(); });
     }
 
   private:
@@ -171,5 +191,6 @@ class Bindings
 
     UiSession& mSession;
     std::vector<std::unique_ptr<Binding>> mBindings;
+    bool mSyncing = false;
 };
 } // namespace nanoq::ui

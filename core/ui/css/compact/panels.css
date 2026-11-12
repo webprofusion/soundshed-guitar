@@ -78,7 +78,7 @@ html[data-density="compact"] .tone-sharing-create-pack-btn {
    mouse keeps it: without one, a strip that overflows has no visible way along.
    (Settings' tab strip has the same rule, after its own below.) */
 @media (pointer: coarse) {
-  html[data-density="compact"] .tone-sharing-browse-nav {
+  html .tone-sharing-browse-nav {
     scrollbar-width: none;
   }
 }
@@ -419,7 +419,7 @@ html[data-density="compact"] .equipment-tabs .equipment-tab-btn {
 }
 
 @media (pointer: coarse) {
-  html[data-density="compact"] .equipment-tabs {
+  html .equipment-tabs {
     scrollbar-width: none;
   }
 }

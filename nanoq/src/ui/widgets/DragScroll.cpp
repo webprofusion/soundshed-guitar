@@ -30,6 +30,23 @@ bool DragScrollEnabled()
     return enabled;
 }
 
+bool TouchFirst()
+{
+    static const bool touch = [] {
+        if (const char* value = std::getenv("SOUNDSHED_NANOQ_TOUCH"); value != nullptr && value[0] != '\0')
+        {
+            return value[0] != '0';
+        }
+
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+        return true;
+#else
+        return std::getenv("SOUNDSHED_KIOSK") != nullptr;
+#endif
+    }();
+    return touch;
+}
+
 float DragScroller::Overflow(const el::context& ctx)
 {
     const auto content = subject().limits(ctx);

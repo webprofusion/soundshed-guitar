@@ -511,10 +511,11 @@ html[data-density="compact"] .looper-layer-count {
   box-shadow: none;
 }
 
+/* By pointer, not density: the full shell's strip is touched on a tablet too. */
 @media (pointer: coarse) {
-  html[data-density="compact"] .looper-strip-row .looper-btn,
-  html[data-density="compact"] .looper-layers-toggle,
-  html[data-density="compact"] .looper-more-btn {
+  html .looper-strip-row .looper-btn,
+  html .looper-layers-toggle,
+  html .looper-more-btn {
     min-height: 32px;
   }
 }

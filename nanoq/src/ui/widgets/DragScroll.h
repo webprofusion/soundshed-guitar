@@ -49,6 +49,11 @@ constexpr float kReleaseAway = -1e6f;
 /// Whether a drag on a list scrolls it.
 [[nodiscard]] bool DragScrollEnabled();
 
+/// The device is driven by a finger first: iOS, and the kiosk (SOUNDSHED_KIOSK). Auto then keeps
+/// the compact frame to a larger window (Shell::WantsWide). SOUNDSHED_NANOQ_TOUCH=1 turns it on
+/// anywhere, for testing, and 0 turns it off.
+[[nodiscard]] bool TouchFirst();
+
 /// Elements' scroller, scrolled by a drag on its content as well. Holds no pointer into what it
 /// scrolls from one event to the next, as that can be rebuilt during a press.
 class DragScroller : public el::scroller_base

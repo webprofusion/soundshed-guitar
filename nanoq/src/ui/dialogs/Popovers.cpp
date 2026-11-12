@@ -267,7 +267,11 @@ void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuIte
     const bool above = anchor.top > ViewSize().y * 0.6f;
     const float maxHeight = above ? anchor.top - 16.0f : ViewSize().y - anchor.bottom - 16.0f;
     const float n = static_cast<float>(columns.size());
-    width = width * n + 4.0f * (n - 1.0f) + (n > 1.0f ? 12.0f : 0.0f);
+    // The panel holds the 6 px padding either side as well, one column or more. Given the
+    // columns' width alone, a single column's panel was 12 px wider than PlacePanel placed it:
+    // right-aligned at the window's edge (the preset menu, the + menu) it ran 12 px past it, and
+    // the window grew to hold it and stayed grown.
+    width = width * n + 4.0f * (n - 1.0f) + 12.0f;
     Ptr list = lists.size() == 1 ? lists.front() : Row(lists);
 
     if (height > maxHeight)

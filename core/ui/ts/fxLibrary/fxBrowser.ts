@@ -335,6 +335,9 @@ export class FxBrowser {
     const list = this.options.list;
 
     // pointerDrag.ts swallows the click that ends a drag, so only a plain click chooses.
+    // The signal path picks the item up after a touch rests on it (touchHoldMs): the
+    // list scrolls, and on a tablet it hangs under the chain, so the drag to the chain
+    // starts upwards, which without the rest would scroll the list instead.
     list.addEventListener("pointerdown", (event: PointerEvent) => {
       if (!event.isPrimary || event.button !== 0) return;
       const target = event.target as HTMLElement | null;

@@ -105,7 +105,9 @@ void Shell::ToggleLooper()
     }
 
     SyncLooper();
-    Mark(kTransport);
+    // The strip takes its height from the stage: the chain and the editor are sized for what is
+    // left (StageHeight, in their signatures).
+    Mark(kTransport | kChain | kPage);
 }
 
 std::string Shell::LooperShape() const
@@ -244,7 +246,7 @@ Ptr Shell::BuildLooperStrip()
     // No minimum width: a strip built for a wider window must not hold the window at that width
     // while the window shrinks; it is rebuilt for the new width at the next tick (LooperShape).
     return el::share(
-        WidthYielding(el::hold_any(FixedHeight(mWide ? 50.0f : 46.0f, Fill(mTheme.Bar(), PadXY(0, 8, Row(row)))))));
+        WidthYielding(el::hold_any(FixedHeight(LooperStripHeight(), Fill(mTheme.Bar(), PadXY(0, 8, Row(row)))))));
 }
 
 void Shell::SyncLooperLive()
@@ -299,7 +301,7 @@ void Shell::SyncLooper()
             mLooperOpen = false;
         }
 
-        Mark(kTransport);
+        Mark(kTransport | kChain | kPage);
     }
 
     if (!mLooperOpen)

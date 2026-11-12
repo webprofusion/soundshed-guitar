@@ -218,8 +218,8 @@ document.addEventListener("fx-pointer-drag-start", (event: Event) => {
   if (!detail?.source || !detail.payload?.effectType) return;
 
   beginPointerDrag<FxDropTarget>(detail.pointerEvent, {
-    source: detail.source,
-    sourceSelector: ".fx-item",
+    source: detail.source, sourceSelector: ".fx-item",
+    touchHoldMs: TOUCH_DRAG_HOLD_MS,
     previewClass: "fx-item-drag-preview",
     bodyClass: "fx-dragging",
     resolveTarget: resolveFxDropTarget,

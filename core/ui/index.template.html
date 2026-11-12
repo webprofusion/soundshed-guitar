@@ -63,21 +63,24 @@
       first frame is already laid out at the right density instead of painting
       the desktop shell and reflowing to the compact one a moment later.
 
-      The two thresholds must match COMPACT_MAX_WIDTH / COMPACT_MAX_HEIGHT, the
-      landscape test must match compactLayoutForViewport, and the split test must
-      match compactSplitForViewport: a wrong guess at the layout paints the
-      navigation on the wrong edge for a frame, which is the reflow this is here
-      to prevent.
+      The thresholds must match densityForViewportSize (COMPACT_MAX_WIDTH /
+      COMPACT_MAX_HEIGHT with a mouse, COMPACT_TOUCH_MAX_WIDTH /
+      COMPACT_TOUCH_MAX_HEIGHT with a finger), the landscape test must match
+      compactLayoutForViewport, and the split test must match
+      compactSplitForViewport: a wrong guess at the layout paints the navigation
+      on the wrong edge for a frame, which is the reflow this is here to prevent.
     */
     (function () {
       var root = document.documentElement;
       var width = window.innerWidth;
       var height = window.innerHeight;
-      var compact = width <= 980 || height <= 620;
+      var coarse = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+      var compact = coarse ? width <= 1200 || height <= 850 : width <= 980 || height <= 620;
       root.dataset.density = compact ? "compact" : "full";
       if (compact) {
-        root.dataset.compactLayout = width > height ? "rail" : "stack";
-        if (width <= height && width >= 600 && height >= 800) {
+        var rail = width > height;
+        root.dataset.compactLayout = rail ? "rail" : "stack";
+        if (rail ? height >= 600 : width >= 600 && height >= 800) {
           root.dataset.compactSplit = "";
         }
       }

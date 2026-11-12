@@ -21,8 +21,15 @@
  *    compact shell; a media query would still read 1280x800 and give it the
  *    desktop one.
  *
- * A preference of `auto` follows the viewport; `compact` and `full` pin it. The
- * choice persists as an app setting so it survives a restart.
+ * A preference of `auto` follows the viewport and the pointer; `compact` and
+ * `full` pin it. The choice persists as an app setting so it survives a restart.
+ *
+ * The pointer counts because a tablet is the size of a small desktop window but
+ * is driven by a finger. With a mouse, Auto gives the compact shell at 980 wide or
+ * 620 tall or less. When the primary pointer is coarse it does so up to 1200x850,
+ * which takes in every iPad but the 12.9" Pro: there the full shell spent 212px
+ * on chrome and had mouse-sized controls, and the compact shell with the chain
+ * over the effect (`data-compact-split`) reads like it with a third of the chrome.
  */
 
 import { updateAppSetting } from "./appSettingsStore.js";
@@ -48,7 +55,8 @@ export type CompactLayout = "rail" | "stack";
 export const DENSITY_SETTING = "ui.density";
 
 /**
- * Widths at or below this get the compact shell. 980 is not a new number — it is
+ * Widths at or below this get the compact shell, with a mouse (see
+ * {@link COMPACT_TOUCH_MAX_WIDTH} for a finger). 980 is not a new number — it is
  * the breakpoint the control bar already stacked at, kept so nothing that worked
  * before regresses.
  */
@@ -63,6 +71,26 @@ export const COMPACT_MAX_WIDTH = 980;
  * `index.template.html`, which applies the same test before this module loads.
  */
 export const COMPACT_MAX_HEIGHT = 620;
+
+/**
+ * The same two limits when the primary pointer is a finger (a tablet). 1200x850
+ * takes in the iPad mini, 9.7", 10.2", Air and 11" Pro in landscape (1024x768 to
+ * 1194x834 CSS px), which get the compact shell split; the 12.9" Pro at 1366x1024
+ * keeps the full shell, which has the room for it.
+ */
+export const COMPACT_TOUCH_MAX_WIDTH = 1200;
+
+export const COMPACT_TOUCH_MAX_HEIGHT = 850;
+
+/** Whether the primary pointer is a finger. Auto reads it; nothing else should. */
+export const COARSE_POINTER_QUERY = "(pointer: coarse)";
+
+/** What Auto picks for a viewport of this size, given the kind of pointer. */
+export function densityForViewportSize(width: number, height: number, coarsePointer: boolean): Density {
+  const maxWidth = coarsePointer ? COMPACT_TOUCH_MAX_WIDTH : COMPACT_MAX_WIDTH;
+  const maxHeight = coarsePointer ? COMPACT_TOUCH_MAX_HEIGHT : COMPACT_MAX_HEIGHT;
+  return width <= maxWidth || height <= maxHeight ? "compact" : "full";
+}
 
 /**
  * Landscape gets the rail; portrait and square keep the stacked bars. The
@@ -90,9 +118,22 @@ export const COMPACT_SPLIT_MIN_WIDTH = 600;
 
 export const COMPACT_SPLIT_MIN_HEIGHT = 800;
 
+/**
+ * The shortest landscape (rail) viewport that splits. The rail's chrome is the
+ * control bar and the footer, about 85px, so 600 leaves a ~515px stage: a one-
+ * or two-line chain over an editor that shows a model row and a row of knobs.
+ * An iPad in landscape (768 tall and up) and a 1024x600 panel split; a phone
+ * (under 430) and an 800x480 panel keep the Chain/Effect turn-taking, where the
+ * chain alone fills the stage. The rail is never narrower than it is tall, so
+ * width needs no limit of its own.
+ */
+export const COMPACT_RAIL_SPLIT_MIN_HEIGHT = 600;
+
 export function compactSplitForViewport(width: number, height: number): boolean {
-  return compactLayoutForViewport(width, height) === "stack"
-    && width >= COMPACT_SPLIT_MIN_WIDTH && height >= COMPACT_SPLIT_MIN_HEIGHT;
+  if (compactLayoutForViewport(width, height) === "rail") {
+    return height >= COMPACT_RAIL_SPLIT_MIN_HEIGHT;
+  }
+  return width >= COMPACT_SPLIT_MIN_WIDTH && height >= COMPACT_SPLIT_MIN_HEIGHT;
 }
 
 const DENSITY_PREFERENCES: readonly DensityPreference[] = ["auto", "compact", "full"];
@@ -131,9 +172,13 @@ export function effectiveViewport(): { width: number; height: number } {
   };
 }
 
+function isCoarsePointer(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia(COARSE_POINTER_QUERY).matches;
+}
+
 function densityForViewport(): Density {
   const { width, height } = effectiveViewport();
-  return width <= COMPACT_MAX_WIDTH || height <= COMPACT_MAX_HEIGHT ? "compact" : "full";
+  return densityForViewportSize(width, height, isCoarsePointer());
 }
 
 function resolveDensity(): Density {
@@ -249,5 +294,10 @@ export function initCompactMode(): void {
   // Zoom changes the layout box without changing the window, so the resize event
   // never fires for them.
   window.addEventListener("uiSettingsApplied", scheduleEvaluate);
+  // A convertible that loses its keyboard, or a tablet given a mouse, changes the
+  // primary pointer without changing the window.
+  if (typeof window.matchMedia === "function") {
+    window.matchMedia(COARSE_POINTER_QUERY).addEventListener?.("change", scheduleEvaluate);
+  }
   applyResolvedDensity();
 }

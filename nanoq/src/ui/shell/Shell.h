@@ -191,6 +191,15 @@ class Shell
     /// The view's size in layout units: the zoom divided out.
     [[nodiscard]] el::extent ViewSize() const;
     [[nodiscard]] bool WantsWide() const;
+    /// The compact frame's stage is tall enough for the chain over the editor (kCompactSplitMinHeight).
+    [[nodiscard]] bool WantsSplit() const;
+
+    /// The chain and the editor share one play stage, the chain over the editor (the full
+    /// layout, or the compact frame's split); false where they take turns as Chain and Effect.
+    [[nodiscard]] bool Split() const
+    {
+        return mWide || mSplit;
+    }
 
     /// Where the stage starts and how wide it is: right of the rail when compact.
     [[nodiscard]] float StageLeft() const
@@ -203,25 +212,46 @@ class Shell
         return ViewSize().x - StageLeft();
     }
 
+    [[nodiscard]] float LooperStripHeight() const
+    {
+        return mWide ? metrics::kWideLooperStripHeight : metrics::kLooperStripHeight;
+    }
+
+    /// The page slot's height: the view less the frame's bars, and the looper strip when it is out.
+    [[nodiscard]] float StageHeight() const
+    {
+        const float bars = mWide ? metrics::kTabBarHeight + 1.0f + metrics::kHeaderHeight + metrics::kWideFooterHeight
+                                 : metrics::kTopBarHeight + metrics::kFooterHeight;
+        return ViewSize().y - bars - (mLooperOpen ? LooperStripHeight() : 0.0f);
+    }
+
+    /// The scene chips over the chain, and the Multi-Rig tabs over them when there are two rigs
+    /// or more (BuildScenes).
+    [[nodiscard]] float SceneRowHeight() const
+    {
+        return 24.0f + (MultiRigShown() ? 26.0f : 0.0f);
+    }
+
     /// The frame for the layout in force, around the region slots.
     Ptr BuildFrame();
 
-    /// Chain and Effect are one page in the full layout.
+    /// Chain and Effect are one page where the play stage is split.
     [[nodiscard]] bool PlayShown() const
     {
-        return mPage == Page::Effect || (mWide && mPage == Page::Chain);
+        return mPage == Page::Effect || (Split() && mPage == Page::Chain);
     }
 
-    /// The full layout's play stage is up: the chain over the editor, or over the pads.
+    /// The play stage is up: the chain over the editor, or (the full layout's footer button) over
+    /// the pads. The compact frame's Setlist is a page of its own, split or not.
     [[nodiscard]] bool PlayStageShown() const
     {
-        return mWide && (PlayShown() || mPage == Page::Pads);
+        return Split() && (PlayShown() || (mWide && mPage == Page::Pads));
     }
 
     /// The footer's pads button: the pads, or back from them.
     void TogglePads()
     {
-        ShowPage(mPage == Page::Pads ? (mWide ? Page::Effect : Page::Chain) : Page::Pads);
+        ShowPage(mPage == Page::Pads ? (Split() ? Page::Effect : Page::Chain) : Page::Pads);
     }
 
     // Shell.cpp
@@ -816,10 +846,11 @@ class Shell
 
     Page mPage = Page::Chain;
     bool mWide = false;               // the full layout is in force
+    bool mSplit = false;              // compact, with the chain over the editor (WantsSplit)
     bool mControlsOpen = false;       // the compact layout's Controls strip is out
     el::extent mLastSize{0.0f, 0.0f}; // the regions sized to the window are rebuilt when it changes
     bool mPlayStageShown = false;     // the full layout's page slot holds the chain and editor
-    float mChainAreaHeight = 0.0f;    // the full layout's chain, as tall as its lines
+    float mChainAreaHeight = 0.0f;    // the play stage's chain, as tall as its lines
     float mChainAreaLimit = 0.0f;     // how tall it may grow, once the bar under it is dragged
     float mChainDragStart = -1.0f;    // the chain's room when that drag began
     // Riff capture's settings, kept while the app runs (RiffDialogs.cpp).

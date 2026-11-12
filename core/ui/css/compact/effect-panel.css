@@ -13,35 +13,42 @@
  *
  * Controls keep the shell's floor: 26px, 30px under a coarse pointer. Height comes
  * back from captions, margins and repeated chrome, not from smaller targets.
+ *
+ * All of it is for the staged layout, where the effect has a phone's stage to
+ * itself. A compact window tall enough to show the chain over the effect
+ * (data-compact-split: a tablet, a window snapped to half a monitor) has the room
+ * the full shell has, and drew small knobs in a void with these rules; there the
+ * panel is the full shell's — equipment picture, full-size knobs, the same
+ * centred card — so every rule here is scoped :not([data-compact-split]) .
  */
 
 /* The 400px floor under .effect-visualization is the single biggest offender — on
    a 400px-tall window it is the entire screen, so the panel could only ever be
    scrolled, never seen. Lifting it lets the shell size to its content. */
-html[data-density="compact"] .effect-visualization {
+html[data-density="compact"]:not([data-compact-split]) .effect-visualization {
   min-height: 0;
 }
 
-html[data-density="compact"] .visualization-panel {
+html[data-density="compact"]:not([data-compact-split]) .visualization-panel {
   overscroll-behavior: contain;
 }
 
-html[data-density="compact"] .effect-visualization-overlay {
+html[data-density="compact"]:not([data-compact-split]) .effect-visualization-overlay {
   padding: 12px;
 }
 
-html[data-density="compact"] .effect-visualization-placeholder h3 {
+html[data-density="compact"]:not([data-compact-split]) .effect-visualization-placeholder h3 {
   margin-bottom: 4px;
   font-size: 15px;
 }
 
-html[data-density="compact"] .effect-visualization-placeholder p {
+html[data-density="compact"]:not([data-compact-split]) .effect-visualization-placeholder p {
   font-size: 12px;
 }
 
 /* A floating card with a 14px radius and a 40px drop shadow wants a margin round
    it that this stage cannot give. The panel sits flush instead. */
-html[data-density="compact"] .effect-visualization .node-params-panel {
+html[data-density="compact"]:not([data-compact-split]) .effect-visualization .node-params-panel {
   border-radius: 0;
   box-shadow: none;
 }
@@ -49,13 +56,13 @@ html[data-density="compact"] .effect-visualization .node-params-panel {
 /* Room where one group of controls ends and an unrelated one starts: under the
    preset strip, and between the effect's header and its controls. Inside each
    group the gaps stay tight. */
-html[data-density="compact"] .default-effect-shell {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell {
   gap: 10px;
   padding: 10px 10px 8px;
 }
 
-html[data-density="compact"] .default-effect-shell-content,
-html[data-density="compact"] .default-effect-shell-main {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-content,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-main {
   gap: 6px;
 }
 
@@ -66,17 +73,17 @@ html[data-density="compact"] .default-effect-shell-main {
   node's own name still identifies it in the header, and its chain node carries
   the artwork.
 */
-html[data-density="compact"] .default-effect-shell-content.has-equipment-image {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-content.has-equipment-image {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-html[data-density="compact"] .default-effect-shell-equipment-panel {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-equipment-panel {
   display: none;
 }
 
-html[data-density="compact"] .default-effect-shell-inline-note {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-inline-note {
   margin: 0;
   padding: 5px 8px;
   font-size: 11px;
@@ -90,8 +97,8 @@ html[data-density="compact"] .default-effect-shell-inline-note {
   was an empty strip in front of the name. The :has() selector is the one that
   sets it, so it is the one that has to be matched to take it back.
 */
-html[data-density="compact"] .default-effect-shell-header,
-html[data-density="compact"] .default-effect-shell:has(.default-effect-shell-content.has-equipment-image) .default-effect-shell-header {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-header,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell:has(.default-effect-shell-content.has-equipment-image) .default-effect-shell-header {
   position: relative;
   display: flex;
   align-items: center;
@@ -100,27 +107,27 @@ html[data-density="compact"] .default-effect-shell:has(.default-effect-shell-con
   padding-left: 0;
 }
 
-html[data-density="compact"] .default-effect-shell-identity {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-identity {
   flex: 1 1 auto;
   gap: 6px;
 }
 
 /* Name and type on one line. The type gives way first: flex-shrink is weighted by
    size, so 50 against the name's 1 empties it before the name loses a letter. */
-html[data-density="compact"] .default-effect-shell-titles {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-titles {
   flex-direction: row;
   align-items: baseline;
   gap: 8px;
 }
 
-html[data-density="compact"] .default-effect-shell-title {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-title {
   flex: 0 1 auto;
   font-size: 12px;
 }
 
 /* Clipped as it gives way: squeezed to nothing, its NAM architecture badge still
    drew at full size over the DSP button beside it. The chain node shows it too. */
-html[data-density="compact"] .default-effect-shell-subtitle {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-subtitle {
   flex: 0 50 auto;
   overflow: hidden;
 }
@@ -131,24 +138,24 @@ html[data-density="compact"] .default-effect-shell-subtitle {
   showing nothing. Here the rail keeps no width and the stats drop over the
   controls from under the header instead.
 */
-html[data-density="compact"] .default-effect-shell-rail {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-rail {
   position: static;
   display: block;
   flex: none;
   width: 0;
 }
 
-html[data-density="compact"] .default-effect-shell-meter-toggle {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-meter-toggle {
   display: none;
 }
 
-html[data-density="compact"] .effect-dsp-status {
+html[data-density="compact"]:not([data-compact-split]) .effect-dsp-status {
   display: flex;
   top: calc(100% + 4px);
   right: 0;
 }
 
-html[data-density="compact"] .default-effect-shell-meta {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-meta {
   flex: none;
   flex-wrap: nowrap;
   gap: 6px;
@@ -161,36 +168,36 @@ html[data-density="compact"] .default-effect-shell-meta {
   controls move to a line of their own, right-aligned as they are on one line.
 */
 @media (max-width: 600px) {
-  html[data-density="compact"] .default-effect-shell-header,
-  html[data-density="compact"] .default-effect-shell:has(.default-effect-shell-content.has-equipment-image) .default-effect-shell-header {
+  html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-header,
+  html[data-density="compact"]:not([data-compact-split]) .default-effect-shell:has(.default-effect-shell-content.has-equipment-image) .default-effect-shell-header {
     flex-wrap: wrap;
     row-gap: 6px;
   }
 
-  html[data-density="compact"] .default-effect-shell-identity {
+  html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-identity {
     flex: 1 1 160px;
     min-width: 0;
   }
 
-  html[data-density="compact"] .default-effect-shell-meta {
+  html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-meta {
     margin-left: auto;
   }
 }
 
 /* The chips, bypass switch and icon buttons take their height from
    --effect-shell-control-height, set on the row above. */
-html[data-density="compact"] .default-effect-shell-chip {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-chip {
   padding: 0 9px;
 }
 
-html[data-density="compact"] .default-effect-shell-meta .effect-visualization-toolbar-btn {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-meta .effect-visualization-toolbar-btn {
   width: 26px;
   border-radius: var(--radius-md);
 }
 
 /* The desktop row shrinks these icons to 13px for its 20px buttons; at 26px they
    return to the toolbar's usual 15px. The DSP stats gauge scales with the row instead. */
-html[data-density="compact"] .default-effect-shell-meta .effect-visualization-toolbar-icon {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-meta .effect-visualization-toolbar-icon {
   width: 15px;
   height: 15px;
 }
@@ -205,7 +212,7 @@ html[data-density="compact"] .default-effect-shell-meta .effect-visualization-to
   Only the pickers the panel lays out itself. A custom layout places its own, and
   the blend and custom-effect blocks borrow the class for other content.
 */
-html[data-density="compact"] :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) {
+html[data-density="compact"]:not([data-compact-split]) :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
@@ -213,11 +220,11 @@ html[data-density="compact"] :is(.neural-model-resource-selector, .effect-inline
   margin-bottom: 0;
 }
 
-html[data-density="compact"] :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) > label {
+html[data-density="compact"]:not([data-compact-split]) :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) > label {
   flex: none;
 }
 
-html[data-density="compact"] :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) > .resource-controls {
+html[data-density="compact"]:not([data-compact-split]) :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) > .resource-controls {
   flex: 1 1 200px;
   min-width: 0;
   gap: 6px;
@@ -225,59 +232,59 @@ html[data-density="compact"] :is(.neural-model-resource-selector, .effect-inline
 
 /* Whatever else a slot carries — a plugin list, a load error — gets a line of its
    own under the controls. */
-html[data-density="compact"] :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) > :not(label, .resource-controls) {
+html[data-density="compact"]:not([data-compact-split]) :is(.neural-model-resource-selector, .effect-inline-resource-selectors, .default-effect-shell-main) > .node-resource-selector:not(.blend-info-block, .node-custom-effect-actions) > :not(label, .resource-controls) {
   flex: 1 1 100%;
 }
 
-html[data-density="compact"] .default-effect-shell .resource-picker-label {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-picker-label {
   padding: 5px 8px;
   line-height: 16px;
 }
 
-html[data-density="compact"] .default-effect-shell .resource-nav-btn {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-nav-btn {
   width: 28px;
   min-width: 28px;
   height: 26px;
   min-height: 26px;
 }
 
-html[data-density="compact"] .default-effect-shell .resource-clear-btn,
-html[data-density="compact"] .default-effect-shell .resource-browse-btn,
-html[data-density="compact"] .default-effect-shell .resource-picker-btn {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-clear-btn,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-browse-btn,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-picker-btn {
   height: 26px;
   padding-block: 0;
 }
 
 /* A file loaded from disk shows its full path on a line of its own. The picker's
    label already names the file. */
-html[data-density="compact"] .default-effect-shell .resource-path-info {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-path-info {
   display: none;
 }
 
 /* A drag-and-drop affordance, on a display that is usually touched. The picker
    itself still opens on tap, and drop still works if a pointer can do it. */
-html[data-density="compact"] .default-effect-shell .resource-picker-label-hint {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .resource-picker-label-hint {
   display: none;
 }
 
-html[data-density="compact"] .default-effect-shell .node-resource-selector .resource-picker-label.is-empty {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-resource-selector .resource-picker-label.is-empty {
   min-height: 36px;
 }
 
-html[data-density="compact"] .default-effect-shell .effect-inline-resource-selectors {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .effect-inline-resource-selectors {
   gap: 6px 16px;
   margin-bottom: 0;
 }
 
 /* Side by side where the width allows. Width is the axis with room to give. */
-html[data-density="compact"] .default-effect-shell .effect-inline-resource-selectors .node-resource-selector {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .effect-inline-resource-selectors .node-resource-selector {
   flex: 1 1 240px;
   padding: 0;
 }
 
 /* ── Controls ───────────────────────────────────────────────────────────────── */
 
-html[data-density="compact"] .default-effect-section {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section {
   padding: 6px;
   border-radius: 10px;
 }
@@ -287,8 +294,8 @@ html[data-density="compact"] .default-effect-section {
   one of its own; everything else still takes a whole line. A custom layout
   positions its own controls, and is left alone.
 */
-html[data-density="compact"] .default-effect-section-controls:not(.default-effect-section-custom-layout),
-html[data-density="compact"] .default-effect-shell.neural-model-effect .default-effect-section-controls:not(.default-effect-section-custom-layout) {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section-controls:not(.default-effect-section-custom-layout),
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell.neural-model-effect .default-effect-section-controls:not(.default-effect-section-custom-layout) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -296,83 +303,83 @@ html[data-density="compact"] .default-effect-shell.neural-model-effect .default-
   padding: 6px 8px;
 }
 
-html[data-density="compact"] .default-effect-section-controls:not(.default-effect-section-custom-layout) > * {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section-controls:not(.default-effect-section-custom-layout) > * {
   flex: 1 1 100%;
   min-width: 0;
 }
 
-html[data-density="compact"] .default-effect-section-controls > .neural-model-resource-selector {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section-controls > .neural-model-resource-selector {
   flex: 1 1 260px;
 }
 
 /* A pair of slots needs ~500px before Main/Advanced can join their line. */
-html[data-density="compact"] .default-effect-section-controls > .effect-inline-resource-selectors {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section-controls > .effect-inline-resource-selectors {
   flex: 1 1 500px;
 }
 
-html[data-density="compact"] .default-effect-section-controls > .node-param-tabs {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section-controls > .node-param-tabs {
   flex: 0 0 auto;
 }
 
 /* The same underlined words, without the rule under the row or the 8px that sat
    the underline below it: they share a line with the picker now. */
-html[data-density="compact"] .default-effect-shell .node-param-tabs {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-tabs {
   gap: 16px;
   border-bottom: 0;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-tab {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-tab {
   min-height: 26px;
   padding: 0 2px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-tab-panels {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-tab-panels {
   gap: 6px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-tab-panel {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-tab-panel {
   padding-top: 0;
 }
 
-html[data-density="compact"] .default-effect-shell .params-controls {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .params-controls {
   gap: 6px 12px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-group-block,
-html[data-density="compact"] .default-effect-shell .eq-visualizer,
-html[data-density="compact"] .default-effect-shell .mixer-inputs-section,
-html[data-density="compact"] .default-effect-shell .input-analyzer-panel,
-html[data-density="compact"] .default-effect-shell .node-resource-selector {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-group-block,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .eq-visualizer,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .mixer-inputs-section,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .input-analyzer-panel,
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-resource-selector {
   padding: 6px 8px;
   border-radius: 10px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-group-block {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-group-block {
   gap: 2px;
   min-width: 0;
   padding: 4px 12px 6px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-group-title {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-group-title {
   font-size: 9px;
   line-height: 12px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-group-items {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-group-items {
   gap: 4px 14px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-group {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-group {
   gap: 2px;
   min-width: 58px;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-label {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-label {
   line-height: 12px;
   letter-spacing: 0.06em;
 }
 
-html[data-density="compact"] .default-effect-shell .node-param-value {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .node-param-value {
   font-size: 10px;
   line-height: 13px;
 }
@@ -382,35 +389,39 @@ html[data-density="compact"] .default-effect-shell .node-param-value {
   makes a fine adjustment a fight, so this is the one place the height comes back
   from padding and label size instead.
 */
-html[data-density="compact"] .default-effect-shell .knob {
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell .knob {
   width: 34px;
   height: 34px;
 }
 
+/* Touch sizes go by the pointer, not the density: a tablet on the full shell, or a
+   split compact one, is touched as much as a phone. The full shell's header
+   controls are 20px.
+
+   :is() takes the specificity of its weightiest argument, so this matches at
+   every density yet still outranks the staged layout's 26px rules above. */
 @media (pointer: coarse) {
-  html[data-density="compact"] .default-effect-shell-meta {
+  :is(html, html[data-density="compact"]:not([data-compact-split])) .default-effect-shell-meta {
     --effect-shell-control-height: 30px;
   }
 
-  html[data-density="compact"] .default-effect-shell .node-param-tab {
+  :is(html, html[data-density="compact"]:not([data-compact-split])) .default-effect-shell .node-param-tab {
     min-height: 30px;
   }
 
-  html[data-density="compact"] .default-effect-shell-meta .effect-visualization-toolbar-btn,
-  html[data-density="compact"] .default-effect-shell .resource-nav-btn {
+  :is(html, html[data-density="compact"]:not([data-compact-split])) .default-effect-shell-meta .effect-visualization-toolbar-btn,
+  :is(html, html[data-density="compact"]:not([data-compact-split])) .default-effect-shell .resource-nav-btn {
     width: 30px;
     min-width: 30px;
     height: 30px;
     min-height: 30px;
   }
 
-  html[data-density="compact"] .default-effect-shell .resource-clear-btn,
-  html[data-density="compact"] .default-effect-shell .resource-browse-btn,
-  html[data-density="compact"] .default-effect-shell .resource-picker-btn {
+  html .default-effect-shell :is(.resource-clear-btn, .resource-browse-btn, .resource-picker-btn) {
     min-height: 30px;
   }
 
-  html[data-density="compact"] .default-effect-shell .resource-picker-label {
+  :is(html, html[data-density="compact"]:not([data-compact-split])) .default-effect-shell .resource-picker-label {
     padding-block: 7px;
   }
 }

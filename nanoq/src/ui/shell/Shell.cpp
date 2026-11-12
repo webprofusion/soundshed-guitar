@@ -169,6 +169,7 @@ void Shell::BuildRoot()
     Fill(*mBgSlot, el::share(el::box(mTheme.Background())));
     mFrameSlot = MakeSlot();
     mWide = WantsWide();
+    mSplit = !mWide && WantsSplit();
     Fill(*mFrameSlot, BuildFrame());
     Ptr frame = mFrameSlot;
 
@@ -295,6 +296,19 @@ void Shell::Rebuild()
         }
     }
 
+    // The chain first: on a split stage it sets the chain's height (mChainAreaHeight), and the
+    // editor under it is sized for what is left, so a new height looks at the editor again.
+    if (mDirty & kChain)
+    {
+        const float chainArea = mChainAreaHeight;
+        Fill(*mChainSlot, BuildChain());
+
+        if (playStage && mChainAreaHeight != chainArea)
+        {
+            mDirty |= kPage;
+        }
+    }
+
     // A page of sliders is patched in place when only values moved: rebuilding it under a drag
     // would drop the drag.
     if ((mDirty & kPage) && PlayShown() && mState.activePreset)
@@ -395,11 +409,6 @@ void Shell::Rebuild()
         Fill(*mSceneSlot, BuildScenes());
     }
 
-    if (mDirty & kChain)
-    {
-        Fill(*mChainSlot, BuildChain());
-    }
-
     if ((mDirty & kPage) && playStage)
     {
         if (!mPlayStageShown)
@@ -495,10 +504,14 @@ void Shell::OnTick()
     }
 
     // A window resized (or zoomed) across the breakpoint gets the other frame, every region
-    // built for it.
-    if (const bool wide = WantsWide(); wide != mWide)
+    // built for it; and so does the compact frame going between split and staged, as its rail
+    // and pages change with it.
+    const bool wide = WantsWide();
+
+    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit)
     {
         mWide = wide;
+        mSplit = split;
         mPlayStageShown = false;
         CloseOverlay();
         CloseDropdown();

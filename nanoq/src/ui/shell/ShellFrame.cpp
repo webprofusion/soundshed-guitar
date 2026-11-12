@@ -28,8 +28,8 @@ Ptr Shell::BuildRail()
         return BuildTabBar();
     }
 
-    auto tab = [this](const char* icon, const char* label, Page page) {
-        auto t = std::make_shared<RailTab>(mTheme, mIcons, icon, label, mPage == page);
+    auto tab = [this](const char* icon, const char* label, Page page, bool lit) {
+        auto t = std::make_shared<RailTab>(mTheme, mIcons, icon, label, lit);
         t->onClick = [this, page] { ShowPage(page); };
         return Row({HGap(5), t, Stretch()});
     };
@@ -39,21 +39,34 @@ Ptr Shell::BuildRail()
     settings->Ink(mPage == Page::Settings ? mTheme.Accent() : mTheme.TextSecondary());
     settings->onClick = [this] { ShowPage(mPage == Page::Settings ? Page::Chain : Page::Settings); };
 
-    std::vector<Ptr> items{VGap(6), FixedHeight(46, tab("ui-chain", "Chain", Page::Chain)),
-                           VGap(4), FixedHeight(46, tab("ui-effect", "Effect", Page::Effect)),
-                           VGap(4), FixedHeight(46, tab("ui-pads", "Setlist", Page::Pads)),
-                           VGap(4)};
+    std::vector<Ptr> items{VGap(6)};
+
+    // Split, the chain and the effect are one Play page, as the full layout's PLAY tab; staged,
+    // they take turns.
+    if (mSplit)
+    {
+        items.push_back(FixedHeight(46, tab("ui-chain", "Play", PlayShown() ? mPage : Page::Chain, PlayShown())));
+    }
+    else
+    {
+        items.insert(items.end(),
+                     {FixedHeight(46, tab("ui-chain", "Chain", Page::Chain, mPage == Page::Chain)), VGap(4),
+                      FixedHeight(46, tab("ui-effect", "Effect", Page::Effect, mPage == Page::Effect))});
+    }
+
+    items.insert(items.end(),
+                 {VGap(4), FixedHeight(46, tab("ui-pads", "Setlist", Page::Pads, mPage == Page::Pads)), VGap(4)});
 
     // Tone sharing can be switched off in Settings > Features, as in the web UI.
     if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::ToneSharing))
     {
-        items.push_back(FixedHeight(46, tab("ui-tones", "Tones", Page::Tones)));
+        items.push_back(FixedHeight(46, tab("ui-tones", "Tones", Page::Tones, mPage == Page::Tones)));
         items.push_back(VGap(4));
     }
 
     if (JamShown())
     {
-        items.push_back(FixedHeight(46, tab("ui-jam", "Jam", Page::Jam)));
+        items.push_back(FixedHeight(46, tab("ui-jam", "Jam", Page::Jam, mPage == Page::Jam)));
         items.push_back(VGap(4));
     }
 

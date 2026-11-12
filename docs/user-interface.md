@@ -509,27 +509,40 @@ presets the engine does not store. Installing and removing Tone Sharing tones ar
 on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-paint script in
 `index.template.html` applies the same tests so the first frame is already right.
 
-- **Density** (`data-density="compact"`): width ≤ 980 or height ≤ 620, or pinned by the
-  Auto/Compact/Full setting (`ui.density`).
+- **Density** (`data-density="compact"`): on Auto, width ≤ 980 or height ≤ 620 with a mouse;
+  when the primary pointer is coarse (`(pointer: coarse)`, re-checked when it changes), width ≤
+  1200 or height ≤ 850, so every iPad but the 12.9" Pro gets the compact shell split rather
+  than the full shell. The Auto/Compact/Full setting (`ui.density`) pins it.
 - **Layout** (`data-compact-layout`): `rail` when wider than tall (every Android phone, which
-  runs landscape, and short desktop windows) puts navigation in a rail down the left edge;
-  `stack` keeps the bars on top.
+  runs landscape, tablets in landscape and short desktop windows) puts navigation in a rail
+  down the left edge; `stack` keeps the bars on top.
 - **Stage.** The chain and the selected effect take turns on the stage (`compactStage.ts`,
-  the Chain/Effect tabs, or the rail's buttons). A stacked window at least 600x800
-  (`data-compact-split`, for example an app snapped to half a monitor) shows both at once, the
-  chain over the effect as in the full shell.
+  the Chain/Effect tabs, or the rail's buttons). A window tall enough to give both a useful
+  share shows both at once (`data-compact-split`), the chain over the effect as in the full
+  shell: stacked at least 600x800 (an app snapped to half a monitor, an iPad upright), on the
+  rail at least 600 tall (an iPad in landscape, a 1024x600 panel). Phones and an 800x480 panel
+  keep the turns. In split the rail shows one Play entry instead of Chain and Effect, the pads
+  view is the footer's pads button, the chain takes what its lines need up to 45% of the stage
+  (`signalPath/layout.ts`) with the collapse chevron and the resize handle as at full density,
+  and the effect panel is the full shell's (equipment picture, full-size knobs, the same
+  centred card); `css/compact/effect-panel.css` is for the staged layout alone.
 - **The chain wraps** onto more lines by default here (below).
 - **Adding an effect.** With the chain on its own stage, the floating + menu's Add FX… opens
   the effect chooser at the end of the chain, the list a + between two nodes opens, instead of
   the FX library, whose effects are added by dragging (`signalPath/addMenu.ts`). The library
-  would have to open over the chain it drops onto, and on a touch screen a drag that starts
-  upwards scrolls its list instead.
+  would have to open over the chain it drops onto. In split Add FX… opens the library, which
+  drops over the effect down to the footer with two cards to a row. On a touch screen an
+  effect is picked up by resting a finger on it for a moment (`TOUCH_DRAG_HOLD_MS`), since a
+  swipe scrolls the list and the chain is above it.
 - **Landscape phones.** An iPhone gives the WebView 667x375 (SE) to about 814x409 (Pro Max)
   once JUCE has taken the safe area off, 354px tall at the least (13 mini), so check there.
   The looper strip is one row, the preset library's tags are one row that scrolls sideways,
   and on the rail its folder toolbar sits under the folder tree so the preset list runs the
   full height. Small controls grow an invisible hit area under `(pointer: coarse)`
-  (`css/compact/shell.css`).
+  (`css/compact/shell.css`). Touch sizes go by the pointer, not the density: the
+  `(pointer: coarse)` size-ups (footer buttons, preset and settings buttons, the + add button,
+  effect header controls, the looper's buttons, tag chips, hit areas) apply to the full shell
+  on a touch screen too.
 - **Tones and Jam put results first** (`css/compact/panels.css`). A Tones section scrolls as
   one, so its search and paging move away with the results; the community search is one
   line; a feed of one row drops the heading its chip already says; pack cards are 150px; and

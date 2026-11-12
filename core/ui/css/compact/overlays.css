@@ -76,6 +76,28 @@ html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualiz
   }
 }
 
+/*
+  Split (the chain over the effect: a tablet, or a window snapped to half a
+  monitor). The library drops over the effect as it does in the full shell, but
+  the desktop box was sized for a desktop's short editor: 360px tall above ~600px
+  of nothing at 768x1024, and three cards a row, which at that width cut every
+  name to "Neur...". Here it reaches down to the footer (fxSelector.ts measures
+  the room into --fx-selector-room) and the cards take two to a row, each wide
+  enough for its name. The category column narrows to the flyout's.
+*/
+html[data-density="compact"][data-compact-split] .fx-selector-panel {
+  max-height: var(--fx-selector-room, min(48vh, 360px));
+}
+
+html[data-density="compact"][data-compact-split] .fx-selector-categories {
+  width: 168px;
+}
+
+html[data-density="compact"][data-compact-split] .fx-item {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 /* ── Preset library ───────────────────────────────────────────────────────────
  *
  * The popover scrolled as a whole, with the folder tree and the preset list each

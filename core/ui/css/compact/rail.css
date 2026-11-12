@@ -9,7 +9,8 @@
  * Here navigation moves into a rail down the left edge and both rows go. The rail
  * lists where you can be — Chain, Effect, Tones, Jam — rather than which panel is
  * up, so each half of Play is one tap from anywhere instead of two. Play has no
- * button of its own on the rail; Chain and Effect are what it is.
+ * button of its own on the rail; Chain and Effect are what it is — except in a
+ * split window (a tablet), where the two share the stage and Play comes back.
  *
  * ts/compactMode.ts stamps html[data-compact-layout="rail"]. The header is not
  * replaced, only stood on its end: Tones and Jam keep their feature-flag gating
@@ -169,7 +170,15 @@ html[data-density="compact"][data-compact-layout="rail"] .nav-tab {
 
 /* Play is Chain and Effect here. (Feature flags hide Tones and Jam with the hidden
    attribute, which base.css enforces with !important, so those need nothing.) */
-html[data-density="compact"][data-compact-layout="rail"] .nav-tab[data-panel="visualizer"] {
+html[data-density="compact"][data-compact-layout="rail"]:not([data-compact-split]) .nav-tab[data-panel="visualizer"] {
+  display: none;
+}
+
+/* A rail tall enough to split (a tablet in landscape) shows the chain and the
+   effect together, so there is nothing for Chain and Effect to switch between:
+   Play stands for both, as it does on the bar. The pads view is reached from the
+   footer's pads button, as in a stacked split window. */
+html[data-density="compact"][data-compact-layout="rail"][data-compact-split] .nav-rail-stage {
   display: none;
 }
 

@@ -593,21 +593,24 @@ html[data-density="compact"] .notification-toast {
  * A compact display is usually a touched one. 38 of the 73 controls on screen at
  * 640x400 were under 28px before this; nothing that takes a tap is allowed to be.
  * The footer's controls all size off --footer-btn-size (css/footer.css).
+ *
+ * These go by the pointer, not the density: the full shell on a touch screen (a
+ * 12.9" iPad) is touched as much as the compact one, and kept 26px settings, 28px
+ * footer buttons and a 24px add button. So they match at every density; where a
+ * compact rule sizes the same control, :is() lends them its specificity so they
+ * still win over it.
  */
 
 @media (pointer: coarse) {
-  html[data-density="compact"] .footer-bar {
+  :is(html, html[data-density="compact"]) .footer-bar {
     --footer-btn-size: 32px;
   }
 
-  html[data-density="compact"] .preset-action-btn,
-  html[data-density="compact"] .control-bar-tab,
-  html[data-density="compact"] .preset-extra-action-item {
+  :is(html, html[data-density="compact"]) :is(.preset-action-btn, .control-bar-tab, .preset-extra-action-item) {
     min-height: 32px;
   }
 
-  html[data-density="compact"] .preset-nav-btn,
-  html[data-density="compact"] .nav-settings-btn {
+  :is(html, html[data-density="compact"]) :is(.preset-nav-btn, .nav-settings-btn) {
     width: 32px !important;
     height: 32px !important;
     min-height: 32px !important;
@@ -615,19 +618,19 @@ html[data-density="compact"] .notification-toast {
 
   /* The chain's add button is how a new effect goes in on a touch screen, where
      the "+" between nodes only shows on hover. 24px was the desktop size. */
-  html[data-density="compact"] .signal-path-add-menu-trigger {
+  :is(html, html[data-density="compact"]) .signal-path-add-menu-trigger {
     width: 38px;
     height: 38px;
     font-size: 20px;
   }
 
-  html[data-density="compact"] .signal-path-add-menu-options button {
+  :is(html, html[data-density="compact"]) .signal-path-add-menu-options button {
     min-height: 34px;
     font-size: 12px;
   }
 
   /* The wrap toggle keeps its small glyph; the padding is the target. */
-  html[data-density="compact"] .signal-path-wrap-btn {
+  :is(html, html[data-density="compact"]) .signal-path-wrap-btn {
     padding: 8px 8px 10px 12px;
     right: 0;
   }
@@ -763,15 +766,16 @@ html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualiz
   title's rename pencil, the chevrons and mute under the Controls sheet's meters,
   and the tuner's reference-pitch steppers. Each keeps its drawing and grows an
   invisible hit area. The steppers are stacked, so theirs grows sideways only.
+  At every density: the full shell's are the same size on a tablet.
 */
 @media (pointer: coarse) {
-  html[data-density="compact"] :is(#preset-favorite, .default-effect-shell-title-edit,
+  html :is(#preset-favorite, .default-effect-shell-title-edit,
     .gate-settings-trigger, .output-quick-mute-btn, .output-status-trigger,
     .input-vu-meter-dropdown-trigger, .tuner-ref-btn) {
     position: relative;
   }
 
-  html[data-density="compact"] :is(#preset-favorite, .default-effect-shell-title-edit,
+  html :is(#preset-favorite, .default-effect-shell-title-edit,
     .gate-settings-trigger, .output-quick-mute-btn, .output-status-trigger,
     .input-vu-meter-dropdown-trigger, .input-mode-trigger)::after {
     content: "";
@@ -780,7 +784,7 @@ html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualiz
     inset: -6px;
   }
 
-  html[data-density="compact"] .tuner-ref-btn::after {
+  html .tuner-ref-btn::after {
     content: "";
     position: absolute;
     z-index: 1;

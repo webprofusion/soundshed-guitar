@@ -67,9 +67,30 @@ function ensureEffectCatalogHydrated(reason: string): void {
   postMessage({ type: "getEffectCatalog" });
 }
 
+/**
+ * The height between the top of the library and the footer, for a compact split
+ * (css/compact/overlays.css), where the library drops over the effect and may
+ * take all of it. The stage's own height moves with the chain, so CSS cannot
+ * know it: it is measured when the library opens and when the window changes.
+ */
+function measureFxSelectorRoom(): void {
+  const stage = fxSelectorPanel?.offsetParent as HTMLElement | null;
+  if (!fxSelectorPanel || !stage) {
+    return;
+  }
+  const footer = document.querySelector<HTMLElement>(".footer-bar");
+  const floor = footer && footer.getClientRects().length > 0 ? footer.getBoundingClientRect().top : window.innerHeight;
+  const marginTop = Number.parseFloat(window.getComputedStyle(fxSelectorPanel).marginTop) || 0;
+  const room = Math.floor(floor - stage.getBoundingClientRect().bottom - marginTop - 8);
+  fxSelectorPanel.style.setProperty("--fx-selector-room", `${Math.max(160, room)}px`);
+}
+
 function syncFxSelectorCollapsedState(options?: { focusSearch?: boolean }): void {
   const isCollapsed = fxSelectorPanel?.classList.contains("collapsed") ?? false;
   signalPathBar?.classList.toggle("fx-library-collapsed", isCollapsed);
+  if (!isCollapsed) {
+    measureFxSelectorRoom();
+  }
   // Not on a touch screen, as with the effect dropdown: focusing the field brings up the
   // on-screen keyboard, which covers the library and scrolls the page to keep the field in view.
   if (!isCollapsed && options?.focusSearch && !window.matchMedia?.("(pointer: coarse)").matches) {
@@ -204,6 +225,12 @@ export function initFxSelector(): void {
     const target = event.target as Node | null;
     if (target === document.body || (target && fxSelectorPanel.parentElement?.contains(target))) {
       setFxSelectorCollapsed(true);
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (!isFxSelectorCollapsed()) {
+      measureFxSelectorRoom();
     }
   });
 
