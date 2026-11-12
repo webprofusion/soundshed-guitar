@@ -44,6 +44,12 @@ export interface RemoteResourceRef extends RemoteResourceAttribution {
   hash?: string;
   /** SHA-256 of the file, the identity providers and the catalogue use across sources. */
   sha256?: string;
+  /**
+   * The file's content hash (metadata.contentHash): "nam-content-v1:" of a NAM model's weights or
+   * "ir-content-v1:" of an IR's samples. It matches any copy of the same model, renamed or
+   * re-tagged, in another library or at the provider, which can look the model up by it.
+   */
+  contentHash?: string;
   /** Provider-specific detail its adapter needs to fetch the file again. */
   providerData?: Record<string, string>;
 }

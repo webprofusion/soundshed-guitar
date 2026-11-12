@@ -1,5 +1,6 @@
 #include "controller/internal/RemoteResourceRefs.h"
 
+#include "models/ContentHash.h"
 #include "resources/ResourceLibrary.h"
 
 #include <algorithm>
@@ -75,6 +76,7 @@ std::string FindRemoteResource(const ResourceLibrary& library, const nlohmann::j
     const auto provider = Text(reference, "provider");
     const auto providerKey = Text(reference, "providerKey");
     const auto hash = Text(reference, "hash");
+    const auto contentHash = Text(reference, "contentHash");
     const auto data = reference.find("providerData");
     const bool hasData = data != reference.end() && data->is_object();
     const auto toneId = hasData ? Text(*data, "toneId") : std::string{};
@@ -125,7 +127,16 @@ std::string FindRemoteResource(const ResourceLibrary& library, const nlohmann::j
 
     if (!hash.empty())
     {
-        return find([&](const LibraryResource& resource) { return resource.hash == hash; });
+        if (auto found = find([&](const LibraryResource& resource) { return resource.hash == hash; }); !found.empty())
+        {
+            return found;
+        }
+    }
+
+    // The same model under any name, from any source: a folder, another provider, a repost.
+    if (IsContentHash(contentHash))
+    {
+        return find([&](const LibraryResource& resource) { return meta(resource, kContentHashMetadataKey) == contentHash; });
     }
 
     return {};

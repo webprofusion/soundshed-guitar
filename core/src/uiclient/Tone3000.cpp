@@ -1,6 +1,7 @@
 #include "uiclient/Tone3000.h"
 
 #include "controller/internal/PresetArchiveSupport.h"
+#include "models/ContentHash.h"
 #include "uiclient/ToneSharing.h"
 #include "util/PathEncoding.h"
 #include "util/PathSanitizer.h"
@@ -149,6 +150,11 @@ std::string ModelsPath(const std::string& toneId, int page, const std::string& a
     return path;
 }
 
+std::string ModelLookupPath(const std::string& contentHash)
+{
+    return "/models/lookup?content_hash=" + tones::EncodeQueryValue(contentHash) + "&page=1&page_size=25";
+}
+
 std::string Url(const std::string& path)
 {
     return std::string(kProxyBase) + path;
@@ -252,6 +258,7 @@ Page<Model> ParseModels(const nlohmann::json& body)
         model.modelUrl = Text(m, "model_url");
         model.toneId = Text(m, "tone_id");
         model.architecture = Text(m, "architecture_version");
+        model.contentHash = Text(m, "content_hash");
         return model;
     });
 }
@@ -398,6 +405,7 @@ std::vector<RemoteRef> MissingRemoteRefs(const ClientState& state, const std::st
         ref.provider = Text(reference, "provider");
         ref.providerKey = Text(reference, "providerKey");
         ref.hash = Text(reference, "hash");
+        ref.contentHash = IsContentHash(Text(reference, "contentHash")) ? Text(reference, "contentHash") : std::string{};
 
         if (const auto data = reference.find("providerData"); data != reference.end() && data->is_object())
         {
@@ -412,7 +420,7 @@ std::vector<RemoteRef> MissingRemoteRefs(const ClientState& state, const std::st
         }
 
         // The engine's rules (FindRemoteResource): the same id; the same provider and key, or
-        // the same Tone3000 tone and model; the same content hash.
+        // the same Tone3000 tone and model; the same file hash; the same model content hash.
         bool found = false;
 
         if (const auto it = state.resources.find(ref.type); it != state.resources.end())
@@ -426,7 +434,8 @@ std::vector<RemoteRef> MissingRemoteRefs(const ClientState& state, const std::st
                       Meta(resource, "modelId") == ref.modelId));
 
                 if ((!ref.id.empty() && resource.id == ref.id) || sameProvider ||
-                    (!ref.hash.empty() && resource.hash == ref.hash))
+                    (!ref.hash.empty() && resource.hash == ref.hash) ||
+                    (!ref.contentHash.empty() && Meta(resource, kContentHashMetadataKey) == ref.contentHash))
                 {
                     found = true;
                     break;

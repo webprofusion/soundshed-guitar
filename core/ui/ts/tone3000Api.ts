@@ -147,6 +147,24 @@ export function sortTone3000ModelsByName(models: readonly Tone3000Model[]): Tone
     || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
 }
 
+/** The page size `models/lookup` allows at most. */
+export const TONE3000_MODEL_LOOKUP_MAX_PAGE_SIZE = 25;
+
+/** Models whose content hash is `contentHash`, oldest first: reposts of one file share it. */
+export function buildTone3000ModelLookupUrl(contentHash: string, page = 1, pageSize = TONE3000_MODEL_LOOKUP_MAX_PAGE_SIZE): string {
+  const params = new URLSearchParams({
+    content_hash: contentHash,
+    page: String(page),
+    page_size: String(Math.min(pageSize, TONE3000_MODEL_LOOKUP_MAX_PAGE_SIZE)),
+  });
+  return buildTone3000ApiUrl("models/lookup", params);
+}
+
+/** One tone by its id. */
+export function buildTone3000ToneUrl(toneId: string | number): string {
+  return buildTone3000ApiUrl(`tones/${encodeURIComponent(String(toneId))}`);
+}
+
 export function buildTone3000ModelsUrl(
   toneId: string | number,
   page = 1,

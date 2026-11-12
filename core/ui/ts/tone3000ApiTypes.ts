@@ -102,6 +102,13 @@ export interface Tone3000Model {
   size?: Tone3000Size;
   tone_id?: number;
   architecture_version?: Tone3000Architecture | null;
+  /**
+   * The model's content hash: "nam-content-v1:" (its weights) or "ir-content-v1:" (its samples)
+   * and 64 hex digits. The same file's library row carries it as metadata.contentHash.
+   */
+  content_hash?: string | null;
+  /** Partner-supplied overrides of the .nam file's own metadata, or null. */
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface Tone3000PaginatedResponse<T> {

@@ -2,8 +2,11 @@ import { uiState } from "./state.js";
 import { appendLog } from "./logging.js";
 import { updateAppSetting } from "./appSettingsStore.js";
 import type { AppSettings, AppSettingValue, Tone3000Session } from "./types.js";
-import type { Tone3000ApiSession, Tone3000Architecture } from "./tone3000ApiTypes.js";
+import type { Tone3000ApiSession, Tone3000Architecture, Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
 import {
+  buildTone3000ModelLookupUrl,
+  buildTone3000ToneUrl,
+  extractTone3000Models,
   fetchAllTone3000ModelPages,
   getTone3000ApiClientConfig,
   getTone3000SessionUrl,
@@ -352,7 +355,60 @@ type Tone3000ArchiveReference = {
   toneId?: string;
   modelId?: string;
   modelUrl?: string;
+  /** The file's content hash (metadata.contentHash), to find the model when its ids are gone. */
+  contentHash?: string;
 };
+
+const CONTENT_HASH_PATTERN = /^(nam|ir)-content-v1:[0-9a-f]{64}$/;
+
+/** Whether `value` is a content hash Tone3000 can look up. */
+export function isContentHash(value: string | null | undefined): value is string {
+  return typeof value === "string" && CONTENT_HASH_PATTERN.test(value);
+}
+
+/**
+ * Tone3000 models whose content hash is `contentHash`: the same weights (NAM) or samples (IR)
+ * whatever the file is called or its metadata says. Reposts share a hash, so there can be
+ * several, oldest first; none is an empty list. Only the first page (25) is read: more reposts
+ * than that add nothing a caller would choose between.
+ */
+export async function lookupTone3000ModelsByContentHash(contentHash: string): Promise<Tone3000Model[]> {
+  if (!isContentHash(contentHash)) {
+    return [];
+  }
+  const response = await tone3000AuthenticatedFetch(buildTone3000ModelLookupUrl(contentHash));
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Tone3000 content hash lookup failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
+  }
+  return extractTone3000Models(await response.json()) as Tone3000Model[];
+}
+
+/** One tone by id, or null when Tone3000 does not show it (private, deleted). */
+export async function fetchTone3000Tone(toneId: string | number): Promise<Tone3000Tone | null> {
+  const response = await tone3000AuthenticatedFetch(buildTone3000ToneUrl(toneId));
+  if (response.status === 403 || response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Tone3000 tone lookup failed: HTTP ${response.status}${detail ? ` - ${detail}` : ""}`);
+  }
+  const payload = (await response.json()) as unknown;
+  const tone = payload && typeof payload === "object" && "data" in payload && !Array.isArray((payload as { data: unknown }).data)
+    ? (payload as { data: unknown }).data
+    : payload;
+  return tone && typeof tone === "object" && "id" in tone ? (tone as Tone3000Tone) : null;
+}
+
+/**
+ * Of the models sharing a content hash, the one to use: one in the tone the caller already knows
+ * (the same pack, its model re-uploaded under a new id), else the oldest, the likeliest original.
+ */
+export function chooseContentHashMatch<T extends { tone_id?: number | string | null }>(models: T[], preferredToneId?: string): T | null {
+  const preferred = preferredToneId?.trim();
+  return (preferred ? models.find((model) => String(model.tone_id ?? "") === preferred) : undefined) ?? models[0] ?? null;
+}
 
 async function fetchTone3000ModelsByToneId(
   toneId: string,
@@ -397,6 +453,30 @@ export async function downloadTone3000ResourceByModelUrl(modelUrl: string): Prom
 }
 
 export async function downloadTone3000ResourceByReference(reference: Tone3000ArchiveReference): Promise<ArrayBuffer> {
+  try {
+    return await downloadTone3000ResourceByLink(reference);
+  } catch (error) {
+    // The link is gone (the model re-uploaded under a new id, its tone moved or made private): a
+    // model with the same content hash is the same file, wherever it is now.
+    if (!isContentHash(reference.contentHash)) {
+      throw error;
+    }
+    let match: Tone3000Model | null = null;
+    try {
+      match = chooseContentHashMatch(await lookupTone3000ModelsByContentHash(reference.contentHash), reference.toneId);
+    } catch (lookupError) {
+      appendLog(`tone3000 content hash lookup failed: ${lookupError instanceof Error ? lookupError.message : String(lookupError)}`);
+    }
+    if (!match?.model_url) {
+      throw error;
+    }
+    appendLog(`tone3000 reference ${reference.toneId ?? "?"}/${reference.modelId ?? "?"} found by content hash as model ${match.id}`);
+    return downloadTone3000ResourceByModelUrl(match.model_url);
+  }
+}
+
+/** By the reference's model URL, or else its tone and model ids. */
+async function downloadTone3000ResourceByLink(reference: Tone3000ArchiveReference): Promise<ArrayBuffer> {
   // The reference comes from an archive someone shared: a modelUrl anywhere but Tone3000 is
   // ignored, and the model is looked up by its ids instead.
   if (reference.modelUrl && isTone3000RequestUrlAllowed(reference.modelUrl)) {
@@ -409,6 +489,10 @@ export async function downloadTone3000ResourceByReference(reference: Tone3000Arc
   if (!isProxyModeActive() && !uiState.tone3000Session?.accessToken) {
     throw new Error("Tone3000 session required to download this resource");
   }
+  return downloadTone3000ResourceByIds(reference);
+}
+
+async function downloadTone3000ResourceByIds(reference: Tone3000ArchiveReference): Promise<ArrayBuffer> {
   const toneId = reference.toneId?.trim() ?? "";
   const modelId = reference.modelId?.trim() ?? "";
   if (!toneId || !modelId) {

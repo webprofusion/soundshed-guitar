@@ -16,6 +16,7 @@
 #include "controller/internal/IrResourceCategory.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/PresetArchiveSupport.h"
+#include "models/ContentHash.h"
 #include "presets/PresetStorage.h"
 #include "resources/PluginPathUtils.h"
 #include "resources/ResourceLibrary.h"
@@ -361,6 +362,8 @@ std::optional<LibraryResource> PluginController::ImportResourceFile(
     {
         EnrichNamResourceMetadata(resource, targetPath);
     }
+
+    RefreshContentHashMetadata(resource);
 
     resource.category = ResolveResourceLibraryCategory(resource, resource.category);
 
@@ -819,6 +822,8 @@ std::optional<LibraryResource> PluginController::SaveLocalLibraryResource(const 
     {
         EnrichNamResourceMetadata(resource, resolvedPath);
     }
+
+    RefreshContentHashMetadata(resource);
 
     resource.category = ResolveResourceLibraryCategory(resource, resource.category);
 
@@ -1481,6 +1486,24 @@ void PluginController::HandleUpdateLibraryResourceRequest(const nlohmann::json& 
     if (resourceType == "nam")
     {
         EnrichNamResourceMetadata(updated, updated.filePath);
+    }
+
+    // The content hash describes the file, not anything the user edits: a metadata map from
+    // the UI replaces the row's wholesale and may not carry it, and a new file needs its own.
+    if (updated.filePath == existing->filePath)
+    {
+        if (const auto kept = existing->metadata.find(kContentHashMetadataKey); kept != existing->metadata.end())
+        {
+            updated.metadata[kContentHashMetadataKey] = kept->second;
+        }
+        else
+        {
+            RefreshContentHashMetadata(updated);
+        }
+    }
+    else
+    {
+        RefreshContentHashMetadata(updated);
     }
 
     mResourceLibrary.UpdateResource(resourceType, resourceId, updated);
@@ -2149,15 +2172,27 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
     // as uncalibrated. Every model is read again once, its file replacing what was stored.
     const bool rereadNamFiles = Store().GetMeta(kNamMetadataRevisionKey) != std::string{kNamMetadataRevision};
 
+    // Rows from before imports kept a content hash get one, once: each NAM and IR file is
+    // read again for it (models/ContentHash.h). Imports have set it since.
+    const bool hashFiles = Store().GetMeta(kContentHashRevisionKey) != std::string{kContentHashRevision};
+
     for (auto& resource : allResources)
     {
         if (resource.type == "ir")
         {
+            const bool hashChanged = hashFiles && RefreshContentHashMetadata(resource);
+
             // Older builds filed IRs under whatever the import said: Tone3000's gear,
             // a folder name, "Local". Settle each on cab or reverb once, keeping a pack
             // or folder name as a tag so that grouping is not lost.
             if (IsIrLibraryCategory(resource.category))
             {
+                if (hashChanged)
+                {
+                    mResourceLibrary.UpdateResource(resource.type, resource.id, resource);
+                    changed.push_back(resource);
+                }
+
                 continue;
             }
 
@@ -2194,6 +2229,11 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
         else if (resource.metadata.count("namFileVersion") == 0)
         {
             EnrichNamResourceMetadata(resource, resource.filePath);
+        }
+
+        if (hashFiles)
+        {
+            RefreshContentHashMetadata(resource);
         }
 
         const std::string resolvedCategory = ResolveResourceLibraryCategory(resource, resource.category);
@@ -2241,6 +2281,12 @@ void PluginController::CleanupResourceLibraryCategoriesOnStartup()
     {
         Store().SetMeta(kNamMetadataRevisionKey, kNamMetadataRevision);
         AppendSessionLog("Re-read NAM model metadata (revision " + std::string{kNamMetadataRevision} + ")");
+    }
+
+    if (hashFiles && saved)
+    {
+        Store().SetMeta(kContentHashRevisionKey, kContentHashRevision);
+        AppendSessionLog("Computed model content hashes (revision " + std::string{kContentHashRevision} + ")");
     }
 }
 } // namespace guitarfx

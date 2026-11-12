@@ -184,6 +184,7 @@ void PluginController::StartPresetArchiveSession(const std::string& archiveFileN
             EnrichNamResourceMetadata(libraryResource, targetPath);
         }
 
+        RefreshContentHashMetadata(libraryResource);
         libraryResource.category = ResolveResourceLibraryCategory(libraryResource, libraryResource.category);
         mResourceLibrary.AddResource(libraryResource);
     }

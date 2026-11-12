@@ -142,9 +142,11 @@ class JsonSkimmer
     }
 
     /// A number value, as written. Any other value (null most often) is skipped and
-    /// leaves `out` empty.
+    /// leaves `out` empty. `out` keeps its capacity, so one string can be reused across a
+    /// whole array of numbers without allocating per element.
     bool ReadNumber(std::string& out)
     {
+        out.clear();
         const int first = PeekValue();
 
         if (first != '-' && (first < '0' || first > '9'))
@@ -152,15 +154,12 @@ class JsonSkimmer
             return SkipValue();
         }
 
-        std::string token;
-
         for (int c = Peek(); c >= 0 && !IsDelimiter(c); c = Peek())
         {
-            token.push_back(static_cast<char>(c));
+            out.push_back(static_cast<char>(c));
             ++mPos;
         }
 
-        out = std::move(token);
         return true;
     }
 

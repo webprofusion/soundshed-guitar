@@ -3,6 +3,7 @@
 #include "controller/internal/PresetArchiveSupport.h"
 #include "util/Base64.h"
 
+#include <algorithm>
 #include <array>
 #include <string_view>
 
@@ -846,48 +847,103 @@ void ToneService::DownloadTone3000(const tone3000::Model& model, const std::stri
             });
 }
 
+void ToneService::Tone3000ModelsByContentHash(const std::string& contentHash, ModelsCallback callback)
+{
+    Request("GET", tone3000::Url(tone3000::ModelLookupPath(contentHash)), {}, false,
+            [callback](const HttpResult& result) {
+                if (result.status != 200)
+                {
+                    callback({}, result.status == 0 ? result.error
+                                                    : "lookup failed (" + std::to_string(result.status) + ")");
+                    return;
+                }
+
+                const auto body = nlohmann::json::parse(result.body, nullptr, false);
+                callback(body.is_discarded() ? std::vector<tone3000::Model>{} : tone3000::ParseModels(body).items, {});
+            });
+}
+
 void ToneService::FetchRemoteRef(const tone3000::RemoteRef& ref,
                                  std::function<void(const std::string&, const std::string&)> done)
 {
-    const auto download = [this, done](const std::string& url) {
-        Request("GET", tone3000::ThroughRelay(url), {}, false, [done](const HttpResult& result) {
+    const auto download = [this](const std::string& url,
+                                 std::function<void(const std::string&, const std::string&)> finished) {
+        Request("GET", tone3000::ThroughRelay(url), {}, false, [finished](const HttpResult& result) {
             if (result.status != 200 || result.body.empty())
             {
-                done({}, result.status == 0 ? result.error : "download failed (" + std::to_string(result.status) + ")");
+                finished({}, result.status == 0 ? result.error
+                                                : "download failed (" + std::to_string(result.status) + ")");
             }
             else
             {
-                done(result.body, {});
+                finished(result.body, {});
             }
         });
     };
 
+    // When its link fails (the model re-uploaded under a new id, its tone moved or made private),
+    // a model with the same content hash is the same file, wherever it is now.
+    const auto byContentHash = [this, ref, done, download](const std::string& error) {
+        if (ref.contentHash.empty())
+        {
+            done({}, error);
+            return;
+        }
+
+        Tone3000ModelsByContentHash(
+            ref.contentHash, [ref, done, download, error](const std::vector<tone3000::Model>& models, const std::string&) {
+                const auto sameTone = std::find_if(models.begin(), models.end(), [&](const tone3000::Model& model) {
+                    return !ref.toneId.empty() && model.toneId == ref.toneId && !model.modelUrl.empty();
+                });
+                const auto any = std::find_if(models.begin(), models.end(),
+                                              [](const tone3000::Model& model) { return !model.modelUrl.empty(); });
+                const auto match = sameTone != models.end() ? sameTone : any;
+
+                if (match == models.end())
+                {
+                    done({}, error);
+                    return;
+                }
+
+                download(match->modelUrl, done);
+            });
+    };
+
     if (!ref.modelUrl.empty())
     {
-        download(ref.modelUrl);
+        download(ref.modelUrl, [done, byContentHash](const std::string& bytes, const std::string& error) {
+            if (error.empty())
+            {
+                done(bytes, {});
+            }
+            else
+            {
+                byContentHash(error);
+            }
+        });
         return;
     }
 
     if (ref.toneId.empty() || ref.modelId.empty())
     {
-        done({}, "the preset does not say where it came from");
+        byContentHash("the preset does not say where it came from");
         return;
     }
 
     // Its URL from its tone's models: download URLs expire, so they are asked for now.
-    Tone3000Models(ref.toneId,
-                   [ref, done, download](const std::vector<tone3000::Model>& models, const std::string& error) {
-                       for (const auto& model : models)
-                       {
-                           if (model.id == ref.modelId && !model.modelUrl.empty())
-                           {
-                               download(model.modelUrl);
-                               return;
-                           }
-                       }
+    Tone3000Models(ref.toneId, [ref, done, download, byContentHash](const std::vector<tone3000::Model>& models,
+                                                                      const std::string& error) {
+        for (const auto& model : models)
+        {
+            if (model.id == ref.modelId && !model.modelUrl.empty())
+            {
+                download(model.modelUrl, done);
+                return;
+            }
+        }
 
-                       done({}, error.empty() ? "no longer on Tone3000" : error);
-                   });
+        byContentHash(error.empty() ? "no longer on Tone3000" : error);
+    });
 }
 
 void ToneService::ImportAndWait(nlohmann::json payload, ImportCallback done)

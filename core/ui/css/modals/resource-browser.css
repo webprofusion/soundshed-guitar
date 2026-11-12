@@ -540,8 +540,9 @@
   border-top: 1px solid var(--rb-divider);
 }
 
-/* A Tone3000 model's way back to its tone on the Tone3000 tab. */
-.resource-browser-details-tone3000-btn {
+/* A Tone3000 model's way back to its tone on the Tone3000 tab, and any model's lookup there by content hash. */
+.resource-browser-details-tone3000-btn,
+.resource-browser-details-tone3000-lookup-btn {
   margin: 0 0 8px;
   padding: 4px 10px;
   border: 1px solid var(--border-browser);
@@ -553,8 +554,18 @@
   cursor: pointer;
 }
 
-.resource-browser-details-tone3000-btn:hover {
+.resource-browser-details-tone3000-btn + .resource-browser-details-tone3000-lookup-btn {
+  margin-left: 6px;
+}
+
+.resource-browser-details-tone3000-btn:hover,
+.resource-browser-details-tone3000-lookup-btn:hover:not(:disabled) {
   background: var(--bg-browser-hover);
+}
+
+.resource-browser-details-tone3000-lookup-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .resource-browser-details-description {

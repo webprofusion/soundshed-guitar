@@ -29,6 +29,7 @@ import { uiState } from "./state.js";
 import { isTone3000AuthReady, tone3000AuthenticatedFetch } from "./tone3000.js";
 import type { Tone3000Architecture } from "./tone3000ApiTypes.js";
 import { tone3000ToneFromResource } from "./tone3000Shared.js";
+import { applyTone3000Match, canLookUpOnTone3000, findTone3000ByContentHash } from "./tone3000ContentHash.js";
 import type { LibraryResource } from "./types.js";
 import { arrayBufferToBase64, copyTextToClipboard, escapeHtml, findResourceById } from "./utils.js";
 
@@ -1375,7 +1376,10 @@ export class ResourceBrowserModal {
                 <button class="resource-browser-action-icon-btn resource-browser-item-select${isSelected ? " is-active" : ""}" type="button" ${DOUBLE_CLICK_SELECTS_ATTR} title="Select in effect" aria-label="Select in effect" aria-pressed="${isSelected ? "true" : "false"}">${getPlaySvg()}</button>
               </div>
             </div>
-            ${isDetailsExpanded ? renderLibraryItemDetailsPanel(res, { tone3000Title: isFeatureEnabled(Features.Tone3000) ? tone3000ToneFromResource(res)?.title : undefined }) : ""}
+            ${isDetailsExpanded ? renderLibraryItemDetailsPanel(res, {
+      tone3000Title: isFeatureEnabled(Features.Tone3000) ? tone3000ToneFromResource(res)?.title : undefined,
+      tone3000Lookup: isFeatureEnabled(Features.Tone3000) && canLookUpOnTone3000(res),
+    }) : ""}
           </div>
         `;
       });
@@ -1432,9 +1436,41 @@ export class ResourceBrowserModal {
     });
   }
 
+  /** The details panel's "Find on Tone3000": the row's model at Tone3000 by its content hash. */
+  private async lookUpOnTone3000(button: HTMLButtonElement): Promise<void> {
+    const resourceType = this.options?.resourceType ?? "nam";
+    const resource = findResourceById(uiState.resourceLibrary[resourceType] ?? [], button.dataset.resourceId ?? "");
+    if (!resource || !canLookUpOnTone3000(resource) || button.disabled) {
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "Looking on Tone3000…";
+    try {
+      const match = await findTone3000ByContentHash(resource);
+      if (!match) {
+        showNotification("Not on Tone3000", `no Tone3000 model has the same ${resourceType === "ir" ? "samples" : "weights"} as "${resource.name}"`);
+        return;
+      }
+      applyTone3000Match(resourceType, resource, match);
+      const creator = match.tone.user?.username ? ` by ${match.tone.user.username}` : "";
+      const reposts = match.others > 0 ? ` (${match.others} other upload${match.others === 1 ? "" : "s"} share it)` : "";
+      showNotification("Found on Tone3000", `"${match.tone.title}"${creator}${reposts}`);
+    } catch (error) {
+      showNotification("Tone3000 lookup failed", error instanceof Error ? error.message : String(error));
+    } finally {
+      this.renderLibraryList();
+    }
+  }
+
   private async handleLibraryClick(event: Event): Promise<void> {
     const target = event.target as HTMLElement | null;
     if (!target) {
+      return;
+    }
+
+    const lookupButton = target.closest(".resource-browser-details-tone3000-lookup-btn") as HTMLButtonElement | null;
+    if (lookupButton) {
+      void this.lookUpOnTone3000(lookupButton);
       return;
     }
 

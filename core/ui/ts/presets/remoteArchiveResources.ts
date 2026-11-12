@@ -57,6 +57,7 @@ export function buildArchiveRemoteRef(resource: LibraryResource, type: string): 
     name: resource.name,
     category: resource.category,
     ...(resource.hash ? { hash: resource.hash } : {}),
+    ...(metadata.contentHash ? { contentHash: metadata.contentHash } : {}),
   };
   if (attribution.provider !== TONE3000) {
     return { ref, legacy: null };
@@ -223,7 +224,12 @@ async function ensureTone3000Access(refCount: number): Promise<void> {
 async function fetchTone3000(ref: RemoteResourceRef): Promise<{ data: string; metadata: Record<string, string> }> {
   const extra = ref.providerData ?? {};
   const modelUrl = extra.modelUrl;
-  const buffer = await downloadTone3000ResourceByReference({ toneId: extra.toneId, modelId: extra.modelId ?? ref.providerKey, modelUrl });
+  const buffer = await downloadTone3000ResourceByReference({
+    toneId: extra.toneId,
+    modelId: extra.modelId ?? ref.providerKey,
+    modelUrl,
+    contentHash: ref.contentHash,
+  });
   return {
     data: arrayBufferToBase64(buffer),
     metadata: {

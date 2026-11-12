@@ -1,7 +1,8 @@
 /**
  * The Library tab's details panel (the row's ℹ): a resource's id, file, tags and metadata,
  * and, for a model that came from Tone3000, a way back to its tone on the Tone3000 tab, where
- * the rest of the pack can be auditioned and imported.
+ * the rest of the pack can be auditioned and imported. A model from anywhere else can be looked
+ * up on Tone3000 by its content hash (tone3000ContentHash.ts).
  */
 
 import type { LibraryResource } from "../types.js";
@@ -32,11 +33,15 @@ const METADATA_LABELS: Record<string, string> = {
   factoryArchiveHash: "Pack Hash",
   originalId: "Source ID",
   sourceFileName: "Source File",
+  contentHash: "Content Hash",
+  tone3000MatchedBy: "Tone3000 Match",
 };
 
 export interface LibraryDetailsOptions {
   /** The title of the Tone3000 tone the resource came from, when the Tone3000 tab can open it. */
   tone3000Title?: string;
+  /** Offer to look the resource up on Tone3000 by its content hash. */
+  tone3000Lookup?: boolean;
 }
 
 export function renderLibraryItemDetailsPanel(res: LibraryResource, options: LibraryDetailsOptions = {}): string {
@@ -82,6 +87,10 @@ export function renderLibraryItemDetailsPanel(res: LibraryResource, options: Lib
     let displayValue: string;
     if (key === "sourceUrl" && value.startsWith("http")) {
       displayValue = `<a class="resource-browser-details-link" href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">${escapeHtml(value)}</a>`;
+    } else if (key === "contentHash") {
+      displayValue = `<span class="resource-browser-details-mono" title="${escapeHtml(value)}">${escapeHtml(value.slice(0, value.indexOf(":") + 13))}…</span>`;
+    } else if (key === "tone3000MatchedBy" && value === "contentHash") {
+      displayValue = "Found by content hash";
     } else {
       displayValue = escapeHtml(value);
     }
@@ -100,9 +109,17 @@ export function renderLibraryItemDetailsPanel(res: LibraryResource, options: Lib
        </button>`
     : "";
 
+  const tone3000Lookup = options.tone3000Lookup
+    ? `<button class="resource-browser-details-tone3000-lookup-btn" type="button" data-resource-id="${escapeHtml(res.id)}"
+               title="Look for a Tone3000 model with the same ${res.metadata?.contentHash?.startsWith("ir-") ? "samples" : "weights"}, whatever this file is called, and take its tone's details">
+         Find on Tone3000
+       </button>`
+    : "";
+
   return `
     <div class="resource-browser-item-details-panel">
       ${tone3000Action}
+      ${tone3000Lookup}
       ${description ? `<p class="resource-browser-details-description">${escapeHtml(description)}</p>` : ""}
       <table class="resource-browser-details-table">
         <tbody>

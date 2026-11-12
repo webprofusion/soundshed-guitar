@@ -154,6 +154,8 @@ class ToneService
     /// Every model of a tone, both the default listing (A1 and custom) and the A2 twins, in the
     /// creator's order with A2 after.
     void Tone3000Models(const std::string& toneId, ModelsCallback callback);
+    /// Tone3000's models whose content hash is `contentHash` (reposts share one), oldest first.
+    void Tone3000ModelsByContentHash(const std::string& contentHash, ModelsCallback callback);
     /// Downloads a model and stores it in the library (an IR zip: its first .wav), then answers
     /// with its library id; a model already imported answers at once.
     void ImportTone3000(const tone3000::Tone& tone, const tone3000::Model& model, const std::string& resourceType,

@@ -759,6 +759,8 @@ set(GUITARFX_CORE_SOURCES
     # Models
     src/models/ModelHasher.h
     src/models/ModelHasher.cpp
+    src/models/ContentHash.h
+    src/models/ContentHash.cpp
 
     # Music theory for the Scale Guide (docs/plans/scale-guide.md)
     src/music/MusicTheory.h

@@ -22,6 +22,7 @@ set(TEST_SOURCES
     BoundaryNodeGainTests.cpp
     ChannelLayoutTests.cpp
     CompressorEffectTests.cpp
+    ContentHashTests.cpp
     ControlSurfaceDrainTests.cpp
     ControllerDisplayFeedTests.cpp
     CustomEffectLibraryTests.cpp

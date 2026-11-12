@@ -76,6 +76,16 @@ enum class NamMetadataRefresh
 void EnrichNamResourceMetadata(LibraryResource& resource, const std::filesystem::path& namFilePath,
                                NamMetadataRefresh refresh = NamMetadataRefresh::FillMissing);
 
+/// Store meta key and value recording that every NAM and IR row has its content hash
+/// (models/ContentHash.h). Rows imported since carry one from the import; raise the value
+/// if the recipe the library uses changes and every row is hashed again at the next launch.
+inline constexpr const char* kContentHashRevisionKey = "content_hash_revision";
+inline constexpr const char* kContentHashRevision = "1";
+
+/// Sets a NAM or IR resource's "contentHash" metadata from its file, or removes it when the
+/// file is missing or unhashable. Other resource types are left alone. True when it changed.
+bool RefreshContentHashMetadata(LibraryResource& resource);
+
 /// Lowercases and strips separators so category spellings compare equal.
 [[nodiscard]] std::string NormalizeCategoryToken(std::string value);
 

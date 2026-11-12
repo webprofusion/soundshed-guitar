@@ -2,6 +2,7 @@
 
 #include "controller/internal/IrResourceCategory.h"
 #include "dsp/EffectGuids.h"
+#include "models/ContentHash.h"
 #include "resources/ResourceLibrary.h"
 #include "util/JsonSkimmer.h"
 #include "util/LongPath.h"
@@ -334,6 +335,36 @@ void EnrichNamResourceMetadata(guitarfx::LibraryResource& resource, const std::f
     setDescriptive("outputLevelDbu", meta.outputLevelDbu);
     setDescriptive("modelDate", meta.modelDate);
     setDescriptive("trainingFinalLoss", meta.trainingFinalLoss);
+}
+
+bool RefreshContentHashMetadata(guitarfx::LibraryResource& resource)
+{
+    if (resource.type != "nam" && resource.type != "ir")
+    {
+        return false;
+    }
+
+    const auto hash = guitarfx::ContentHashOfFile(resource.type, resource.filePath);
+    const auto existing = resource.metadata.find(guitarfx::kContentHashMetadataKey);
+
+    if (hash)
+    {
+        if (existing != resource.metadata.end() && existing->second == *hash)
+        {
+            return false;
+        }
+
+        resource.metadata[guitarfx::kContentHashMetadataKey] = *hash;
+        return true;
+    }
+
+    if (existing == resource.metadata.end())
+    {
+        return false;
+    }
+
+    resource.metadata.erase(existing);
+    return true;
 }
 
 std::string NormalizeCategoryToken(std::string value)

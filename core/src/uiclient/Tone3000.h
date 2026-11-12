@@ -53,6 +53,7 @@ struct Model
     std::string modelUrl;
     std::string toneId;
     std::string architecture; // "1", "2", "custom", or empty
+    std::string contentHash;  // "nam-content-v1:..." / "ir-content-v1:...", or empty
 };
 
 template <typename T> struct Page
@@ -70,6 +71,9 @@ template <typename T> struct Page
 /// need architecture "2" (and newer tones are A2 only).
 [[nodiscard]] std::string ModelsPath(const std::string& toneId, int page, const std::string& architecture,
                                      int pageSize = kModelsPageSize);
+/// Models whose content hash (models/ContentHash.h) is `contentHash`, oldest first: reposts of
+/// one file share it.
+[[nodiscard]] std::string ModelLookupPath(const std::string& contentHash);
 [[nodiscard]] std::string Url(const std::string& path);
 
 /// A URL Tone3000 gave on its own API (a model's `model_url`,
@@ -109,12 +113,13 @@ struct RemoteRef
     std::string provider;
     std::string providerKey;
     std::string hash;
+    std::string contentHash; // the model's content hash, to find it when its ids are gone
     std::string toneId, modelId, modelUrl;
     nlohmann::json raw;
 };
 
 /// The archive's remote references none of the library's entries matches (by id; by provider
-/// and provider key, or a Tone3000 tone and model id; by content hash), the engine's own rules
+/// and provider key, or a Tone3000 tone and model id; by file hash or model content hash), the engine's own rules
 /// (RemoteResourceRefs.cpp). Empty for bytes that are not a preset archive.
 [[nodiscard]] std::vector<RemoteRef> MissingRemoteRefs(const ClientState& state, const std::string& archiveBytes);
 
