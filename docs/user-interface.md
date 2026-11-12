@@ -516,16 +516,21 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
 - **Layout** (`data-compact-layout`): `rail` when wider than tall (every Android phone, which
   runs landscape, tablets in landscape and short desktop windows) puts navigation in a rail
   down the left edge; `stack` keeps the bars on top.
-- **Stage.** The chain and the selected effect take turns on the stage (`compactStage.ts`,
-  the Chain/Effect tabs, or the rail's buttons). A window tall enough to give both a useful
-  share shows both at once (`data-compact-split`), the chain over the effect as in the full
-  shell: stacked at least 600x800 (an app snapped to half a monitor, an iPad upright), on the
-  rail at least 600 tall (an iPad in landscape, a 1024x600 panel). Phones and an 800x480 panel
-  keep the turns. In split the rail shows one Play entry instead of Chain and Effect, the pads
-  view is the footer's pads button, the chain takes what its lines need up to 45% of the stage
-  (`signalPath/layout.ts`) with the collapse chevron and the resize handle as at full density,
-  and the effect panel is the full shell's (equipment picture, full-size knobs, the same
-  centred card); `css/compact/effect-panel.css` is for the staged layout alone.
+- **Stage.** The chain and the selected effect show at once wherever they can
+  (`data-compact-split`), the chain over the effect as in the full shell; taking turns on the
+  stage (`compactStage.ts`, the Chain/Effect tabs, or the rail's buttons) is the last resort.
+  Split: stacked at least 600x800 (an app snapped to half a monitor, an iPad upright), on the
+  rail at least 520 tall (an iPad in landscape, a 1024x600 tablet less its system bars). Phones
+  and an 800x480 panel keep the turns. In split the rail shows one Play entry instead of Chain
+  and Effect, the pads view is the footer's pads button, the chain takes what its lines need up
+  to 45% of the stage (`signalPath/layout.ts`) with the collapse chevron and the resize handle
+  as at full density, and the effect panel is the full shell's (equipment picture, full-size
+  knobs, the same centred card); `css/compact/effect-panel.css` is for the staged layout alone.
+  The chain makes the room: when its full-size nodes would need more lines than its share, or
+  the shared stage is under 480px, it takes its compact nodes by itself (`fitSplitChain`), and
+  goes back to full ones once the stage or width grows or it loses a node. A size picked with
+  the resize handle while split is kept until the density changes. Nano Q does the same with
+  its icon tiles (`IconChain`, `kSplitCardsMinStage`).
 - **The chain wraps** onto more lines by default here (below).
 - **Adding an effect.** With the chain on its own stage, the floating + menu's Add FX… opens
   the effect chooser at the end of the chain, the list a + between two nodes opens, instead of

@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <utility>
 #include <map>
 #include <sstream>
 #include <variant>
@@ -143,6 +144,12 @@ bool Shell::IconChain() const
         return mChainIcons == 1;
     }
 
+    // The compact split chose tiles itself, the cards not fitting (BuildChain).
+    if (mSplit && mChainAutoIcons)
+    {
+        return true;
+    }
+
     const auto native = mState.uiSettings.find("native");
     return native != mState.uiSettings.end() && native->is_object() && native->value("chainIcons", false);
 }
@@ -161,6 +168,12 @@ Ptr Shell::BuildChain()
     if (mMixTab && MultiRigShown())
     {
         return BuildInlineMixer();
+    }
+
+    // Each build starts from the cards and turns to tiles again only if they still do not fit.
+    if (!std::exchange(mChainAutoPass, false))
+    {
+        mChainAutoIcons = false;
     }
 
     const auto& graph = mState.activePreset->graph;
@@ -632,6 +645,18 @@ Ptr Shell::BuildChain()
         // as it was, with the bars taken out, so it holds for the compact frame's too).
         const float most = limit > 0.0f ? std::clamp(limit, floor, std::max(floor, StageHeight() - 146.0f))
                                         : std::max(floor, ViewSize().y / 3.0f);
+
+        // The compact split makes room rather than falling back to Chain and Effect taking turns:
+        // cards that need more lines than their share, or a short stage, give way to tiles. Not
+        // when the bar was dragged to choose (mChainIcons), which is the user's.
+        if (mSplit && !icons && mChainIcons < 0 &&
+            (StageHeight() < metrics::kSplitCardsMinStage || (mWrapChain && wanted > most)))
+        {
+            mChainAutoIcons = true;
+            mChainAutoPass = true;
+            return BuildChain();
+        }
+
         // Dragged, the chain gets that room whatever it holds (centred in it, or scrolling).
         const float area = limit > 0.0f ? most : std::min(wanted, most);
         mChainAreaHeight = area + SceneRowHeight() + AddRowHeight(); // the scene chips (and rig tabs), the add button

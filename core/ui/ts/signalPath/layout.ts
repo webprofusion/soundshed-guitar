@@ -20,6 +20,32 @@ const SIGNAL_PATH_WRAP_MAX_SHARE = 0.5;
 /** The most of a compact split's stage the chain takes; the editor has the rest. */
 const SIGNAL_PATH_SPLIT_MAX_SHARE = 0.45;
 
+/**
+ * A compact split's shared stage (chain and editor together) shorter than this
+ * gets the chain's compact nodes whatever its length: a 96px row would leave the
+ * editor too little under it. A tablet's 1024x528 has a ~440px stage.
+ */
+const SIGNAL_PATH_SPLIT_FULL_NODES_MIN_STAGE = 480;
+
+/**
+ * Splitting the stage beats taking turns on the Chain/Effect tabs, so in a compact
+ * split the chain makes room rather than the view falling back to tabs: when its
+ * full-size nodes would need more lines than its share, or the stage is short, it
+ * drops to its compact nodes by itself. What it was fitted to is kept, so it tries
+ * the full nodes again only once the stage or the width has grown or the chain has
+ * lost a node — not every frame, where the two sizes would take turns.
+ */
+let splitChainFittedTo: { stage: number; width: number; nodes: number } | null = null;
+
+/** The user picked a size with the handle while split: theirs, until the density changes. */
+let splitChainChosen = false;
+
+function sharedStageHeight(bar: HTMLElement): number {
+  const stage = bar.closest<HTMLElement>(".signal-path-stage");
+  const main = document.querySelector<HTMLElement>(".main-content");
+  return stage && main ? stage.offsetHeight + main.offsetHeight : 0;
+}
+
 export type SignalPathDensity = "compact" | "full";
 
 export let signalPathScrollHeight = SIGNAL_PATH_FULL_HEIGHT;
@@ -83,7 +109,9 @@ function wrappedChainMaxHeight(bar: HTMLElement, scroll: HTMLElement): number {
 
 /**
  * Apply the signal-chain mode selected by the splitter gesture. Node
- * dimensions remain fixed and never react to the available panel space.
+ * dimensions remain fixed and never react to the available panel space, except
+ * in a compact split, where the chain takes its compact nodes when the full ones
+ * would not fit its share (fitSplitChain).
  */
 export function updateSignalPathLayoutAdapt(): void {
   const bar = getSignalPathBarElement();
@@ -110,12 +138,62 @@ export function updateSignalPathLayoutAdapt(): void {
   const minimumHeight = heightForSignalPathDensity(density);
   bar.style.setProperty("--signal-path-scroll-height", `${minimumHeight}px`);
   const contentHeight = Math.max(minimumHeight, Math.ceil(scroll.scrollHeight));
+
+  if (fitSplitChain(bar, scroll, nodes, density, wrap, contentHeight)) {
+    return;
+  }
   // A wrapped chain grows to show every line, up to half the window; past that it scrolls.
   const viewportHeight = wrap
     ? Math.min(contentHeight, Math.max(minimumHeight, wrappedChainMaxHeight(bar, scroll)))
     : contentHeight;
   bar.style.setProperty("--signal-path-scroll-height", `${viewportHeight}px`);
   updateSignalChainWrapRoutes(nodes, scheduleSignalPathLayoutAdapt);
+}
+
+/**
+ * In a compact split, the chain's node size for the room it has (see
+ * splitChainFittedTo). True when it changed the size, which schedules another pass.
+ */
+function fitSplitChain(
+  bar: HTMLElement,
+  scroll: HTMLElement,
+  nodes: HTMLElement,
+  density: SignalPathDensity,
+  wrap: boolean,
+  contentHeight: number,
+): boolean {
+  if (!isCompactSplit() || splitChainChosen) {
+    splitChainFittedTo = null;
+    return false;
+  }
+
+  const stage = sharedStageHeight(bar);
+  const width = scroll.clientWidth;
+  // The nodes sit in wrappers (one per line segment), so count the nodes themselves.
+  const count = nodes.querySelectorAll(".signal-node").length;
+
+  if (stage <= 0 || width <= 0) {
+    return false;
+  }
+
+  if (density === "full") {
+    const short = stage < SIGNAL_PATH_SPLIT_FULL_NODES_MIN_STAGE;
+    const overflows = wrap && contentHeight > wrappedChainMaxHeight(bar, scroll) + 1;
+    if (!short && !overflows) {
+      return false;
+    }
+    splitChainFittedTo = { stage, width, nodes: count };
+    setSignalPathScrollHeight(SIGNAL_PATH_COMPACT_HEIGHT, { persist: false });
+    return true;
+  }
+
+  const fitted = splitChainFittedTo;
+  if (fitted && (stage > fitted.stage + 24 || width > fitted.width + 24 || count < fitted.nodes)) {
+    splitChainFittedTo = null;
+    setSignalPathScrollHeight(SIGNAL_PATH_FULL_HEIGHT, { persist: false });
+    return true;
+  }
+  return false;
 }
 
 export function scheduleSignalPathLayoutAdapt(): void {
@@ -144,6 +222,7 @@ export function setSignalPathScrollHeight(height: number, options?: { persist?: 
   scheduleSignalPathLayoutAdapt();
 
   if (options?.persist) {
+    splitChainChosen = isCompactSplit();
     updateUiSettings({
       signalPathHeight: nextHeight,
     });
@@ -290,6 +369,8 @@ export function initSignalPathResize(): void {
   });
 
   window.addEventListener("densityChanged", () => {
+    splitChainChosen = false;
+    splitChainFittedTo = null;
     applyCompactChainDensity();
     applySignalPathHeightFromSettings();
     scheduleSignalPathLayoutAdapt();

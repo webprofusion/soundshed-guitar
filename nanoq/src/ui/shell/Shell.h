@@ -900,6 +900,8 @@ class Shell
     std::shared_ptr<Text> mLooperStatus, mLooperTime, mLooperBar;
     bool mLibraryExportAll = false; // Settings > Library: the whole library, not only what presets use
     int mChainIcons = -1;           // the chain as icon tiles (1) or cards (0); -1 follows the setting
+    bool mChainAutoIcons = false;   // compact split: the cards did not fit, so tiles (BuildChain)
+    bool mChainAutoPass = false;    // BuildChain is building again as tiles
     bool mChainDragIcons = false;   // which it was when that drag began
     guitarfx::uiclient::PresetTrail mPresetTrail;
     std::shared_ptr<guitarfx::uiclient::TapTempo> mTapTempo;

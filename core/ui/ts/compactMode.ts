@@ -119,15 +119,19 @@ export const COMPACT_SPLIT_MIN_WIDTH = 600;
 export const COMPACT_SPLIT_MIN_HEIGHT = 800;
 
 /**
- * The shortest landscape (rail) viewport that splits. The rail's chrome is the
- * control bar and the footer, about 85px, so 600 leaves a ~515px stage: a one-
- * or two-line chain over an editor that shows a model row and a row of knobs.
- * An iPad in landscape (768 tall and up) and a 1024x600 panel split; a phone
- * (under 430) and an 800x480 panel keep the Chain/Effect turn-taking, where the
- * chain alone fills the stage. The rail is never narrower than it is tall, so
- * width needs no limit of its own.
+ * The shortest landscape (rail) viewport that splits. Taking turns on the
+ * Chain/Effect tabs is the last resort: a split costs nothing a tap can win back,
+ * since the chain shrinks to its compact nodes when its full-size lines would not
+ * leave the editor its share (ts/signalPath/layout.ts). The rail's chrome is the
+ * control bar and the footer, about 85px, so 520 leaves a ~435px stage: a 48px
+ * chain over an editor that still shows a model row and a row of knobs. An iPad in
+ * landscape (768 tall and up), a 1024x600 tablet less its status and navigation
+ * bars (about 530) and a 1280x800 one at 1.33x (about 600) split; a phone (under
+ * 430) and an 800x480 panel keep the turn-taking, where the chain alone fills the
+ * stage. The rail is never narrower than it is tall, so width needs no limit of
+ * its own.
  */
-export const COMPACT_RAIL_SPLIT_MIN_HEIGHT = 600;
+export const COMPACT_RAIL_SPLIT_MIN_HEIGHT = 520;
 
 export function compactSplitForViewport(width: number, height: number): boolean {
   if (compactLayoutForViewport(width, height) === "rail") {

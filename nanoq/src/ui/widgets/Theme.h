@@ -305,8 +305,15 @@ inline constexpr float kCompactMaxHeight = 620.0f;
 inline constexpr float kTouchCompactMaxWidth = 1200.0f;
 inline constexpr float kTouchCompactMaxHeight = 850.0f;
 /// From this view height the compact frame shows the chain over the editor, as the full layout
-/// does ("split"); below it the two take turns. The web UI's rule (compactMode.ts) is the same.
-inline constexpr float kCompactSplitMinHeight = 600.0f;
+/// does ("split"); below it the two take turns. Taking turns is the last resort: split, the chain
+/// turns to icon tiles by itself when its cards would not leave the editor room (IconChain), so a
+/// 1024 x 600 tablet less its system bars still splits. The web UI's rule (compactMode.ts) is the
+/// same.
+inline constexpr float kCompactSplitMinHeight = 520.0f;
+/// The compact split's stage (chain and editor, between the preset bar and the footer) shorter
+/// than this takes the chain as icon tiles whatever its length (signalPath/layout.ts's
+/// SIGNAL_PATH_SPLIT_FULL_NODES_MIN_STAGE).
+inline constexpr float kSplitCardsMinStage = 470.0f;
 /// The looper strip over the footer, open: compact and full.
 inline constexpr float kLooperStripHeight = 46.0f;
 inline constexpr float kWideLooperStripHeight = 50.0f;

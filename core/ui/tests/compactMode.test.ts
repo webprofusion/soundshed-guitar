@@ -50,13 +50,16 @@ describe("compactSplitForViewport", () => {
     expect(compactSplitForViewport(700, 780)).toBe(false);
   });
 
-  it("splits the rail on a tablet in landscape and a 600px-tall panel", async () => {
+  it("splits the rail on a tablet in landscape, even less its system bars", async () => {
     const { compactSplitForViewport } = await loadCompactMode();
     expect(compactSplitForViewport(1024, 768)).toBe(true);
     expect(compactSplitForViewport(1194, 834)).toBe(true);
     expect(compactSplitForViewport(900, 820)).toBe(true);
     expect(compactSplitForViewport(1024, 600)).toBe(true);
     expect(compactSplitForViewport(800, 600)).toBe(true);
+    // A 1024x600 tablet less its status and navigation bars.
+    expect(compactSplitForViewport(1024, 528)).toBe(true);
+    expect(compactSplitForViewport(962, 520)).toBe(true);
   });
 
   it("keeps the rail's turn-taking on phones and short panels", async () => {
@@ -64,7 +67,7 @@ describe("compactSplitForViewport", () => {
     expect(compactSplitForViewport(844, 390)).toBe(false);
     expect(compactSplitForViewport(667, 375)).toBe(false);
     expect(compactSplitForViewport(800, 480)).toBe(false);
-    expect(compactSplitForViewport(1024, 599)).toBe(false);
+    expect(compactSplitForViewport(1024, 519)).toBe(false);
   });
 });
 
@@ -136,7 +139,8 @@ describe("initCompactMode", () => {
     expect(isCompactStaged()).toBe(false);
 
     const seen = captureNextDensityChange();
-    setViewport(960, 560);
+    // Short enough for the rail to take turns (under COMPACT_RAIL_SPLIT_MIN_HEIGHT).
+    setViewport(960, 500);
     initCompactMode();
     expect(root.dataset.compactSplit).toBeUndefined();
     expect(isCompactStaged()).toBe(true);
