@@ -14,13 +14,14 @@ import { setFavoriteToggleState } from "../presets/favorites.js";
 import { findFolderForPreset } from "../presets/folders.js";
 import { clonePreset, uiState } from "../state.js";
 import { setActivePresetId } from "../presetLibraryStore.js";
-import { presetChooserLabel, presetControlBar, presetExtraActionsBtn, presetExtraActionsMenu, presetFolderTreeElement, presetLibraryMultiRigPanel, presetLibraryMultiRigTab, presetLibraryPopover, presetLibraryPresetsPanel, presetLibraryPresetsTab, presetLibraryTabs, presetListElement } from "./dom.js";
+import { presetChooserLabel, presetControlBar, presetExtraActionsBtn, presetExtraActionsMenu, presetFolderTreeElement, presetLibraryMultiRigTab, presetLibraryPopover, presetListElement } from "./dom.js";
 import { setActivePresetFolder } from "./folderControls.js";
+import { setPresetFolderPickerOpen } from "./folderPicker.js";
 import { filterPresets, updatePresetDropdownSelection } from "./filter.js";
+import { syncPresetLibraryTabsVisibility } from "./libraryTabs.js";
 import { requestPresetUIRender } from "./refresh.js";
 import { PRESET_FOLDER_ALL_ID } from "./sorting.js";
 import { updatePresetActionButtons } from "./toolbar.js";
-import { setSetlistPanelVisible } from "./setlists.js";
 
 export function syncPresetHeaderPopoverLayer(): void {
   const hasOpenPopover = Boolean(
@@ -97,6 +98,7 @@ export function closePresetLibraryPopover(): void {
     return;
   }
   const onClose = presetChooserCloseOverride;
+  setPresetFolderPickerOpen(false);
   presetLibraryPopover.classList.remove("open");
   presetLibraryPopover.setAttribute("aria-hidden", "true");
   presetChooserLabel?.setAttribute("aria-expanded", "false");
@@ -179,33 +181,16 @@ export function syncPresetLibraryFeatureVisibility(): void {
 
   presetLibraryPopover?.classList.toggle("preset-library-popover-simple", !showMultiRigTab);
 
-  if (presetLibraryTabs) {
-    presetLibraryTabs.hidden = !showMultiRigTab;
-    presetLibraryTabs.setAttribute("aria-hidden", String(!showMultiRigTab));
-  }
-
   if (presetLibraryMultiRigTab) {
     presetLibraryMultiRigTab.hidden = !showMultiRigTab;
     presetLibraryMultiRigTab.setAttribute("aria-hidden", String(!showMultiRigTab));
     presetLibraryMultiRigTab.tabIndex = showMultiRigTab ? 0 : -1;
   }
 
-  // Whenever the tab itself isn't shown, force the view back to the normal
-  // Presets panel — this is what stops a since-removed/never-fetched
-  // Multi-Rig tab from leaving the preset list stuck hidden behind it.
-  if (!showMultiRigTab) {
-    presetLibraryPresetsTab?.classList.add("active");
-    presetLibraryPresetsTab?.setAttribute("aria-selected", "true");
-    presetLibraryMultiRigTab?.classList.remove("active");
-    presetLibraryMultiRigTab?.setAttribute("aria-selected", "false");
-    if (presetLibraryPresetsPanel) {
-      presetLibraryPresetsPanel.hidden = false;
-    }
-    if (presetLibraryMultiRigPanel) {
-      presetLibraryMultiRigPanel.hidden = true;
-    }
-    setSetlistPanelVisible(true);
-  }
+  // Whenever the tab itself isn't shown, this forces the view back to the
+  // Presets panel — which stops a since-removed/never-fetched Multi-Rig tab
+  // from leaving the preset list stuck hidden behind it.
+  syncPresetLibraryTabsVisibility(showMultiRigTab);
 }
 
 document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => {

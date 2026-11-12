@@ -12,7 +12,7 @@ import { updateAppSetting } from "../appSettingsStore.js";
 import { WHEEL_ADJUST_SETTING, isWheelAdjustEnabled } from "../wheelAdjust.js";
 import { SIGNAL_FLOW_ANIMATION_SETTING, isSignalFlowAnimationEnabled, updateSignalPathFlow } from "../signalPath/signalFlow.js";
 import { updateUiSettings } from "../windowSettings.js";
-import { densityLevelSelect, signalFlowAnimationToggle, themeSelect, wheelAdjustToggle, zoomLevelSelect } from "./dom.js";
+import { densityLevelSelect, footerDensitySelect, signalFlowAnimationToggle, themeSelect, wheelAdjustToggle, zoomLevelSelect } from "./dom.js";
 import { ZOOM_DEFAULT, ZOOM_LEVEL_OPTIONS, ZOOM_MAX, ZOOM_MIN } from "./keys.js";
 
 let themeSelectInitialized = false;
@@ -28,8 +28,9 @@ let densitySelectInitialized = false;
  * full-size panel than learn a second arrangement of it.
  */
 export function initDensitySelect(): void {
-  const select = densityLevelSelect;
-  if (!select || densitySelectInitialized) {
+  // The settings panel's select, and the same choice in the compact footer's OPTIONS sheet.
+  const selects = [densityLevelSelect, footerDensitySelect].filter((select): select is HTMLSelectElement => Boolean(select));
+  if (!selects.length || densitySelectInitialized) {
     return;
   }
   densitySelectInitialized = true;
@@ -40,19 +41,23 @@ export function initDensitySelect(): void {
     { value: "full", label: "Full" },
   ];
 
-  select.innerHTML = options
-    .map((option) => `<option value="${option.value}">${option.label}</option>`)
-    .join("");
+  for (const select of selects) {
+    select.innerHTML = options
+      .map((option) => `<option value="${option.value}">${option.label}</option>`)
+      .join("");
 
-  select.value = getDensityPreference();
+    select.value = getDensityPreference();
 
-  select.addEventListener("change", () => {
-    setDensityPreference(select.value as DensityPreference);
-  });
+    select.addEventListener("change", () => {
+      setDensityPreference(select.value as DensityPreference);
+    });
+  }
 
   // The stored preference arrives with app settings, well after this binds.
   window.addEventListener("densityPreferenceChanged", () => {
-    select.value = getDensityPreference();
+    for (const select of selects) {
+      select.value = getDensityPreference();
+    }
   });
 }
 

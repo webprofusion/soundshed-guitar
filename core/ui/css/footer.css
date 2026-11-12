@@ -441,6 +441,18 @@
     max-width: 150px;
   }
 
+  /* A quarter of the bar cut the clip's name to "Guitar Riff (": the demo
+     group's controls close up and its select's padding narrows so the name
+     fits, and a name too long still ends in an ellipsis. */
+  .footer-demo-controls {
+    gap: 3px;
+  }
+
+  .footer-demo-select {
+    padding-inline: 6px 2px;
+    text-overflow: ellipsis;
+  }
+
   .footer-group + .footer-group {
     padding-left: 10px;
   }

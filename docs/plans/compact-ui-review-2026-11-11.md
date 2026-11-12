@@ -1,10 +1,98 @@
 # Compact UI review: web and Nano Q, iPad size and smaller
 
-Status: **reviewed 2026-11-11 at `9869b6db` plus the working tree; the blocking faults (step 1 of
-"Suggested order") fixed the same day, uncommitted. See "Fixed so far".** Everything else is
-open. One build fix was needed to run Nano Q (see "How it was reviewed").
+Status: **reviewed 2026-11-11 at `9869b6db` plus the working tree. Step 1 of "Suggested order"
+(the blocking faults) is `a23810d3`. Steps 2 to 5 were done on 2026-11-11 and 12 in both UIs,
+one commit per step after it: see "Steps 2 to 5" below, including what is still open.** The
+findings sections further down describe the UI as it was before any of this.
 
-## Fixed so far (2026-11-11, uncommitted)
+## Steps 2 to 5 (2026-11-11 and 12)
+
+Checked the same way as the review: the web UI over CDP with touch emulation, Nano Q with the
+DevDriver on Windows. `npm run verify` passes; Nano Q builds on Windows (MSVC) and Linux x64
+(GCC, in the kiosk's Docker build). **Nothing here has run on an iPad, a phone or a Pi, and the
+iOS branches have never been compiled.**
+
+### What an iPad gets now
+
+On a touch device, Auto keeps the compact shell up to 1200 wide or 850 high (web: a coarse
+pointer; Nano Q: iOS, the kiosk, or `SOUNDSHED_NANOQ_TOUCH=1`). A compact window at least 600
+high in landscape (web also: 600x800 upright) is **split**: the chain over the effect's editor,
+drawn as the full shell draws it (the picture, full-size knobs), with one Play entry on the rail.
+So 1024x768 to 1194x834 by touch is compact + split; 1366x1024 by touch, and any mouse-driven
+window above 980x620, is the full shell; phones and 800x480 keep the Chain/Effect turn-taking.
+
+### Step 2: functions compact dropped (section B)
+
+| | Web | Nano Q |
+| --- | --- | --- |
+| Looper Redo, Clear, modes, Save, Loops | A "..." on the strip opens a sheet with all of them; the Layers panel shows its sliders and export again | Options is always on the strip and holds the modes, Click, Redo, Clear and Save; Redo and Clear return to the strip from a 680 px stage |
+| Preset back/forward | Two entries in the preset "..." menu at compact | The same, left out when there is nowhere to go |
+| Copy A to B | Never hidden by width; fits down to 360 px | Was already there |
+| Source badge | Shown when the name's pill is 340 px or wider | Shown when the name keeps 180 px |
+| Tap tempo, metronome | (step 5) | TAP in the Options popover; starting the metronome no longer closes it |
+
+### Step 3: the layout ladder (section A)
+
+A1 to A4 as recommended, in both UIs (`ts/compactMode.ts`, `css/compact/*`; `Shell::WantsSplit`,
+`TouchFirst()`, `StageHeight()`). The touch size-ups in the web UI apply at any density. Nano Q
+has no upright "stack" layout: a tall narrow window still gets the rail.
+
+### Step 4: touch (sections D and E)
+
+- **Web:** `css/touch.css` (coarse pointer only): hit areas grown by an invisible margin, 40 px
+  bars and rows where that was not enough, an 11 px floor for labels. Controls under 40 px,
+  summed over 16 screens, went from 514 to 252 at 1024x768 and from 354 to 149 at 667x375. The
+  preset toolbar gives way to the name: Random, Publish, Edit and Save move into the "..." menu
+  when the name would drop under 200 px. In split the + is a real 44 px button in the scene row.
+  Escape closes every dialog. A mouse sees no change (1,964 boxes compared at 1280x800).
+- **Nano Q:** touch sizes (`ui.touchControls`: Auto, On, Off; in Settings and Options): 48 and
+  44 px bars, 36 to 44 px hit areas with the drawing unchanged, 11 px labels. Press and hold does
+  what right click does (cards, knobs, scene chips), and the effect header has a "..." with the
+  node's menu, so Move, Replace and Turn off need no gesture. A card's bypass corner only takes a
+  tap when it is drawn. Menu dialogs showed their list in half their height: fixed.
+
+### Step 5: short screens and consistency (sections F, G, H and C10 to C13)
+
+- **Preset library on a short screen, both UIs:** Presets, Multi-Rig and Setlists tabs, the
+  folder tree as a drop-down, denser cards. Whole presets visible: web 1 to 3 at 667x375, 4 at
+  844x390; Nano Q 5 at 800x480.
+- **Web:** the footer keeps Record, Loop, the tempo and metronome play on the bar when they fit
+  (as Nano Q's does) and the OPTIONS sheet has labelled rows; the metronome and Global EQ fit a
+  landscape phone; the model browser shows five rows at 667x375 (was one); one close control;
+  the demo clip's name is no longer cut at 1024.
+- **Nano Q:** the Controls strip fits 640x400; the model browser's search no longer squeezes;
+  the FX Library stays off the footer and looper strip; Tones, Jam, Settings and Pads lay out for
+  640 wide; Enter saves in Save As with the on-screen keyboard up; one empty-state message; one
+  page padding; Save As fields match the drop-down.
+- **Both:** a parameter group whose title repeats its only knob, and the fallback "OTHER" group,
+  show no title. The node EQ's knobs lose their band prefix inside a titled band.
+
+### Still open
+
+- **Touch targets still under 40 px (web):** node bypass and delete (36), rating stars (20 wide),
+  model browser row actions (30), metronome beat dots (32), some full-density strips. Grown hit
+  areas are a Chromium `::after`: a tap just outside the drawing can go to a clickable parent, so
+  the worst cases want real size on a device.
+- **Nano Q, not looked into:**
+  - After launch with the restored session on the second scene of "Black Album (Full Rig)",
+    + > Add FX... > any effect marks the preset changed and adds nothing; after tapping a scene
+    chip it works. The add path was not changed by this work. Scene state after a session
+    restore, in the engine or the client.
+  - Six crash dumps (`%LOCALAPPDATA%\CrashDumps`, 2026-11-11 20:15 to 20:35) from while step 3
+    was being written. The one stack captured was `Bindings::Sync` destroying a dead knob
+    binding, after adding an effect and selecting another node. `Bindings::Sync` no longer holds
+    iterators over a list that can change; no crash since, in several hundred driven actions and
+    two deliberate five-round repeats, but the cause was never pinned down.
+  - Escape does not close the preset chooser while its search field has focus.
+- **Differences left between the two UIs:** Nano Q's rail has a Setlist entry (the web UI
+  reaches the pads from the footer); Nano Q's FX Library is three columns where the web's is two
+  in split; the node EQ and the Global EQ lay their bands out differently in Nano Q.
+- **Web:** at 800x600 and 960x600 the split editor gets about 285 px and scrolls; the model
+  browser keeps two rows of filters at 390 wide; adding a preset to a setlist is still a drag.
+- From the review, untouched: the 620/621 px flip (A5), the pre-paint script ignoring zoom and a
+  pinned density.
+
+## Step 1: the blocking faults (2026-11-11, `a23810d3`)
 
 | Item | What changed | Checked |
 | --- | --- | --- |
@@ -19,6 +107,8 @@ open. One build fix was needed to run Nano Q (see "How it was reviewed").
 | E Nano Q on iOS: typing | The on-screen keyboard is on for iOS (`input/OnScreenKeyboard.cpp`); `SOUNDSHED_NANOQ_KEYBOARD=0` turns it off | **Not built or run for iOS** |
 
 `npm run verify` passes for the web changes. Nano Q was rebuilt and driven on Windows only.
+
+## The review
 
 The question: the compact UI is meant for iPad screens and smaller, should stay consistent with
 the full UI where it can, and should lose clutter gracefully as the window shrinks. Where does it

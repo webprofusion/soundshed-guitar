@@ -1,0 +1,139 @@
+/* ===== Compact density: the footer bar and its OPTIONS sheet =====
+ *
+ * ts/footerFit.ts puts what fits on the bar, by priority, and leaves the rest in
+ * the sheet: Record and Loop join Setlists and Tuner at the left, the history and
+ * A/B keep the middle, the tempo and the metronome's play stand by OPTIONS at the
+ * right. These rules lay the bar out for that and turn the sheet into labelled
+ * rows. The bar's base rules are in css/compact/shell.css; the full bar in
+ * css/footer.css never shows the pieces added here.
+ */
+
+.footer-compact-tempo,
+.footer-sheet-label,
+.footer-layout-control,
+.footer-history-sheet-group {
+  display: none;
+}
+
+/* ── The bar ─────────────────────────────────────────────────────────────── */
+
+html[data-density="compact"] .footer-compact-tempo:not(:empty) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* The history sits in the middle of what is left between the two ends. */
+html[data-density="compact"] .footer-bar > .footer-chain-history {
+  margin-inline: auto;
+}
+
+html[data-density="compact"] .footer-compact-tempo .bpm-display {
+  padding-inline: 8px;
+}
+
+/* ── The sheet ───────────────────────────────────────────────────────────── */
+
+/* Setlists and Tuner are always on the bar: the sheet does not repeat them. */
+html[data-density="compact"] .footer-actions-panel :is(#footer-pads-btn, #footer-tuner-btn) {
+  display: none;
+}
+
+/* Every row says what it is: icon buttons spell out their names beside the icon,
+   and the clip, zoom, theme and layout pickers have a name above them. */
+html[data-density="compact"] .footer-actions-panel .footer-sheet-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--footer-fg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+html[data-density="compact"] .footer-actions-panel .footer-tool-label {
+  display: inline;
+}
+
+html[data-density="compact"] .footer-actions-panel .footer-tap-short {
+  display: none;
+}
+
+html[data-density="compact"] .footer-actions-panel .footer-icon-btn:has(.footer-tool-label) {
+  width: auto;
+  padding: 0 10px 0 8px;
+}
+
+html[data-density="compact"] .footer-actions-panel :is(.footer-demo-group, .footer-history-sheet-group) {
+  flex-wrap: wrap;
+}
+
+html[data-density="compact"] .footer-actions-panel :is(.footer-demo-group, .footer-history-sheet-group) > .footer-sheet-label {
+  flex: 1 0 100%;
+  margin-bottom: 0;
+}
+
+/* The chain's history comes into the sheet only on a bar too narrow for it. */
+html[data-density="compact"] .footer-actions-panel .footer-history-sheet-group:has(> :not(.footer-sheet-label)) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--footer-divider);
+}
+
+html[data-density="compact"] .footer-actions-panel .footer-history-sheet-group .footer-ab-switch {
+  margin-inline: 4px;
+}
+
+html[data-density="compact"] .footer-actions-panel .footer-demo-audio-container {
+  width: 100%;
+}
+
+html[data-density="compact"] .footer-actions-panel :is(.footer-zoom-control, .footer-theme-select, .footer-layout-control) {
+  display: flex;
+  flex: 1 1 96px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+
+/* Laid out as a column, the pickers' flex-basis (compact/shell.css) became a
+   138px height. */
+html[data-density="compact"] .footer-actions-panel :is(.footer-zoom-control, .footer-theme-select, .footer-layout-control) .footer-demo-select {
+  flex: none;
+  width: 100%;
+  max-width: none;
+}
+
+/* The sheet is rows, but MIDI (with Record and Loop on the bar, the tools row's
+   only button) and the tempo row's TAP and Metronome share one line when they
+   fit: on a phone held sideways the sheet has ~280px of height. Neither group may
+   shrink below its buttons, so when the two do not fit the second wraps to its
+   own line. The tools group's size container (css/footer.css) is dropped here:
+   inline-size containment gave it no content width, so it squeezed to its
+   padding and MIDI's label ran under Tap tempo. */
+html[data-density="compact"] .footer-actions-panel {
+  flex-flow: row wrap;
+  align-content: flex-start;
+  column-gap: 0;
+}
+
+html[data-density="compact"] .footer-actions-panel > * {
+  flex: 1 1 100%;
+}
+
+html[data-density="compact"] .footer-actions-panel > :is(.footer-tools-group, .footer-tempo-group) {
+  flex: 1 0 auto;
+  width: auto;
+  max-width: 100%;
+  padding-right: 16px;
+  container-type: normal;
+}
+
+html[data-density="compact"] .footer-actions-panel > :is(.footer-tools-group, .footer-tempo-group) > * {
+  flex: none;
+  white-space: nowrap;
+}

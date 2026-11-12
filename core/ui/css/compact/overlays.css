@@ -119,6 +119,12 @@ html[data-density="compact"][data-compact-layout="rail"] .preset-library-popover
   max-height: calc(100vh - 56px - var(--ssg-safe-top) - var(--ssg-safe-bottom));
 }
 
+/* Stacked, the popover opens ~136px down on a phone, under two rows of strip:
+   100vh - 130px ran it 6px off the bottom of a 390x844 screen. */
+html[data-density="compact"][data-compact-layout="stack"] .preset-library-popover.open {
+  max-height: calc(100vh - 150px - var(--ssg-safe-bottom));
+}
+
 html[data-density="compact"] .preset-library-popover.open > .preset-library {
   flex: 1 1 auto;
   min-height: 0;
@@ -196,6 +202,281 @@ html[data-density="compact"] .preset-library-popover.open .preset-list {
     grid-column: 2;
     grid-row: 1 / span 2;
   }
+}
+
+/* The Multi-Rig list kept the desktop's 420px cap inside a popover shorter than
+   that, and ran 49-83px out of it on a phone. It fills the panel and scrolls. */
+html[data-density="compact"] .preset-library-popover.open .preset-library-multi-rig-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-density="compact"] .preset-library-popover.open .composite-preset-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/*
+  Setlists are a third tab at compact density (presets/libraryTabs.ts), not a bar
+  under the list: the bar took a fixed row from a list that had room for one or
+  two cards. The tab gives the setlist panel the body: the list of setlists
+  beside the one being edited, each scrolling, stacked on a narrow screen.
+*/
+html[data-density="compact"] .setlist-collapsible.is-tab:not([hidden]) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-toggle {
+  display: none;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin-top: 0;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-header {
+  grid-template-columns: minmax(0, 1fr) 90px auto;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-body {
+  flex: 1 1 auto;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab :is(.setlist-list, .setlist-editor) {
+  min-height: 0;
+  max-height: none;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-slots {
+  min-height: 0;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-editor-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-editor-header {
+  min-width: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-add-current-btn {
+  display: inline-flex;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-hint-tab {
+  display: block;
+}
+
+html[data-density="compact"] .setlist-collapsible.is-tab .setlist-hint-drag {
+  display: none;
+}
+
+/* The search and the tags filter presets: on the Setlists tab they have nothing to do. */
+html[data-density="compact"] .preset-library:has(> .setlist-collapsible.is-tab:not([hidden])) :is(#preset-search, .preset-library-filter-row) {
+  display: none;
+}
+
+html[data-density="compact"] .preset-library:has(> .setlist-collapsible.is-tab:not([hidden])) .preset-library-actions {
+  margin-left: auto;
+}
+
+/* On a short rail the library keeps one height whichever tab shows and however
+   few presets a search leaves, so the tabs and the close button stay put. */
+html[data-compact-short][data-compact-layout="rail"] .preset-library-popover.open {
+  height: calc(100vh - 56px - var(--ssg-safe-top) - var(--ssg-safe-bottom));
+}
+
+@media (max-width: 480px) {
+  html[data-density="compact"] .setlist-collapsible.is-tab .setlist-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+  }
+
+  html[data-density="compact"] .setlist-collapsible.is-tab .setlist-list {
+    max-height: 30vh;
+  }
+}
+
+/*
+  A short screen (a phone held sideways, an 800x480 panel: data-compact-short) has
+  about 200px under the library's header, and the folder tree, its tools and the
+  tag row took all but one card of it. There the list comes first:
+
+  - The tree folds into the picker at the start of the tag row (folderPicker.ts),
+    which drops it, with the folder tools at its foot, over the top of the list.
+    The list spans the whole body; the tree and tools take its first two rows
+    only while open.
+  - Cards are two lines: the name with its Mixer button, then the source badge,
+    the folder path and the stars. Tags and description are left to taller
+    screens.
+*/
+html[data-compact-short] .preset-library-popover.open > .preset-library {
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+html[data-compact-short] .preset-library-popover .preset-library-filter-row {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+html[data-compact-short] .preset-library-popover .preset-library-filter-row .preset-tag-filter-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
+html[data-compact-short] .preset-library:not(:has(> #preset-library-presets-panel[hidden])) .preset-folder-picker {
+  display: inline-flex;
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open #preset-library-presets-panel {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, auto) auto minmax(0, 1fr);
+  gap: 0;
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open #preset-library-presets-panel .preset-list-column {
+  display: contents;
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open .preset-list {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  padding: 0 4px 0 0;
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open :is(.preset-folder-tree, .preset-folder-toolbar) {
+  display: none;
+  z-index: 2;
+  grid-column: 1;
+  justify-self: start;
+  width: min(100%, 360px);
+  box-sizing: border-box;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-secondary);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.4);
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open .preset-folder-tree {
+  grid-row: 1;
+  padding: 4px;
+  border-bottom: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open .preset-folder-toolbar {
+  grid-row: 2;
+  padding: 6px;
+  border-top: 1px solid var(--border-dark);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open .folders-open .preset-folder-tree {
+  display: block;
+}
+
+html[data-density="compact"][data-compact-short] .preset-library-popover.open .folders-open .preset-folder-toolbar {
+  display: flex;
+}
+
+html[data-compact-short] .preset-list .preset-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  margin-bottom: 4px;
+  padding: 4px 10px;
+}
+
+html[data-compact-short] .preset-list .preset-item header {
+  grid-column: 1 / -1;
+  align-items: center;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* "In Mixer" carries a tick that made the playing preset's card 4px taller. */
+html[data-compact-short] .preset-list .preset-item .preset-add-to-mixer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+}
+
+html[data-compact-short] .preset-list .preset-item .preset-add-to-mixer-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+html[data-compact-short] .preset-library-popover.open {
+  padding: 8px;
+}
+
+html[data-compact-short] .preset-list .preset-item h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-compact-short] .preset-list .preset-item .preset-item-meta {
+  grid-column: 1;
+  grid-row: 2;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+html[data-compact-short] .preset-list .preset-item .preset-category-badge {
+  flex: none;
+}
+
+html[data-compact-short] .preset-list .preset-item .preset-folder-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-compact-short] .preset-list .preset-item :is(.preset-item-tags, p, .preset-rating-label) {
+  display: none;
+}
+
+html[data-compact-short] .preset-list .preset-item .preset-rating {
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: 0;
 }
 
 /* The FX library's effects fill the list's width, 200px or more each: a third

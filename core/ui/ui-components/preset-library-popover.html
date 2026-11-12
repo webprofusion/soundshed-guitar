@@ -4,6 +4,8 @@
               <div class="preset-library-tabs" role="tablist" hidden>
                 <button id="preset-lib-tab-presets" type="button" class="preset-lib-tab active" role="tab" aria-selected="true" aria-controls="preset-library-presets-panel">Presets</button>
                 <button id="preset-lib-tab-multi-rig" type="button" class="preset-lib-tab" role="tab" aria-selected="false" aria-controls="preset-library-multi-rig-panel">Multi-Rig</button>
+                <!-- Compact density only: there the setlists are a tab rather than a fold under the list (presets/libraryTabs.ts). -->
+                <button id="preset-lib-tab-setlists" type="button" class="preset-lib-tab preset-lib-tab-setlists" hidden role="tab" aria-selected="false" aria-controls="setlist-collapsible">Setlists</button>
               </div>
               <input type="text" id="preset-search" placeholder="Search presets…" />
               <div class="preset-library-actions">
@@ -15,10 +17,19 @@
                   </svg>
                 </button>
               </div>
-              <button id="preset-library-close-btn" type="button" class="preset-library-close-btn" aria-label="Close preset selector" title="Close">×</button>
+              <button id="preset-library-close-btn" type="button" class="preset-library-close-btn modal-close" aria-label="Close preset selector" title="Close">×</button>
             </div>
-            <!-- presets/library.ts renders the chips (initializePresetTagFilterBar). -->
-            <div class="preset-tag-filter-bar" id="preset-tag-filter-bar"></div>
+            <!-- On a short screen the folder tree folds into the picker at the start of the tag row
+                 (presets/folderPicker.ts); elsewhere the row is only the tags. -->
+            <div class="preset-library-filter-row">
+              <button id="preset-folder-picker" type="button" class="preset-folder-picker" aria-haspopup="true" aria-expanded="false" aria-controls="preset-folder-tree" title="Choose a folder">
+                <span class="preset-folder-picker-name">All Presets</span>
+                <span class="preset-folder-picker-count"></span>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <!-- presets/library.ts renders the chips (initializePresetTagFilterBar). -->
+              <div class="preset-tag-filter-bar" id="preset-tag-filter-bar"></div>
+            </div>
             <div class="preset-library-body" id="preset-library-presets-panel" role="tabpanel" aria-labelledby="preset-lib-tab-presets">
               <div class="preset-folder-tree" id="preset-folder-tree"></div>
               <div class="preset-list-column">
@@ -71,9 +82,14 @@
                 <div class="setlist-body">
                   <div class="setlist-list" id="setlist-list"></div>
                   <div class="setlist-editor">
-                    <div class="setlist-editor-header" id="setlist-editor-header">Select a setlist</div>
+                    <div class="setlist-editor-title-row">
+                      <div class="setlist-editor-header" id="setlist-editor-header">Select a setlist</div>
+                      <!-- Compact only: the Setlists tab has no preset list beside it to drag from. -->
+                      <button id="setlist-add-current-btn" type="button" class="setlist-add-current-btn" disabled>+ Current preset</button>
+                    </div>
                     <div class="setlist-slots" id="setlist-slots"></div>
-                    <div class="setlist-hint">Drag presets here to add slots.</div>
+                    <div class="setlist-hint setlist-hint-drag">Drag presets here to add slots.</div>
+                    <div class="setlist-hint setlist-hint-tab">Load a preset, then + Current preset adds it here.</div>
                   </div>
                 </div>
               </div>

@@ -136,12 +136,28 @@ export function compactSplitForViewport(width: number, height: number): boolean 
   return width >= COMPACT_SPLIT_MIN_WIDTH && height >= COMPACT_SPLIT_MIN_HEIGHT;
 }
 
+/**
+ * The tallest compact viewport that counts as short: a phone held sideways (354
+ * to 430) and an 800x480 panel. There a list or a dialog has about 300px under
+ * its header, so the preset library folds its folders into a drop-down, cards get
+ * denser and dialogs lay out in columns. 1024x600 is not short.
+ *
+ * Stamped on the root as `data-compact-short`. The pre-paint bootstrap in
+ * `index.template.html` applies the same test.
+ */
+export const COMPACT_SHORT_MAX_HEIGHT = 500;
+
+export function compactShortForViewport(height: number): boolean {
+  return height <= COMPACT_SHORT_MAX_HEIGHT;
+}
+
 const DENSITY_PREFERENCES: readonly DensityPreference[] = ["auto", "compact", "full"];
 
 let preference: DensityPreference = "auto";
 let density: Density = "full";
 let layout: CompactLayout | null = null;
 let split = false;
+let short = false;
 let initialized = false;
 let evaluateRaf = 0;
 
@@ -203,6 +219,11 @@ export function isCompactSplit(): boolean {
   return split;
 }
 
+/** At compact density, whether the viewport is short (see {@link COMPACT_SHORT_MAX_HEIGHT}). */
+export function isCompactShort(): boolean {
+  return short;
+}
+
 /** At compact density, whether the chain and the effect take turns on the stage. */
 export function isCompactStaged(): boolean {
   return density === "compact" && !split;
@@ -217,12 +238,14 @@ function applyResolvedDensity(): void {
   const { width, height } = effectiveViewport();
   const nextLayout = next === "compact" ? compactLayoutForViewport(width, height) : null;
   const nextSplit = next === "compact" && compactSplitForViewport(width, height);
+  const nextShort = next === "compact" && compactShortForViewport(height);
   const root = document.documentElement;
   root.dataset.densityPref = preference;
 
   const unchanged = next === density && root.dataset.density === next
     && nextLayout === layout && (root.dataset.compactLayout ?? null) === nextLayout
-    && nextSplit === split && ("compactSplit" in root.dataset) === nextSplit;
+    && nextSplit === split && ("compactSplit" in root.dataset) === nextSplit
+    && nextShort === short && ("compactShort" in root.dataset) === nextShort;
   if (unchanged) {
     return;
   }
@@ -230,6 +253,12 @@ function applyResolvedDensity(): void {
   density = next;
   layout = nextLayout;
   split = nextSplit;
+  short = nextShort;
+  if (nextShort) {
+    root.dataset.compactShort = "";
+  } else {
+    delete root.dataset.compactShort;
+  }
   root.dataset.density = next;
   if (nextLayout) {
     root.dataset.compactLayout = nextLayout;

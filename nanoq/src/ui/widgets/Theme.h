@@ -310,6 +310,10 @@ inline constexpr float kCompactSplitMinHeight = 600.0f;
 /// The looper strip over the footer, open: compact and full.
 inline constexpr float kLooperStripHeight = 46.0f;
 inline constexpr float kWideLooperStripHeight = 50.0f;
+/// The margin of a page's content under its section chips at the compact size (Tones, Jam,
+/// Settings), at the sides and above; a scrolling page keeps 14 at the right for its scroll bar.
+inline constexpr float kPagePad = 12.0f;
+inline constexpr float kPagePadTop = 10.0f;
 /// The smallest window the compact layout still fits.
 inline constexpr float kMinWidth = 640.0f;
 inline constexpr float kMinHeight = 400.0f;

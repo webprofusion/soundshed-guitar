@@ -356,7 +356,7 @@ class SceneChip final : public Pressable
     }
 
     /// Where the chip is drawn: its bounds, or with touch sizes an 18 px face centred in them
-    /// (at the left of a chip with an x, whose zone runs on past it).
+    /// (at the left of a chip with an x, whose zone runs on past it, and of the add chip).
     [[nodiscard]] el::rect FaceRect(const el::rect& bounds, el::canvas& cnv) const
     {
         if (!metrics::Touch())
@@ -367,7 +367,9 @@ class SceneChip final : public Pressable
         const float w = FaceWidth(cnv);
         const auto face = metrics::Face(bounds, w, 18.0f);
 
-        if (onRemove)
+        // The add chip's face at the left of its hit area too, so it sits the same gap from the
+        // last scene's zone as the scenes do from each other.
+        if (onRemove || mAdd)
         {
             return el::rect{bounds.left, face.top, bounds.left + w, face.bottom};
         }

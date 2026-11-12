@@ -168,6 +168,77 @@ html[data-density="compact"] .resource-browser-footer-hint {
   display: none;
 }
 
+/* On a short screen (a phone held sideways) the list is the point and had room
+   for about two rows under two rows of filters. So: the filters keep to one row
+   that scrolls sideways; Cancel and OK move up beside the title, where the empty
+   header has room for them, instead of a footer of their own; and the nested
+   paddings (dialog body, tab panel, pack indent) give the rows' titles their
+   width back. */
+html[data-compact-short] .resource-browser-modal-content {
+  position: relative;
+}
+
+html[data-compact-short] .resource-browser-modal-content .modal-header {
+  min-height: 44px;
+  padding: 4px 10px;
+  padding-right: 196px;
+}
+
+html[data-compact-short] .resource-browser-modal-content .modal-header h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-compact-short] .resource-browser-modal-content .modal-header .modal-close {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+}
+
+html[data-compact-short] .resource-browser-modal-content .modal-footer {
+  position: absolute;
+  top: 0;
+  right: 44px;
+  height: 44px;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+html[data-compact-short] .resource-browser-modal-content .modal-footer button {
+  padding: 4px 14px;
+}
+
+html[data-compact-short] .resource-browser-modal-content .modal-body {
+  padding: 0;
+}
+
+html[data-compact-short] .resource-browser-tab-panel {
+  padding: 4px 8px 0;
+}
+
+html[data-compact-short] .resource-browser-filters {
+  flex-wrap: nowrap;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html[data-compact-short] .resource-browser-filters > :is(*, select) {
+  flex: none;
+}
+
+html[data-compact-short] .resource-browser-filters > input {
+  flex: 1 0 140px;
+}
+
+html[data-compact-short] .resource-browser-modal .resource-browser-pack-items {
+  padding-left: 8px;
+}
+
 /* ── Layout designer ──────────────────────────────────────────────────────────
  *
  * A canvas beside a 240px inspector rail does not fit in 640px. The rail moves
@@ -280,4 +351,123 @@ html[data-density="compact"] .metronome-bottom-row {
 
 html[data-density="compact"] .metronome-hint {
   display: none;
+}
+
+/* The backdrop scrolls, not the card (see above), so the header with its close
+   button holds to the top of it instead of scrolling away. */
+html[data-density="compact"] .metronome-card-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* On a short screen (a phone held sideways) the card is two columns: what is
+   played with (the tempo, TAP, Rhythm, play and the beat dots) on the left, the
+   settings (Volume, Pan, Time Signature, Sound) on the right. One column was
+   taller than the screen, with the beat dots and play below the fold. */
+html[data-compact-short] .metronome-card-header {
+  padding: 8px 12px;
+  margin-bottom: 0;
+}
+
+html[data-compact-short] .metronome-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    "play settings"
+    "beats settings"
+    "status settings";
+  gap: 6px 16px;
+  padding: 10px 12px;
+}
+
+html[data-compact-short] .metronome-top-row {
+  grid-area: settings;
+  grid-auto-flow: row dense;
+  align-content: start;
+  padding-left: 16px;
+  border-left: 1px solid var(--border-dark-medium);
+}
+
+html[data-compact-short] .metronome-top-row > .wide {
+  grid-column: 1 / -1;
+  gap: 4px;
+}
+
+html[data-compact-short] .metronome-top-row > :not(.wide) {
+  gap: 2px;
+}
+
+html[data-compact-short] .metronome-divider {
+  display: none;
+}
+
+html[data-compact-short] .metronome-bottom-row {
+  grid-area: play;
+  gap: 8px 12px;
+}
+
+html[data-compact-short] .metronome-bpm-block {
+  gap: 4px;
+}
+
+html[data-compact-short] .metronome-modal .metronome-card input.metronome-bpm-input {
+  width: 116px;
+  font-size: 38px;
+}
+
+html[data-compact-short] .metro-beats {
+  grid-area: beats;
+  gap: 2px;
+  min-height: 0;
+}
+
+/* Each dot is tapped to cycle its accent: 40px wide, the dots' spacing kept. */
+html[data-compact-short] .metro-beat {
+  min-width: 40px;
+}
+
+html[data-compact-short] .metronome-footer {
+  grid-area: status;
+  align-self: end;
+}
+
+/* ── Global EQ ────────────────────────────────────────────────────────────────
+ *
+ * On a short screen the curve gives up height and the four bands sit in one row
+ * under it, so both show without scrolling (844x390); the section's
+ * "PARAMETRIC EQ" heading repeats the dialog's title and goes.
+ */
+
+html[data-compact-short] .eq-modal .eq-curve-canvas {
+  height: clamp(64px, calc(100vh - 300px), 160px);
+}
+
+html[data-compact-short] .eq-modal .eq-section {
+  padding: 8px;
+}
+
+html[data-compact-short] .eq-modal .eq-header {
+  display: none;
+}
+
+html[data-compact-short] .eq-modal .eq-bands {
+  gap: 8px;
+}
+
+html[data-compact-short] .eq-modal .eq-band {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 8px 8px;
+}
+
+html[data-compact-short] .eq-modal .eq-band-title {
+  min-height: 0;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+}
+
+html[data-compact-short] .eq-modal .eq-knob-group {
+  gap: 6px;
 }

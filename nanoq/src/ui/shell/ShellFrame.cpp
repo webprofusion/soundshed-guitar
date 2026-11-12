@@ -323,8 +323,10 @@ Ptr Shell::BuildScenes()
 
         if (touch)
         {
-            // The chips are hit over the row's 40 px; the tray is drawn round their faces as ever.
-            row.push_back(Over(tray, Middle(FixedHeight(22, el::share(el::rbox(trayColour, 11.0f))))));
+            // The chips are hit over the row's 40 px and their x zones run past their faces, so a
+            // tray round them all was one long capsule with the chips far apart in it: with touch
+            // sizes each chip stands on its own, the faces an even 24 px apart.
+            row.push_back(tray);
         }
         else
         {

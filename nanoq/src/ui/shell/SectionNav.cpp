@@ -47,9 +47,15 @@ class SectionTab final : public Pressable
         }
 
         // Touch sizes: the chips and the account are hit over 40 px, drawn 30 tall in the middle.
-        const float w = MeasureTextWidth(mLabel, LabelFont()) + (mStyle == Style::Chip ? 24.0f : 28.0f);
+        const float w = Width();
         const float h = metrics::Hit(30.0f, 40.0f);
         return {{w, h}, {w, h}};
+    }
+
+    /// A chip's or the account's width.
+    [[nodiscard]] float Width() const
+    {
+        return MeasureTextWidth(mLabel, LabelFont()) + (mStyle == Style::Chip ? 24.0f : 28.0f);
     }
 
     void draw(const el::context& ctx) override
@@ -172,23 +178,42 @@ Ptr Shell::WithSectionNav(SectionNav nav, Ptr content)
     }
 
     // At the compact size: the chips across the top, the tools at their right.
-    std::vector<Ptr> row{HGap(10)};
+    std::vector<Ptr> chips;
+    float chipsWidth = 0.0f;
 
     if (account)
     {
-        row.push_back(account);
-        row.push_back(HGap(8));
+        chips.push_back(account);
+        chips.push_back(HGap(8));
+        chipsWidth += account->Width() + 8.0f;
     }
 
     for (auto& item : nav.items)
     {
         auto tab = std::make_shared<SectionTab>(mTheme, item.label, item.active, SectionTab::Style::Chip);
         tab->onClick = std::move(item.onClick);
-        row.push_back(tab);
-        row.push_back(HGap(4));
+        chipsWidth += tab->Width() + 4.0f;
+        chips.push_back(tab);
+        chips.push_back(HGap(4));
     }
 
-    row.push_back(Stretch());
+    std::vector<Ptr> row{HGap(10)};
+    const float toolsWidth = nav.compactToolsWidth + 6.0f * static_cast<float>(nav.compactTools.size()) +
+                             (nav.compactTools.empty() ? 0.0f : 8.0f);
+
+    // Where the chips and the tools do not fit across the stage (Tones at 640 wide needed about
+    // 680), the chips scroll sideways and the tools keep their place at the right.
+    if (10.0f + chipsWidth + toolsWidth + 4.0f > StageWidth())
+    {
+        // No bar: drawn over the chips it would cut through them.
+        row.push_back(Expand(MakeScroller(FixedWidth(chipsWidth, Row(chips)), el::no_vscroll | el::no_scrollbars)));
+        row.push_back(HGap(8));
+    }
+    else
+    {
+        row.insert(row.end(), chips.begin(), chips.end());
+        row.push_back(Stretch());
+    }
 
     for (auto& tool : nav.compactTools)
     {
@@ -199,6 +224,16 @@ Ptr Shell::WithSectionNav(SectionNav nav, Ptr content)
     row.push_back(HGap(4));
     const float padY = metrics::Touch() ? 5.0f : 8.0f;
     return Col({FixedHeight(metrics::Touch() ? 50 : 46, Pad(0, padY, 0, padY, Row(row))), rule(false), content});
+}
+
+Ptr Shell::EmptyState(const std::string& title, const std::string& hint, float height)
+{
+    auto t = std::make_shared<Text>(mTheme, title, 16.0f, Weight::SemiBold);
+    t->Alignment(Text::Align::Centre);
+    auto h = std::make_shared<Text>(mTheme, hint, metrics::kSmallText);
+    h->Colour(mTheme.TextMuted()).Alignment(Text::Align::Centre);
+    auto block = Col({Stretch(), FixedHeight(24, t), VGap(6), FixedHeight(20, h), Stretch()});
+    return height > 0.0f ? FixedHeight(height, block) : block;
 }
 
 void Shell::OpenPublishInfo(bool pack)

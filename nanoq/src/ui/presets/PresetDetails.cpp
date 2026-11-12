@@ -80,10 +80,13 @@ void Shell::OpenPresetDetails(bool asNew)
         st->folderId = current->id;
     }
 
+    // A text field as tall as the Save Folder drop-down (32) with the same 10 px inset: Elements'
+    // own box is its text's height plus a third of it (about 22 px) whatever height it is given.
     const auto field = [](const char* placeholder, const std::string& text) {
-        auto [element, box] = el::input_box(placeholder, Font(Weight::Regular), 1.0f);
+        const auto font = Font(Weight::Regular).size(metrics::kSmallText);
+        auto box = el::share(el::basic_input_box{placeholder, font});
         box->set_text(text);
-        return std::make_pair(el::share(std::move(element)), box);
+        return std::make_pair(el::share(el::input_box(el::hold(box), el::rect{10.0f, 8.0f, 10.0f, 8.0f})), box);
     };
     auto [nameElement, nameBox] = field("My Custom Preset", asNew && userPreset ? preset.name + " copy" : preset.name);
     auto [categoryElement, categoryBox] = field("User", preset.category);
@@ -238,7 +241,8 @@ void Shell::OpenPresetDetails(bool asNew)
                         FixedHeight(32, Row({cell("Designed Peak", false), designedPeak, HGap(10), Middle(apply)}))})),
              el::share(Surface(mTheme.ModalRaised(), mTheme.ModalRule(), 8.0f)));
 
-    const auto box = [](Ptr element) { return FixedHeight(36, element); };
+    // On the drop-down's fill, so the two read as one kind of field.
+    const auto box = [this](Ptr element) { return FixedHeight(32, Rounded(mTheme.Tertiary(), 3.0f, element)); };
     auto details =
         Col({label("Save Folder"), FixedHeight(34, folder), VGap(12), label("Preset Name"), box(nameElement), VGap(12),
              label("Category"), box(categoryElement), VGap(12), label("Description"), box(descriptionElement), VGap(12),
@@ -325,10 +329,16 @@ void Shell::OpenPresetDetails(bool asNew)
         CloseOverlay();
         mSession.Commands().SavePresetWithDetails(details, asNew);
     };
-    nameBox->on_enter = [save](std::string_view) {
-        save();
-        return true;
-    };
+
+    // Enter in any of the fields saves, as a web form's does: with the on-screen keyboard up the
+    // footer's Save is under it, and its Enter key is the way to commit.
+    for (const auto& box : {nameBox, categoryBox, descriptionBox})
+    {
+        box->on_enter = [save](std::string_view) {
+            save();
+            return true;
+        };
+    }
 
     ShowDialog({.title = asNew ? "Save Preset As" : "Overwrite Preset",
                 .body = Col({FixedHeight(32, Row({detailsTab, HGap(6), advancedTab, Stretch()})), VGap(12), panel}),

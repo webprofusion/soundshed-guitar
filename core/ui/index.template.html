@@ -67,8 +67,9 @@
       COMPACT_MAX_HEIGHT with a mouse, COMPACT_TOUCH_MAX_WIDTH /
       COMPACT_TOUCH_MAX_HEIGHT with a finger), the landscape test must match
       compactLayoutForViewport, and the split test must match
-      compactSplitForViewport: a wrong guess at the layout paints the navigation
-      on the wrong edge for a frame, which is the reflow this is here to prevent.
+      compactSplitForViewport and the short test compactShortForViewport: a wrong
+      guess at the layout paints the navigation on the wrong edge for a frame,
+      which is the reflow this is here to prevent.
     */
     (function () {
       var root = document.documentElement;
@@ -82,6 +83,9 @@
         root.dataset.compactLayout = rail ? "rail" : "stack";
         if (rail ? height >= 600 : width >= 600 && height >= 800) {
           root.dataset.compactSplit = "";
+        }
+        if (height <= 500) {
+          root.dataset.compactShort = "";
         }
       }
     })();
@@ -190,6 +194,7 @@
        matters: these are parts of one sheet, the shell and its landscape rail
        before the panels they size. -->
   <link rel="stylesheet" href="css/compact/shell.css" />
+  <link rel="stylesheet" href="css/compact/footer.css" />
   <link rel="stylesheet" href="css/compact/rail.css" />
   <link rel="stylesheet" href="css/compact/panels.css" />
   <link rel="stylesheet" href="css/compact/effect-panel.css" />

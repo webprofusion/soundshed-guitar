@@ -62,7 +62,7 @@ std::string Decibels(double v)
 }
 } // namespace
 
-Shell::ControlCells Shell::BuildControlCells()
+Shell::ControlCells Shell::BuildControlCells(float cellWidth)
 {
     auto& commands = mSession.Commands();
     const auto chain = [this]() -> const guitarfx::GlobalSignalChainConfig& { return mState.globalChain; };
@@ -155,7 +155,7 @@ Shell::ControlCells Shell::BuildControlCells()
         }
 
         cell.push_back(std::make_shared<el::element>());
-        return FixedWidth(84, Col(cell));
+        return FixedWidth(cellWidth, Col(cell));
     };
 
     // ── IN: the level, and which inputs feed it ──
@@ -333,11 +333,17 @@ Shell::ControlCells Shell::BuildControlCells()
 
 void Shell::OpenControls()
 {
-    auto c = BuildControlCells();
     // Touch sizes: the chevron and mute under the meters take 36 px rows, as the cells' do.
     const float under = metrics::Touch() ? 36.0f : 18.0f;
     // and the gaps beside the meters close up, so the strip is no wider than without them.
     const float meterGap = metrics::Touch() ? 8.0f : 14.0f;
+    // The five knob cells narrow (down to their 70 px drop-downs) where the strip would run past
+    // the window: at 640 wide it needed 28 px more than the popover has. The EQ cell is 72, a meter
+    // column about 30 (36 with touch sizes), and the popover's sides 6 and its padding 8 each.
+    const auto view = ViewSize();
+    const float room = view.x - metrics::kRailWidth - 12.0f - 16.0f;
+    const float fixed = 72.0f + 2.0f * meterGap + 2.0f * (metrics::Touch() ? 36.0f : 30.0f) + 2.0f;
+    auto c = BuildControlCells(std::clamp(std::floor((room - fixed) / 5.0f), 72.0f, 84.0f));
     auto strip =
         Row({Stretch(),
              Col({FixedHeight(84, c.inMeter), VGap(2), FixedHeight(under, Row({Stretch(), c.levelling, Stretch()})),
@@ -347,7 +353,6 @@ void Shell::OpenControls()
                   std::make_shared<el::element>()}),
              Stretch()});
 
-    const auto view = ViewSize();
     ShowPopover(Pad(8, 10, 8, 6, strip),
                 el::rect{metrics::kRailWidth + 6.0f, 0.0f, view.x - 6.0f, metrics::TopBarHeight() - 6.0f},
                 view.x - metrics::kRailWidth - 12.0f, 124.0f + (metrics::Touch() ? metrics::kTouchCellExtra : 0.0f));

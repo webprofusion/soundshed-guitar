@@ -117,9 +117,10 @@ struct SectionNav
     std::string account; // the account pill's label; empty for none
     std::function<void(el::rect anchor)> onAccount;
     std::vector<Item> items;
-    std::vector<Ptr> tools;        // under the sections, in the side list
-    std::vector<Ptr> compactTools; // at the right of the chips, at the compact size
-    std::string help;              // a help card under the side list
+    std::vector<Ptr> tools;         // under the sections, in the side list
+    std::vector<Ptr> compactTools;  // at the right of the chips, at the compact size
+    float compactToolsWidth = 0.0f; // their widths together, to tell whether the chips still fit
+    std::string help;               // a help card under the side list
 };
 
 class WebViewSlot; // JamPage.cpp
@@ -235,6 +236,18 @@ class Shell
         return (metrics::Touch() ? 40.0f : 24.0f) + (MultiRigShown() ? 26.0f : 0.0f);
     }
 
+    /// What a page under its section chips (or beside its side list) shows of its body without
+    /// scrolling: where an empty state centres its message.
+    [[nodiscard]] float PageRoom() const
+    {
+        const float nav = mWide ? 0.0f : (metrics::Touch() ? 50.0f : 46.0f) + 1.0f;
+        return std::max(120.0f, StageHeight() - nav - metrics::kPagePadTop - 16.0f);
+    }
+
+    /// An empty page or section: one centred message and a line on what to do, the same on every
+    /// page (Tones, Jam, Pads). `height` 0 takes what its column gives it.
+    Ptr EmptyState(const std::string& title, const std::string& hint, float height = 0.0f);
+
     /// The row under the split stage's chain that holds its round add button.
     [[nodiscard]] static float AddRowHeight()
     {
@@ -303,7 +316,8 @@ class Shell
         Ptr levelling; // input levelling, under the input meter
     };
 
-    ControlCells BuildControlCells();
+    /// `cellWidth`: each knob's cell, narrowed where the compact strip has less room (640 wide).
+    ControlCells BuildControlCells(float cellWidth = 84.0f);
     /// A small panel beside `anchor` (a control's bounds), closed by a tap anywhere else.
     void ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above = false);
     /// The panel placed beside `anchor`, over a layer that calls `onOutside` when tapped.
@@ -688,7 +702,8 @@ class Shell
     // The YouTube player is a web page: it shows in a web view of its own (nanoq/src/WebView.h)
     // placed over an empty slot in the layout, or, where there is none, in the browser. It keeps
     // playing on other pages, with a bar over them to stop it.
-    [[nodiscard]] Ptr BuildJamPlayer(float width);
+    /// `besideWidth` > 0: the title and buttons go beside the video, not over it.
+    [[nodiscard]] Ptr BuildJamPlayer(float width, float besideWidth = 0.0f);
     [[nodiscard]] nanoq::WebView* JamWebView();
     void CloseJamPlayer();
     void SyncJamWebViews();

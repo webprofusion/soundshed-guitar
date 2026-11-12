@@ -259,19 +259,6 @@ body.theme-classic {
   box-shadow: inset 0 1px 0 rgba(245, 241, 232, 0.08);
 }
 
-.theme-classic .fx-selector-close {
-  background: #3d2f25;
-  border-color: #5a5048;
-  color: var(--text-dark-secondary);
-  box-shadow: inset 0 1px 0 rgba(245, 241, 232, 0.08);
-}
-
-.theme-classic .fx-selector-close:hover {
-  border-color: var(--color-accent);
-  background: rgba(240, 160, 16, 0.12);
-  color: var(--text-dark-primary);
-}
-
 .theme-classic .fx-selector-categories {
   background: #1f1815;
   border-right-color: #5a5048;

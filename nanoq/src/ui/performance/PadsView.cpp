@@ -581,7 +581,8 @@ Ptr Shell::BuildPadsView()
 
     if (setlist != nullptr)
     {
-        const bool narrow = ViewSize().x < 700.0f;
+        // From the stage, not the window: the rail and the full layout's header take their share.
+        const bool narrow = StageWidth() < 640.0f;
         const int columns = padCount == 4 ? 2 : narrow ? 2 : padCount / 2;
         const int cursor = mState.setlistCursor;
         const std::string id = setlist->id;
@@ -649,22 +650,26 @@ Ptr Shell::BuildPadsView()
     }
     else
     {
-        auto title = std::make_shared<Text>(mTheme, "No setlist selected", 16.0f, Weight::SemiBold);
-        title->Alignment(Text::Align::Centre);
-        auto detail =
-            std::make_shared<Text>(mTheme, "Add a bank, or make a setlist in the preset chooser.", metrics::kSmallText);
-        detail->Colour(mTheme.TextMuted()).Alignment(Text::Align::Centre);
-        pads = Col({Stretch(), FixedHeight(24, title), VGap(6), FixedHeight(20, detail), Stretch()});
+        pads = EmptyState("No setlist selected", "Add a bank, or make a setlist in the preset chooser.");
     }
 
-    // A short window tightens the spacing and the bank strip, as the web UI's max-height: 760px.
-    const bool short_ = ViewSize().y < 760.0f;
+    // A short stage tightens the spacing and the bank strip, as the web UI's max-height: 760px
+    // (a 760 px window leaves the full layout's stage about 545).
+    const bool short_ = StageHeight() < 560.0f;
     const float gap = short_ ? 10.0f : 14.0f;
     const float edge = short_ ? 12.0f : 16.0f;
-    return Fill(mTheme.Background(),
-                Pad(18, edge, 18, edge,
-                    Col({FixedHeight(32, Row(header)), VGap(gap),
-                         FixedHeight(editing ? 136.0f : (short_ ? 72.0f : 95.0f), strip), VGap(gap), pads})));
+    std::vector<Ptr> column{FixedHeight(32, Row(header)), VGap(gap)};
+
+    // With no setlist the bank strip has nothing to step through, and the page says so once,
+    // under the header.
+    if (setlist != nullptr || editing)
+    {
+        column.push_back(FixedHeight(editing ? 136.0f : (short_ ? 72.0f : 95.0f), strip));
+        column.push_back(VGap(gap));
+    }
+
+    column.push_back(pads);
+    return Fill(mTheme.Background(), Pad(18, edge, 18, edge, Col(column)));
 }
 
 void Shell::AssignSetlistPad(int index)

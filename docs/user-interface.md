@@ -592,7 +592,28 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   keeps its sliders and exports, wrapping a row onto two lines. The preset load history's
   back/forward buttons become the first two entries of the preset "…" menu. The Factory/User
   badge shows when the name's pill is at least 340px wide (a container query), since it is
-  what explains a disabled Save. Copy A to B stays on the footer at every width.
+  what explains a disabled Save.
+- **The footer bar fills by priority** (`ts/footerFit.ts`, `css/compact/footer.css`). Setlists
+  and Tuner, then Record, Loop, undo/redo, A/B, Copy, the tempo (a tap opens the metronome) and
+  the metronome's play join the bar while they fit on one line, measured on every resize; what
+  does not fit is in the OPTIONS sheet (the history under a "Chain" row). The sheet's rows are
+  labelled (Demo audio, MIDI, Tap tempo, Metronome, Click, Zoom, Theme, Layout), repeat nothing
+  on the bar, and stay open for TAP and Click; the bar is not re-fitted while the sheet is open.
+- **Short screens** (`data-compact-short`: compact and 500px tall or less, a phone held
+  sideways or an 800x480 panel). The preset library has Presets, Multi-Rig and Setlists tabs,
+  a folder drop-down beside the tag chips in place of the tree, and two-line cards (three
+  whole at 667x375, four at 844x390, five at 800x480); a long press on a card moves it to a
+  folder. The metronome is two columns (tempo, TAP, Rhythm, play and the beat dots; then
+  Volume, Pan, Time Signature, Sound) under a header that stays put. The Global EQ curve
+  shrinks so the four bands sit under it in one row. The model browser's filters are one row
+  that scrolls sideways and its Cancel and OK sit in the header beside the title, so five
+  rows show at 667x375 and 844x390.
+- **One close control.** The preset library and the FX library close with the dialogs' ×
+  (`.modal-close`: 28px, 30 at compact, the same hit area on touch).
+- **Effect group titles** (`paramGroupBlockHtml` in `ts/parameterControlMarkup.ts`) are left
+  off where they say nothing, at every density: over parameters an effect leaves ungrouped
+  (once "Other") and over a group whose one control has the same name ("Swell"). Such a block
+  keeps an empty title line only beside a titled one, so knobs stay in line.
 
 ## Settings → Features
 

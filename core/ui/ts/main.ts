@@ -20,6 +20,7 @@ import {
 import { buildImportSummaryMessage } from "./presets/archive.js";
 import { importArchiveRemoteResources, prepareArchiveRemoteResourcesForPreview, readArchiveRemoteRefs } from "./presets/remoteArchiveResources.js";
 import { initCompactMode, isCompact } from "./compactMode.js";
+import { initializeFooterFit } from "./footerFit.js";
 import { initCompactStage } from "./compactStage.js";
 import { installFetchLogger, renderLogEntries } from "./logging.js";
 import { scheduleDSPPerformancePlotUpdate } from "./views.js";
@@ -179,6 +180,8 @@ function initFooterActionsPopup(): void {
   compactQuery.addEventListener("change", syncMode);
   window.addEventListener("densityChanged", syncMode);
   syncMode();
+  // At compact density the bar takes what fits of the sheet's tools, by priority.
+  initializeFooterFit(isCompact);
 }
 
 

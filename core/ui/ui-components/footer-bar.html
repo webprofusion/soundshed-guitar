@@ -43,6 +43,9 @@
           </svg>
         </button>
       </div>
+      <!-- Compact density: the tempo and the metronome's play when the bar has room for them
+           (ts/footerFit.ts moves them here from the tempo group, and back). -->
+      <div class="footer-compact-tempo" aria-label="Tempo"></div>
       <button
         id="footer-actions-toggle"
         class="footer-btn footer-actions-toggle"
@@ -53,7 +56,12 @@
         OPTIONS
       </button>
       <div id="footer-actions-panel" class="footer-actions-panel" aria-hidden="false">
+        <!-- The footer-sheet-label spans name each row of the compact OPTIONS sheet; the full bar hides them. -->
+        <div class="footer-history-sheet-group" aria-label="Signal chain">
+          <span class="footer-sheet-label">Chain</span>
+        </div>
         <div class="footer-group footer-demo-group" aria-label="Demo audio">
+          <span class="footer-sheet-label">Demo audio</span>
           <div id="footer-demo-audio-container" class="footer-demo-audio-container">
             <!-- Demo audio controls rendered by JavaScript -->
           </div>
@@ -112,7 +120,7 @@
             </label>
             <input type="range" id="footer-bpm-slider" min="30" max="300" step="1" />
           </div>
-          <button class="footer-btn" id="footer-tap-btn" type="button">TAP</button>
+          <button class="footer-btn" id="footer-tap-btn" type="button"><span class="footer-tap-short">TAP</span><span class="footer-tool-label">Tap tempo</span></button>
           <button
             class="footer-btn footer-icon-btn footer-metronome-btn metronome-only"
             id="footer-metronome-btn"
@@ -126,17 +134,26 @@
               <path d="M12 8.5v7" />
               <path d="M12 10.5l2.75-1.75" />
             </svg>
+            <span class="footer-tool-label">Metronome</span>
           </button>
           <button class="footer-btn footer-icon-btn footer-metronome-play-btn metronome-only" id="footer-metronome-toggle" type="button" aria-label="Start metronome" aria-pressed="false" title="Start metronome">
             <span class="footer-metronome-play-icon" aria-hidden="true"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></span>
+            <span class="footer-tool-label">Click</span>
           </button>
         </div>
         <div class="footer-group footer-view-group footer-right" aria-label="View options">
           <div class="footer-zoom-control">
+            <span class="footer-sheet-label">Zoom</span>
             <select id="zoom-level-select" class="footer-demo-select themed-select zoom-level-select" aria-label="UI zoom level" title="UI zoom level"></select>
           </div>
           <div class="footer-theme-select">
+            <span class="footer-sheet-label">Theme</span>
             <select id="theme-select" class="footer-demo-select themed-select" aria-label="Theme" title="Theme"></select>
+          </div>
+          <!-- The layout density (Settings has the same choice), in the compact sheet only. -->
+          <div class="footer-layout-control">
+            <span class="footer-sheet-label">Layout</span>
+            <select id="footer-density-select" class="footer-demo-select themed-select" aria-label="Layout density" title="Layout density"></select>
           </div>
         </div>
       </div>

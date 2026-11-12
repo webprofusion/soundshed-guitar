@@ -251,6 +251,18 @@
   text-align: center;
 }
 
+/* An untitled group (the ungrouped rest, or a lone knob its title would only
+   repeat) keeps a title's line beside titled groups, so knobs stay in line; with
+   no titled group beside it, it takes no room. */
+.node-param-group-title-spacer {
+  visibility: hidden;
+}
+
+:not(:has(> .node-param-group-block > .node-param-group-title:not(.node-param-group-title-spacer)))
+  > .node-param-group-block > .node-param-group-title-spacer {
+  display: none;
+}
+
 .node-param-group-items {
   display: flex;
   flex-wrap: wrap;

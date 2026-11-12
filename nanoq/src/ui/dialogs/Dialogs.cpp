@@ -64,7 +64,9 @@ void Shell::ShowDialog(DialogParts parts)
 
     const auto view = ViewSize();
     const float footer = parts.actions.empty() && !parts.footerLeft ? 0.0f : kDialogFooterHeight;
-    const float height = std::min(parts.height, std::max(200.0f, view.y - 40.0f));
+    // A short window (800x480) keeps 8 px round a tall dialog rather than 20: a list or a form
+    // shows a row more.
+    const float height = std::min(parts.height, std::max(200.0f, view.y - (view.y < 560.0f ? 16.0f : 40.0f)));
     const float width = std::min(parts.width, std::max(280.0f, view.x - 32.0f));
     Ptr body = Pad(parts.padX, parts.padY, parts.padX, parts.padY, std::move(parts.body));
 

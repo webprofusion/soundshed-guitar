@@ -68,6 +68,16 @@ describe("compactSplitForViewport", () => {
   });
 });
 
+describe("compactShortForViewport", () => {
+  it("takes in landscape phones and an 800x480 panel, not a 600px-tall one", async () => {
+    const { compactShortForViewport } = await loadCompactMode();
+    expect(compactShortForViewport(375)).toBe(true);
+    expect(compactShortForViewport(430)).toBe(true);
+    expect(compactShortForViewport(480)).toBe(true);
+    expect(compactShortForViewport(600)).toBe(false);
+  });
+});
+
 describe("densityForViewportSize", () => {
   it("keeps 980x620 for a mouse", async () => {
     const { densityForViewportSize } = await loadCompactMode();
@@ -95,6 +105,25 @@ describe("initCompactMode", () => {
     delete root.dataset.densityPref;
     delete root.dataset.compactLayout;
     delete root.dataset.compactSplit;
+    delete root.dataset.compactShort;
+  });
+
+  it("stamps a short viewport at compact density only, and drops it when the window grows", async () => {
+    setViewport(844, 390);
+    const { initCompactMode, isCompactShort, applyDensityPreference } = await loadCompactMode();
+    initCompactMode();
+    expect(root.dataset.compactShort).toBe("");
+    expect(isCompactShort()).toBe(true);
+
+    setViewport(1024, 600);
+    initCompactMode();
+    expect(root.dataset.compactShort).toBeUndefined();
+    expect(isCompactShort()).toBe(false);
+
+    // Full pinned on a short window: the full shell has no short layout.
+    setViewport(1280, 480);
+    applyDensityPreference("full");
+    expect(root.dataset.compactShort).toBeUndefined();
   });
 
   it("stamps the split on a window snapped to half a monitor, and drops it when it gets short", async () => {

@@ -307,9 +307,13 @@ Ptr Shell::BuildDeviceContent()
     const auto& s = device.state;
     std::vector<Ptr> rows;
 
-    constexpr float kLabelWidth = 190.0f;
-    constexpr float kWide = 340.0f;
-    constexpr float kNarrow = 220.0f;
+    // The card's inner width, as SettingsPage.cpp works it out. At 640 the 190 px labels and 340 px
+    // device lists with Test beside them ran past the card's right edge: the labels and lists
+    // narrow to leave room for the button.
+    const float room = StageWidth() - (mWide ? 245.0f : 0.0f) - (mWide ? 48.0f : metrics::kPagePad + 14.0f) - 46.0f;
+    const float labelWidth = room >= 190.0f + 340.0f + 104.0f ? 190.0f : 120.0f;
+    const float wideWidth = std::clamp(room - labelWidth - 104.0f, 200.0f, 340.0f);
+    const float narrowWidth = std::min(220.0f, wideWidth);
 
     auto heading = [&](const char* text) {
         auto t = std::make_shared<Text>(mTheme, text, 11.0f, Weight::SemiBold);
@@ -319,13 +323,13 @@ Ptr Shell::BuildDeviceContent()
     auto label = [&](const std::string& text) {
         auto l = std::make_shared<Text>(mTheme, text, metrics::kTextSize);
         l->Colour(mTheme.TextSecondary());
-        return FixedWidth(kLabelWidth, Middle(l));
+        return FixedWidth(labelWidth, Middle(l));
     };
     // A muted line under a control, indented to the controls' column.
     auto hint = [&](const std::string& text, bool warning = false) {
         auto t = std::make_shared<Text>(mTheme, text, metrics::kSmallText);
         t->Colour(warning ? mTheme.Warning() : mTheme.TextMuted());
-        rows.push_back(FixedHeight(22, Row({HGap(kLabelWidth), t})));
+        rows.push_back(FixedHeight(22, Row({HGap(labelWidth), t})));
     };
     auto select = [&](const std::vector<Option>& options, const std::string& selected, float width, bool enabled,
                       std::function<void(const std::string&)> onPick) -> Ptr {
@@ -413,7 +417,7 @@ Ptr Shell::BuildDeviceContent()
             options.emplace_back(t, t);
         }
 
-        row("Driver", {select(options, Str(s, "deviceType"), kNarrow, true,
+        row("Driver", {select(options, Str(s, "deviceType"), narrowWidth, true,
                               [this](const std::string& v) { DeviceRequest("setDeviceType", {{"deviceType", v}}); })});
     }
 
@@ -423,7 +427,7 @@ Ptr Shell::BuildDeviceContent()
     {
         const auto input = Str(s, "inputDevice");
         row("Input Device",
-            {select(DeviceOptions(Strings(s, "inputDevices"), input, "No input"), input, kWide, true,
+            {select(DeviceOptions(Strings(s, "inputDevices"), input, "No input"), input, wideWidth, true,
                     [this](const std::string& v) { DeviceRequest("setDevice", {{"kind", "input"}, {"name", v}}); })});
     }
 
@@ -433,7 +437,7 @@ Ptr Shell::BuildDeviceContent()
         auto test = button("Test", [this] { DeviceRequest("playTestTone"); }, open && !output.empty());
         row(separate ? "Output Device" : "Device",
             {select(DeviceOptions(Strings(s, "outputDevices"), output, separate ? "No output" : "No device"), output,
-                    kWide, true,
+                    wideWidth, true,
                     [this, separate](const std::string& v) {
                         DeviceRequest("setDevice", {{"kind", separate ? "output" : "linked"}, {"name", v}});
                     }),
@@ -452,9 +456,9 @@ Ptr Shell::BuildDeviceContent()
             rateOptions.emplace_back(Integer(r), Integer(r) + " Hz");
         }
 
-        row("Sample Rate", {select(rateOptions, Integer(rate), kNarrow, rates.size() > 1, [this](const std::string& v) {
-                DeviceRequest("setSampleRate", {{"sampleRate", std::stod(v)}});
-            })});
+        row("Sample Rate",
+            {select(rateOptions, Integer(rate), narrowWidth, rates.size() > 1,
+                    [this](const std::string& v) { DeviceRequest("setSampleRate", {{"sampleRate", std::stod(v)}}); })});
 
         if (Numbers(s, "sampleRates").size() <= 1)
         {
@@ -472,7 +476,7 @@ Ptr Shell::BuildDeviceContent()
         }
 
         row("Buffer Size",
-            {select(sizeOptions, Integer(buffer), kNarrow, sizes.size() > 1,
+            {select(sizeOptions, Integer(buffer), narrowWidth, sizes.size() > 1,
                     [this](const std::string& v) { DeviceRequest("setBufferSize", {{"bufferSize", std::stoi(v)}}); })});
 
         if (Numbers(s, "bufferSizes").size() <= 1)
@@ -502,7 +506,7 @@ Ptr Shell::BuildDeviceContent()
             level,
             [this] { return mState.device.inputLevelDb <= -99.0 ? -100L : std::lround(mState.device.inputLevelDb); },
             [](Text& t, long db) { t.Set(db <= -100L ? std::string("-inf dB") : std::to_string(db) + " dB"); });
-        row("Input Level", {FixedWidth(kWide, Middle(meter)), HGap(10), FixedWidth(70, Middle(level))});
+        row("Input Level", {FixedWidth(wideWidth, Middle(meter)), HGap(10), FixedWidth(70, Middle(level))});
     }
 
     if (Flag(s, "canMuteInput"))
@@ -575,7 +579,7 @@ Ptr Shell::BuildDeviceContent()
         }
 
         outputs.emplace_back("", "None");
-        row("MIDI Output", {select(outputs, chosen, kWide, true, [this](const std::string& v) {
+        row("MIDI Output", {select(outputs, chosen, wideWidth, true, [this](const std::string& v) {
                 DeviceRequest("setMidiOutput", {{"identifier", v}});
             })});
     }

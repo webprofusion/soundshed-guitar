@@ -213,9 +213,12 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
     const bool overEditor = PlayStageShown() && mEditorArea.height() > (mWide ? 200.0f : 324.0f);
     const float width =
         overEditor ? std::min(860.0f, mEditorArea.width() - 24.0f) : std::min(860.0f, stageWidth - 24.0f);
-    const float top = overEditor ? mEditorArea.top + 8.0f : metrics::TopBarHeight() + 8.0f;
-    const float height =
-        overEditor ? std::clamp(mEditorArea.height() - 24.0f, 300.0f, 400.0f) : std::min(460.0f, view.y - top - 48.0f);
+    const float height = overEditor ? std::clamp(mEditorArea.height() - 24.0f, 300.0f, 400.0f)
+                                    : std::min(460.0f, view.y - metrics::TopBarHeight() - 8.0f - 48.0f);
+    // An editor shorter than the panel (the wide frame with the looper strip open, 1024x768):
+    // the panel's foot stays on the editor's and it rises over the chain, not over the footer.
+    const float top = overEditor ? std::min(mEditorArea.top + 8.0f, mEditorArea.bottom - 16.0f - height)
+                                 : metrics::TopBarHeight() + 8.0f;
     const float x = overEditor ? mEditorArea.left + (mEditorArea.width() - width) * 0.5f
                                : StageLeft() + (stageWidth - width) * 0.5f;
     // The effects in columns of cards (.fx-items grid), as many as fit beside the categories.

@@ -67,7 +67,12 @@ Ptr Shell::BuildSettingsPage()
 
     // The width a card's text wraps to: the page, less the side list, its margins and the card's.
     const float pageWidth = StageWidth() - (mWide ? 245.0f : 0.0f);
-    const float textWidth = std::max(240.0f, pageWidth - 2.0f * 24.0f - 2.0f * 16.0f - 14.0f);
+    const float pageSides = mWide ? 2.0f * 24.0f : metrics::kPagePad + 14.0f;
+    const float textWidth = std::max(240.0f, pageWidth - pageSides - 2.0f * 16.0f - 14.0f);
+    // Below this, a row's label sits over its control instead of beside it: at 640 wide the
+    // 230 px labels left the controls about 260.
+    const bool stacked = textWidth - kLabelWidth - 12.0f < 300.0f;
+    const float labelWidth = stacked ? 0.0f : kLabelWidth + 12.0f;
 
     std::vector<Ptr> page;
     std::vector<Ptr> card; // the card being filled
@@ -108,6 +113,14 @@ Ptr Shell::BuildSettingsPage()
     const auto row = [&](const char* title, Ptr control, float height = 40.0f) {
         auto l = std::make_shared<Text>(mTheme, Upper(title), 11.0f, Weight::SemiBold);
         l->Colour(mTheme.TextSecondary());
+
+        if (stacked)
+        {
+            card.push_back(FixedHeight(18, l));
+            card.push_back(FixedHeight(height, control));
+            return;
+        }
+
         card.push_back(FixedHeight(height, Row({FixedWidth(kLabelWidth, Middle(l)), HGap(12), control})));
     };
     // What a row does, under it.
@@ -175,7 +188,7 @@ Ptr Shell::BuildSettingsPage()
                 std::snprintf(text, sizeof(text), "%.*f %s", decimals, v, unit);
                 s.Update((v - lo) / (hi - lo), text);
             });
-        row(title, Row({FixedWidth(std::min(420.0f, textWidth - kLabelWidth - 12.0f), Middle(sl)), Stretch()}), 52.0f);
+        row(title, Row({FixedWidth(std::min(420.0f, textWidth - labelWidth), Middle(sl)), Stretch()}), 52.0f);
     };
     const auto button = [&](const std::string& text, std::function<void()> onClick, bool primary = false) {
         auto b = std::make_shared<Button>(mTheme, text, std::move(onClick),
@@ -368,8 +381,7 @@ Ptr Shell::BuildSettingsPage()
                     s.Update(v, std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%");
                 });
             row("Adjust Quality",
-                Row({FixedWidth(std::min(420.0f, textWidth - kLabelWidth - 12.0f), Middle(quality)), Stretch()}),
-                52.0f);
+                Row({FixedWidth(std::min(420.0f, textWidth - labelWidth), Middle(quality)), Stretch()}), 52.0f);
         }
         describe("Lower quality reduces CPU use on models that support it. Watch the DSP load while you adjust it.");
         pick(
@@ -471,7 +483,8 @@ Ptr Shell::BuildSettingsPage()
     }
     }
 
-    auto content = VScroll(Pad(24, mWide ? 20.0f : 12.0f, 24, 12, Col(page)));
+    auto content = VScroll(mWide ? Pad(24, 20, 24, 12, Col(page))
+                                 : Pad(metrics::kPagePad, metrics::kPagePadTop, 14, 12, Col(page)));
     return Fill(mTheme.Background(), WithSectionNav(std::move(nav), content));
 }
 } // namespace nanoq::ui

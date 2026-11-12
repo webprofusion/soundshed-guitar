@@ -82,10 +82,11 @@ afterEach(() => {
 });
 
 describe("closing the FX library", () => {
-  it("has a labelled close button", () => {
+  it("has the dialogs' close button, named for a screen reader", () => {
     fxSelector.expandFxSelector();
     const close = document.getElementById("fx-selector-close")!;
-    expect(close.textContent).toContain("Close");
+    expect(close.classList.contains("modal-close")).toBe(true);
+    expect(close.getAttribute("aria-label")).toContain("Close");
     close.click();
     expect(isOpen()).toBe(false);
   });

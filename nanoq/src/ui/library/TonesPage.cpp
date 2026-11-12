@@ -242,8 +242,11 @@ Ptr Shell::BuildTonesPage()
 
     // The side list takes 245 px in the full layout.
     const float stageWidth = StageWidth() - (mWide ? 245.0f : 0.0f);
-    const float contentWidth = stageWidth - 2.0f * (mWide ? 14.0f : 10.0f) - 14.0f; // margins, scroll bar
+    const float contentWidth = stageWidth - (mWide ? 14.0f : metrics::kPagePad) - 14.0f - 14.0f; // margins, scroll bar
     auto image = [this](const std::string& url) { return RemoteImage(url); };
+    // A pack card at the compact size is 150 px, as the web UI's compact rule (panels.css): at
+    // 206 the packs row took most of an 800x480 stage and the community presets barely showed.
+    const float compactPackHeight = mWide ? kPackCardHeight : 150.0f;
 
     // ── The sections: the account, the tabs, Create Pack, Cards / List and the help card ──
     const auto& account = service.Account();
@@ -288,6 +291,7 @@ Ptr Shell::BuildTonesPage()
     };
     nav.tools = {FixedHeight(26, createPack(208.0f)), layout(104.0f)};
     nav.compactTools = {FixedWidth(110, Middle(createPack(110.0f))), FixedWidth(112, Middle(layout(56.0f)))};
+    nav.compactToolsWidth = 110.0f + 112.0f;
     nav.help = "Share a preset in 3 steps: load it in Soundshed Guitar, click Publish there, then use Share on "
                "its card here after approval.";
 
@@ -343,7 +347,10 @@ Ptr Shell::BuildTonesPage()
             LoadTones(false);
             Mark(kPage);
         };
-        body.push_back(FixedHeight(30, Row({mTonesSearchElement, HGap(8), tag, HGap(6), clear})));
+        // The field gives way down to 120 px so All tags and Clear stay in view at 640 wide (its
+        // own minimum is its hint's width).
+        body.push_back(FixedHeight(
+            30, Row({WidthRange(120.0f, el::full_extent, mTonesSearchElement), HGap(8), tag, HGap(6), clear})));
         body.push_back(VGap(4));
     }
 
@@ -484,7 +491,7 @@ Ptr Shell::BuildTonesPage()
 
             // As rows, the strip is a line of wide bars.
             const float packWidth = mTonesList ? 320.0f : kPackCardWidth;
-            const float packHeight = mTonesList ? 32.0f : kPackCardHeight;
+            const float packHeight = mTonesList ? 32.0f : compactPackHeight;
 
             for (const auto& pack : mToneHomePacks)
             {
@@ -539,7 +546,7 @@ Ptr Shell::BuildTonesPage()
         }
         else
         {
-            body.push_back(grid(mTonePacks, kPackCardWidth, kPackCardHeight));
+            body.push_back(grid(mTonePacks, kPackCardWidth, compactPackHeight));
         }
 
         auto step = [this](const char* label, int delta, bool enabled) {
@@ -565,7 +572,9 @@ Ptr Shell::BuildTonesPage()
 
         if (entries.empty())
         {
-            body.push_back(message("Nothing installed from tone sharing yet."));
+            body.push_back(EmptyState("Nothing installed yet",
+                                      "Presets and packs you install from Presets or Packs are listed here.",
+                                      PageRoom()));
             break;
         }
 
@@ -632,7 +641,21 @@ Ptr Shell::BuildTonesPage()
     case TonesTab::Mine: {
         if (!service.HasSession())
         {
-            body.push_back(message("Sign in to view your content."));
+            body.push_back(EmptyState("Not signed in", "Sign In, at the left of the sections, to see what you publish.",
+                                      PageRoom()));
+            break;
+        }
+
+        // Nothing published at all: one message, not one per row.
+        if (!mTonesLoading && mToneMine.empty() && mToneMinePacks.empty())
+        {
+            auto publish = std::make_shared<IconButton>(mTheme, mIcons, "ui-share", IconButton::Look::Accent);
+            publish->Size(120, 30).IconSize(13).Label("How to publish", 11.0f);
+            publish->onClick = [this] { OpenPublishInfo(); };
+            const float room = PageRoom();
+            body.push_back(EmptyState("Nothing published yet",
+                                      "Presets and packs you publish from Soundshed Guitar show here.", room - 40.0f));
+            body.push_back(FixedHeight(30, Row({Stretch(), publish, Stretch()})));
             break;
         }
 
@@ -647,7 +670,7 @@ Ptr Shell::BuildTonesPage()
             }
             else
             {
-                body.push_back(packs ? grid(list, kPackCardWidth, kPackCardHeight)
+                body.push_back(packs ? grid(list, kPackCardWidth, compactPackHeight)
                                      : grid(list, kPresetCardMin, kPresetCardHeight));
             }
         };
@@ -663,7 +686,8 @@ Ptr Shell::BuildTonesPage()
     }
 
     body.push_back(VGap(16));
-    auto content = VScroll(Pad(mWide ? 14.0f : 10.0f, mWide ? 18.0f : 4.0f, 14, 0, Col(body)));
+    auto content =
+        VScroll(Pad(mWide ? 14.0f : metrics::kPagePad, mWide ? 18.0f : metrics::kPagePadTop, 14, 0, Col(body)));
     return Over(WithSectionNav(std::move(nav), content), std::make_shared<StageBackdrop>(mTheme));
 }
 

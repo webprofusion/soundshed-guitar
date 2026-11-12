@@ -73,9 +73,14 @@ std::string NameInGroup(const std::string& name, const std::string& group)
         return name;
     }
 
+    // A hyphen matches a space: the Parametric EQ's "Low Mid" group holds "Low-Mid Gain".
+    const auto fold = [](char c) {
+        return c == '-' ? ' ' : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    };
+
     for (std::size_t i = 0; i < group.size(); ++i)
     {
-        if (std::tolower(static_cast<unsigned char>(name[i])) != std::tolower(static_cast<unsigned char>(group[i])))
+        if (fold(name[i]) != fold(group[i]))
         {
             return name;
         }
@@ -416,6 +421,8 @@ Ptr Shell::BuildEffectPage()
     {
         std::string name;
         std::vector<std::pair<float, Ptr>> cells; // width, cell
+        std::vector<std::string> controls;        // the names of the controls in it
+        std::string title;                        // what its box shows over them
     };
 
     std::vector<Group> groups;
@@ -441,6 +448,7 @@ Ptr Shell::BuildEffectPage()
         }
 
         auto& target = *group;
+        target.controls.push_back(info.name);
         // A right click on any of them: MIDI Learn, for whichever control it is (Automation.cpp).
         auto menu = [this, key = info.key](el::point at) {
             if (const auto* n = SelectedNode())
@@ -563,17 +571,18 @@ Ptr Shell::BuildEffectPage()
         }
     }
 
-    // Beside named groups, the controls that have none are titled Other, as the web UI does.
-    if (std::any_of(groups.begin(), groups.end(), [](const Group& g) { return !g.name.empty(); }))
+    // A group's title, as the web UI's: none for the controls that have no group (it was "Other",
+    // which names nothing), and none where it would only repeat its one control's name ("SWELL"
+    // over "SWELL").
+    for (auto& g : groups)
     {
-        for (auto& g : groups)
-        {
-            if (g.name.empty())
-            {
-                g.name = "Other";
-            }
-        }
+        const bool repeats = g.controls.size() == 1 && Upper(g.controls.front()) == Upper(g.name);
+        g.title = repeats ? std::string() : g.name;
     }
+
+    // Where any box has a title, every box keeps the room for one, so the knobs of boxes side by
+    // side stay in line.
+    const bool titled = std::any_of(groups.begin(), groups.end(), [](const Group& g) { return !g.title.empty(); });
 
     // A group's box: its title over its cells, as wide as they are; an untitled group alone in
     // its row stretches across it with its cells centred (as the Input's Gain and the Doubler's).
@@ -589,8 +598,8 @@ Ptr Shell::BuildEffectPage()
     };
     // A titled group: 6 above its title, the 14 px title, 4, the cells, 8. An untitled one: 8
     // above the cells and 4 below.
-    auto groupHeight = [](const Group& g) {
-        return g.name.empty() ? 8.0f + kCellHeight + 4.0f : 6.0f + 14.0f + 4.0f + kCellHeight + 8.0f;
+    auto groupHeight = [titled](const Group&) {
+        return !titled ? 8.0f + kCellHeight + 4.0f : 6.0f + 14.0f + 4.0f + kCellHeight + 8.0f;
     };
     auto buildGroup = [&](const Group& g, bool stretch) -> Ptr {
         std::vector<Ptr> row;
@@ -611,9 +620,9 @@ Ptr Shell::BuildEffectPage()
         }
 
         row.push_back(Stretch());
-        const float top = g.name.empty() ? 8.0f : 6.0f + 14.0f + 4.0f;
-        return Over(Pad(kGroupPadX, top, kGroupPadX, g.name.empty() ? 4.0f : 8.0f, FixedHeight(kCellHeight, Row(row))),
-                    std::make_shared<InsetBox>(mTheme, g.name));
+        const float top = !titled ? 8.0f : 6.0f + 14.0f + 4.0f;
+        return Over(Pad(kGroupPadX, top, kGroupPadX, !titled ? 4.0f : 8.0f, FixedHeight(kCellHeight, Row(row))),
+                    std::make_shared<InsetBox>(mTheme, g.title));
     };
 
     // The panel's width: the model slots take the whole stage; otherwise as wide as its groups,
@@ -1027,7 +1036,7 @@ Ptr Shell::BuildEffectPage()
                 flush();
             }
 
-            // An untitled group (the only one, since the rest are titled Other) spans its row.
+            // The controls with no group, when nothing else is grouped, span their row.
             const bool alone = groups.size() == 1;
             rowHeight = std::max(rowHeight, groupHeight(g));
 

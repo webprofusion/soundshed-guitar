@@ -30,7 +30,7 @@ export { openPresetChooserForSelection, syncPresetLibraryFeatureVisibility } fro
 export { applyPresetFavoritesFromBackend, applyPresetRatingsFromBackend, applyPresetRecentsFromAppSettings, applyPresetRecentsFromBackend } from "./presets/recents.js";
 export { isUserPreset, updatePresetActionButtons } from "./presets/toolbar.js";
 export { adoptCreatedPreset, closeSavePresetModal, createDefaultPreset, initializeSaveAsButton, initializeSavePresetModal, openSavePresetModal, refreshSavePresetModalPeakInfoIfOpen, saveCurrentPreset } from "./presets/saveModal.js";
-export { applySetlistCursorFromBackend, applySetlistsFromBackend, assignPresetToActiveSetlistSlot, clearActiveSetlistSlot, createSetlist, deleteActiveSetlist, isOnlyPlayingPreset, setSetlistPanelVisible, updateActiveSetlistDetails } from "./presets/setlists.js";
+export { applySetlistCursorFromBackend, applySetlistsFromBackend, assignPresetToActiveSetlistSlot, clearActiveSetlistSlot, createSetlist, deleteActiveSetlist, isOnlyPlayingPreset, updateActiveSetlistDetails } from "./presets/setlists.js";
 
 export { handlePresetDataMessage, refreshPresetCacheEntryFromBackend, rejectPendingPresetRequest } from "./presets/fetch.js";
 export { cachePresetInMemory } from "./presets/cache.js";

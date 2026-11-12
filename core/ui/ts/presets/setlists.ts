@@ -15,17 +15,11 @@ import { setPresetLoadingId } from "../presetLibraryStore.js";
 import type { Setlist } from "../types.js";
 import { setlistCollapsible, setlistEditorHeader, setlistListElement, setlistPanel, setlistSlotsElement, setlistToggle } from "./dom.js";
 import { renderActivePreset } from "./filter.js";
+import { syncSetlistAddCurrentButton } from "./libraryTabs.js";
 import { escapeHtml } from "../utils.js";
 
 export function normalizeSetlistName(name: string): string {
   return name.trim();
-}
-
-/** Setlists only make sense against the regular preset library, not the Multi-Rig list. */
-export function setSetlistPanelVisible(visible: boolean): void {
-  if (setlistCollapsible) {
-    setlistCollapsible.hidden = !visible;
-  }
 }
 
 export function ensureSetlists(): void {
@@ -290,6 +284,7 @@ export function renderSetlistPanel(): void {
     });
   });
 
+  syncSetlistAddCurrentButton();
   const activeSetlist = findSetlistById(uiState.activeSetlistId);
   if (!activeSetlist) {
     setlistEditorHeader.textContent = "Select a setlist";

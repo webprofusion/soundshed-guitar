@@ -54,6 +54,12 @@ export const presetLibraryPresetsTab = document.getElementById("preset-lib-tab-p
 
 export const presetLibraryMultiRigPanel = document.getElementById("preset-library-multi-rig-panel") as HTMLElement | null;
 
+/** The Setlists tab, shown at compact density only (presets/libraryTabs.ts). */
+export const presetLibrarySetlistsTab = document.getElementById("preset-lib-tab-setlists") as HTMLButtonElement | null;
+
+/** On a short screen, the button the folder tree folds into (presets/folderPicker.ts). */
+export const presetFolderPickerButton = document.getElementById("preset-folder-picker") as HTMLButtonElement | null;
+
 /** The library's preset rows; rendered by views.ts, re-rendered on every filter. */
 export const presetListElement = document.getElementById("preset-list");
 
@@ -87,6 +93,8 @@ export const setlistCollapsible = document.getElementById("setlist-collapsible")
 export const setlistToggle = document.getElementById("setlist-toggle");
 
 export const setlistPanel = document.getElementById("setlist-panel");
+
+export const setlistAddCurrentButton = document.getElementById("setlist-add-current-btn") as HTMLButtonElement | null;
 
 export const presetExportSessionButton = document.getElementById("preset-export-session-btn") as HTMLButtonElement | null;
 

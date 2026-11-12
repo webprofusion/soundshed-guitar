@@ -60,31 +60,8 @@
   color: var(--text-secondary);
 }
 
-/* A labelled button rather than a bare glyph, so closing the library is never a hunt. */
+/* Drawn by .modal-close (css/modals/shell.css): the same x as every dialog's. */
 .fx-selector-close {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  min-height: 30px;
-  padding: 0 12px 0 9px;
-  border: 1px solid var(--border-medium);
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border-radius: var(--radius-md);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.fx-selector-close:hover,
-.fx-selector-close:focus-visible {
-  border-color: var(--color-accent);
-  background: var(--overlay-light);
-}
-
-.fx-selector-close svg {
   flex-shrink: 0;
 }
 

@@ -99,6 +99,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         std::function<std::shared_ptr<artist::image>(const std::string&)> thumbnailFor;
         std::weak_ptr<Browser> self;
         std::function<void(const std::string&)> onPick; // pick only: what to do with the choice
+        bool controlsTwoRows = false;                   // the Library's search over its filters, on a narrow window
     };
 
     auto state = std::make_shared<Browser>();
@@ -399,15 +400,17 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             categories.emplace_back(name, name);
         }
 
+        // The filters, and what they take across with their gaps.
         std::vector<Ptr> row{
-            b->searchElement, HGap(8),
             chooser(b->category.empty() ? "All categories" : b->category, 140, categories, &b->category)};
+        float filtersWidth = 140.0f;
 
         if (b->resourceType == "nam")
         {
             row.push_back(HGap(6));
             row.push_back(chooser(b->arch.empty() ? "A1 / A2" : b->arch, 84,
                                   {{"A1 and A2", ""}, {"A1", "A1"}, {"A2", "A2"}}, &b->arch));
+            filtersWidth += 90.0f;
         }
 
         // Creators and tags: the facets of what the library holds (getResourceLibraryFacets).
@@ -434,6 +437,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
             row.push_back(HGap(6));
             row.push_back(chooser(b->creator.empty() ? "All creators" : b->creator, 120, creators, &b->creator));
+            filtersWidth += 126.0f;
         }
 
         if (!facets.tags.empty())
@@ -472,6 +476,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             };
             row.push_back(HGap(6));
             row.push_back(tags);
+            filtersWidth += 82.0f;
         }
 
         // All | Favourites (.resource-browser-favorites-filter).
@@ -522,15 +527,35 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             b->previewed = true; // a file chosen there is the new choice; Cancel puts back the old
             b->fillFooter();     // which OK keeps
         };
-        row.insert(row.end(),
-                   {HGap(6), favourites, HGap(6), Middle(group), HGap(6), Middle(previous), HGap(4), Middle(next)});
+        std::vector<Ptr> tools{favourites, HGap(6), Middle(group), HGap(6), Middle(previous), HGap(4), Middle(next)};
+        // All | Favourites is about 130 wide; then the three square buttons and their gaps.
+        float toolsWidth = 130.0f + 6.0f + 32.0f + 6.0f + 32.0f + 4.0f + 32.0f;
 
         if (!b->onPick)
         {
-            row.insert(row.end(), {HGap(6), file});
+            tools.insert(tools.end(), {HGap(6), file});
+            toolsWidth += 70.0f;
         }
 
-        return Row(row);
+        // The search keeps at least 220 px. Where that and everything else do not fit across the
+        // dialog (800 wide squeezed it to "Searc"), the search and the tools take the first row
+        // and the filters a second.
+        const float inner = std::min(944.0f, ViewSize().x - 16.0f) - 32.0f;
+        b->controlsTwoRows = 220.0f + 8.0f + filtersWidth + 6.0f + toolsWidth > inner;
+
+        if (b->controlsTwoRows)
+        {
+            std::vector<Ptr> first{WidthRange(160.0f, el::full_extent, b->searchElement), HGap(8)};
+            first.insert(first.end(), tools.begin(), tools.end());
+            row.push_back(Stretch());
+            return Col({FixedHeight(34, Row(first)), VGap(6), FixedHeight(30, Row(row))});
+        }
+
+        std::vector<Ptr> one{WidthRange(220.0f, el::full_extent, b->searchElement), HGap(8)};
+        one.insert(one.end(), row.begin(), row.end());
+        one.push_back(HGap(6));
+        one.insert(one.end(), tools.begin(), tools.end());
+        return Row(one);
     };
 
     // ── Folder ──────────────────────────────────────────────────────────────────
@@ -1110,10 +1135,12 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         Fill(*b->tabs, Row(tabs));
     };
     b->fillControls = [this, b, libraryControls, folderControls, tone3000Controls] {
-        const float height = b->tab == Tab::Folder ? 68.0f : b->tab == Tab::Library ? 34.0f : 30.0f;
-        Fill(*b->controls, FixedHeight(height, b->tab == Tab::Library  ? libraryControls()
-                                               : b->tab == Tab::Folder ? folderControls()
-                                                                       : tone3000Controls()));
+        auto content = b->tab == Tab::Library  ? libraryControls()
+                       : b->tab == Tab::Folder ? folderControls()
+                                               : tone3000Controls();
+        const float library = b->controlsTwoRows ? 34.0f + 6.0f + 30.0f : 34.0f;
+        const float height = b->tab == Tab::Folder ? 68.0f : b->tab == Tab::Library ? library : 30.0f;
+        Fill(*b->controls, FixedHeight(height, content));
         mSession.View().layout();
         mSession.View().refresh();
     };
@@ -1427,13 +1454,16 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     }
 
     const auto view = ViewSize();
+    // A short window (800x480) keeps the margins round the dialog and between its parts small, so
+    // the list shows four rows under the search and filters.
+    const bool short_ = view.y < 560.0f;
     ShowDialog({.title = title.empty() ? b->role.title : title,
                 .body = Col({FixedHeight(38, b->tabs),
-                             FixedHeight(1, Fill(mTheme.ModalRule(), std::make_shared<el::element>())), VGap(12),
-                             b->controls, VGap(10), b->list}),
+                             FixedHeight(1, Fill(mTheme.ModalRule(), std::make_shared<el::element>())),
+                             VGap(short_ ? 8 : 12), b->controls, VGap(short_ ? 6 : 10), b->list}),
                 .footerLeft = b->footer,
                 .width = std::min(944.0f, view.x - 16.0f),
-                .height = std::max(320.0f, view.y - 40.0f),
+                .height = std::max(320.0f, view.y - (short_ ? 16.0f : 40.0f)),
                 .padX = 16.0f,
                 .padY = 10.0f,
                 .onClose = cancel,

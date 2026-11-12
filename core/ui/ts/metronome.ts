@@ -11,6 +11,7 @@
 
 import { uiState } from "./state.js";
 import { setMetronome } from "./bridge.js";
+import { isCompact } from "./compactMode.js";
 import { GenericKnob, enhanceRangeInput } from "./controls.js";
 import { isWheelAdjustEnabled } from "./wheelAdjust.js";
 import type { EnvironmentState, MetronomeState, MetronomeSubdivisionOption } from "./types.js";
@@ -607,6 +608,12 @@ function initializeFooterControls(): void {
   if (footerBpmButton && footerBpmPanel) {
     footerBpmButton.addEventListener("click", (event) => {
       event.stopPropagation();
+      // The compact bar has no room for the BPM panel's popover: the tempo opens the
+      // metronome, which has the tempo and everything else besides.
+      if (isCompact()) {
+        openMetronome();
+        return;
+      }
       if (!isEditable()) return;
       const isOpen = footerBpmPanel.classList.toggle("open");
       footerBpmPanel.setAttribute("aria-hidden", isOpen ? "false" : "true");

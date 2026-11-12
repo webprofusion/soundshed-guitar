@@ -4,6 +4,11 @@
 // the folders at the left and, at the right, the folder tools (a name to create a folder with,
 // rename and delete) over the presets as cards; and Setlists folded at the foot. It stays open
 // while presets are tried, and follows the library as it changes.
+//
+// On a short window (ShortChooser) the list comes first: the folders are a drop-down beside the
+// tag chips, with a "..." menu for the folder tools; Setlists is a third tab rather than a fold
+// at the foot; and the cards are denser (one line under the name, stars at its right). The web
+// UI keeps its folder column and Setlists fold at every height.
 
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/Shell.h"
@@ -20,6 +25,13 @@ using namespace guitarfx::uiclient;
 
 namespace
 {
+/// The chooser's short-window arrangement (BuildPresetChooser): the compact frame at the compact
+/// height or under (800x480, 640x400, 960x600).
+bool ShortChooser(el::point view, bool wide)
+{
+    return !wide && view.y <= metrics::kCompactMaxHeight;
+}
+
 /// One preset (.preset-item): its name with "+ Mixer" (or "In Mixer") at the right; its source and
 /// the folders it is in; then its rating, in words and as stars. The one playing is outlined in
 /// the accent. A tap loads it, the stars rate it, a right click opens its menu.
@@ -34,6 +46,14 @@ class PresetCard final : public Pressable
     }
 
     static constexpr float kHeight = 100.0f;
+    /// Dense, on a short window: two lines, the name over the source, its folders and the stars.
+    static constexpr float kDenseHeight = 52.0f;
+
+    PresetCard& Dense(bool dense)
+    {
+        mDense = dense;
+        return *this;
+    }
 
     std::function<void()> onAddToMixer;
     std::function<void(int rating)> onRate;
@@ -64,14 +84,15 @@ class PresetCard final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{240.0f, kHeight}, {el::full_extent, kHeight}};
+        const float h = mDense ? metrics::Hit(kDenseHeight, kDenseHeight + 8.0f) : kHeight;
+        return {{240.0f, h}, {el::full_extent, h}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds.inset(0.0f, 4.0f);
+        const auto b = ctx.bounds.inset(0.0f, mDense ? 3.0f : 4.0f);
         cnv.fill_style(mActive ? mTheme.AccentTint() : (mHover ? mTheme.Elevated() : mTheme.Card()));
         cnv.fill_round_rect(b, 8.0f);
         cnv.stroke_style(mActive ? mTheme.Accent().opacity(0.7f) : mTheme.Border());
@@ -82,7 +103,8 @@ class PresetCard final : public Pressable
         const auto nameFont = Font(Weight::SemiBold).size(13.5f);
         const float nameRight = mMixer ? MixerRect(b).left - 8.0f : b.right - 12.0f;
         FillText(cnv, Ellipsize(cnv, mName, nameFont, nameRight - b.left - 12.0f), nameFont, mTheme.Text(),
-                 el::rect{b.left + 12.0f, b.top + 8.0f, nameRight, b.top + 30.0f}, HAlign::Left);
+                 el::rect{b.left + 12.0f, b.top + (mDense ? 4.0f : 8.0f), nameRight, b.top + (mDense ? 24.0f : 30.0f)},
+                 HAlign::Left);
 
         if (mMixer)
         {
@@ -98,16 +120,26 @@ class PresetCard final : public Pressable
         // The source as a badge, then the folders it is in.
         const auto badgeFont = Font(Weight::SemiBold).size(9.5f);
         const float badgeWidth = MeasureTextWidth(mSource, badgeFont) + 14.0f;
-        const el::rect badge{b.left + 12.0f, b.top + 36.0f, b.left + 12.0f + badgeWidth, b.top + 52.0f};
+        const float badgeTop = mDense ? b.bottom - 20.0f : b.top + 36.0f;
+        const el::rect badge{b.left + 12.0f, badgeTop, b.left + 12.0f + badgeWidth, badgeTop + 16.0f};
         cnv.fill_style(mTheme.Text().opacity(0.1f));
         cnv.fill_round_rect(badge, 8.0f);
         FillText(cnv, mSource, badgeFont, mTheme.TextSecondary(), badge, HAlign::Centre);
 
-        if (!mPath.empty())
+        // Dense, the folders stop short of the stars on the same line.
+        const float pathRight = mDense ? StarSlot(b, 0).left - 8.0f : b.right - 12.0f;
+
+        if (!mPath.empty() && pathRight > badge.right + 20.0f)
         {
             const auto pathFont = Font(Weight::Regular).size(10.5f);
-            FillText(cnv, Ellipsize(cnv, mPath, pathFont, b.right - badge.right - 20.0f), pathFont, mTheme.TextMuted(),
-                     el::rect{badge.right + 6.0f, badge.top, b.right - 12.0f, badge.bottom}, HAlign::Left);
+            FillText(cnv, Ellipsize(cnv, mPath, pathFont, pathRight - badge.right - 8.0f), pathFont, mTheme.TextMuted(),
+                     el::rect{badge.right + 6.0f, badge.top, pathRight, badge.bottom}, HAlign::Left);
+        }
+
+        if (mDense)
+        {
+            DrawStars(cnv, b);
+            return;
         }
 
         // The rating: in words at the left, the stars at the right.
@@ -118,7 +150,11 @@ class PresetCard final : public Pressable
         FillText(cnv, Ellipsize(cnv, rating, ratingFont, std::max(0.0f, ratingRight - b.left - 12.0f)), ratingFont,
                  mTheme.TextSecondary(), el::rect{b.left + 12.0f, b.bottom - 26.0f, ratingRight, b.bottom - 8.0f},
                  HAlign::Left);
+        DrawStars(cnv, b);
+    }
 
+    void DrawStars(el::canvas& cnv, const el::rect& b)
+    {
         for (int i = 0; i < 5; ++i)
         {
             mIcons.Draw(cnv, "star", StarRect(b, i),
@@ -130,7 +166,7 @@ class PresetCard final : public Pressable
     {
         if (btn.state == el::mouse_button::left)
         {
-            const auto b = ctx.bounds.inset(0.0f, 4.0f);
+            const auto b = ctx.bounds.inset(0.0f, mDense ? 3.0f : 4.0f);
 
             if (mMixer && MixerRect(b).inset(-3.0f, -3.0f).includes(btn.pos))
             {
@@ -160,35 +196,44 @@ class PresetCard final : public Pressable
     }
 
   private:
-    static el::rect MixerRect(const el::rect& b)
+    [[nodiscard]] el::rect MixerRect(const el::rect& b) const
     {
-        return el::rect{b.right - 12.0f - 64.0f, b.top + 9.0f, b.right - 12.0f, b.top + 29.0f};
+        const float top = b.top + (mDense ? 5.0f : 9.0f);
+        return el::rect{b.right - 12.0f - 64.0f, top, b.right - 12.0f, top + 20.0f};
     }
 
     /// With touch sizes each star has a 40 px slot, the five ending 4 px in from the card's edge.
     static constexpr float kTouchStarSlot = 40.0f;
 
-    static el::rect StarSlot(const el::rect& b, int index)
+    /// A star's slot: with touch sizes 40 px, else the star and its gap (16 px), at the right of
+    /// the bottom line.
+    [[nodiscard]] el::rect StarSlot(const el::rect& b, int index) const
     {
-        const float left = b.right - 4.0f - 5.0f * kTouchStarSlot + static_cast<float>(index) * kTouchStarSlot;
-        return el::rect{left, b.bottom - 36.0f, left + kTouchStarSlot, b.bottom + 4.0f};
-    }
-
-    static el::rect StarRect(const el::rect& b, int index)
-    {
-        if (metrics::Touch())
+        if (!metrics::Touch())
         {
-            const auto slot = StarSlot(b, index);
-            const float left = slot.left + (kTouchStarSlot - 13.0f) * 0.5f;
-            return el::rect{left, b.bottom - 23.0f, left + 13.0f, b.bottom - 10.0f};
+            const float left = b.right - 12.0f - 5.0f * 16.0f + static_cast<float>(index) * 16.0f;
+            return el::rect{left, b.bottom - StarBottom() - 13.0f, left + 16.0f, b.bottom - StarBottom()};
         }
 
-        const float left = b.right - 12.0f - 5.0f * 16.0f + static_cast<float>(index) * 16.0f;
-        return el::rect{left, b.bottom - 23.0f, left + 13.0f, b.bottom - 10.0f};
+        const float left = b.right - 4.0f - 5.0f * kTouchStarSlot + static_cast<float>(index) * kTouchStarSlot;
+        return el::rect{left, b.bottom - (mDense ? 30.0f : 36.0f), left + kTouchStarSlot, b.bottom + 4.0f};
     }
 
-    /// Where a star takes a press: its 40 px slot, or 2 by 6 px round it.
-    static el::rect StarHit(const el::rect& bounds, const el::rect& b, int index)
+    /// The stars' baseline above the card's foot: lower in a dense card.
+    [[nodiscard]] float StarBottom() const
+    {
+        return mDense ? 6.0f : 10.0f;
+    }
+
+    [[nodiscard]] el::rect StarRect(const el::rect& b, int index) const
+    {
+        const auto slot = StarSlot(b, index);
+        const float left = metrics::Touch() ? slot.left + (kTouchStarSlot - 13.0f) * 0.5f : slot.left;
+        return el::rect{left, b.bottom - StarBottom() - 13.0f, left + 13.0f, b.bottom - StarBottom()};
+    }
+
+    /// Where a star takes a press: its 40 px slot, or 2 by 6 px round it (by 3 px, dense).
+    [[nodiscard]] el::rect StarHit(const el::rect& bounds, const el::rect& b, int index) const
     {
         if (metrics::Touch())
         {
@@ -196,7 +241,7 @@ class PresetCard final : public Pressable
             return el::rect{slot.left, slot.top, slot.right, std::min(slot.bottom, bounds.bottom)};
         }
 
-        return StarRect(b, index).inset(-2.0f, -6.0f);
+        return StarRect(b, index).inset(-2.0f, mDense ? -3.0f : -6.0f);
     }
 
     const Theme& mTheme;
@@ -204,6 +249,7 @@ class PresetCard final : public Pressable
     std::string mName, mSource, mPath;
     int mRating;
     bool mActive, mMixer, mInMixer;
+    bool mDense = false;
 };
 } // namespace
 
@@ -266,16 +312,30 @@ Ptr Shell::BuildPresetChooser()
         mShowMultiRigs = false;
     }
 
+    // A short window (800x480, 640x400) showed two presets under the chips, the folder tools and
+    // the Setlists bar. There, as the web UI's short-screen library, the list comes first: the
+    // folders are a drop-down beside the tag chips, the folder tools sit behind "...", Setlists is
+    // a tab beside Presets and Multi-Rig (mChooserSetlistsOpen is then that tab), and the presets
+    // take a row of two lines each.
+    const bool shortScreen = ShortChooser(ViewSize(), mWide);
+    const bool setlistsTab = shortScreen && mChooserSetlistsOpen;
+
     // ── The header (.preset-library-header): tabs, search, Export, close ──
     std::vector<Ptr> header;
 
-    if (multiRig)
+    if (multiRig || shortScreen)
     {
-        const auto tab = [this](const char* label, bool rigs) {
+        const auto tab = [this, shortScreen, setlistsTab](const char* label, bool rigs, bool setlists) {
+            const bool chosen = setlists ? setlistsTab : !setlistsTab && mShowMultiRigs == rigs;
             auto b = std::make_shared<Button>(
                 mTheme, label,
-                [this, rigs] {
+                [this, rigs, setlists, shortScreen] {
                     mShowMultiRigs = rigs;
+
+                    if (shortScreen)
+                    {
+                        mChooserSetlistsOpen = setlists;
+                    }
 
                     if (rigs)
                     {
@@ -284,14 +344,26 @@ Ptr Shell::BuildPresetChooser()
 
                     RebuildPresetChooser();
                 },
-                mShowMultiRigs == rigs ? Button::Style::Primary : Button::Style::Plain);
-            b->MinWidth(84);
+                chosen ? Button::Style::Primary : Button::Style::Plain);
+            b->MinWidth(shortScreen ? 72 : 84);
             return b;
         };
-        header.push_back(tab("Presets", false));
+        header.push_back(tab("Presets", false, false));
         header.push_back(HGap(6));
-        header.push_back(tab("Multi-Rig", true));
-        header.push_back(HGap(12));
+
+        if (multiRig)
+        {
+            header.push_back(tab("Multi-Rig", true, false));
+            header.push_back(HGap(6));
+        }
+
+        if (shortScreen)
+        {
+            header.push_back(tab("Setlists", false, true));
+            header.push_back(HGap(6));
+        }
+
+        header.push_back(HGap(6));
     }
 
     if (!mSearchBox)
@@ -307,7 +379,7 @@ Ptr Shell::BuildPresetChooser()
         };
     }
 
-    header.push_back(mSearchElement);
+    header.push_back(shortScreen ? WidthRange(120.0f, el::full_extent, mSearchElement) : mSearchElement);
     header.push_back(HGap(10));
 
     // Export (.preset-library-export-btn): the folder on show, or every preset.
@@ -350,13 +422,14 @@ Ptr Shell::BuildPresetChooser()
         Button::Style::Plain);
     setlistToggle->Flexible(true).Alignment(HAlign::Left);
 
-    if (mShowMultiRigs)
+    if (setlistsTab)
     {
-        column.push_back(BuildMultiRigList());
+        column.push_back(BuildSetlistsView(nullptr));
+        return Col(column);
     }
-    else
-    {
-        // ── The tag chips (.preset-tag-filter-bar) ──
+
+    // ── The tag chips (.preset-tag-filter-bar) ──
+    const auto tagChips = [this] {
         std::vector<Ptr> chips;
 
         for (const auto& tag : tones::StandardTags())
@@ -387,7 +460,91 @@ Ptr Shell::BuildPresetChooser()
             chips.push_back(chip);
         }
 
-        column.push_back(FixedHeight(30, HScroll(Row(chips))));
+        return chips;
+    };
+
+    if (mShowMultiRigs)
+    {
+        column.push_back(BuildMultiRigList());
+    }
+    else if (shortScreen)
+    {
+        // The folder on show as a drop-down, the folder tools behind "...", then the chips.
+        const auto* current = FindPresetFolder(mState.presetFolders, mQuery.folderId);
+        const std::string folderLabel = current != nullptr                          ? current->name
+                                        : mQuery.folderId == kPresetFolderRecents   ? std::string("Recents")
+                                        : mQuery.folderId == kPresetFolderFavorites ? std::string("Favourites")
+                                                                                    : std::string("All Presets");
+        auto folders = std::make_shared<PickerField>(mTheme, mIcons);
+        folders->AccessName("Folder");
+        folders->Set(folderLabel);
+        folders->onClick = [this, f = folders.get()] {
+            // The folder tree, as the side list shows it: the three lists, then the folders.
+            const auto count = [this](const std::string& folderId) {
+                PresetQuery q;
+                q.folderId = folderId;
+                return FilterPresets(mState, q).size();
+            };
+            std::vector<MenuItem> items;
+            const auto add = [&](const std::string& id, const std::string& label, int depth) {
+                items.push_back({std::string(static_cast<std::size_t>(depth) * 3, ' ') + label + "  (" +
+                                     std::to_string(count(id)) + ")",
+                                 mQuery.folderId == id, false, [this, id] { SelectPresetBrowserFolder(id); }});
+            };
+            add(kPresetFolderRecents, "Recents", 0);
+            add(kPresetFolderFavorites, "Favourites", 0);
+            add(kPresetFolderAll, "All Presets", 0);
+            const auto flat = FlattenPresetFolders(mState.presetFolders);
+
+            if (!flat.empty())
+            {
+                items.push_back({"Folders", false, true, {}});
+            }
+
+            for (const auto& [folder, depth] : flat)
+            {
+                add(folder->id, folder->name, depth);
+            }
+
+            OpenDropdown(f->Bounds(), std::move(items), std::max(220.0f, f->Bounds().width()));
+        };
+        auto more = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+        more->Size(32, 30).Label("\xE2\x80\xA6", 14.0f);
+        more->AccessName("Folder tools");
+        more->onClick = [this, m = more.get(), id = current != nullptr ? current->id : std::string()] {
+            // The folder tools: a new folder (inside the one on show), and the one on show's own.
+            std::vector<MenuItem> items{{"New folder...", false, false, [this, id] {
+                                             PostPrompt("New folder", "", "Create",
+                                                        [this, id](const std::string& name) {
+                                                            mSession.Commands().CreatePresetFolder(name, id);
+                                                        });
+                                         }}};
+
+            if (!id.empty())
+            {
+                items.push_back({"This folder...", false, false, [this, id] {
+                                     mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), id] {
+                                         if (alive.lock())
+                                         {
+                                             OpenFolderMenu(id);
+                                         }
+                                     });
+                                 }});
+            }
+
+            OpenDropdown(m->Bounds(), std::move(items), 180.0f);
+        };
+        column.push_back(
+            FixedHeight(32, Row({FixedWidth(170, folders), HGap(6), Middle(more), HGap(8), HScroll(Row(tagChips()))})));
+        column.push_back(VGap(6));
+        mPresetListSlot = MakeSlot();
+        Fill(*mPresetListSlot, BuildPresetListContent());
+        column.push_back(mPresetListSlot);
+        return Col(column);
+    }
+    else
+    {
+        column.push_back(FixedHeight(30, HScroll(Row(tagChips()))));
         column.push_back(VGap(8));
 
         // ── The folder tools (.preset-folder-toolbar) ──
@@ -449,6 +606,11 @@ Ptr Shell::BuildPresetChooser()
         column.push_back(Row({FixedWidth(210, BuildFolderColumn()), HGap(14), right}));
     }
 
+    if (shortScreen)
+    {
+        return Col(column); // Setlists is a tab
+    }
+
     column.push_back(VGap(10));
     column.push_back(FixedHeight(36, setlistToggle));
 
@@ -469,6 +631,7 @@ Ptr Shell::BuildPresetCard(const PresetSummary& p)
     auto card = std::make_shared<PresetCard>(mTheme, mIcons, p.name, p.source == "user" ? "User" : "Factory",
                                              PresetFolderPath(mState.presetFolders, p.id), PresetRating(mState, p.id),
                                              p.id == mState.activePresetId, multiRig, inMixer);
+    card->Dense(ShortChooser(ViewSize(), mWide));
     card->onClick = [this, id = p.id] { LoadWithConfirm(id); };
     card->onMenu = [this, p](el::point) { OpenPresetRowMenu(p); };
     card->onRate = [this, id = p.id](int rating) { mSession.Commands().SetPresetRating(id, rating); };

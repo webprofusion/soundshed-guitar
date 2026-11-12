@@ -17,6 +17,7 @@ import { renderPresetDetails, renderPresetList } from "../views.js";
 import { activeTagFilters, filterPresets, refilterPresets } from "./filter.js";
 import { movePresetFolder, setActivePresetFolder, syncPresetFolderToolbarState } from "./folderControls.js";
 import { presetLibraryPopover } from "./dom.js";
+import { syncPresetFolderPickerLabel } from "./folderPicker.js";
 import { applyPresetFromLibrary, bindLoadButtons, requestSignalPathTest } from "./load.js";
 import { closePresetLibraryPopover, takePresetChooserOverride } from "./popover.js";
 import { setPresetUIRenderer } from "./refresh.js";
@@ -85,6 +86,7 @@ function renderPresetRows(): void {
       switchMainPanel("sharing");
     },
   });
+  syncPresetFolderPickerLabel();
 }
 
 export function initializePresetTagFilterBar(): void {

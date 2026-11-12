@@ -14,6 +14,39 @@ export function formatParamLabel(key: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+/**
+ * Whether a parameter group's title is drawn above its controls. Not for the
+ * parameters an effect leaves ungrouped (group "", which used to show as "Other"),
+ * and not over a group whose only control already says the same name ("Swell"
+ * over a knob called Swell): neither title tells anyone anything.
+ */
+export function showsParamGroupTitle(group: string, labels: readonly string[]): boolean {
+  const title = group.trim().toLowerCase();
+  if (!title) {
+    return false;
+  }
+  return !(labels.length === 1 && labels[0].trim().toLowerCase() === title);
+}
+
+/**
+ * A group block's markup: titled, or the untitled inset panel when the title says
+ * nothing. An untitled block among titled ones keeps an empty line where a title
+ * would be (shown only beside a real title, css/signal-path/resource-slots.css),
+ * so the knobs of blocks side by side stay in line.
+ */
+export function paramGroupBlockHtml(group: string, labels: readonly string[], controlsHtml: string): string {
+  const titled = showsParamGroupTitle(group, labels);
+  return `
+    <div class="node-param-group-block${titled ? "" : " node-param-group-block-untitled"}">
+      ${titled
+        ? `<div class="node-param-group-title">${group}</div>`
+        : `<div class="node-param-group-title node-param-group-title-spacer" aria-hidden="true">&nbsp;</div>`}
+      <div class="node-param-group-items">
+        ${controlsHtml}
+      </div>
+    </div>`;
+}
+
 export function isToggleParam(paramDef: { key: string; min?: number; max?: number; unit?: string }): boolean {
   return paramDef.unit === "toggle";
 }
@@ -80,21 +113,19 @@ export function buildDefaultParamControlsHtml(paramDefs: ParameterDef[], nodeId 
   }
 
   const groupOrder: string[] = [];
-  const groupMap = new Map<string, string[]>();
+  const groupMap = new Map<string, { html: string[]; labels: string[] }>();
   paramDefs.forEach((p) => {
-    const group = p.group?.trim() || "Other";
+    const group = p.group?.trim() || "";
     if (!groupMap.has(group)) {
-      groupMap.set(group, []);
+      groupMap.set(group, { html: [], labels: [] });
       groupOrder.push(group);
     }
-    groupMap.get(group)!.push(renderOne(p));
+    groupMap.get(group)!.html.push(renderOne(p));
+    groupMap.get(group)!.labels.push(p.name || formatParamLabel(p.key));
   });
 
-  return groupOrder.map((group) => `
-    <div class="node-param-group-block">
-      <div class="node-param-group-title">${group}</div>
-      <div class="node-param-group-items">
-        ${groupMap.get(group)!.join("")}
-      </div>
-    </div>`).join("");
+  return groupOrder.map((group) => {
+    const { html, labels } = groupMap.get(group)!;
+    return paramGroupBlockHtml(group, labels, html.join(""));
+  }).join("");
 }

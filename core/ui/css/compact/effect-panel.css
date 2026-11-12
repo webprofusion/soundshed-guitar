@@ -161,6 +161,12 @@ html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-met
   display: none;
 }
 
+/* Split keeps the rail (the stats open from it) but not its strip: with no track
+   drawn, a level there read as a stray pink dash beside the name's pencil. */
+html[data-density="compact"][data-compact-split] .default-effect-shell-meter-toggle {
+  visibility: hidden;
+}
+
 html[data-density="compact"]:not([data-compact-split]) .effect-dsp-status {
   display: flex;
   top: calc(100% + 4px);

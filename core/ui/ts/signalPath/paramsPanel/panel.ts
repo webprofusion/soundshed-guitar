@@ -46,6 +46,7 @@ import { bindChannelModeControl, renderChannelModeControl } from "./channelMode.
 import { bindEnumPickerTriggers, buildEnumPickerTriggerHtml, isPickerParam } from "./enumPicker.js";
 import { buildPickupDesignSectionHtml, buildPickupResponseSectionHtml, isPickupMatchNode, PICKUP_DESIGN_PARAM_KEYS } from "./pickupResponse.js";
 import { bindNodeParamControls, bindParamTabs, formatParamLabel, isToggleParam } from "./paramControls.js";
+import { paramGroupBlockHtml } from "../../parameterControlMarkup.js";
 import { applyParamVisibility, isParamVisible, withParamVisibility } from "./paramVisibility.js";
 import { isPitchShiftType, semitoneKnobRange } from "./pitchShiftRange.js";
 import { buildNodeResourceSelector, preloadResourceNavigationCaches } from "./resourceSelector.js";
@@ -281,25 +282,23 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     }
 
     const groupOrder: string[] = [];
-    const groupMap = new Map<string, string[]>();
+    const groupMap = new Map<string, { html: string[]; labels: string[] }>();
 
     defs.forEach((paramDef) => {
-      const group = paramDef.group?.trim() || "Other";
+      // No group: the untitled panel (paramGroupBlockHtml), not a made-up "Other".
+      const group = paramDef.group?.trim() || "";
       if (!groupMap.has(group)) {
-        groupMap.set(group, []);
+        groupMap.set(group, { html: [], labels: [] });
         groupOrder.push(group);
       }
-      groupMap.get(group)?.push(renderParamControl(paramDef));
+      groupMap.get(group)?.html.push(renderParamControl(paramDef));
+      groupMap.get(group)?.labels.push(paramDef.name || formatParamLabel(paramDef.key));
     });
 
-    return groupOrder.map((group) => `
-      <div class="node-param-group-block">
-        <div class="node-param-group-title">${group}</div>
-        <div class="node-param-group-items">
-          ${(groupMap.get(group) || []).join("")}
-        </div>
-      </div>
-    `).join("");
+    return groupOrder.map((group) => {
+      const { html, labels } = groupMap.get(group) ?? { html: [], labels: [] };
+      return paramGroupBlockHtml(group, labels, html.join(""));
+    }).join("");
   };
 
   let advancedParamDefs = paramDefs.filter((paramDef) => Boolean(paramDef.advanced));

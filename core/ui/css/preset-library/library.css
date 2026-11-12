@@ -94,6 +94,56 @@ html:not([data-density="compact"]) .preset-library-popover.open {
   min-height: 140px;
 }
 
+/* The tag row and, on a short screen, the folder picker before it
+   (css/compact/overlays.css). Elsewhere the row is the tag bar alone. */
+.preset-library-filter-row {
+  display: contents;
+}
+
+.preset-folder-picker {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 45%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preset-folder-picker-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-folder-picker-count {
+  flex: none;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.preset-folder-picker svg {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.preset-folder-picker[aria-expanded="true"] {
+  border-color: var(--color-primary);
+}
+
+.preset-folder-picker[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
 .preset-library-header {
   display: flex;
   gap: 10px;
@@ -155,25 +205,9 @@ html:not([data-density="compact"]) .preset-library-popover.open {
   flex: 0 0 auto;
 }
 
+/* Drawn by .modal-close (css/modals/shell.css): the same x as every dialog's. */
 .preset-library-close-btn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border-dark);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
   flex: 0 0 auto;
-}
-
-.preset-library-close-btn:hover {
-  background: var(--overlay-light);
-  color: var(--text-primary);
 }
 
 .preset-library-export-btn {
@@ -343,6 +377,33 @@ html:not([data-density="compact"]) .preset-library-popover.open {
   font-size: 12px;
   font-weight: 600;
   margin-bottom: 8px;
+}
+
+/* Shown in the compact Setlists tab only (css/compact/overlays.css), with the
+   hint that goes with it in place of the drag hint. */
+.setlist-hint-tab {
+  display: none;
+}
+
+.setlist-add-current-btn {
+  display: none;
+  flex: none;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  background: var(--overlay-medium);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.setlist-add-current-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .setlist-slots {

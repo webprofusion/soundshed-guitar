@@ -20,8 +20,9 @@ import { escapeHtml } from "./utils.js";
 import { showNotification } from "./notifications.js";
 import { showConfirm, showPrompt } from "./dialogs.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
-import { syncPresetLibraryFeatureVisibility, setSetlistPanelVisible } from "./presets.js";
+import { syncPresetLibraryFeatureVisibility } from "./presets.js";
 import { presetSearchElement } from "./presets/dom.js";
+import { selectPresetLibraryTab } from "./presets/libraryTabs.js";
 import { renderSignalPathBar } from "./signalPath.js";
 import { STANDARD_TAGS } from "./presetTags.js";
 import {
@@ -355,25 +356,13 @@ export function initMultiRigTab(): void {
   // Multi-Rigs get appended on top by ensureMultiRigTagChips() elsewhere.
   ensureMultiRigTagChips(STANDARD_TAGS);
 
-  const selectTab = (multiRig: boolean): void => {
-    presetsTab.classList.toggle("active", !multiRig);
-    presetsTab.setAttribute("aria-selected", String(!multiRig));
-    multiRigTab.classList.toggle("active", multiRig);
-    multiRigTab.setAttribute("aria-selected", String(multiRig));
-    presetsPanel.hidden = multiRig;
-    multiRigPanel.hidden = !multiRig;
-    // Setlists only make sense against the regular preset list.
-    setSetlistPanelVisible(!multiRig);
-  };
-
-  presetsTab.addEventListener("click", () => selectTab(false));
-
+  // The Presets and Setlists tabs are bound by presets/libraryTabs.ts.
   multiRigTab.addEventListener("click", () => {
     if (!isFeatureEnabled(Features.MultiRig)) {
-      selectTab(false);
+      selectPresetLibraryTab("presets");
       return;
     }
-    selectTab(true);
+    selectPresetLibraryTab("multiRig");
     // Refresh list on open
     getCompositePresetList();
   });

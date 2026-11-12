@@ -226,8 +226,14 @@ void Shell::OpenMetronome()
     const float width = std::min(760.0f, std::max(360.0f, view.x - 48.0f));
     const float inner = width - 44.0f;
 
+    // The knobs and the drop-downs hang from the top of their row, so the knobs' names and the
+    // drop-downs' labels read along one line (centred, the 63 px knobs floated above them).
     auto picker = [this](const std::string& name, Ptr field) {
-        return Middle(Col({FixedHeight(14, Middle(Label(mTheme, name))), VGap(8), FixedHeight(32, std::move(field))}));
+        return Col({FixedHeight(14, Middle(Label(mTheme, name))), VGap(8), FixedHeight(32, std::move(field)),
+                    std::make_shared<el::element>()});
+    };
+    auto knobCell = [](Ptr knob) {
+        return Col({VGap(3), Row({Stretch(), std::move(knob), Stretch()}), std::make_shared<el::element>()});
     };
 
     constexpr float kTopRow = 66.0f;
@@ -236,19 +242,19 @@ void Shell::OpenMetronome()
     if (compact)
     {
         const float column = (inner - gap) * 0.5f;
-        top = Col({FixedHeight(kTopRow, Row({FixedWidth(column, Centred(volume)), HGap(gap),
+        top = Col({FixedHeight(kTopRow, Row({FixedWidth(column, knobCell(volume)), HGap(gap),
                                              FixedWidth(column, picker("Time Signature", meter))})),
                    VGap(gap),
                    FixedHeight(kTopRow, Row({FixedWidth(column, picker("Sound", sound)), HGap(gap),
-                                             FixedWidth(column, Centred(pan))}))});
+                                             FixedWidth(column, knobCell(pan))}))});
     }
     else
     {
         const float column = (inner - 3.0f * gap) / 4.0f;
         top = FixedHeight(
             kTopRow,
-            Row({FixedWidth(column, Centred(volume)), HGap(gap), FixedWidth(column, picker("Time Signature", meter)),
-                 HGap(gap), FixedWidth(column, picker("Sound", sound)), HGap(gap), FixedWidth(column, Centred(pan))}));
+            Row({FixedWidth(column, knobCell(volume)), HGap(gap), FixedWidth(column, picker("Time Signature", meter)),
+                 HGap(gap), FixedWidth(column, picker("Sound", sound)), HGap(gap), FixedWidth(column, knobCell(pan))}));
     }
 
     auto divider = FixedHeight(1, Fill(mTheme.BorderStrong().opacity(0.6f), std::make_shared<el::element>()));

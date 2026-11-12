@@ -4,6 +4,7 @@
  */
 
 import { showConfirm } from "../dialogs.js";
+import { Features, isFeatureEnabled } from "../featureFlags.js";
 import { showNotification } from "../notifications.js";
 import { exportSelectedPresetCollectionArchive } from "../presets/archive.js";
 import { presetFavoriteToggle, presetSearchElement } from "../presets/dom.js";
@@ -20,7 +21,9 @@ import { filterPresets, updatePresetDropdownSelection } from "./filter.js";
 import { applyPresetFromLibrary } from "./load.js";
 import { closePresetExtraActionsMenu, closePresetLibraryPopover, syncPresetLibraryFeatureVisibility, togglePresetLibraryPopover } from "./popover.js";
 import { initializePresetToolbarFit } from "./toolbarFit.js";
-import { createSetlist, renderSetlistPanel, setSetlistExpanded } from "./setlists.js";
+import { initPresetFolderPicker } from "./folderPicker.js";
+import { initPresetLibraryTabs } from "./libraryTabs.js";
+import { addPresetToSetlist, createSetlist, renderSetlistPanel, setSetlistExpanded } from "./setlists.js";
 
 export function getActivePresetIndex(): number {
   if (!uiState.activePresetId) return -1;
@@ -62,6 +65,12 @@ export async function selectNextPreset(): Promise<void> {
 }
 
 export function initializePresetControls(): void {
+  initPresetLibraryTabs(() => isFeatureEnabled(Features.MultiRig), () => {
+    if (uiState.activePresetId) {
+      addPresetToSetlist(uiState.activePresetId);
+    }
+  });
+  initPresetFolderPicker();
   syncPresetLibraryFeatureVisibility();
 
   if (presetSelector) {

@@ -496,7 +496,7 @@ void Shell::CloseJamPlayer()
     Mark(kPage);
 }
 
-Ptr Shell::BuildJamPlayer(float width)
+Ptr Shell::BuildJamPlayer(float width, float besideWidth)
 {
     // The web UI's floating player (.jam-floating-player), docked beside the results: the title
     // and channel over the video, with the favourite star and close.
@@ -522,14 +522,25 @@ Ptr Shell::BuildJamPlayer(float width)
     close->Size(30, 30).Label("\xC3\x97", 16.0f);
     close->onClick = [this] { CloseJamPlayer(); };
 
-    auto slot = std::make_shared<WebViewSlot>(mTheme, width, std::floor(width * 9.0f / 16.0f), "Loading the player...");
+    const float videoHeight = std::floor(width * 9.0f / 16.0f);
+    auto slot = std::make_shared<WebViewSlot>(mTheme, width, videoHeight, "Loading the player...");
     mJamPlayerSlot = slot;
     auto hint = std::make_shared<Paragraph>(
-        mTheme, "It plays on while you use the rest of the app; a bar over the other pages stops it.", width, 10.5f);
+        mTheme, "It plays on while you use the rest of the app; a bar over the other pages stops it.",
+        besideWidth > 0.0f ? besideWidth : width, 10.5f);
     hint->Colour(mTheme.TextMuted());
-    return Col(
-        {FixedHeight(36, Row({Col({FixedHeight(18, title), FixedHeight(16, channel)}), HGap(4), star, youtube, close})),
-         VGap(6), FixedHeight(std::floor(width * 9.0f / 16.0f), slot), VGap(8), FixedHeight(30, hint), Stretch()});
+    auto header =
+        FixedHeight(36, Row({Col({FixedHeight(18, title), FixedHeight(16, channel)}), HGap(4), star, youtube, close}));
+
+    // Over the results (a narrow stage): the video at the left, its title and buttons beside it.
+    if (besideWidth > 0.0f)
+    {
+        return FixedHeight(videoHeight,
+                           Row({FixedWidth(width, slot), HGap(12),
+                                FixedWidth(besideWidth, Col({header, VGap(6), FixedHeight(44, hint), Stretch()}))}));
+    }
+
+    return Col({header, VGap(6), FixedHeight(videoHeight, slot), VGap(8), FixedHeight(30, hint), Stretch()});
 }
 
 void Shell::SyncJamWebViews()
@@ -723,7 +734,7 @@ Ptr Shell::BuildBackingTracks(float width)
     }
     else if (!search && favorites.empty())
     {
-        body.push_back(Message(mTheme, "No favourites yet. Star a backing track to pin it here."));
+        body.push_back(EmptyState("No favourites yet", "Star a backing track to pin it here.", PageRoom()));
     }
     else if (search && list.empty())
     {
@@ -860,8 +871,23 @@ Ptr Shell::BuildJamPage()
             // The player beside the results, as wide as leaves two columns of cards when it can.
             const float playerWidth = std::floor(std::clamp(stageWidth * 0.42f, 280.0f, 460.0f));
             const float resultsWidth = contentWidth - playerWidth - kPlayerGap;
-            content = Row({KeptVScroll(Pad(12, 10, 14, 0, BuildBackingTracks(resultsWidth)), mJamScroll),
-                           FixedWidth(playerWidth + 12.0f, Pad(0, 10, 12, 0, BuildJamPlayer(playerWidth)))});
+
+            if (resultsWidth < 300.0f)
+            {
+                // A narrow stage (640): beside the player the results are one squeezed column, so
+                // the player sits over them, its video a third of the stage high, and they scroll
+                // under it at the full width. Not in the scroll: the video is a native window,
+                // which would ride up over the section tabs.
+                const float videoWidth =
+                    std::floor(std::min(contentWidth * 0.55f, StageHeight() * 0.36f * 16.0f / 9.0f));
+                content = Col({Pad(12, 10, 14, 0, BuildJamPlayer(videoWidth, contentWidth - videoWidth - 12.0f)),
+                               KeptVScroll(Pad(12, 10, 14, 0, BuildBackingTracks(contentWidth)), mJamScroll)});
+            }
+            else
+            {
+                content = Row({KeptVScroll(Pad(12, 10, 14, 0, BuildBackingTracks(resultsWidth)), mJamScroll),
+                               FixedWidth(playerWidth + 12.0f, Pad(0, 10, 12, 0, BuildJamPlayer(playerWidth)))});
+            }
         }
         else
         {
@@ -873,7 +899,8 @@ Ptr Shell::BuildJamPage()
         content = KeptVScroll(Pad(12, 10, 14, 0, BuildScaleGuide(contentWidth)), mJamScroll);
         break;
     case JamSection::Riffs:
-        content = Pad(16, 14, 16, 0, BuildRiffSection());
+        content = mWide ? Pad(16, 14, 16, 0, BuildRiffSection())
+                        : Pad(metrics::kPagePad, metrics::kPagePadTop, metrics::kPagePad, 0, BuildRiffSection());
         break;
     case JamSection::Practice:
         content = KeptVScroll(Pad(12, 10, 14, 0, BuildPracticeTool(contentWidth)), mJamScroll);

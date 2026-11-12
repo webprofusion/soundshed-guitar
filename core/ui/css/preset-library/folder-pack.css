@@ -13,6 +13,12 @@
   font-size: 12px;
 }
 
+/* A preset card's "Move to" menu lists every folder: past the window's height it scrolls. */
+.preset-move-menu {
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+}
+
 .preset-folder-menu-title {
   padding: 4px 8px 6px;
   font-size: 11px;
