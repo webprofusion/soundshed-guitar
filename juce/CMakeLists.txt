@@ -136,11 +136,7 @@ endif()
 
 # Signalsmith headers are provided transitively by SoundshedGuitarCore.
 
-# The shared detector lowercases Visual Studio's canonical Win32 platform name for comparisons.
-if(WIN32 AND _guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
-    set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "Build the generic WASM effect host" FORCE)
-    message(STATUS "Windows x86 build detected; disabling WASM effects because Wasmtime does not provide a Windows x86 C API bundle.")
-endif()
+# Windows x86 keeps WASM effects: Wasmtime publishes an i686-windows C API bundle.
 
 # Configures universal binaries and decides which version of macOS to support
 include(PamplejuceMacOS)
@@ -318,7 +314,7 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "" FORCE)
 
 # JUCE is setup in the /JUCE folder and this build enforces a pinned JUCE version.
 # If your checkout drifts, configure will fail with an actionable message.
-set(GUITARFX_REQUIRED_JUCE_VERSION "9.0.3")
+set(GUITARFX_REQUIRED_JUCE_VERSION "9.0.5")
 set(_guitarfx_juce_core_header "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/modules/juce_core/juce_core.h")
 if(NOT EXISTS "${_guitarfx_juce_core_header}")
     message(FATAL_ERROR "Missing JUCE checkout at ${_guitarfx_juce_core_header}. Ensure JUCE is available in juce/JUCE.")

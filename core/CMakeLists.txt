@@ -108,6 +108,9 @@ function(guitarfx_get_wasmtime_bundle out_platform out_archive_ext out_static_li
             set(_guitarfx_wasmtime_platform "x86_64-windows")
         elseif(_guitarfx_wasmtime_arch MATCHES "^(arm64|arm64ec|aarch64)$")
             set(_guitarfx_wasmtime_platform "aarch64-windows")
+        elseif(_guitarfx_wasmtime_arch MATCHES "^(win32|x86|i386|i686)$")
+            # 32-bit Windows: Wasmtime publishes an i686 C API bundle (an older note here said not).
+            set(_guitarfx_wasmtime_platform "i686-windows")
         else()
             message(FATAL_ERROR "Unsupported Windows architecture for Wasmtime bundle: ${_guitarfx_wasmtime_arch}")
         endif()
@@ -188,7 +191,7 @@ if(NOT TARGET nlohmann_json::nlohmann_json AND GUITARFX_CORE_FETCH_DEPS)
     include(FetchContent)
     FetchContent_Declare(nlohmann_json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.11.3)
+        GIT_TAG v3.12.0)
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
@@ -196,20 +199,21 @@ endif()
 if(NOT DEFINED signalsmith_linear_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     include(FetchContent)
     FetchContent_Declare(signalsmith_linear
-        # Pinned to release 0.6.4 (2026-09-25), the version Signalsmith Stretch 1.4.0 pins. It frees
+        # Pinned to release 0.6.6 (2026-10-21), the version Signalsmith Stretch's main pins: bug
+        # fixes in linear.h, stft.h and the Accelerate and IPP backends over 0.6.4, which freed
         # Temporary's buffer on destruction; only Linear::reserve() allocates that buffer, and
         # nothing here calls it. Bump deliberately (tools/check-dependency-pins.mjs --upstream).
         GIT_REPOSITORY https://github.com/Signalsmith-Audio/linear.git
-        GIT_TAG de55e6a50ffcf6f8f43f649692d94691c7025151)
+        GIT_TAG 7bb1c8f36794d6980080ce817c91f8da8fe56a66)
     FetchContent_MakeAvailable(signalsmith_linear)
 endif()
 
 if(NOT DEFINED signalsmith_stretch_SOURCE_DIR AND GUITARFX_CORE_FETCH_DEPS)
     include(FetchContent)
     FetchContent_Declare(signalsmith_stretch
-        # Pinned to main as of 2026-01-24.
+        # Pinned to main as of 2026-10-22 (1.4.0 and its bump to Linear 0.6.6).
         GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
-        GIT_TAG 57b93f4e9206a089a45387eaa39bdc9f310d3308)
+        GIT_TAG 88061fd4eda56a2353c5d65c74aa3f4ccf76f9da)
     FetchContent_MakeAvailable(signalsmith_stretch)
 endif()
 
@@ -222,9 +226,10 @@ if((NOT DEFINED stftpitchshift_SOURCE_DIR OR NOT EXISTS "${stftpitchshift_SOURCE
     # Adding it also broke the iOS configure, where an executable is a bundle and the
     # tool's install() gives no bundle destination.
     FetchContent_Declare(stftpitchshift
-        # Pinned to main as of 2025-09-13.
+        # Pinned to main as of 2026-10-18: v2.0 and its fixes for edge cases, DC interpolation
+        # and the cepstral defaults (upstream #58, #60).
         GIT_REPOSITORY https://github.com/jurihock/stftPitchShift.git
-        GIT_TAG 1a4f21f6c300a785cce860e374fd63cb5e9ba154
+        GIT_TAG 70c96db087458f8631edbc1bb4068d42ea5b52cc
         SOURCE_SUBDIR cpp/StftPitchShift/headers-only)
     FetchContent_MakeAvailable(stftpitchshift)
 endif()
@@ -234,7 +239,7 @@ if(NOT TARGET guitarfx_miniz)
     include(FetchContent)
     FetchContent_Declare(guitarfx_miniz_src
         GIT_REPOSITORY https://github.com/richgel999/miniz.git
-        GIT_TAG 3.0.2)
+        GIT_TAG 3.1.2)
 
     if(POLICY CMP0169)
         cmake_policy(PUSH)
@@ -269,8 +274,9 @@ endif()
 if(NOT TARGET guitarfx_sqlite)
     include(FetchContent)
     FetchContent_Declare(guitarfx_sqlite_src
-        URL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip
-        URL_HASH SHA256=1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032
+        URL https://sqlite.org/2026/sqlite-amalgamation-3540100.zip
+        # SQLite publishes SHA3-256 (sqlite.org/download.html).
+        URL_HASH SHA3_256=92281c86e2957f9b9305890f9ac04204caa7b677cc868dc326d942689df28e30
         DOWNLOAD_EXTRACT_TIMESTAMP FALSE)
 
     if(POLICY CMP0169)
@@ -356,13 +362,14 @@ if(GUITARFX_CORE_ENABLE_WASM_EFFECTS AND NOT TARGET guitarfx_wasmtime)
     # Wasmtime runs modules shared by other people, so stay on a supported line: 48 is the LTS
     # (security fixes until 2028-08). Bumping the version means new hashes below; GitHub lists
     # each asset's SHA-256: gh api repos/bytecodealliance/wasmtime/releases/tags/v<ver>
-    set(GUITARFX_WASMTIME_VERSION "48.0.6")
-    set(_guitarfx_wasmtime_sha256_x86_64-windows "3df46ba35b4a4a6dec72e9b3f9494eb458a68df8e418761fadfd294a56f32970")
-    set(_guitarfx_wasmtime_sha256_aarch64-windows "376823543c8dc1b869b16b2e793ff13786ca9626373e9eff254a08e76614b747")
-    set(_guitarfx_wasmtime_sha256_x86_64-macos "0eff843c8d126b0303d76b2a949187e98d4bd45dcea51d43e53440ee227063c4")
-    set(_guitarfx_wasmtime_sha256_aarch64-macos "34db573f929de089163fbd61fb6ffd89da74a09ba20f737d009aaa70e734f5ef")
-    set(_guitarfx_wasmtime_sha256_x86_64-linux "8da74b225e159dcd901055bc5185248052af544d06bcdff8b3fe2d81ef4ca68f")
-    set(_guitarfx_wasmtime_sha256_aarch64-linux "dc5aefa8219e83a7d91a543de444e390a5daf4be45482fb2e7d3d57778072b1b")
+    set(GUITARFX_WASMTIME_VERSION "48.0.8")
+    set(_guitarfx_wasmtime_sha256_x86_64-windows "31c2d97399b2555c06233a5fe0d2ba7373d020dae584107b1e3f459dd1756c42")
+    set(_guitarfx_wasmtime_sha256_aarch64-windows "2dd5ec2f86b9d50da93e4f29985472c0520ee3545e5ab9e8771430f39011c269")
+    set(_guitarfx_wasmtime_sha256_i686-windows "3ebdad8029d60db09fde17735e1e732e2168274302f582a279a11904ab1a2a3c")
+    set(_guitarfx_wasmtime_sha256_x86_64-macos "07dc84f84debc1cca9f79c5b75200799296bb53d83f2e9d0e8dc83fe05245a63")
+    set(_guitarfx_wasmtime_sha256_aarch64-macos "2c7c4e75ca41f505867ef7c836c942c6b1190f708939753d10d1927585eaed59")
+    set(_guitarfx_wasmtime_sha256_x86_64-linux "6cd2e5a976d68932afb546c2d14d89ba9e5578127a9716a13500dde40fc1e0e6")
+    set(_guitarfx_wasmtime_sha256_aarch64-linux "3bb7d77fcbf0da214b7d56fc1f244e77b6dbb51b740c63ff7cbd8ece398308dc")
 
     # Wasmtime publishes one C API bundle per architecture. A universal macOS build
     # (CMAKE_OSX_ARCHITECTURES "arm64;x86_64", as the released app is) takes both and joins
