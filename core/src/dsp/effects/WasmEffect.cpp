@@ -1,6 +1,7 @@
 #include "dsp/effects/WasmEffect.h"
 
 #include "dsp/effects/WasmDescriptor.h"
+#include "dsp/effects/WasmPlatform.h"
 
 #include "dsp/FiniteCheck.h"
 #include "resources/CustomEffectLibrary.h"
@@ -477,6 +478,14 @@ class WasmSharedRuntime
         wasmtime_config_wasm_stack_switching_set(config, false);
         wasmtime_config_wasm_memory64_set(config, false);
 
+        // In a host that would kill the process for running generated code, there is no engine
+        // (WasmPlatform.h); every load then reports why.
+        if (!WasmGeneratedCodeAllowed())
+        {
+            wasm_config_delete(config);
+            return;
+        }
+
         mEngine = wasm_engine_new_with_config(config);
 
         if (mEngine)
@@ -569,6 +578,16 @@ std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::fil
         if (error)
         {
             *error = "Custom Effects are turned off in Settings, so this module was not inspected.";
+        }
+
+        return std::nullopt;
+    }
+
+    if (std::string why; !WasmGeneratedCodeAllowed(&why))
+    {
+        if (error)
+        {
+            *error = why;
         }
 
         return std::nullopt;
@@ -1050,6 +1069,12 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
         return false;
     }
 
+    if (std::string why; !WasmGeneratedCodeAllowed(&why))
+    {
+        SetError(why);
+        return false;
+    }
+
     for (std::size_t i = 0; i < resourceCount; ++i)
     {
         if (IsNetworkPath(paths[i]))
@@ -1273,6 +1298,12 @@ bool WasmEffect::BuildRuntimeOnly()
     if (!IsHostingEnabled())
     {
         SetError("Custom Effects are turned off in Settings, so this module was not loaded.");
+        return false;
+    }
+
+    if (std::string why; !WasmGeneratedCodeAllowed(&why))
+    {
+        SetError(why);
         return false;
     }
 

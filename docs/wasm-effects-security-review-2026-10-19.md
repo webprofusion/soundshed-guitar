@@ -85,7 +85,10 @@ of that host, and whether the user knows they are running code.
   (`featureFlags.ts:119-126`). C++ registers the effect whenever it is compiled in
   (`BuiltinEffects.h:77-79`), and nothing in `core/src` checks `customEffects.enabled`.
 - It is compiled in on Windows x64/arm64 and Linux release builds. It is off on the universal
-  macOS release and on Android.
+  macOS release and on Android. (Since 2026-11-12 the universal macOS release has it too: the
+  core joins Wasmtime's arm64 and x86_64 libraries, the standalone carries
+  `allow-unsigned-executable-memory`, and in a plugin host without it the effect refuses to load
+  rather than have the kernel kill the host; `core/src/dsp/effects/WasmPlatform.h`.)
 
 Impact today: the CPU, memory and crash denial of service in findings 2 and 3, served to any
 user who installs a tone, plus full exposure to any future Wasmtime sandbox escape.

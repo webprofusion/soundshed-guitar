@@ -48,5 +48,16 @@
          (issue #54). Inside a DAW the host's own entitlements apply instead. -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
+
+    <!-- Custom Effects (the WASM effect host). Wasmtime compiles a module to
+         native code in memory it then makes executable, without MAP_JIT, so the
+         Hardened Runtime kills the process when that code runs unless this is
+         set. allow-jit is not enough: measured 2026-11-12, a hardened process
+         with only allow-jit was killed as with no entitlement, and with this
+         one the WASM host tests pass. Inside a DAW the host's entitlements
+         apply instead; where they lack this, the effect reports that it cannot
+         run there rather than loading (core/src/dsp/effects/WasmPlatform.h). -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
 </dict>
 </plist>

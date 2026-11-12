@@ -169,10 +169,10 @@ inline void AppendOp(ByteVector& target, const ByteVector& op)
 }
 
 inline ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::vector<ImportFuncDef>& imports,
-                      const std::vector<GlobalDef>& globals, const std::vector<DefinedFuncDef>& definedFunctions,
-                      const std::vector<std::pair<std::string, uint32_t>>& exports, bool exportMemory = false,
-                      const std::vector<DataSegmentDef>& dataSegments = {}, uint32_t memoryMinPages = 1,
-                      std::optional<uint32_t> startFunction = std::nullopt)
+                             const std::vector<GlobalDef>& globals, const std::vector<DefinedFuncDef>& definedFunctions,
+                             const std::vector<std::pair<std::string, uint32_t>>& exports, bool exportMemory = false,
+                             const std::vector<DataSegmentDef>& dataSegments = {}, uint32_t memoryMinPages = 1,
+                             std::optional<uint32_t> startFunction = std::nullopt)
 {
     ByteVector module{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
 

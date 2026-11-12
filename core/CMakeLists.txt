@@ -91,7 +91,7 @@ function(guitarfx_get_wasmtime_bundle out_platform out_archive_ext out_static_li
             set(_guitarfx_wasmtime_arch "${CMAKE_SYSTEM_PROCESSOR}")
         endif()
         if(_guitarfx_wasmtime_arch MATCHES ";")
-            message(FATAL_ERROR "Universal macOS builds are not supported when GUITARFX_CORE_ENABLE_WASM_EFFECTS is ON because Wasmtime C API bundles are single-architecture.")
+            message(FATAL_ERROR "A universal macOS build takes one Wasmtime bundle per architecture; see the universal path below.")
         endif()
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set(_guitarfx_wasmtime_arch "${CMAKE_SYSTEM_PROCESSOR}")
@@ -136,6 +136,47 @@ function(guitarfx_get_wasmtime_bundle out_platform out_archive_ext out_static_li
     set(${out_platform} "${_guitarfx_wasmtime_platform}" PARENT_SCOPE)
     set(${out_archive_ext} "${_guitarfx_wasmtime_ext}" PARENT_SCOPE)
     set(${out_static_lib} "${_guitarfx_wasmtime_lib}" PARENT_SCOPE)
+endfunction()
+
+# Downloads one Wasmtime C API bundle (pinned by its SHA-256 in
+# _guitarfx_wasmtime_sha256_<platform>) as FetchContent's <name>, and returns the folder in it
+# that holds include/ and <static_lib>: the archive puts them one level down.
+function(guitarfx_fetch_wasmtime_bundle name platform archive_ext static_lib out_root)
+    FetchContent_Declare(${name}
+        URL "https://github.com/bytecodealliance/wasmtime/releases/download/v${GUITARFX_WASMTIME_VERSION}/wasmtime-v${GUITARFX_WASMTIME_VERSION}-${platform}-c-api.${archive_ext}"
+        URL_HASH "SHA256=${_guitarfx_wasmtime_sha256_${platform}}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
+
+    FetchContent_GetProperties(${name})
+    if(NOT ${name}_POPULATED)
+        FetchContent_Populate(${name})
+    endif()
+
+    if(POLICY CMP0169)
+        cmake_policy(POP)
+    endif()
+
+    set(_root "${${name}_SOURCE_DIR}")
+    if(NOT EXISTS "${_root}/include" OR NOT EXISTS "${_root}/${static_lib}")
+        file(GLOB _children LIST_DIRECTORIES TRUE "${${name}_SOURCE_DIR}/*")
+        foreach(_child IN LISTS _children)
+            if(IS_DIRECTORY "${_child}" AND EXISTS "${_child}/include" AND EXISTS "${_child}/${static_lib}")
+                set(_root "${_child}")
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    if(NOT EXISTS "${_root}/include" OR NOT EXISTS "${_root}/${static_lib}")
+        message(FATAL_ERROR "Unable to locate the Wasmtime C API bundle contents under ${${name}_SOURCE_DIR}")
+    endif()
+
+    set(${out_root} "${_root}" PARENT_SCOPE)
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -322,48 +363,64 @@ if(GUITARFX_CORE_ENABLE_WASM_EFFECTS AND NOT TARGET guitarfx_wasmtime)
     set(_guitarfx_wasmtime_sha256_aarch64-macos "34db573f929de089163fbd61fb6ffd89da74a09ba20f737d009aaa70e734f5ef")
     set(_guitarfx_wasmtime_sha256_x86_64-linux "8da74b225e159dcd901055bc5185248052af544d06bcdff8b3fe2d81ef4ca68f")
     set(_guitarfx_wasmtime_sha256_aarch64-linux "dc5aefa8219e83a7d91a543de444e390a5daf4be45482fb2e7d3d57778072b1b")
-    guitarfx_get_wasmtime_bundle(_guitarfx_wasmtime_platform _guitarfx_wasmtime_ext _guitarfx_wasmtime_static_lib)
 
-    FetchContent_Declare(guitarfx_wasmtime_src
-        URL "https://github.com/bytecodealliance/wasmtime/releases/download/v${GUITARFX_WASMTIME_VERSION}/wasmtime-v${GUITARFX_WASMTIME_VERSION}-${_guitarfx_wasmtime_platform}-c-api.${_guitarfx_wasmtime_ext}"
-        URL_HASH "SHA256=${_guitarfx_wasmtime_sha256_${_guitarfx_wasmtime_platform}}"
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    # Wasmtime publishes one C API bundle per architecture. A universal macOS build
+    # (CMAKE_OSX_ARCHITECTURES "arm64;x86_64", as the released app is) takes both and joins
+    # their static libraries with lipo, so WASM effects work on Apple Silicon and Intel alike;
+    # the headers are the same in both. Any other build takes its own architecture's bundle.
+    if(APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";")
+        set(_guitarfx_wasmtime_slices "")
+        set(_guitarfx_wasmtime_include "")
 
-    if(POLICY CMP0169)
-        cmake_policy(PUSH)
-        cmake_policy(SET CMP0169 OLD)
-    endif()
+        foreach(_guitarfx_wasmtime_osx_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+            if(_guitarfx_wasmtime_osx_arch MATCHES "^(x86_64|amd64)$")
+                set(_guitarfx_wasmtime_slice_platform "x86_64-macos")
+            elseif(_guitarfx_wasmtime_osx_arch MATCHES "^(arm64|aarch64)$")
+                set(_guitarfx_wasmtime_slice_platform "aarch64-macos")
+            else()
+                message(FATAL_ERROR "Unsupported macOS architecture for Wasmtime bundle: ${_guitarfx_wasmtime_osx_arch}")
+            endif()
 
-    FetchContent_GetProperties(guitarfx_wasmtime_src)
-    if(NOT guitarfx_wasmtime_src_POPULATED)
-        FetchContent_Populate(guitarfx_wasmtime_src)
-    endif()
+            string(REPLACE "-" "_" _guitarfx_wasmtime_slice_name "guitarfx_wasmtime_${_guitarfx_wasmtime_slice_platform}_src")
+            guitarfx_fetch_wasmtime_bundle(${_guitarfx_wasmtime_slice_name} "${_guitarfx_wasmtime_slice_platform}"
+                "tar.xz" "lib/libwasmtime.a" _guitarfx_wasmtime_slice_root)
+            list(APPEND _guitarfx_wasmtime_slices "${_guitarfx_wasmtime_slice_root}/lib/libwasmtime.a")
 
-    if(POLICY CMP0169)
-        cmake_policy(POP)
-    endif()
-
-    set(_guitarfx_wasmtime_root "${guitarfx_wasmtime_src_SOURCE_DIR}")
-    if(NOT EXISTS "${_guitarfx_wasmtime_root}/include" OR NOT EXISTS "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}")
-        file(GLOB _guitarfx_wasmtime_children LIST_DIRECTORIES TRUE "${guitarfx_wasmtime_src_SOURCE_DIR}/*")
-        foreach(_guitarfx_wasmtime_child IN LISTS _guitarfx_wasmtime_children)
-            if(IS_DIRECTORY "${_guitarfx_wasmtime_child}"
-               AND EXISTS "${_guitarfx_wasmtime_child}/include"
-               AND EXISTS "${_guitarfx_wasmtime_child}/${_guitarfx_wasmtime_static_lib}")
-                set(_guitarfx_wasmtime_root "${_guitarfx_wasmtime_child}")
-                break()
+            if(NOT _guitarfx_wasmtime_include)
+                set(_guitarfx_wasmtime_include "${_guitarfx_wasmtime_slice_root}/include")
             endif()
         endforeach()
-    endif()
 
-    if(NOT EXISTS "${_guitarfx_wasmtime_root}/include" OR NOT EXISTS "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}")
-        message(FATAL_ERROR "Unable to locate the Wasmtime C API bundle contents under ${guitarfx_wasmtime_src_SOURCE_DIR}")
+        # Joined once per version and set of architectures: the inputs are pinned by their hashes.
+        string(REPLACE ";" "-" _guitarfx_wasmtime_arch_tag "${CMAKE_OSX_ARCHITECTURES}")
+        set(_guitarfx_wasmtime_universal_dir
+            "${CMAKE_BINARY_DIR}/wasmtime-v${GUITARFX_WASMTIME_VERSION}-${_guitarfx_wasmtime_arch_tag}")
+        set(_guitarfx_wasmtime_library "${_guitarfx_wasmtime_universal_dir}/libwasmtime.a")
+
+        if(NOT EXISTS "${_guitarfx_wasmtime_library}")
+            file(MAKE_DIRECTORY "${_guitarfx_wasmtime_universal_dir}")
+            execute_process(
+                COMMAND lipo -create ${_guitarfx_wasmtime_slices} -output "${_guitarfx_wasmtime_library}"
+                RESULT_VARIABLE _guitarfx_wasmtime_lipo_result
+                ERROR_VARIABLE _guitarfx_wasmtime_lipo_error)
+
+            if(NOT _guitarfx_wasmtime_lipo_result EQUAL 0)
+                file(REMOVE "${_guitarfx_wasmtime_library}")
+                message(FATAL_ERROR "Could not join the Wasmtime libraries into a universal one: ${_guitarfx_wasmtime_lipo_error}")
+            endif()
+        endif()
+    else()
+        guitarfx_get_wasmtime_bundle(_guitarfx_wasmtime_platform _guitarfx_wasmtime_ext _guitarfx_wasmtime_static_lib)
+        guitarfx_fetch_wasmtime_bundle(guitarfx_wasmtime_src "${_guitarfx_wasmtime_platform}"
+            "${_guitarfx_wasmtime_ext}" "${_guitarfx_wasmtime_static_lib}" _guitarfx_wasmtime_root)
+        set(_guitarfx_wasmtime_library "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}")
+        set(_guitarfx_wasmtime_include "${_guitarfx_wasmtime_root}/include")
     endif()
 
     add_library(guitarfx_wasmtime STATIC IMPORTED GLOBAL)
     set_target_properties(guitarfx_wasmtime PROPERTIES
-        IMPORTED_LOCATION "${_guitarfx_wasmtime_root}/${_guitarfx_wasmtime_static_lib}"
-        INTERFACE_INCLUDE_DIRECTORIES "${_guitarfx_wasmtime_root}/include")
+        IMPORTED_LOCATION "${_guitarfx_wasmtime_library}"
+        INTERFACE_INCLUDE_DIRECTORIES "${_guitarfx_wasmtime_include}")
 
     if(WIN32)
         target_compile_definitions(guitarfx_wasmtime INTERFACE WASM_API_EXTERN= WASI_API_EXTERN=)
@@ -822,6 +879,8 @@ if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
         src/dsp/effects/WasmEffect.cpp
         src/dsp/effects/WasmDescriptor.h
         src/dsp/effects/WasmDescriptor.cpp
+        src/dsp/effects/WasmPlatform.h
+        src/dsp/effects/WasmPlatform.cpp
     )
 endif()
 
@@ -937,6 +996,10 @@ target_compile_definitions(SoundshedGuitarCore
 
 if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
     target_compile_definitions(SoundshedGuitarCore PUBLIC GUITARFX_ENABLE_WASM_EFFECTS=1)
+    # WasmPlatform.cpp asks macOS whether this process may run generated code.
+    if(APPLE)
+        target_link_libraries(SoundshedGuitarCore PRIVATE "-framework Security" "-framework CoreFoundation")
+    endif()
 endif()
 
 # Link dependencies

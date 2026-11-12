@@ -16,8 +16,7 @@ void PitchTracker::Detect(int elapsed)
     mSinceHold = std::min(mSinceHold + elapsed, mHalf);
 
     // A non-finite input leaves the low-pass state poisoned; start again rather than hold it.
-    if (!IsFinite(mFilter[0].s1) || !IsFinite(mFilter[0].s2) || !IsFinite(mFilter[1].s1) ||
-        !IsFinite(mFilter[1].s2))
+    if (!IsFinite(mFilter[0].s1) || !IsFinite(mFilter[0].s2) || !IsFinite(mFilter[1].s1) || !IsFinite(mFilter[1].s2))
     {
         Reset();
         return;

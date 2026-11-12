@@ -32,8 +32,8 @@ inline constexpr std::size_t kMaxDescriptorTextLength = 1000;
 }
 
 /// The descriptor the entries make, or nothing with the reason in `error`.
-[[nodiscard]] std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector<WasmMetadataEntry>& entries,
-                                                                             std::string* error);
+[[nodiscard]] std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(
+    const std::vector<WasmMetadataEntry>& entries, std::string* error);
 
 /// The descriptor a blob of key=value lines makes ('#' comments and blank lines skipped).
 [[nodiscard]] std::optional<WasmModuleDescriptor> ParseDescriptorBlob(const std::string& text, std::string* error);

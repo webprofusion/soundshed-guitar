@@ -155,10 +155,8 @@ if(IOS)
     message(STATUS "iOS build detected; disabling WASM effects (no Wasmtime C API bundle for iOS).")
 endif()
 
-if(APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";")
-    set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "Build the generic WASM effect host" FORCE)
-    message(STATUS "Universal macOS build detected; disabling WASM effects because Wasmtime C API bundles are single-architecture.")
-endif()
+# A universal macOS build keeps WASM effects: the core joins Wasmtime's arm64 and x86_64
+# libraries into one (core/CMakeLists.txt, guitarfx_fetch_wasmtime_bundle).
 
 # Plain char is unsigned on Linux arm64, and WDL (in the resampler) refuses to
 # compile unless it is signed, because its code assumes it. As in the Android
