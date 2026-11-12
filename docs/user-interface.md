@@ -550,6 +550,15 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   Controls and the preset actions share the second. Below 600px the effect header, the preset
   library (folders over presets), the FX library (category chips over two columns) and the
   Tones sidebar stack their parts instead of placing them side by side.
+- **Tucked away, not removed.** Compact hides nothing that has no other route. The looper
+  strip's More button (…) opens a sheet above the strip with Redo, Clear, the modes (Press/Armed,
+  Free/Bars and the bar count, Click, Tempo, Options) and the loop's name, Save and Loops; it
+  closes on a tap outside, Escape, Save, opening a loop or leaving compact. At 480px wide or
+  less the waveform takes a second line of the strip, under the buttons. The layers panel
+  keeps its sliders and exports, wrapping a row onto two lines. The preset load history's
+  back/forward buttons become the first two entries of the preset "…" menu. The Factory/User
+  badge shows when the name's pill is at least 340px wide (a container query), since it is
+  what explains a disabled Save. Copy A to B stays on the footer at every width.
 
 ## Settings → Features
 

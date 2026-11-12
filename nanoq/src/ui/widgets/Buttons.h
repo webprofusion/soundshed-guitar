@@ -119,6 +119,13 @@ class IconButton final : public Pressable
         return *this;
     }
 
+    /// Another icon, for a toggle shown in place (play and stop).
+    IconButton& Icon(std::string icon)
+    {
+        mIcon = std::move(icon);
+        return *this;
+    }
+
     IconButton& IconSize(float s)
     {
         mIconSize = s;

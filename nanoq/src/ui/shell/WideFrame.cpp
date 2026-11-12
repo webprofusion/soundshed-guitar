@@ -22,26 +22,6 @@ using namespace frame;
 
 namespace
 {
-std::string SourceLabel(const std::string& source)
-{
-    if (source == "user")
-    {
-        return "User";
-    }
-
-    if (source == "factory")
-    {
-        return "Factory";
-    }
-
-    if (source == "session")
-    {
-        return "Session";
-    }
-
-    return {};
-}
-
 /// Whether the control bar's toolbar has room for NEW and PUBLISH spelt out: 406 px with them,
 /// and the middle of the bar is the window less the meters and the six cells either side of it
 /// (636 px). At 1024 wide (an iPad) that leaves 388, and the toolbar's end, the preset menu, lay

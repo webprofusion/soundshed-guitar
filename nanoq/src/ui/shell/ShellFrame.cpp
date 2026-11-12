@@ -87,8 +87,13 @@ Ptr Shell::BuildTopBar()
     next->Size(28, 28).IconSize(16);
     next->onClick = [this] { StepPresetWithConfirm(1); };
 
-    // The name opens the presets; the heart in it favourites the preset.
+    // The name opens the presets; the heart in it favourites the preset. The source badge
+    // (Factory, User) says why Edit and Save are greyed; the pill shows it only where the name
+    // keeps 180 px, which it works out from its own width as it draws, so the window's width
+    // need not be in TopBarSignature (the source is).
+    const auto* summary = mState.FindPresetSummary(presetId);
     auto pill = std::make_shared<PresetPill>(mTheme, mIcons, PresetTitle(mState), favourite, dirty);
+    pill->Badge(summary != nullptr ? SourceLabel(summary->source) : std::string(), 180.0f);
     pill->onClick = [this, p = pill.get()] { OpenPresetChooser(p->Bounds()); };
     pill->onFavourite = [&commands, presetId, favourite] {
         if (!presetId.empty())
@@ -469,11 +474,23 @@ void Shell::OpenOptions(el::rect anchor)
         28.0f, 16.0f);
     mute->Lit(muted);
 
-    // The metronome: its tempo, the full controls, on and off.
-    char bpm[32];
-    std::snprintf(bpm, sizeof(bpm), "%.1f BPM", mState.metronome.bpm);
-    auto tempo = std::make_shared<Text>(mTheme, bpm, 12.0f, Weight::SemiBold);
-    tempo->Colour(mTheme.Text()).Fixed(true);
+    // The metronome: its tempo, TAP (as the full footer's), the full controls, on and off. TAP and
+    // the transport leave the sheet open and change in place, through bindings rather than a
+    // rebuild of the sheet from a click inside it; only the Metronome dialog closes it.
+    auto tempo = std::make_shared<Text>(mTheme, "", 12.0f, Weight::SemiBold);
+    // A set width, so a tempo of more figures needs no new layout.
+    tempo->Colour(mTheme.Text());
+    mLive.Bind(
+        tempo, [this] { return mState.metronome.bpm; },
+        [](Text& t, double value) {
+            char bpm[32];
+            std::snprintf(bpm, sizeof(bpm), "%.1f BPM", value);
+            t.Set(bpm);
+        });
+    auto tap = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    tap->Size(44, 28).Label("TAP", 10.0f).Ink(mTheme.TextSecondary());
+    tap->AccessName("Tap tempo");
+    tap->onClick = [this] { TapTempo(); };
     auto metronome = ToolButton(
         mTheme, mIcons, "ui-metronome",
         [this] {
@@ -481,15 +498,15 @@ void Shell::OpenOptions(el::rect anchor)
             OpenMetronome();
         },
         28.0f, 16.0f);
-    const bool ticking = mState.metronome.enabled;
     auto tick = ToolButton(
-        mTheme, mIcons, ticking ? "ui-stop" : "ui-play",
-        [&commands, ticking, this] {
-            commands.SetMetronomeEnabled(!ticking);
-            CloseOverlay();
-        },
+        mTheme, mIcons, "ui-play", [&commands, this] { commands.SetMetronomeEnabled(!mState.metronome.enabled); },
         28.0f, 13.0f);
-    tick->Lit(ticking);
+    mLive.Bind(
+        tick, [this] { return mState.metronome.enabled; },
+        [](IconButton& b, bool ticking) {
+            b.Icon(ticking ? "ui-stop" : "ui-play").Lit(ticking);
+            b.AccessName(ticking ? "Stop metronome" : "Start metronome");
+        });
 
     // The theme.
     auto themeButton = BuildThemeButton();
@@ -535,8 +552,9 @@ void Shell::OpenOptions(el::rect anchor)
             Col({FixedHeight(28, Row({clipButton, Stretch(), play, HGap(6), loop})), VGap(8), rule(), VGap(8),
                  FixedHeight(28, Row({pads, HGap(10), tuner, HGap(10), midi, HGap(10), io, HGap(10), mute, Stretch()})),
                  VGap(8), rule(), VGap(8),
-                 FixedHeight(28, Row({HGap(8), tempo, HGap(14), metronome, HGap(6), tick, Stretch()})), VGap(8), rule(),
-                 VGap(8), FixedHeight(28, Row(viewRow))}));
+                 FixedHeight(28, Row({HGap(8), FixedWidth(72, tempo), HGap(6), tap, HGap(10), metronome, HGap(6), tick,
+                                      Stretch()})),
+                 VGap(8), rule(), VGap(8), FixedHeight(28, Row(viewRow))}));
     ShowPopover(panel, anchor, 350.0f, 190.0f, true);
 }
 } // namespace nanoq::ui

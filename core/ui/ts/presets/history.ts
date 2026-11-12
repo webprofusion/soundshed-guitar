@@ -9,7 +9,7 @@
  */
 
 import { uiState } from "../state.js";
-import { presetRedoBtn, presetUndoBtn } from "./dom.js";
+import { presetHistoryBackItem, presetHistoryForwardItem, presetRedoBtn, presetUndoBtn } from "./dom.js";
 import { updatePresetDropdownSelection } from "./filter.js";
 
 // ── Preset navigation history ────────────────────────────────────────────────
@@ -48,12 +48,20 @@ export function recordPresetInHistory(presetId: string): void {
   updatePresetHistoryButtons();
 }
 
+/** The toolbar buttons and their menu entries (compact density) together, so an open menu stays current. */
 export function updatePresetHistoryButtons(): void {
-  if (presetUndoBtn) {
-    presetUndoBtn.disabled = presetHistoryIndex <= 0;
+  const cannotGoBack = presetHistoryIndex <= 0;
+  const cannotGoForward = presetHistoryIndex >= presetHistory.length - 1;
+
+  for (const control of [presetUndoBtn, presetHistoryBackItem]) {
+    if (control) {
+      control.disabled = cannotGoBack;
+    }
   }
-  if (presetRedoBtn) {
-    presetRedoBtn.disabled = presetHistoryIndex >= presetHistory.length - 1;
+  for (const control of [presetRedoBtn, presetHistoryForwardItem]) {
+    if (control) {
+      control.disabled = cannotGoForward;
+    }
   }
 }
 

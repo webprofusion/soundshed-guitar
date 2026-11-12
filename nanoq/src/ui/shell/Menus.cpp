@@ -277,6 +277,21 @@ void Shell::OpenPresetMenu(std::optional<el::rect> anchor)
 
     std::vector<MenuItem> items;
 
+    // Back and forward through the presets loaded: the full layout's header has buttons for them,
+    // the compact bar has no room. A menu item cannot be greyed, so one that cannot go is left out.
+    if (!mWide)
+    {
+        if (mPresetTrail.CanGoBack())
+        {
+            items.push_back({"Back to previous preset", false, false, [this] { StepPresetTrail(-1); }});
+        }
+
+        if (mPresetTrail.CanGoForward())
+        {
+            items.push_back({"Forward to next preset", false, false, [this] { StepPresetTrail(1); }});
+        }
+    }
+
     if (havePreset)
     {
         // Save over it only where the toolbar's Save would; Save As copies any preset.

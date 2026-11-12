@@ -438,6 +438,13 @@ void Shell::Rebuild()
     if (mDirty & kTransport)
     {
         Fill(*mTransportSlot, BuildTransport());
+
+        // The looper strip over it follows the window's width and the layout too, which the
+        // looper's own reports (SyncLooper's other callers) do not tell it of while it is stopped.
+        if (mLooperOpen)
+        {
+            SyncLooper();
+        }
     }
 
     if ((mDirty & kValues) && PlayShown())

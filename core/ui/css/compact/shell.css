@@ -229,10 +229,42 @@ html[data-density="compact"] .preset-chooser-label {
   white-space: nowrap;
 }
 
-/* Load history is a keyboard shortcut and a footer control; it need not be here. */
-html[data-density="compact"] .preset-history,
+/* The load history's back/forward buttons give way to two entries at the top of
+   the preset "..." menu, which do the same and follow the same disabled state
+   (presets/history.ts). */
+html[data-density="compact"] .preset-history {
+  display: none;
+}
+
+html[data-density="compact"] .preset-extra-history-item {
+  display: block;
+}
+
+html[data-density="compact"] #preset-history-forward-item {
+  margin-bottom: 4px;
+  border-bottom-color: var(--border-dark-light);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/*
+  The Factory/User badge says why Save and Edit are greyed out on a factory
+  preset. It shows only where the name's pill has room for it and about 260px
+  of name besides; on a phone the name keeps the space. The pill is the query
+  container: its own width, not the window's, is what the badge costs.
+*/
+html[data-density="compact"] .preset-selector {
+  container-type: inline-size;
+}
+
 html[data-density="compact"] .preset-selector-status {
   display: none;
+}
+
+@container (min-width: 340px) {
+  html[data-density="compact"] .preset-selector-status {
+    display: inline-block;
+    margin-left: 4px;
+  }
 }
 
 /* .nav-btn carries a 44px min-height that wins over a plain height, and it was
@@ -569,7 +601,8 @@ html[data-density="compact"] .notification-toast {
   }
 
   html[data-density="compact"] .preset-action-btn,
-  html[data-density="compact"] .control-bar-tab {
+  html[data-density="compact"] .control-bar-tab,
+  html[data-density="compact"] .preset-extra-action-item {
     min-height: 32px;
   }
 

@@ -24,6 +24,7 @@ import {
   sendSaveLooperProject,
   setMetronome,
 } from "./bridge.js";
+import { isCompact } from "./compactMode.js";
 import { showConfirm } from "./dialogs.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import { registerLooperRenderer } from "./looper/refresh.js";
@@ -115,6 +116,7 @@ function render(full: boolean): void {
   strip.hidden = !visible;
 
   if (!visible) {
+    strip.classList.remove("is-more-open");
     lastShape = "";
     return;
   }
@@ -126,7 +128,7 @@ function render(full: boolean): void {
     const open = Array.from(strip.querySelectorAll<HTMLDetailsElement>("details")).filter((d) => d.open).map((d) => d.className);
     const title = strip.querySelector<HTMLInputElement>("[data-looper-title]");
     const typing = title && document.activeElement === title ? title.value : null;
-    renderLooperStrip(strip);
+    renderLooperStrip(strip, isCompact());
 
     for (const details of Array.from(strip.querySelectorAll<HTMLDetailsElement>("details"))) {
       details.open = open.includes(details.className);
@@ -145,6 +147,43 @@ function render(full: boolean): void {
   }
 }
 
+/**
+ * The compact strip's "More" sheet (Redo, Clear, the modes, the loop's project). Open while the
+ * strip has is-more-open; the class outlives a redraw, which only rewrites the strip's contents.
+ */
+function setMoreOpen(open: boolean, focusButton = false): void {
+  if (!strip) {
+    return;
+  }
+
+  strip.classList.toggle("is-more-open", open);
+  const more = strip.querySelector<HTMLButtonElement>("[data-looper-more]");
+  more?.setAttribute("aria-expanded", String(open));
+
+  if (focusButton) {
+    more?.focus();
+  }
+}
+
+function isMoreOpen(): boolean {
+  return Boolean(strip?.classList.contains("is-more-open"));
+}
+
+/** A tap anywhere but the sheet, its button or a dialog it raised (Clear, Open) closes it. */
+function closeMoreOnOutsideClick(event: MouseEvent): void {
+  if (!isMoreOpen() || !strip) {
+    return;
+  }
+
+  // The path as dispatched: a press that redrew the strip has already detached its target.
+  const inside = event.composedPath().some((node) =>
+    node instanceof HTMLElement && (node.matches(".looper-more-sheet, [data-looper-more]") || node.id === "dialog-modal"));
+
+  if (!inside) {
+    setMoreOpen(false);
+  }
+}
+
 function layerIdOf(target: HTMLElement): string {
   return target.closest<HTMLElement>(".looper-layer-row")?.dataset.layerId ?? "";
 }
@@ -154,6 +193,11 @@ function handleClick(event: MouseEvent): void {
   const status = getLooperStatus();
 
   if (!target || !status) {
+    return;
+  }
+
+  if (target.closest("[data-looper-more]")) {
+    setMoreOpen(!isMoreOpen());
     return;
   }
 
@@ -177,12 +221,15 @@ function handleClick(event: MouseEvent): void {
 
   if (target.closest("[data-looper-save]")) {
     sendSaveLooperProject(strip?.querySelector<HTMLInputElement>("[data-looper-title]")?.value.trim() ?? "");
+    setMoreOpen(false);
     return;
   }
 
   const projectId = target.closest<HTMLElement>(".looper-project-row")?.dataset.projectId ?? "";
 
   if (projectId && target.closest("[data-looper-open]")) {
+    setMoreOpen(false);
+
     if (!status.dirty) {
       sendLoadLooperProject(projectId);
       return;
@@ -360,5 +407,19 @@ export function initializeLooper(): void {
     }
   }, true);
   document.addEventListener(FEATURE_FLAGS_CHANGED_EVENT, () => render(true));
+  document.addEventListener("click", closeMoreOnOutsideClick);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isMoreOpen()) {
+      setMoreOpen(false, true);
+    }
+  });
+  // The strip's markup differs by density (the sheet is compact-only), and the sheet goes with it.
+  window.addEventListener("densityChanged", () => {
+    if (!isCompact()) {
+      setMoreOpen(false);
+    }
+
+    render(true);
+  });
   // The first state is asked for by main.ts after uiReady, once replies have somewhere to go.
 }

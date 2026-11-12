@@ -23,6 +23,11 @@ export const presetUndoBtn = document.getElementById("preset-undo") as HTMLButto
 
 export const presetRedoBtn = document.getElementById("preset-redo") as HTMLButtonElement | null;
 
+/** The same two steps as entries in the preset actions menu, for compact density where the buttons are hidden. */
+export const presetHistoryBackItem = document.getElementById("preset-history-back-item") as HTMLButtonElement | null;
+
+export const presetHistoryForwardItem = document.getElementById("preset-history-forward-item") as HTMLButtonElement | null;
+
 export const randomPresetBtn = document.getElementById("preset-random-btn");
 
 export const presetExtraActionsBtn = document.getElementById("preset-extra-actions-btn") as HTMLButtonElement | null;

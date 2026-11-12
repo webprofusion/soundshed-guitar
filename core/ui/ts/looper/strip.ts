@@ -140,8 +140,14 @@ function renderProject(status: LooperStatus): string {
   return `<div class="looper-project">${title}${dirty}${save}${renderProjectMenu(status)}</div>`;
 }
 
-/** The strip, drawn whole into `root`. */
-export function renderLooperStrip(root: HTMLElement): void {
+const MORE_ICON = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.75" /><circle cx="12" cy="12" r="1.75" /><circle cx="19" cy="12" r="1.75" /></svg>`;
+
+/**
+ * The strip, drawn whole into `root`. `compact` is the one-row strip of a small display: Redo,
+ * Clear, the modes and the loop's project go into the "More" sheet instead of the row (they are
+ * drawn once either way). The sheet shows while `root` has the is-more-open class.
+ */
+export function renderLooperStrip(root: HTMLElement, compact = false): void {
   const status = getLooperStatus();
 
   if (!status) {
@@ -155,6 +161,25 @@ export function renderLooperStrip(root: HTMLElement): void {
     ? `<div class="looper-countin" aria-live="assertive">${status.countInBeatsLeft}</div>`
     : "";
   const layersOpen = isLooperLayersOpen();
+  const redoClear = `${command("redo", "Redo", "Redo", !status.canRedo)}
+        ${command("clear", "Clear", "Clear the loop", empty && !status.canRedo)}`;
+  const layersToggle = `<button type="button" class="looper-layers-toggle" data-looper-layers aria-expanded="${layersOpen}">Layers</button>`;
+  const moreOpen = root.classList.contains("is-more-open");
+  const tail = compact
+    ? `${layersToggle}
+      <button type="button" class="looper-more-btn" data-looper-more aria-label="More looper controls" title="More looper controls" aria-haspopup="true" aria-expanded="${moreOpen}" aria-controls="looper-more-sheet">${MORE_ICON}</button>
+    </div>
+    <div class="looper-more-sheet" id="looper-more-sheet" role="group" aria-label="More looper controls">
+      <div class="looper-transport looper-more-transport">
+        ${redoClear}
+      </div>
+      ${renderModes(status)}
+      ${renderProject(status)}
+    </div>`
+    : `${renderProject(status)}
+      ${renderModes(status)}
+      ${layersToggle}
+    </div>`;
   root.dataset.looperState = state;
   root.innerHTML = `
     <div class="looper-strip-row">
@@ -162,8 +187,7 @@ export function renderLooperStrip(root: HTMLElement): void {
         ${command("recPlayDub", mainButtonLabel(state), "Record, play, overdub")}
         ${command("stop", "Stop", "Stop", empty)}
         ${command("undo", "Undo", "Undo the last layer", !status.canUndo && !["recording", "overdubbing", "countIn", "armed", "overdubArmed"].includes(state))}
-        ${command("redo", "Redo", "Redo", !status.canRedo)}
-        ${command("clear", "Clear", "Clear the loop", empty && !status.canRedo)}
+        ${compact ? "" : redoClear}
       </div>
       <div class="looper-display">
         <canvas class="looper-wave" aria-hidden="true"></canvas>
@@ -176,10 +200,7 @@ export function renderLooperStrip(root: HTMLElement): void {
         </div>
         ${countIn}
       </div>
-      ${renderProject(status)}
-      ${renderModes(status)}
-      <button type="button" class="looper-layers-toggle" data-looper-layers aria-expanded="${layersOpen}">Layers</button>
-    </div>
+      ${tail}
     <div class="looper-layers"${layersOpen ? "" : " hidden"}>${layersOpen ? renderLooperLayers(getLooperLayers()) : ""}</div>`;
   updateLooperStrip(root);
 }

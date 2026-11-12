@@ -49,6 +49,28 @@ inline std::string PresetTitle(const guitarfx::uiclient::ClientState& state)
     return "No preset";
 }
 
+/// The preset pill's badge for where the preset comes from: it says why a factory preset's Edit
+/// and Save are greyed.
+inline std::string SourceLabel(const std::string& source)
+{
+    if (source == "user")
+    {
+        return "User";
+    }
+
+    if (source == "factory")
+    {
+        return "Factory";
+    }
+
+    if (source == "session")
+    {
+        return "Session";
+    }
+
+    return {};
+}
+
 inline std::shared_ptr<IconButton> ToolButton(const Theme& theme, Icons& icons, const char* icon,
                                               std::function<void()> onClick, float size = 28.0f, float iconSize = 14.0f)
 {

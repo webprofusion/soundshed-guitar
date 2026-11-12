@@ -225,6 +225,12 @@
   border-color: transparent;
 }
 
+/* Back/Forward through the load history: the toolbar's buttons do this at full
+   density; compact shows these instead (css/compact/shell.css). */
+.preset-extra-history-item {
+  display: none;
+}
+
 .preset-extra-action-item-danger {
   color: color-mix(in srgb, var(--color-error), #fff 18%);
 }

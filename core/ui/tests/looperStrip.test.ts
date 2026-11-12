@@ -202,6 +202,54 @@ describe("the looper strip", () => {
     expect(sent).toContainEqual({ type: "addRiffAsLooperLayer", takeId: "t1" });
   });
 
+  it("keeps Redo, Clear, the modes and Save in a More sheet at compact density", async () => {
+    const { applyDensityPreference } = await import("../ts/compactMode.js");
+    const sheet = () => strip.querySelector<HTMLElement>(".looper-more-sheet");
+    const more = () => strip.querySelector<HTMLButtonElement>("[data-looper-more]");
+    state({ state: "playing", playing: true, lengthSec: 8, layerCount: 1, canRedo: true }, { length: "bars", bars: 4 });
+    expect(more()).toBeNull();
+
+    applyDensityPreference("compact");
+    expect(more()?.getAttribute("aria-label")).toBe("More looper controls");
+    // Drawn once, in the sheet rather than the row.
+    for (const selector of ['[data-looper-command="redo"]', '[data-looper-command="clear"]', ".looper-modes", "[data-looper-save]", "[data-looper-projects]"]) {
+      expect(strip.querySelectorAll(selector)).toHaveLength(1);
+      expect(sheet()?.querySelector(selector)).not.toBeNull();
+    }
+
+    more()?.click();
+    expect(strip.classList.contains("is-more-open")).toBe(true);
+    expect(more()?.getAttribute("aria-expanded")).toBe("true");
+
+    // Using a control in the sheet leaves it open, through the redraw the engine's answer causes.
+    strip.querySelector<HTMLButtonElement>('[data-looper-bars="1"]')?.click();
+    expect(sent).toContainEqual({ type: "setLooper", bars: 5 });
+    state({ state: "playing", playing: true, lengthSec: 8, layerCount: 1 }, { length: "bars", bars: 5 });
+    expect(strip.classList.contains("is-more-open")).toBe(true);
+    expect(more()?.getAttribute("aria-expanded")).toBe("true");
+
+    // A tap elsewhere closes it, and so does Escape.
+    document.body.click();
+    expect(strip.classList.contains("is-more-open")).toBe(false);
+    more()?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(strip.classList.contains("is-more-open")).toBe(false);
+
+    // Save closes it.
+    more()?.click();
+    strip.querySelector<HTMLButtonElement>("[data-looper-save]")?.click();
+    expect(sent.some((m) => m.type === "saveLooperProject")).toBe(true);
+    expect(strip.classList.contains("is-more-open")).toBe(false);
+
+    // Leaving compact closes it and puts everything back on the row.
+    more()?.click();
+    applyDensityPreference("full");
+    expect(strip.classList.contains("is-more-open")).toBe(false);
+    expect(more()).toBeNull();
+    expect(strip.querySelector('.looper-transport [data-looper-command="redo"]')).not.toBeNull();
+    applyDensityPreference("auto");
+  });
+
   it("explains a refused press once", () => {
     state({ notice: "noSpare" });
     state({ notice: "noSpare" });

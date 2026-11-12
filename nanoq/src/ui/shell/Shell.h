@@ -126,8 +126,8 @@ class WebViewSlot; // JamPage.cpp
 class ScaleNeck;   // ScaleGuideDraw.h
 class RunTabView;
 class ProgressionTabView;
-class NodeCard;    // NodeCard.h
-class Connector;   // ChainWires.h
+class NodeCard;  // NodeCard.h
+class Connector; // ChainWires.h
 
 namespace chain
 {
@@ -751,6 +751,10 @@ class Shell
     void OpenLooperLayers();
     void OpenLooperLoops();
     void OpenLooperOptions();
+    /// The strip's Clear and Save, shared with the Options dialog: Clear asks first when the
+    /// loop is unsaved; Save asks for the loop's name.
+    void ClearLooperWithConfirm();
+    void SaveLooperWithPrompt();
 
     void OpenConfirm(const std::string& title, const std::string& detail, const std::string& confirmLabel,
                      std::function<void()> onYes);

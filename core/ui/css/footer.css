@@ -553,13 +553,8 @@
     transform: none;
   }
 
-  /* The copy control is the one part of the chain group that can wait for a
-     wider window. */
-  .footer-chain-copy-btn {
-    display: none;
-  }
-
-  /* With the panel folded away, nothing follows the chain group to divide from. */
+  /* With the panel folded away, nothing follows the chain group to divide from.
+     Copy A to B stays in the group: the bar has room for it down to 360px. */
   .footer-chain-history {
     padding-right: 0;
     border-right: none;

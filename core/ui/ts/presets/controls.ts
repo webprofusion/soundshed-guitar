@@ -11,7 +11,7 @@ import { toggleFavoritePreset } from "../presets/favorites.js";
 import { PRESET_FOLDER_ALL_ID } from "./sorting.js";
 import { isVirtualPresetFolderId } from "../presets/folders.js";
 import { uiState } from "../state.js";
-import { nextPresetBtn, presetExportFolderButton, presetExtraActionsBtn, presetExtraActionsMenu, presetFolderAddButton, presetFolderDeleteButton, presetFolderNameInput, presetFolderRenameButton, presetLibraryCloseButton, presetLibraryPopover, presetRedoBtn, presetSelector, presetUndoBtn, prevPresetBtn, randomPresetBtn, setlistAddButton, setlistBankInput, setlistCollapsible, setlistNameInput, setlistToggle } from "./dom.js";
+import { nextPresetBtn, presetExportFolderButton, presetExtraActionsBtn, presetExtraActionsMenu, presetFolderAddButton, presetFolderDeleteButton, presetFolderNameInput, presetFolderRenameButton, presetHistoryBackItem, presetHistoryForwardItem, presetLibraryCloseButton, presetLibraryPopover, presetRedoBtn, presetSelector, presetUndoBtn, prevPresetBtn, randomPresetBtn, setlistAddButton, setlistBankInput, setlistCollapsible, setlistNameInput, setlistToggle } from "./dom.js";
 import { initializePresetDrag } from "./drag.js";
 import { initializePresetFolderMenu } from "./folderContextMenu.js";
 import { createFolder, deleteFolderById, getCurrentRealPresetFolder, renameFolder, syncPresetFolderToolbarState } from "./folderControls.js";
@@ -142,6 +142,14 @@ export function initializePresetControls(): void {
   presetRedoBtn?.addEventListener("click", () => {
     void stepPresetHistory(1, applyPresetFromLibrary);
   });
+
+  // The menu's copies of the two buttons (shown at compact density, where the buttons are not).
+  for (const [item, offset] of [[presetHistoryBackItem, -1], [presetHistoryForwardItem, 1]] as const) {
+    item?.addEventListener("click", () => {
+      closePresetExtraActionsMenu();
+      void stepPresetHistory(offset, applyPresetFromLibrary);
+    });
+  }
 
   if (randomPresetBtn) {
     randomPresetBtn.addEventListener("click", async () => {
