@@ -260,10 +260,15 @@ html[data-density="compact"] .practice-tool-waveform {
   Scale Guide. At full size it is three rows of controls over the neck, about
   150px before the neck starts, and its panel has a 420px floor: on a landscape
   phone the neck began under the footer and nothing scrolled to it. Here the
-  panel scrolls as one, like a Tones section, and the controls take two rows:
-  the tabs with Listen, Play and the instrument, then Key, Scale, Position and
-  Dots wrapping as the width allows. The labels the pickers make plain go (they
-  stay for screen readers); Style and Strings in Arpeggios keep theirs.
+  panel scrolls as one, like a Tones section, and every control flows as one
+  wrapping row instead of three: the mode tabs, Key and Scale (or Chord, or the
+  progression and its steps), then Position, Dots, Play and the instrument. At
+  740x360 that is two lines, 74px, where the three rows took 130 and left the
+  neck 68px of its 120. The labels the pickers make plain go (they stay for
+  screen readers); Style and Strings in Arpeggios keep theirs.
+
+  The rows are flattened with display: contents, so `order` puts each control
+  in its place; the neck and everything under it take lines of their own.
 */
 html[data-density="compact"] .jam-scales-panel.active {
   min-height: 0;
@@ -273,22 +278,98 @@ html[data-density="compact"] .jam-scales-panel.active {
 }
 
 html[data-density="compact"] .scale-guide {
-  gap: 8px;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 4px 10px;
   padding-bottom: 8px;
 }
 
-html[data-density="compact"] .sg-tabs {
-  gap: 0 14px;
+html[data-density="compact"] .scale-guide > *,
+html[data-density="compact"] .sg-controls > .sg-editor {
+  flex: 1 1 100%;
+  order: 10;
+}
+
+html[data-density="compact"] :is(.sg-tabs, .sg-controls, .sg-controls > .sg-bar) {
+  display: contents;
 }
 
 html[data-density="compact"] .sg-tab {
-  padding: 6px 2px 8px;
+  flex: none;
+  order: 1;
+  padding: 7px 2px 7px;
   font-size: 13px;
+  letter-spacing: 0.06em;
 }
 
+html[data-density="compact"] .sg-tab.active::after {
+  bottom: 1px;
+  height: 2px;
+}
+
+/* A little more room after the last tab, so the tabs read as one group. */
+html[data-density="compact"] .sg-tab + :not(.sg-tab) {
+  margin-left: 6px;
+}
+
+html[data-density="compact"] .sg-controls > .sg-bar:not(.sg-bar-neck) > * {
+  order: 2;
+}
+
+html[data-density="compact"] .sg-controls > .sg-editor {
+  order: 3;
+}
+
+html[data-density="compact"] .sg-bar-neck > * {
+  order: 4;
+}
+
+html[data-density="compact"] .sg-bar-end {
+  margin-left: 0;
+}
+
+/* Play and the instrument end the last line of controls. */
+
 html[data-density="compact"] .sg-actions {
+  order: 6;
+  flex: none;
+  flex-wrap: nowrap;
   gap: 6px;
-  padding-bottom: 4px;
+  margin-left: auto;
+  padding-bottom: 0;
+}
+
+html[data-density="compact"] .sg-live:not([hidden]) + .sg-actions {
+  margin-left: auto;
+}
+
+/*
+  What LISTEN heard, a chip over the neck's top right corner. In the row it came
+  and went with each note, wrapping Play onto a line of its own and moving the
+  neck down and back up as you played.
+*/
+html[data-density="compact"] .scale-guide {
+  position: relative;
+}
+
+html[data-density="compact"] .sg-live {
+  position: absolute;
+  top: calc(var(--sg-above-neck, 90px) + 2px);
+  right: 4px;
+  z-index: 2;
+  max-width: calc(100% - 8px);
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--sg-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sg-surface-raised) 92%, transparent);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+html[data-density="compact"] .sg-live b {
+  font-size: 15px;
 }
 
 html[data-density="compact"] .sg-listen,
@@ -304,9 +385,27 @@ html[data-density="compact"] .scale-guide .sg-volume {
   width: 56px;
 }
 
-/* A phone's width: the tuning's name put Listen and Play on a line of their own
-   under the tabs, a row the neck needs more. The button keeps its icon and its
-   tooltip, the neck names the strings, and a screen reader still hears it. */
+/* A narrow panel (a 640px window, or a phone): Play is its triangle alone, still
+   named for a screen reader, and the volume is shorter, so they stay on the line
+   with Position and Dots rather than taking one of their own. */
+@container (max-width: 620px) {
+  html[data-density="compact"] .sg-play {
+    gap: 0;
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+    letter-spacing: 0;
+  }
+
+  html[data-density="compact"] .scale-guide .sg-volume {
+    width: 44px;
+  }
+}
+
+/* A phone's width: the tuning's name pushed Play onto a line of its own. The
+   button keeps its icon and its tooltip, the neck names the strings, and a
+   screen reader still hears it. */
 @media (max-width: 760px) {
   html[data-density="compact"] .sg-setup-button {
     padding-left: 10px;
@@ -322,23 +421,6 @@ html[data-density="compact"] .scale-guide .sg-volume {
   }
 }
 
-/* The two bars' items share one wrapping row; the progression editor, when it
-   is open, keeps a line of its own. */
-html[data-density="compact"] .sg-controls {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-}
-
-html[data-density="compact"] .sg-controls > .sg-bar {
-  display: contents;
-}
-
-html[data-density="compact"] .sg-controls > .sg-editor {
-  flex: 1 1 100%;
-}
-
 html[data-density="compact"] .sg-controls .sg-inline > .sg-label:is(#sg-key-label, #sg-position-label, #sg-labels-label),
 html[data-density="compact"] .sg-controls .sg-field-wide > .sg-label {
   position: absolute;
@@ -349,34 +431,59 @@ html[data-density="compact"] .sg-controls .sg-field-wide > .sg-label {
   white-space: nowrap;
 }
 
+html[data-density="compact"] .sg-inline,
+html[data-density="compact"] .sg-inline-group {
+  gap: 6px 10px;
+}
+
 html[data-density="compact"] .scale-guide .sg-controls .sg-select {
   height: 32px;
-  padding: 0 30px 0 10px;
+  padding: 0 28px 0 10px;
+  background-position: right 10px center;
   font-size: 14px;
+}
+
+html[data-density="compact"] .scale-guide .sg-select-accent {
+  min-width: 70px;
 }
 
 html[data-density="compact"] .sg-field-wide .sg-select {
   max-width: 220px;
 }
 
+html[data-density="compact"] .sg-segmented {
+  flex-wrap: nowrap;
+}
+
 html[data-density="compact"] .sg-segment {
-  min-width: 30px;
-  padding: 4px 9px;
+  min-width: 28px;
+  padding: 4px 8px;
 }
 
 /*
-  The neck is no taller than what the stage has left under the two rows of
-  controls (about 90px), so on a landscape phone all six strings are on screen
-  at once; below 120px the panel scrolls instead. Landscape, it also fits the
-  width rather than scrolling sideways past 680px. A phone held upright keeps
-  the sideways scroll: fitted to 360px the neck's dots were too small to read.
+  The neck is no taller than the stage has left under the controls
+  (--sg-above-neck, measured by scaleGuide/neckSpace.ts as they wrap), so on a landscape phone
+  all six strings and the fret numbers are on screen at once (at 740x360 the
+  neck has 112px); below that the panel scrolls instead.
+  Landscape, it also fits the width rather than scrolling sideways past 680px. A
+  phone held upright keeps the sideways scroll: fitted to 360px the neck's dots
+  were too small to read.
 */
+html[data-density="compact"] .sg-neck {
+  padding-top: 0;
+}
+
 html[data-density="compact"] .sg-neck-svg {
-  max-height: max(120px, calc(100cqh - 90px));
+  max-height: max(112px, calc(100cqh - var(--sg-above-neck, 90px) - 4px));
 }
 
 html[data-density="compact"][data-compact-layout="rail"] .sg-neck-svg {
   min-width: 0;
+}
+
+/* Under the neck the summary and the cards are reference, scrolled to: tighter. */
+html[data-density="compact"] .sg-summary > * {
+  padding: 10px 14px;
 }
 
 /* ── Settings ─────────────────────────────────────────────────────────────────

@@ -178,8 +178,6 @@ export interface ScaleGuideSettings {
   position: number;
   capo: number;
   leftHanded: boolean;
-  /** LISTEN: light the note played (Scales) or step on a clean chord (Chords). */
-  listen: boolean;
   /** How closely a strum has to match its chord. */
   match: "easy" | "normal" | "strict";
   arpeggioStyle: ArpeggioStyle;

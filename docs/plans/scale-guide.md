@@ -171,7 +171,8 @@ expected dots and shapes) live in core/tests and are what both renderers' tests 
   theme tokens (root uses the accent token), so light and dark themes both work. Compact layout
   stacks the chord box under the neck and scrolls the neck horizontally.
 - **Web layout:** three slim rows above the neck, so the neck starts as high as it can. The tabs,
-  with Listen, Play and the instrument button at their end; the button reads what is set
+  with Play and the instrument button at their end (LISTEN has no switch: it is on whenever the
+  guide shows); the button reads what is set
   ("Standard E · Capo 2 · Left-handed") and opens Tuning, Capo and Left-handed, which are set once
   and then left alone. Then what is showing: Key or Root with the scale, chord or progression,
   and on that row an arpeggio's Style and Strings and a progression's steps. Then, on the neck,
@@ -200,7 +201,8 @@ state: `scaleGuide.view` (mode, key, scale, chord, tuning, labels, position, han
 
 - Scales: the tuner feed (`tunerUpdate`) gives the note; show its pitch class wherever it falls
   on the neck, debounce (two matching reads before moving, a short release, a fading trail of the
-  last few notes). The tuner runs while the guide is open with LISTEN on.
+  last few notes). The tuner runs whenever the guide is on screen: LISTEN is always on there,
+  with no switch and no "Listening" indicator, and stops when the guide is left.
 - Chords: a 12-bin chroma of the dry input, a new tap beside the tuner (pitch-class folding of a
   spectrum is cheap and off the audio thread's critical path). Rule: with overtones removed, the
   chord's tones hold a set share of the energy and each tone but a plain 5th is present; held
@@ -304,7 +306,7 @@ web do no music theory.
   from the lowest root in the chosen position's run to the next root and back, taken from the first
   position when All is showing. A chord box, or a progression's, strums its own frets
   (`StrummedChord`, action `playChord`), so the chord heard is the box clicked even before the
-  view catches up. The tab card has a Play of its own, the same as the one beside Listen.
+  view catches up. The tab card has a Play of its own, the same as the one beside the tabs.
 - `music/ScalePlayback.h` renders the notes on the message thread to a mono signal, eighth notes at
   the metronome's tempo (held to 60-200 BPM), peaking at 0.35 like a DI track.
   `DemoPreviewService::StartPreviewFromSamples` then mixes it into the input, so it goes through the

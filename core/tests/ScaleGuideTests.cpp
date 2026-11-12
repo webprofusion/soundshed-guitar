@@ -658,7 +658,7 @@ void TestUiClient()
     namespace sg = guitarfx::uiclient::scaleguide;
 
     const auto defaults = sg::ParseSettings(nullptr);
-    Expect(defaults.mode == "scale" && defaults.key == 4 && defaults.scale == "minpent" && !defaults.listen,
+    Expect(defaults.mode == "scale" && defaults.key == 4 && defaults.scale == "minpent" && !defaults.leftHanded,
            "settings default as the web UI's");
     const auto parsed = sg::ParseSettings({{"key", 15},
                                            {"mode", "piano"},

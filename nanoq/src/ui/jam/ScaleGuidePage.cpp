@@ -1,8 +1,10 @@
 // The Scale Guide in Jam's Scales section (docs/plans/scale-guide.md), as the web UI draws it
 // (ts/scaleGuide/panel.ts): Scales, Chords and Arpeggios, slim rows of controls (the tabs with
-// Listen, Play and the instrument; what is showing; a progression's steps; position and dots),
-// the neck, the chord boxes (a progression's voice-led strip) or an arpeggio's tab (a progression's
-// whole, a bar for each chord), a summary and LISTEN.
+// Play and the instrument; what is showing; a progression's steps; position and dots), the neck,
+// the chord boxes (a progression's voice-led strip) or an arpeggio's tab (a progression's whole, a
+// bar for each chord), a summary and LISTEN. LISTEN has no switch: it is on whenever the section
+// shows. At the compact size every control flows as one wrapping row, and the neck's strings close
+// up so the whole neck fits a short window under them (css/compact/panels.css).
 //
 // The choices are the web UI's own app settings (uiclient/ScaleGuide.h), so either product opens
 // where the other left off. The view model comes from the engine's music library directly, the
@@ -202,9 +204,15 @@ Ptr Shell::BuildScaleGuide(float width)
     const auto model = ReadGuideModel(view);
     const auto progression = view.find("progression") != view.end() ? view["progression"] : nlohmann::json();
     const auto wholeRun = arpeggioMode ? ReadGuideProgressionRun(view) : std::nullopt;
+    // The compact frame: the pickers say what they are by what they show, as the web UI's do (their
+    // names stay for a screen reader), and the controls flow as one wrapping row (`flow`).
+    const bool compact = !mWide;
+    std::vector<std::pair<Ptr, float>> flow;
 
-    // ── Tabs, LISTEN's readout, then Listen, Play, its volume and the instrument ──
-    auto mode = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Scales", "Chords", "Arpeggios"}, 80.0f);
+    // ── Tabs, LISTEN's readout, then Play, its volume and the instrument ──
+    const float modeWidth = compact ? 72.0f : 80.0f;
+    auto mode =
+        std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Scales", "Chords", "Arpeggios"}, modeWidth);
     mode->AccessName("Scales, chords or arpeggios");
     mode->Select(arpeggioMode ? 2 : chordMode ? 1 : 0);
     mode->onSelect = [this](int index) {
@@ -224,10 +232,18 @@ Ptr Shell::BuildScaleGuide(float width)
         return p;
     };
     const auto labelWidth = [](const std::string& label) { return 8.0f * static_cast<float>(label.size()) + 6.0f; };
-    const auto field = [this, labelWidth](const std::string& label, Ptr control, float width) {
+    const auto field = [this, labelWidth, compact](const std::string& label, Ptr control, float width) -> Ptr {
+        if (compact)
+        {
+            return FixedWidth(width, Middle(control));
+        }
+
         return FixedWidth(labelWidth(label) + 8.0f + width,
                           Row({FixedWidth(labelWidth(label), Middle(Label(mTheme, label))), HGap(8),
                                FixedWidth(width, Middle(control))}));
+    };
+    const auto fieldWidth = [labelWidth, compact](const std::string& label, float width) {
+        return compact ? width : labelWidth(label) + 8.0f + width;
     };
     // A choice that changes nothing about what is sounding: saved, and the page drawn again.
     const auto keep = [this](const std::function<void(sg::Settings&)>& edit) {
@@ -284,7 +300,9 @@ Ptr Shell::BuildScaleGuide(float width)
     };
 
     // What is showing: a scale, or for Chords and Arpeggios one chord or a progression in the key.
-    std::vector<Ptr> what = {field(rootKey ? "Root" : "Key", key, 84.0f), HGap(16)};
+    const auto keyField = field(rootKey ? "Root" : "Key", key, compact ? 72.0f : 84.0f);
+    std::vector<Ptr> what = {keyField, HGap(16)};
+    flow.push_back({keyField, fieldWidth(rootKey ? "Root" : "Key", 72.0f)});
 
     if (!chordMode && !arpeggioMode)
     {
@@ -323,7 +341,9 @@ Ptr Shell::BuildScaleGuide(float width)
 
             OpenDropdownColumns(scale->Bounds(), std::move(columns), 210.0f);
         };
-        what.push_back(field("Scale", scale, 220.0f));
+        auto scaleField = field("Scale", scale, compact ? 200.0f : 220.0f);
+        what.push_back(scaleField);
+        flow.push_back({scaleField, fieldWidth("Scale", 200.0f)});
     }
     else
     {
@@ -387,12 +407,16 @@ Ptr Shell::BuildScaleGuide(float width)
 
             OpenDropdown(play->Bounds(), std::move(items), 300.0f);
         };
-        what.push_back(field("Play", play, 220.0f));
+        auto playField = field("Play", play, compact ? 200.0f : 220.0f);
+        what.push_back(playField);
+        flow.push_back({playField, fieldWidth("Play", 200.0f)});
 
         if (settings.progression.empty())
         {
+            auto chordField = chordPicker();
             what.push_back(HGap(16));
-            what.push_back(chordPicker());
+            what.push_back(chordField);
+            flow.push_back({chordField, fieldWidth("Chord", 150.0f)});
         }
     }
 
@@ -465,7 +489,8 @@ Ptr Shell::BuildScaleGuide(float width)
         labelNames.insert(labelNames.end(), {"Order", "Fingers"});
     }
 
-    auto labels = std::make_shared<Segmented>(mTheme, labelNames, arpeggioMode ? 68.0f : 76.0f);
+    const float labelSegment = arpeggioMode ? 68.0f : 76.0f;
+    auto labels = std::make_shared<Segmented>(mTheme, labelNames, labelSegment);
     labels->AccessName("Dots");
     const auto chosenLabels = std::find(labelIds.begin(), labelIds.end(), settings.labels);
     labels->Select(chosenLabels == labelIds.end() ? 0 : static_cast<int>(chosenLabels - labelIds.begin()));
@@ -485,7 +510,8 @@ Ptr Shell::BuildScaleGuide(float width)
         positionNames.push_back(std::to_string(i) + (hint.empty() ? "" : " " + hint));
     }
 
-    auto positions = std::make_shared<Segmented>(mTheme, positionNames, chordMode || arpeggioMode ? 44.0f : 36.0f);
+    const float positionSegment = chordMode || arpeggioMode ? 44.0f : compact ? 32.0f : 36.0f;
+    auto positions = std::make_shared<Segmented>(mTheme, positionNames, positionSegment);
     positions->AccessName(chordMode ? "Shape" : "Position");
     positions->Select(model.position);
     positions->onSelect = [this](int index) {
@@ -493,17 +519,6 @@ Ptr Shell::BuildScaleGuide(float width)
         mScaleGuideAnchor = mScaleGuideStep;
         ChangeScaleGuide([index](sg::Settings& s) { s.position = index; });
     };
-    auto listen = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    listen->Size(96, 30).Label("\xE2\x97\x8F Listen", 11.0f).Lit(settings.listen);
-    listen->AccessName("Listen");
-
-    if (settings.listen)
-    {
-        listen->Ink(mTheme.Success());
-    }
-
-    listen->onClick = [this] { ChangeScaleGuide([](sg::Settings& s) { s.listen = !s.listen; }); };
-
     // Every play control stops whatever is sounding; otherwise each sounds its own thing, from the
     // request this view was drawn from, so what sounds is what shows.
     const bool playing = ScaleGuidePlaying();
@@ -524,7 +539,16 @@ Ptr Shell::BuildScaleGuide(float width)
     };
     const auto playButton = [&, togglePlay] {
         auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-        button->Size(84, 30).Label(playing ? "\xE2\x96\xA0 Stop" : "\xE2\x96\xB6 Play", 11.0f).Lit(playing);
+        // Compact, its glyph alone (still named for a screen reader).
+        if (compact)
+        {
+            button->Size(40, 30).Label(playing ? "\xE2\x96\xA0" : "\xE2\x96\xB6", 11.0f).Lit(playing);
+        }
+        else
+        {
+            button->Size(84, 30).Label(playing ? "\xE2\x96\xA0 Stop" : "\xE2\x96\xB6 Play", 11.0f).Lit(playing);
+        }
+
         // A progression's arpeggios play whole, whatever the position.
         button->Disabled(model.position == 0 && !wholeRun);
         button->AccessName(playing ? "Stop" : "Play");
@@ -559,26 +583,33 @@ Ptr Shell::BuildScaleGuide(float width)
         OpenDropdown(level->Bounds(), std::move(items), 120.0f);
     };
 
-    const float instrumentWidth = width >= 1000.0f ? 240.0f : 180.0f;
-    const auto actions = FixedWidth(96.0f + 8.0f + 84.0f + 8.0f + 104.0f + 8.0f + instrumentWidth,
-                                    Row({Middle(listen), HGap(8), Middle(play), HGap(8), FixedWidth(104, Middle(level)),
-                                         HGap(8), FixedWidth(instrumentWidth, Middle(instrument))}));
+    const float playWidth = compact ? 40.0f : 84.0f;
+    const float levelWidth = compact ? 84.0f : 104.0f;
+    const float instrumentWidth = compact ? 130.0f : width >= 1000.0f ? 240.0f : 180.0f;
+    const float actionsWidth = playWidth + 6.0f + levelWidth + 6.0f + instrumentWidth;
+    const auto actions =
+        FixedWidth(actionsWidth, Row({Middle(play), HGap(6), FixedWidth(levelWidth, Middle(level)), HGap(6),
+                                      FixedWidth(instrumentWidth, Middle(instrument))}));
     std::vector<Ptr> controls;
 
-    // Narrow, the actions take a row of their own under the tabs.
-    if (width >= 820.0f)
+    if (!compact)
     {
-        controls.push_back(Row({Middle(mode), HGap(12), Stretch(Middle(FixedHeight(20, live))), HGap(12), actions}));
-    }
-    else
-    {
-        controls.push_back(Row({Middle(mode), HGap(12), Stretch(Middle(FixedHeight(20, live)))}));
-        controls.push_back(VGap(8));
-        controls.push_back(Row({Stretch(), actions}));
-    }
+        // Narrow, the actions take a row of their own under the tabs.
+        if (width >= 820.0f)
+        {
+            controls.push_back(
+                Row({Middle(mode), HGap(12), Stretch(Middle(FixedHeight(20, live))), HGap(12), actions}));
+        }
+        else
+        {
+            controls.push_back(Row({Middle(mode), HGap(12), Stretch(Middle(FixedHeight(20, live)))}));
+            controls.push_back(VGap(8));
+            controls.push_back(Row({Stretch(), actions}));
+        }
 
-    controls.push_back(VGap(10));
-    controls.push_back(Row(what));
+        controls.push_back(VGap(10));
+        controls.push_back(Row(what));
+    }
 
     // ── An arpeggio's style and strings ──
     if (arpeggioMode)
@@ -592,6 +623,7 @@ Ptr Shell::BuildScaleGuide(float width)
             ChangeScaleGuide([&](sg::Settings& s) { s.arpeggioStyle = styleIds[static_cast<std::size_t>(index)]; });
         };
         std::vector<Ptr> row{FixedWidth(labelWidth("Style"), Middle(Label(mTheme, "Style"))), HGap(8), Middle(style)};
+        float rowWidth = labelWidth("Style") + 8.0f + 3.0f * 84.0f;
 
         // A box takes every string under the hand, so there is nothing to choose.
         if (settings.arpeggioStyle != "box")
@@ -614,11 +646,19 @@ Ptr Shell::BuildScaleGuide(float width)
             };
             row.insert(row.end(), {HGap(16), FixedWidth(labelWidth("Strings"), Middle(Label(mTheme, "Strings"))),
                                    HGap(8), Middle(strings)});
+            rowWidth += 16.0f + labelWidth("Strings") + 8.0f + 36.0f * static_cast<float>(names.size());
         }
 
-        row.push_back(Stretch());
-        controls.push_back(VGap(10));
-        controls.push_back(Row(row));
+        if (compact)
+        {
+            flow.push_back({FixedWidth(rowWidth, Row(row)), rowWidth});
+        }
+        else
+        {
+            row.push_back(Stretch());
+            controls.push_back(VGap(10));
+            controls.push_back(Row(row));
+        }
     }
 
     // ── A progression's steps ──
@@ -642,13 +682,19 @@ Ptr Shell::BuildScaleGuide(float width)
             b->onClick = std::move(click);
             return b;
         };
-        auto round =
-            std::make_shared<Text>(mTheme, settings.listen ? "Round " + std::to_string(mScaleGuideRound) : "", 11.0f);
+        // LISTEN is always on, so the rounds it counts always show.
+        auto round = std::make_shared<Text>(mTheme, "Round " + std::to_string(mScaleGuideRound), 11.0f);
         round->Colour(mTheme.TextMuted());
-        controls.push_back(VGap(10));
-        controls.push_back(Row(
-            {FixedWidth(labelWidth("Steps"), Middle(Label(mTheme, "Steps"))), HGap(8),
-             // A long progression scrolls its steps only when they would not fit beside the buttons.
+        std::vector<Ptr> row;
+
+        if (!compact)
+        {
+            row.insert(row.end(), {FixedWidth(labelWidth("Steps"), Middle(Label(mTheme, "Steps"))), HGap(8)});
+        }
+
+        row.insert(
+            row.end(),
+            {// A long progression scrolls its steps only when they would not fit beside the buttons.
              Middle(static_cast<float>(steps.size()) * 44.0f > width - 300.0f ? HScroll(stepper) : Ptr(stepper)),
              HGap(8), Middle(button("\xE2\x97\x80", "Back one chord", [this] { ScaleGuideStep(mScaleGuideStep - 1); })),
              HGap(4),
@@ -659,14 +705,95 @@ Ptr Shell::BuildScaleGuide(float width)
                                mScaleGuideRound = 1;
                                ScaleGuideStep(0);
                            })),
-             HGap(10), Middle(FixedWidth(70, round)), Stretch()}));
+             HGap(10), Middle(FixedWidth(70, round)), Stretch()});
+
+        if (compact)
+        {
+            // A line of its own: a progression can be long.
+            flow.push_back({Row(row), width});
+        }
+        else
+        {
+            controls.push_back(VGap(10));
+            controls.push_back(Row(row));
+        }
     }
 
     const auto positionLabel = chordMode ? "Shape" : "Position";
-    controls.push_back(VGap(10));
-    controls.push_back(
-        Row({FixedWidth(labelWidth(positionLabel), Middle(Label(mTheme, positionLabel))), HGap(8), Middle(positions),
-             Stretch(), FixedWidth(labelWidth("Dots"), Middle(Label(mTheme, "Dots"))), HGap(8), Middle(labels)}));
+    float controlsHeight = 0.0f; // compact: the lines of controls together
+
+    if (!compact)
+    {
+        controls.push_back(VGap(10));
+        controls.push_back(Row({FixedWidth(labelWidth(positionLabel), Middle(Label(mTheme, positionLabel))), HGap(8),
+                                Middle(positions), Stretch(), FixedWidth(labelWidth("Dots"), Middle(Label(mTheme, "Dots"))),
+                                HGap(8), Middle(labels)}));
+    }
+    else
+    {
+        // The mode tabs, what is showing, an arpeggio's style, a progression's steps, the position,
+        // the dots, and Play with the instrument, line after line as the width allows: two lines
+        // on a 740 px window where the full layout's rows took four. LISTEN's readout takes what
+        // the first line leaves; Play and the instrument keep to the right of theirs.
+        const float gap = 10.0f;
+        flow.insert(flow.begin(), {Middle(mode), modeWidth * 3.0f});
+        flow.push_back({Middle(positions), positionSegment * static_cast<float>(positionNames.size())});
+        flow.push_back({Middle(labels), labelSegment * static_cast<float>(labelNames.size())});
+        flow.push_back({actions, actionsWidth});
+        std::vector<std::vector<Ptr>> lines(1);
+        float used = 0.0f;
+
+        for (std::size_t i = 0; i < flow.size(); ++i)
+        {
+            const auto& [item, itemWidth] = flow[i];
+            const bool last = i + 1 == flow.size();
+
+            if (!lines.back().empty() && used + gap + itemWidth > width)
+            {
+                lines.emplace_back();
+                used = 0.0f;
+            }
+
+            auto& line = lines.back();
+
+            if (last)
+            {
+                // The readout fills the first line; on another line the actions sit at its right.
+                line.push_back(lines.size() == 1 ? HGap(gap) : Stretch());
+                line.push_back(actions);
+                continue;
+            }
+
+            if (!line.empty())
+            {
+                line.push_back(HGap(gap));
+            }
+
+            line.push_back(item);
+            used += (line.size() > 1 ? gap : 0.0f) + itemWidth;
+        }
+
+        for (std::size_t i = 0; i < lines.size(); ++i)
+        {
+            if (i == 0)
+            {
+                // What LISTEN heard, in the room the first line leaves (before the actions, when
+                // they share it).
+                auto& first = lines.front();
+                const auto at = lines.size() == 1 ? first.end() - 2 : first.end();
+                first.insert(at, {HGap(gap), Stretch(Middle(FixedHeight(20, live)))});
+            }
+            else
+            {
+                controls.push_back(VGap(6));
+            }
+
+            controls.push_back(Row(lines[i]));
+        }
+
+        const float lineHeight = metrics::Touch() ? metrics::kTouchTarget : 34.0f;
+        controlsHeight = static_cast<float>(lines.size()) * lineHeight + static_cast<float>(lines.size() - 1) * 6.0f;
+    }
 
     // ── The neck ──
     auto neck = std::make_shared<ScaleNeck>(mTheme, model, settings.labels, settings.leftHanded);
@@ -675,6 +802,19 @@ Ptr Shell::BuildScaleGuide(float width)
     // LISTEN follows notes in Scales and Arpeggios; a chord is matched, not followed.
     neck->SetHeard(chordMode ? std::vector<int>{} : ScaleGuideHeard(), settings.listenEverywhere);
     neck->SetPlaying(mScaleGuideMoment.places);
+
+    // A short compact window: the strings close up (to 24 px from 30) so the whole neck shows under
+    // the controls, rather than its low strings under the footer. What is left of the stage under
+    // the section chips (and their rule), the page's top margin, the controls and the gap under them.
+    if (compact && model.openMidi.size() > 1)
+    {
+        const float room =
+            StageHeight() - (metrics::Touch() ? 50.0f : 46.0f) - 1.0f - 10.0f - controlsHeight - 10.0f - 4.0f;
+        const float strings = static_cast<float>(model.openMidi.size());
+        neck->StringGap(
+            std::clamp((room - ScaleNeck::HeightFor(model.openMidi.size(), 0.0f)) / (strings - 1.0f), 24.0f, 30.0f));
+    }
+
     mScaleRunTab.reset();
     mScaleProgressionTab.reset();
 
@@ -994,7 +1134,8 @@ std::vector<int> Shell::ScaleGuideHeard() const
 void Shell::SyncScaleGuideListen()
 {
     const auto settings = sg::LoadSettings(mState.appSettings);
-    const bool wanted = settings.listen && mPage == Page::Jam && mJamSection == JamSection::Scales;
+    // LISTEN has no switch: it is on whenever the guide shows, and off as soon as it does not.
+    const bool wanted = mPage == Page::Jam && mJamSection == JamSection::Scales;
     const bool chroma = wanted && settings.mode == "chord";
 
     if (wanted != mScaleGuideListening || chroma != mScaleGuideChroma)
@@ -1008,7 +1149,7 @@ void Shell::SyncScaleGuideListen()
         mScaleGuideChroma = chroma;
         mScaleGuideFollower.Reset();
         mScaleGuideStrums.Reset();
-        mScaleGuideReadout = wanted ? "Listening" : "";
+        mScaleGuideReadout.clear();
         Mark(kPage);
         return;
     }
@@ -1053,7 +1194,7 @@ void Shell::SyncScaleGuideListen()
 
         if (!current)
         {
-            setReadout("Listening");
+            setReadout("");
             return;
         }
 

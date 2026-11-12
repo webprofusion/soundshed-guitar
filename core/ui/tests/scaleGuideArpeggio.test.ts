@@ -581,7 +581,7 @@ describe("arpeggios panel", () => {
   });
 
   it("follows the played note, as Scales does", () => {
-    settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "arpeggio", listen: true, position: 1 });
+    settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "arpeggio", position: 1 });
     renderScaleGuidePanel();
     answer(arpeggioView());
     const listen = postMessage.mock.calls.map(([message]) => message).find((message) => message.type === "tuner");
@@ -599,7 +599,7 @@ describe("arpeggios panel", () => {
     const hit = (string: number): boolean => document.querySelector(`#sg-neck .sg-dot[data-string="${string}"]`)?.classList.contains("sg-hit") ?? false;
 
     function hear(listenEverywhere: boolean): void {
-      settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "arpeggio", listen: true, position: 1, listenEverywhere });
+      settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "arpeggio", position: 1, listenEverywhere });
       renderScaleGuidePanel();
       answer(arpeggioView({ dots: twice }));
       onScaleGuideReading(reading);

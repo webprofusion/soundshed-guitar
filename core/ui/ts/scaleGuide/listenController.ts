@@ -1,6 +1,6 @@
 /**
  * The Scale Guide's LISTEN, wired to the panel through `ListenHost` (panel.ts): asks the engine to
- * listen while LISTEN is on and the guide is on screen (`tuner {action: "listen"}`), follows the
+ * listen whenever the guide is on screen (`tuner {action: "listen"}`; there is no switch), follows the
  * played note in Scales and Arpeggios mode, and in Chords mode turns chroma readings into clean strums that step a
  * progression on. listen.ts holds the logic, listenView.ts the page writes.
  */
@@ -43,11 +43,10 @@ export function resetRound(): void {
   cleanCount = 0;
 }
 
-/** Asks the engine to listen while LISTEN is on and the guide is showing, with chroma in Chords mode. */
+/** Asks the engine to listen while the guide is showing, with chroma in Chords mode. */
 export function syncListening(host: ListenHost): void {
-  const state = host.settings();
-  const enabled = state.listen && guideVisible();
-  const chroma = enabled && state.mode === "chord";
+  const enabled = guideVisible();
+  const chroma = enabled && host.settings().mode === "chord";
 
   if ((sentListen === null && !enabled) || (sentListen?.enabled === enabled && sentListen.chroma === chroma)) {
     return;
@@ -96,8 +95,9 @@ export function renderListen(host: ListenHost): void {
     return;
   }
 
+  // Nothing heard yet: no readout. Listening is simply what the guide does, so it says nothing of it.
   if (follower.current === null) {
-    setReadout(readout, "<span>Listening</span>", "idle");
+    readout.hidden = true;
     return;
   }
 
@@ -114,7 +114,7 @@ export function onListenReading(host: ListenHost, payload: IncomingPayload): boo
     return false;
   }
 
-  if (!guideVisible() || !host.settings().listen) {
+  if (!guideVisible()) {
     syncListening(host);
     return true;
   }

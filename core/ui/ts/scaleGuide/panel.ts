@@ -11,6 +11,7 @@ import { escapeHtml } from "../utils.js";
 import { effectiveLabels, isArpeggioStyle, renderRunCard, renderArpeggioControls, watchRunCard } from "./arpeggioView.js";
 import { renderChordBoxSvg } from "./chordBox.js";
 import { onListenReading, renderListen, resetListenForTests, resetRound, syncListening, type ListenHost } from "./listenController.js";
+import { watchNeckSpace } from "./neckSpace.js";
 import {
   markSummaryPlayable,
   onScaleGuidePlaybackEnded,
@@ -187,12 +188,12 @@ function change(patch: Partial<ScaleGuideSettings>): void {
     });
   }
 
-  if ("listen" in patch || "mode" in patch) {
+  if ("mode" in patch) {
     syncListening(listenHost);
   }
 
   // Labels, handedness and LISTEN's settings only change how the same model is drawn.
-  const redrawOnly = Object.keys(patch).every((key) => ["labels", "leftHanded", "listen", "match", "listenEverywhere", "playVolume"].includes(key));
+  const redrawOnly = Object.keys(patch).every((key) => ["labels", "leftHanded", "match", "listenEverywhere", "playVolume"].includes(key));
 
   if (redrawOnly && view) {
     renderView();
@@ -252,7 +253,7 @@ function bindEvents(root: HTMLElement): void {
     }
 
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-arp-slides],[data-sg-play],[data-sg-play-scale],#sg-listen",
+      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-arp-slides],[data-sg-play],[data-sg-play-scale]",
     );
 
     if (!target || !root.contains(target)) {
@@ -271,9 +272,7 @@ function bindEvents(root: HTMLElement): void {
       return;
     }
 
-    if (target.id === "sg-listen") {
-      change({ listen: !current().listen });
-    } else if (data.sgMatch) {
+    if (data.sgMatch) {
       change({ match: data.sgMatch as ScaleGuideSettings["match"] });
     } else if (isArpeggioStyle(data.sgArpStyle)) {
       change({ arpeggioStyle: data.sgArpStyle });
@@ -551,13 +550,6 @@ function renderControls(): void {
     button.setAttribute("aria-pressed", String(button.dataset.sgMatch === state.match));
   });
 
-  const listen = element<HTMLElement>("sg-listen");
-
-  if (listen) {
-    listen.classList.toggle("active", state.listen);
-    listen.setAttribute("aria-pressed", String(state.listen));
-  }
-
   const keyLabel = element<HTMLElement>("sg-key-label");
 
   // Chords and Arpeggios take one chord on a root, or a progression in a key.
@@ -691,6 +683,7 @@ function renderNeck(model: ScaleGuideView, state: ScaleGuideSettings): void {
 /** Redraws the neck when its space changes: a window resize, a zoom, or the panel coming into view. */
 function watchNeckWidth(): void {
   const neck = element<HTMLElement>("sg-neck");
+  const root = element<HTMLElement>("scale-guide");
 
   if (!neck || typeof ResizeObserver === "undefined") {
     return;
@@ -703,6 +696,10 @@ function watchNeckWidth(): void {
       renderListen(listenHost);
     }
   }).observe(neck);
+
+  if (root) {
+    watchNeckSpace(root, neck);
+  }
 }
 
 function renderView(): void {

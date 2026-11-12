@@ -103,7 +103,6 @@ Settings ParseSettings(const nlohmann::json& stored)
     s.position = IntField(stored, "position", s.position, 0, 99);
     s.capo = IntField(stored, "capo", s.capo, 0, kMaxCapo);
     s.leftHanded = BoolField(stored, "leftHanded", s.leftHanded);
-    s.listen = BoolField(stored, "listen", s.listen);
     s.match = OneOf(stored, "match", s.match, {"easy", "normal", "strict"});
     s.arpeggioStyle = OneOf(stored, "arpeggioStyle", s.arpeggioStyle, {"sweep", "two", "box"});
     s.arpeggioStrings = IntField(stored, "arpeggioStrings", s.arpeggioStrings, 0, kMaxArpeggioStrings);
@@ -125,7 +124,6 @@ nlohmann::json SettingsJson(const Settings& s)
             {"position", s.position},
             {"capo", s.capo},
             {"leftHanded", s.leftHanded},
-            {"listen", s.listen},
             {"match", s.match},
             {"arpeggioStyle", s.arpeggioStyle},
             {"arpeggioStrings", s.arpeggioStrings},

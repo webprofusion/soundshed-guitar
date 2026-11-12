@@ -151,9 +151,21 @@ class ScaleNeck final : public el::element, public Drawn, public TapTarget
     /// A note tapped on the neck.
     std::function<void(int midi)> onNote;
 
+    /// The room between strings: 30 px, or less (down to 24) where a short window wants the whole
+    /// neck on screen under the controls (BuildScaleGuide).
+    ScaleNeck& StringGap(float gap)
+    {
+        mStringGap = gap;
+        return *this;
+    }
+
+    /// The neck's height for `strings` strings `gap` apart.
+    [[nodiscard]] static float HeightFor(std::size_t strings, float gap);
+
   private:
     const Theme& mTheme;
     GuideModel mModel;
+    float mStringGap = 30.0f;
     std::string mLabels;
     bool mLeftHanded;
     std::vector<int> mHeard;

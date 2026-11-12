@@ -61,7 +61,7 @@ function neckDot(note: TimedNote): Element | null {
   return document.querySelector(`#sg-neck .sg-dot[data-string="${note.string}"][data-fret="${note.fret}"]`);
 }
 
-/** Every play control, the one beside Listen and the tab's, shows Stop while anything plays. */
+/** Every play control, the one beside the tabs and the tab's, shows Stop while anything plays. */
 export function showScaleGuidePlaying(): void {
   document.querySelectorAll<HTMLElement>("#scale-guide [data-sg-play]").forEach((button) => {
     button.classList.toggle("active", playing);

@@ -1,9 +1,11 @@
 /* ===== Scale Guide: LISTEN =====
-   The Listen toggle, the readout beside the tabs, the played note and its
-   trail on the neck, and the chord match meter (ts/scaleGuide/listenView.ts).
+   LISTEN is always on while the guide shows, so it has no switch: this is the
+   readout beside the tabs, the played note and its trail on the neck, and the
+   chord match meter (ts/scaleGuide/listenView.ts). .sg-listen is the boxed look
+   of the Play button beside the tabs (it was LISTEN's switch's).
    Linked after scale-guide.css, whose tokens it uses. */
 
-/* ── LISTEN: the toggle, the readout, the played note on the neck, the chord meter ── */
+/* ── The Play button's box, the readout, the played note on the neck, the chord meter ── */
 .sg-listen {
   display: inline-flex;
   align-items: center;
@@ -27,17 +29,6 @@
   height: 8px;
   border-radius: 50%;
   background: var(--text-muted);
-}
-
-.sg-listen.active {
-  border-color: var(--color-success);
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
-}
-
-.sg-listen.active::before {
-  background: var(--color-success);
-  box-shadow: 0 0 8px var(--color-success-glow);
 }
 
 .sg-live {
@@ -75,7 +66,7 @@
   color: var(--color-success);
 }
 
-/* Play, beside Listen: a triangle, and a square to stop it. */
+/* Play, beside the tabs: a triangle, and a square to stop it. */
 .sg-play::before {
   width: 0;
   height: 0;

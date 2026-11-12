@@ -37,7 +37,6 @@ struct Settings
     int position = 0;
     int capo = 0;
     bool leftHanded = false;
-    bool listen = false;
     std::string match = "normal";        ///< "easy", "normal" or "strict"
     std::string arpeggioStyle = "sweep"; ///< "sweep", "two" or "box"
     int arpeggioStrings = 0;             ///< from the highest string; 0 for the default

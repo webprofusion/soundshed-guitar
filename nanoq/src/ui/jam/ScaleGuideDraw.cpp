@@ -17,7 +17,6 @@ constexpr float kNameX = 14.0f;
 constexpr float kOpenX = 44.0f;
 constexpr float kNutX = 62.0f;
 constexpr float kTop = 24.0f;
-constexpr float kStringGap = 30.0f;
 constexpr float kDotRadius = 11.5f;
 constexpr int kInlays[] = {3, 5, 7, 9, 15, 17, 19, 21};
 constexpr int kDoubleInlays[] = {12, 24};
@@ -244,10 +243,14 @@ ScaleNeck::ScaleNeck(const Theme& theme, GuideModel model, std::string labels, b
 {
 }
 
+float ScaleNeck::HeightFor(std::size_t strings, float gap)
+{
+    return kTop + (static_cast<float>(std::max<std::size_t>(1, strings)) - 1.0f) * gap + 52.0f;
+}
+
 el::view_limits ScaleNeck::limits(const el::basic_context&) const
 {
-    const auto strings = static_cast<float>(std::max<std::size_t>(1, mModel.openMidi.size()));
-    const float height = kTop + (strings - 1.0f) * kStringGap + 52.0f;
+    const float height = HeightFor(mModel.openMidi.size(), mStringGap);
     return {{560.0f, height}, {el::full_extent, height}};
 }
 
@@ -263,7 +266,7 @@ int ScaleNeck::NoteAt(const el::context& ctx, el::point point) const
     {
         const float value = NoteX(dot.fret, mModel.frets, end);
         const float cx = b.left + (mLeftHanded ? width - value : value);
-        const float cy = b.top + kTop + static_cast<float>(strings - 1 - dot.string) * kStringGap;
+        const float cy = b.top + kTop + static_cast<float>(strings - 1 - dot.string) * mStringGap;
 
         if (std::hypot(point.x - cx, point.y - cy) <= kReach)
         {
@@ -336,7 +339,7 @@ void ScaleNeck::draw(const el::context& ctx)
     const float width = b.width();
     const float end = width - 8.0f;
     const auto x = [&](float value) { return b.left + (mLeftHanded ? width - value : value); };
-    const auto y = [&](int string) { return b.top + kTop + static_cast<float>(strings - 1 - string) * kStringGap; };
+    const auto y = [&](int string) { return b.top + kTop + static_cast<float>(strings - 1 - string) * mStringGap; };
     const float top = y(strings - 1) - 18.0f;
     const float bottom = y(0) + 18.0f;
     const float middle = (top + bottom) * 0.5f;

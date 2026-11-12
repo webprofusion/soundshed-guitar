@@ -392,16 +392,16 @@ describe("scale guide panel", () => {
     expect(document.getElementById("sg-editor-delete")?.hidden).toBe(true);
   });
 
-  it("listens while LISTEN is on and the guide is showing, with chroma in Chords mode", () => {
-    renderScaleGuidePanel();
-    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: ukuleleView({ mode: "scale", shapes: undefined }) });
+  it("listens whenever the guide is showing, with chroma in Chords mode, and has no switch for it", () => {
     const listens = (): Array<Record<string, unknown>> =>
       postMessage.mock.calls.map(([m]) => m as Record<string, unknown>).filter((m) => m.type === "tuner" && m.action === "listen");
-    expect(listens()).toHaveLength(0);
-
-    (document.getElementById("sg-listen") as HTMLElement).click();
+    renderScaleGuidePanel();
     expect(listens().at(-1)).toMatchObject({ enabled: true, chroma: false });
-    expect(settingsStore.get(SCALE_GUIDE_SETTING)).toMatchObject({ listen: true });
+    expect(document.getElementById("sg-listen")).toBeNull();
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: ukuleleView({ mode: "scale", shapes: undefined }) });
+
+    // Nothing heard yet: no readout saying it is listening.
+    expect(document.getElementById("sg-live")?.hidden).toBe(true);
 
     // The played note (G4, the ukulele's open high G) lights where it sits once it reads twice.
     const reading = { type: "tunerUpdate", detected: true, noteName: "G", octave: 4, levelDb: -20 };
@@ -427,7 +427,7 @@ describe("scale guide panel", () => {
   });
 
   it("steps a progression on when its chord rings clean", () => {
-    settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "chord", progression: "b:pop", listen: true, position: 1 });
+    settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "chord", progression: "b:pop", position: 1 });
     renderScaleGuidePanel();
     onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: progressionView(0) });
     expect(document.getElementById("sg-match")?.hidden).toBe(false);
