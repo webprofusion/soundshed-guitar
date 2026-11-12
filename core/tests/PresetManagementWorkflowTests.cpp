@@ -3860,8 +3860,7 @@ bool TestStandaloneInputModeSurvivesPresetLoad()
     controller.Initialize();
 
     controller.HandleUIMessage(
-        nlohmann::json{{"type", "setInputMode"}, {"monoMode", true}, {"inputChannel", 1}, {"dualMono", false}}
-            .dump());
+        nlohmann::json{{"type", "setInputMode"}, {"monoMode", true}, {"inputChannel", 1}, {"dualMono", false}}.dump());
 
     if (!controller.GetMixer().IsMonoMode() || controller.GetMixer().GetInputChannel() != 1)
     {

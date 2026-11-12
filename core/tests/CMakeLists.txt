@@ -3,6 +3,7 @@
 set(TEST_SOURCES
     ArpeggioTests.cpp
     ScalePlaybackTests.cpp
+    ScalePlaybackMessageTests.cpp
     AtomicFileWriteTests.cpp
     AudioDeviceRequestTests.cpp
     AutoArpEffectTests.cpp
@@ -115,6 +116,7 @@ set(TEST_SOURCES
     PickupMatchEffectTests.cpp
     PitchShiftEngineTests.cpp
     PitchTrackerTests.cpp
+    PitchTrackerRealGuitarTests.cpp
     PluginPathUtilsTests.cpp
     PresetDSPLoadingTests.cpp
     PresetArchiveInstallTests.cpp
@@ -176,6 +178,7 @@ set(TEST_SOURCES
     ToneSharingLinkTests.cpp
     JamPracticeToolTests.cpp
     ScaleGuideTests.cpp
+    ScaleGuideUiClientTests.cpp
     TransposeBenchmark.cpp
     TransposeEffectTests.cpp
     WahEffectTests.cpp
@@ -326,8 +329,9 @@ target_link_libraries(SplitterRoutingTests PRIVATE SoundshedUiClient)
 target_link_libraries(ToneSharingLinkTests PRIVATE SoundshedUiClient)
 # The Jam tab's backing tracks and Practice Tool (uiclient/Jam.h, uiclient/PracticeTool.h).
 target_link_libraries(JamPracticeToolTests PRIVATE SoundshedUiClient)
-# The Scale Guide's engine half and the native UIs' half (uiclient/ScaleGuide.h).
+# The Scale Guide's engine half, and the native UIs' half (uiclient/ScaleGuide.h).
 target_link_libraries(ScaleGuideTests PRIVATE SoundshedUiClient)
+target_link_libraries(ScaleGuideUiClientTests PRIVATE SoundshedUiClient)
 # The save dialog's preset inspector (uiclient/PresetInspect.h), against the web UI's validate.ts.
 target_link_libraries(PresetInspectTests PRIVATE SoundshedUiClient)
 # The settings flyouts' parameter rows (uiclient/ParamFormat.h), against flyoutParamControls.ts.

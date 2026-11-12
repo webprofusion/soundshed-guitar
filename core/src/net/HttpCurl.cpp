@@ -264,9 +264,9 @@ class CurlTransport final : public HttpTransport
             response.body.clear();
             response.headers.clear();
             response.cancelled = cancel.IsCancelled();
-            response.error = response.cancelled                 ? std::string("Cancelled")
-                             : result == CURLE_URL_MALFORMAT    ? "Not a URL: " + request.url
-                                                                : Describe(result);
+            response.error = response.cancelled              ? std::string("Cancelled")
+                             : result == CURLE_URL_MALFORMAT ? "Not a URL: " + request.url
+                                                             : Describe(result);
             return;
         }
 

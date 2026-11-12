@@ -14,7 +14,7 @@ constexpr double kWindowSeconds = 0.17;
 // The harmonics that land on another pitch class (the 2nd and 4th are the note's own). The 9th and
 // up are too weak on a guitar to matter below kMaxHz.
 constexpr std::array<double, 4> kForeignHarmonics = {3.0, 5.0, 6.0, 7.0};
-constexpr double kOvertoneStrength = 0.7; // the lower peak's magnitude against this one's
+constexpr double kOvertoneStrength = 0.7;     // the lower peak's magnitude against this one's
 constexpr double kOvertoneTolerance = 1.0204; // 35 cents: a plucked string's partials run sharp
 } // namespace
 

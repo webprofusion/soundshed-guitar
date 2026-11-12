@@ -1,0 +1,128 @@
+/* ===== Resource Browser: a row's details panel =====
+   The library's and the folder tab's rows open to this panel: what the file is,
+   its path, its tags, and for a Tone3000 model its way back to the tone, or any
+   model's lookup there by content hash. Linked right after resource-browser.css,
+   whose tokens it uses. */
+
+/* ── Details panel (library and folder) ────────────────────────────────────── */
+
+.resource-browser-library-entry,
+.resource-browser-folder-entry {
+  display: flex;
+  flex-direction: column;
+}
+
+.is-details-expanded > .resource-browser-item {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.resource-browser-item-details-panel {
+  margin-bottom: 4px;
+  padding: 8px 12px 10px;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+  background: var(--rb-row-bg);
+  border-top: 1px solid var(--rb-divider);
+}
+
+/* A Tone3000 model's way back to its tone on the Tone3000 tab, and any model's lookup there by content hash. */
+.resource-browser-details-tone3000-btn,
+.resource-browser-details-tone3000-lookup-btn {
+  margin: 0 0 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-browser);
+  border-radius: var(--radius-md);
+  background: var(--bg-browser-input);
+  color: var(--modal-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.resource-browser-details-tone3000-btn + .resource-browser-details-tone3000-lookup-btn {
+  margin-left: 6px;
+}
+
+.resource-browser-details-tone3000-btn:hover,
+.resource-browser-details-tone3000-lookup-btn:hover:not(:disabled) {
+  background: var(--bg-browser-hover);
+}
+
+.resource-browser-details-tone3000-lookup-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.resource-browser-details-description {
+  font-size: 11px;
+  color: var(--modal-text-secondary);
+  margin: 0 0 8px;
+  padding: 0;
+  line-height: 1.5;
+}
+
+.resource-browser-details-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.resource-browser-details-label {
+  color: var(--modal-text-muted);
+  padding: 2px 12px 2px 0;
+  white-space: nowrap;
+  vertical-align: top;
+  width: 30%;
+}
+
+.resource-browser-details-value {
+  color: var(--modal-text);
+  padding: 2px 0;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.resource-browser-details-mono {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  color: var(--modal-text-secondary);
+}
+
+.resource-browser-details-link,
+.resource-browser-attribution-link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.resource-browser-details-link:hover,
+.resource-browser-attribution-link:hover {
+  text-decoration: underline;
+}
+
+.resource-browser-details-path-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.resource-browser-local-path-copy-btn {
+  width: 22px;
+  height: 22px;
+  margin-top: -3px;
+}
+
+.resource-browser-local-path-copy-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.resource-browser-details-table .resource-browser-tag-pill {
+  display: inline-block;
+  margin: 0 4px 2px 0;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-browser-hover);
+  color: var(--modal-text-secondary);
+  font-size: 10px;
+}

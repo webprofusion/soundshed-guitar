@@ -1,6 +1,7 @@
 /**
  * LayoutImages.cpp - how the UI addresses a layout image (its URL, its renditions' names and
- * URLs) and the pixel size read from its header. LayoutSupport.cpp has where the files live.
+ * URLs), what kind of image a file is (its MIME type, whether its bytes are what its extension
+ * says) and the pixel size read from its header. LayoutSupport.cpp has where the files live.
  */
 
 #include "controller/internal/LayoutSupport.h"
@@ -9,12 +10,18 @@
 #include "util/FileSystem.h"
 #include "util/PathSanitizer.h"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <optional>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace guitarfx::controller_detail
 {
@@ -459,5 +466,93 @@ std::optional<LayoutImageSize> ReadLayoutImageSize(const std::filesystem::path& 
     }
 
     return std::nullopt;
+}
+
+std::string LayoutImageMimeType(const std::filesystem::path& extension)
+{
+    const std::string ext = LowerExtension(extension);
+
+    if (ext == ".png")
+    {
+        return "image/png";
+    }
+
+    if (ext == ".jpg" || ext == ".jpeg")
+    {
+        return "image/jpeg";
+    }
+
+    if (ext == ".gif")
+    {
+        return "image/gif";
+    }
+
+    if (ext == ".webp")
+    {
+        return "image/webp";
+    }
+
+    if (ext == ".svg")
+    {
+        return "image/svg+xml";
+    }
+
+    return {};
+}
+
+bool LooksLikeLayoutImage(const std::vector<std::uint8_t>& bytes, const std::filesystem::path& extension)
+{
+    const std::string ext = LowerExtension(extension);
+
+    if (ext == ".png")
+    {
+        return StartsWith(bytes, 0, "\x89PNG\r\n\x1a\n");
+    }
+
+    if (ext == ".jpg" || ext == ".jpeg")
+    {
+        return StartsWith(bytes, 0, "\xFF\xD8\xFF");
+    }
+
+    if (ext == ".gif")
+    {
+        return StartsWith(bytes, 0, "GIF87a") || StartsWith(bytes, 0, "GIF89a");
+    }
+
+    if (ext == ".webp")
+    {
+        return StartsWith(bytes, 0, "RIFF") && StartsWith(bytes, 8, "WEBP");
+    }
+
+    if (ext == ".svg")
+    {
+        // Markup, optionally after a byte-order mark and whitespace, with an <svg> element early on.
+        std::size_t start = StartsWith(bytes, 0, "\xEF\xBB\xBF") ? 3 : 0;
+
+        while (start < bytes.size() && std::isspace(bytes[start]) != 0)
+        {
+            ++start;
+        }
+
+        if (start >= bytes.size() || bytes[start] != '<')
+        {
+            return false;
+        }
+
+        const std::size_t end = std::min(bytes.size(), start + 4096);
+        const std::string head(bytes.begin() + static_cast<std::ptrdiff_t>(start),
+                               bytes.begin() + static_cast<std::ptrdiff_t>(end));
+        return LowerAscii(head).find("<svg") != std::string::npos;
+    }
+
+    return false;
+}
+
+bool IsLayoutImageLicense(std::string_view license)
+{
+    static constexpr std::array<std::string_view, 9> kLicenses = {"CC0-1.0",         "CC-BY-4.0",    "CC-BY-SA-4.0",
+                                                                  "CC-BY-ND-4.0",    "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0",
+                                                                  "CC-BY-NC-ND-4.0", "own",          "other"};
+    return std::find(kLicenses.begin(), kLicenses.end(), license) != kLicenses.end();
 }
 } // namespace guitarfx::controller_detail

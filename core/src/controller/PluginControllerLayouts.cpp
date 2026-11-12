@@ -410,7 +410,8 @@ void PluginController::HandleBrowseLayoutImageRequest(const nlohmann::json& payl
                 InvalidateLayoutImageIndex();
 
                 // A new image is filed under what it was picked for: a knob or a background.
-                const bool filed = IsLayoutImageCategory(purpose) && SaveLayoutImageCategory(mFileSystem, imageId, purpose);
+                const bool filed =
+                    IsLayoutImageCategory(purpose) && SaveLayoutImageCategory(mFileSystem, imageId, purpose);
                 sendSelected(imageId, destPath, filed ? purpose : std::string(), false);
             }
             catch (const std::exception& e)
@@ -780,7 +781,8 @@ void PluginController::HandleSetLayoutImageCategoryRequest(const nlohmann::json&
     const std::string category = payload.value("category", "");
 
     // A factory image keeps the category it ships under.
-    const auto sources = CollectLayoutImageSources(mFileSystem, ResolveFactoryLayoutsDir(mHost.GetBundledAssetsPath()), true);
+    const auto sources =
+        CollectLayoutImageSources(mFileSystem, ResolveFactoryLayoutsDir(mHost.GetBundledAssetsPath()), true);
     const auto source = std::find_if(sources.begin(), sources.end(),
                                      [&imageId](const LayoutImageSource& s) { return s.imageId == imageId; });
 

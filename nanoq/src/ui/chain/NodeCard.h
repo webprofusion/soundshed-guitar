@@ -344,6 +344,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             cnv.scale(1.06f, 1.06f);
             cnv.translate(-cx, -cy);
         }
+
         const auto tint = mLook.tint;
         const bool on = mLook.enabled;
         const bool boundary = mLook.boundary != Boundary::None;

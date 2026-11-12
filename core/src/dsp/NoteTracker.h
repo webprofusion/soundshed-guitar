@@ -76,7 +76,7 @@ class NoteTracker
         // than its first reading being exact: the tracker's long window takes over within a few
         // detections, and the move comes out as a glide.
         mTracker.SetFastNoteChanges(true);
-        mHighPass =biquad::HighPass(kAttackHighPassHz, 0.7071067811865476, mSampleRate);
+        mHighPass = biquad::HighPass(kAttackHighPassHz, 0.7071067811865476, mSampleRate);
         mFastCoef = SmoothingCoefficient(kAttackFastSeconds);
         mSlowCoef = SmoothingCoefficient(kAttackSlowSeconds);
         mLevelRelease = static_cast<float>(std::exp(-1.0 / (kLevelReleaseSeconds * mSampleRate)));
@@ -605,8 +605,8 @@ class NoteTracker
     int mOctaveHits = 0;
     bool mExactStarts = true;
     bool mWaitedForBetter = false; ///< this attack's note has already waited on an early reading
-    int mSinceDetection = 0; ///< samples since the tracker's last detection
-    int mOctaveSamples = 0;  ///< how long an octave move has held
-    int mSwellSamples = 0;   ///< how long an unpicked pitch has held
+    int mSinceDetection = 0;       ///< samples since the tracker's last detection
+    int mOctaveSamples = 0;        ///< how long an octave move has held
+    int mSwellSamples = 0;         ///< how long an unpicked pitch has held
 };
 } // namespace guitarfx

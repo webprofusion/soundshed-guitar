@@ -40,8 +40,8 @@ double SecondsSince(Clock::time_point start)
 
 std::string Answer(const std::string& status, const std::string& headers, const std::string& body)
 {
-    return "HTTP/1.1 " + status + "\r\nContent-Length: " + std::to_string(body.size()) +
-           "\r\nConnection: close\r\n" + headers + "\r\n" + body;
+    return "HTTP/1.1 " + status + "\r\nContent-Length: " + std::to_string(body.size()) + "\r\nConnection: close\r\n" +
+           headers + "\r\n" + body;
 }
 
 /// One thread, one connection at a time: reads a request, hands it to `respond`, writes the answer.

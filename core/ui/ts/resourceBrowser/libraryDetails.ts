@@ -6,7 +6,9 @@
  */
 
 import type { LibraryResource } from "../types.js";
-import { escapeHtml } from "../utils.js";
+import { showNotification } from "../notifications.js";
+import { showPrompt } from "../dialogs.js";
+import { copyTextToClipboard, escapeHtml, findResourceById } from "../utils.js";
 import { getResourceTags } from "./helpers.js";
 
 const METADATA_LABELS: Record<string, string> = {
@@ -128,4 +130,31 @@ export function renderLibraryItemDetailsPanel(res: LibraryResource, options: Lib
       </table>
     </div>
   `;
+}
+
+/** The details panel's and the row's "copy path": the file's path on this machine, or shown to copy by hand. */
+export async function copyLibraryResourcePath(library: LibraryResource[], resourceId: string): Promise<void> {
+  const resource = findResourceById(library, resourceId);
+  if (!resource) {
+    showNotification("Copy path failed", "Resource not found.");
+    return;
+  }
+
+  const path = (resource.filePath ?? "").trim();
+  if (!path) {
+    showNotification("Copy path unavailable", "This resource does not have a local file path.");
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(path);
+    showNotification("Path copied", path);
+  } catch {
+    const promptResult = await showPrompt("Copy this path by hand:", path, { title: "Copy Path" });
+    if (promptResult === null) {
+      showNotification("Copy cancelled", "Local path was not copied.");
+      return;
+    }
+    showNotification("Path ready", "Local resource path is shown for manual copy.");
+  }
 }

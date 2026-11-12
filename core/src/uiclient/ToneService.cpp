@@ -871,8 +871,8 @@ void ToneService::FetchRemoteRef(const tone3000::RemoteRef& ref,
         Request("GET", tone3000::ThroughRelay(url), {}, false, [finished](const HttpResult& result) {
             if (result.status != 200 || result.body.empty())
             {
-                finished({}, result.status == 0 ? result.error
-                                                : "download failed (" + std::to_string(result.status) + ")");
+                finished({},
+                         result.status == 0 ? result.error : "download failed (" + std::to_string(result.status) + ")");
             }
             else
             {
@@ -891,7 +891,8 @@ void ToneService::FetchRemoteRef(const tone3000::RemoteRef& ref,
         }
 
         Tone3000ModelsByContentHash(
-            ref.contentHash, [ref, done, download, error](const std::vector<tone3000::Model>& models, const std::string&) {
+            ref.contentHash,
+            [ref, done, download, error](const std::vector<tone3000::Model>& models, const std::string&) {
                 const auto sameTone = std::find_if(models.begin(), models.end(), [&](const tone3000::Model& model) {
                     return !ref.toneId.empty() && model.toneId == ref.toneId && !model.modelUrl.empty();
                 });
@@ -932,7 +933,7 @@ void ToneService::FetchRemoteRef(const tone3000::RemoteRef& ref,
 
     // Its URL from its tone's models: download URLs expire, so they are asked for now.
     Tone3000Models(ref.toneId, [ref, done, download, byContentHash](const std::vector<tone3000::Model>& models,
-                                                                      const std::string& error) {
+                                                                    const std::string& error) {
         for (const auto& model : models)
         {
             if (model.id == ref.modelId && !model.modelUrl.empty())

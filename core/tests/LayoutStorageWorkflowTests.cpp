@@ -846,9 +846,8 @@ bool TestPickingTheSameImageAgainReusesIt()
     const auto imageCount = [&](const std::string& layoutId) {
         std::error_code ec;
         const auto dir = content / layoutId / "images";
-        return fs::is_directory(dir, ec)
-                   ? std::distance(fs::directory_iterator(dir, ec), fs::directory_iterator())
-                   : std::ptrdiff_t{0};
+        return fs::is_directory(dir, ec) ? std::distance(fs::directory_iterator(dir, ec), fs::directory_iterator())
+                                         : std::ptrdiff_t{0};
     };
 
     const fs::path face = sandbox / "picked" / "face.png";
@@ -902,9 +901,9 @@ bool TestImageCategoriesAreFiledListedAndShipped()
     const fs::path wood = sandbox / "picked" / "wood.png";
     WriteBytes(wood, PngOfSize(400, 280, 60));
     host.SetBrowsePath(wood);
-    controller.HandleUIMessage(
-        nlohmann::json{{"type", "browseLayoutImage"}, {"purpose", "background"}, {"layoutId", "A"}, {"pickerId", "picker-7"}}
-            .dump());
+    controller.HandleUIMessage(nlohmann::json{
+        {"type", "browseLayoutImage"}, {"purpose", "background"}, {"layoutId", "A"}, {"pickerId", "picker-7"}}
+                                   .dump());
     const auto selected = host.WaitForMessage("layoutImageSelected");
     const std::string woodId = selected ? selected->value("imageId", "") : std::string();
 
@@ -914,6 +913,7 @@ bool TestImageCategoriesAreFiledListedAndShipped()
         std::cerr << "The picker's request id did not come back with the image\n";
         return false;
     }
+
     // The library lists a layout's images once the layout is saved.
     SaveLayout(controller, "A", "fx_a", {woodId});
 
@@ -978,9 +978,11 @@ bool TestImageCreditsAreRecordedAndListed()
         return image.value("license", "") + "|" + image.value("credit", "");
     };
     const auto setCredit = [&](const std::string& license, const std::string& text) {
-        controller.HandleUIMessage(
-            nlohmann::json{{"type", "setLayoutImageCredit"}, {"imageId", "knob_1"}, {"license", license}, {"credit", text}}
-                .dump());
+        controller.HandleUIMessage(nlohmann::json{
+            {"type", "setLayoutImageCredit"},
+            {"imageId", "knob_1"},
+            {"license", license},
+            {"credit", text}}.dump());
     };
 
     setCredit("CC-BY-4.0", "Knob by Ada");
@@ -1037,10 +1039,10 @@ bool TestImageControlReferencesAreCopiedOnSave()
 
     TestHost host(sandbox);
     guitarfx::PluginController controller(host);
-    const std::vector<std::string> ids = {"face_1",        "face_base_1", "switch_off_1", "switch_on_1",
-                                          "switch_strip_1", "strip_1",    "skirt_1",      "glare_1",
-                                          "on_1",          "off_1",       "switchstrip_1", "rail_1",
-                                          "cap_1",         "sliderstrip_1", "logo_1"};
+    const std::vector<std::string> ids = {"face_1",         "face_base_1",   "switch_off_1",  "switch_on_1",
+                                          "switch_strip_1", "strip_1",       "skirt_1",       "glare_1",
+                                          "on_1",           "off_1",         "switchstrip_1", "rail_1",
+                                          "cap_1",          "sliderstrip_1", "logo_1"};
 
     for (const auto& id : ids)
     {

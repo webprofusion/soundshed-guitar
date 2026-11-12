@@ -239,8 +239,9 @@ LayoutScaleResult ComputeLayoutScale(double designWidth, double designHeight, do
 {
     const LayoutScaling spec = scaling.value_or(LayoutScaling{});
     const std::string mode = spec.mode == "fit" || spec.mode == "fixed" ? spec.mode : std::string("fit-width");
-    const double maxScale = std::min(
-        kMaxScaleLimit, spec.maxScale && guitarfx::IsFinite(*spec.maxScale) && *spec.maxScale > 0.0 ? *spec.maxScale : 1.0);
+    const double maxScale =
+        std::min(kMaxScaleLimit,
+                 spec.maxScale && guitarfx::IsFinite(*spec.maxScale) && *spec.maxScale > 0.0 ? *spec.maxScale : 1.0);
     const double minScale = std::min(
         maxScale, spec.minScale && guitarfx::IsFinite(*spec.minScale) && *spec.minScale > 0.0 ? *spec.minScale : 0.0);
 

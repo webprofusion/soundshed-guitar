@@ -136,7 +136,8 @@ std::string FindRemoteResource(const ResourceLibrary& library, const nlohmann::j
     // The same model under any name, from any source: a folder, another provider, a repost.
     if (IsContentHash(contentHash))
     {
-        return find([&](const LibraryResource& resource) { return meta(resource, kContentHashMetadataKey) == contentHash; });
+        return find(
+            [&](const LibraryResource& resource) { return meta(resource, kContentHashMetadataKey) == contentHash; });
     }
 
     return {};

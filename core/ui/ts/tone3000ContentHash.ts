@@ -9,10 +9,14 @@
  */
 
 import { postMessage } from "./bridge.js";
+import { showNotification } from "./notifications.js";
+import type { ResourceType } from "./resourceBrowser/types.js";
+import { uiState } from "./state.js";
 import type { Tone3000Model, Tone3000Tone } from "./tone3000ApiTypes.js";
 import { chooseContentHashMatch, fetchTone3000Tone, isContentHash, lookupTone3000ModelsByContentHash } from "./tone3000.js";
 import { tone3000ResourceMetadata } from "./tone3000Shared.js";
 import type { LibraryResource } from "./types.js";
+import { findResourceById } from "./utils.js";
 
 export interface Tone3000ContentHashMatch {
   tone: Tone3000Tone;
@@ -89,4 +93,32 @@ export function applyTone3000Match(resourceType: string, resource: LibraryResour
     description: resource.description,
     metadata,
   });
+}
+
+/**
+ * The library details panel's "Find on Tone3000": the row's model at Tone3000 by its content hash,
+ * applied to the row when found, with what happened in a notification. `done` redraws the list.
+ */
+export async function lookUpOnTone3000(button: HTMLButtonElement, resourceType: ResourceType, done: () => void): Promise<void> {
+  const resource = findResourceById(uiState.resourceLibrary[resourceType] ?? [], button.dataset.resourceId ?? "");
+  if (!resource || !canLookUpOnTone3000(resource) || button.disabled) {
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Looking on Tone3000…";
+  try {
+    const match = await findTone3000ByContentHash(resource);
+    if (!match) {
+      showNotification("Not on Tone3000", `no Tone3000 model has the same ${resourceType === "ir" ? "samples" : "weights"} as "${resource.name}"`);
+      return;
+    }
+    applyTone3000Match(resourceType, resource, match);
+    const creator = match.tone.user?.username ? ` by ${match.tone.user.username}` : "";
+    const reposts = match.others > 0 ? ` (${match.others} other upload${match.others === 1 ? "" : "s"} share it)` : "";
+    showNotification("Found on Tone3000", `"${match.tone.title}"${creator}${reposts}`);
+  } catch (error) {
+    showNotification("Tone3000 lookup failed", error instanceof Error ? error.message : String(error));
+  } finally {
+    done();
+  }
 }

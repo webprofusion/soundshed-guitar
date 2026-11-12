@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const postMessage = vi.fn();
-vi.mock("../ts/bridge.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../ts/bridge.js")>()), postMessage }));
+vi.mock("../ts/bridge.js", async (importOriginal) => ({ ...(await importOriginal<Record<string, unknown>>()), postMessage }));
 window.IPlugSendMsg = () => {};
 
 const { uiState } = await import("../ts/state.js");

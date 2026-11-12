@@ -302,9 +302,9 @@ void RaisePriorityOfThisThreadForAudio() noexcept
     // helper, so a helper below it would hold it back behind whatever sits between them.
     const char* const priority = std::getenv("SOUNDSHED_AUDIO_PRIO");
     sched_param param{};
-    param.sched_priority = std::clamp(priority != nullptr ? std::atoi(priority) : 0,
-                                      std::max(1, sched_get_priority_min(SCHED_FIFO)),
-                                      sched_get_priority_max(SCHED_FIFO));
+    param.sched_priority =
+        std::clamp(priority != nullptr ? std::atoi(priority) : 0, std::max(1, sched_get_priority_min(SCHED_FIFO)),
+                   sched_get_priority_max(SCHED_FIFO));
     pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
 #endif
 }

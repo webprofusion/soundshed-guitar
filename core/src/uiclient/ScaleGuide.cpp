@@ -337,8 +337,7 @@ bool StrumGate::Push(double levelDb, bool clean)
 
     mRearmWait = std::max(0, mRearmWait - 1);
 
-    if (mRearmWait == 0 && levelDb > kQuietDb &&
-        levelDb - *std::min_element(mLevels.begin(), mLevels.end()) >= kJumpDb)
+    if (mRearmWait == 0 && levelDb > kQuietDb && levelDb - *std::min_element(mLevels.begin(), mLevels.end()) >= kJumpDb)
     {
         mArmed = true;
     }

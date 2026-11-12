@@ -9,7 +9,7 @@
  */
 import { postMessage, sendResourceFavorite } from "./bridge.js";
 import { recordAppSetting } from "./appSettingsStore.js";
-import { showConfirm, showPrompt } from "./dialogs.js";
+import { showConfirm } from "./dialogs.js";
 import { FEATURE_FLAGS_CHANGED_EVENT, Features, isFeatureEnabled } from "./featureFlags.js";
 import { getPlaySvg } from "./iconAssets.js";
 import { showNotification } from "./notifications.js";
@@ -19,7 +19,7 @@ import { DOUBLE_CLICK_SELECTS_ATTR, normalizeArchitectureBadge, formatGearDescri
 import { DEFAULT_RESOURCE_CONTEXT_KEY, RESOURCE_FAVORITES_SETTING } from "./resourceBrowser/settings.js";
 import { LibraryPackGrouping } from "./resourceBrowser/libraryPacks.js";
 import { NavigationLists } from "./resourceBrowser/navigationListing.js";
-import { renderLibraryItemDetailsPanel } from "./resourceBrowser/libraryDetails.js";
+import { copyLibraryResourcePath, renderLibraryItemDetailsPanel } from "./resourceBrowser/libraryDetails.js";
 import { libraryThumbnailAttr, libraryThumbnailImage } from "./resourceBrowser/libraryThumbnails.js";
 import { TONE3000_IR_GEAR_OPTIONS, slotImportCategory, slotLibraryCategoryHint, slotStateKey, slotTitle, slotTone3000IrGear } from "./resourceBrowser/slot.js";
 import { Tone3000Tab } from "./resourceBrowser/tone3000Tab.js";
@@ -29,9 +29,9 @@ import { uiState } from "./state.js";
 import { isTone3000AuthReady, tone3000AuthenticatedFetch } from "./tone3000.js";
 import type { Tone3000Architecture } from "./tone3000ApiTypes.js";
 import { tone3000ToneFromResource } from "./tone3000Shared.js";
-import { applyTone3000Match, canLookUpOnTone3000, findTone3000ByContentHash } from "./tone3000ContentHash.js";
+import { canLookUpOnTone3000, lookUpOnTone3000 } from "./tone3000ContentHash.js";
 import type { LibraryResource } from "./types.js";
-import { arrayBufferToBase64, copyTextToClipboard, escapeHtml, findResourceById } from "./utils.js";
+import { arrayBufferToBase64, escapeHtml, findResourceById } from "./utils.js";
 
 export type { ResourceNavigationResult } from "./resourceBrowser/types.js";
 
@@ -1121,36 +1121,6 @@ export class ResourceBrowserModal {
   /// top-level "architecture" token (e.g. "WaveNet" -> A1, "SlimmableContainer"
   /// -> A2) when an explicit version is not present in the metadata.
 
-  private async copyLocalLibraryPath(resourceId: string): Promise<void> {
-    if (!this.options) {
-      return;
-    }
-
-    const resource = findResourceById(uiState.resourceLibrary[this.options.resourceType] ?? [], resourceId);
-    if (!resource) {
-      showNotification("Copy path failed", "Resource not found.");
-      return;
-    }
-
-    const path = (resource.filePath ?? "").trim();
-    if (!path) {
-      showNotification("Copy path unavailable", "This resource does not have a local file path.");
-      return;
-    }
-
-    try {
-      await copyTextToClipboard(path);
-      showNotification("Path copied", path);
-    } catch {
-      const promptResult = await showPrompt("Copy this path by hand:", path, { title: "Copy Path" });
-      if (promptResult === null) {
-        showNotification("Copy cancelled", "Local path was not copied.");
-        return;
-      }
-      showNotification("Path ready", "Local resource path is shown for manual copy.");
-    }
-  }
-  
   private isResourceFavorite(resourceId: string): boolean {
     const raw = uiState.appSettings?.[RESOURCE_FAVORITES_SETTING];
     if (!Array.isArray(raw)) {
@@ -1436,32 +1406,6 @@ export class ResourceBrowserModal {
     });
   }
 
-  /** The details panel's "Find on Tone3000": the row's model at Tone3000 by its content hash. */
-  private async lookUpOnTone3000(button: HTMLButtonElement): Promise<void> {
-    const resourceType = this.options?.resourceType ?? "nam";
-    const resource = findResourceById(uiState.resourceLibrary[resourceType] ?? [], button.dataset.resourceId ?? "");
-    if (!resource || !canLookUpOnTone3000(resource) || button.disabled) {
-      return;
-    }
-    button.disabled = true;
-    button.textContent = "Looking on Tone3000…";
-    try {
-      const match = await findTone3000ByContentHash(resource);
-      if (!match) {
-        showNotification("Not on Tone3000", `no Tone3000 model has the same ${resourceType === "ir" ? "samples" : "weights"} as "${resource.name}"`);
-        return;
-      }
-      applyTone3000Match(resourceType, resource, match);
-      const creator = match.tone.user?.username ? ` by ${match.tone.user.username}` : "";
-      const reposts = match.others > 0 ? ` (${match.others} other upload${match.others === 1 ? "" : "s"} share it)` : "";
-      showNotification("Found on Tone3000", `"${match.tone.title}"${creator}${reposts}`);
-    } catch (error) {
-      showNotification("Tone3000 lookup failed", error instanceof Error ? error.message : String(error));
-    } finally {
-      this.renderLibraryList();
-    }
-  }
-
   private async handleLibraryClick(event: Event): Promise<void> {
     const target = event.target as HTMLElement | null;
     if (!target) {
@@ -1470,7 +1414,7 @@ export class ResourceBrowserModal {
 
     const lookupButton = target.closest(".resource-browser-details-tone3000-lookup-btn") as HTMLButtonElement | null;
     if (lookupButton) {
-      void this.lookUpOnTone3000(lookupButton);
+      void lookUpOnTone3000(lookupButton, this.options?.resourceType ?? "nam", () => this.renderLibraryList());
       return;
     }
 
@@ -1508,7 +1452,7 @@ export class ResourceBrowserModal {
     if (copyPathButton) {
       const resourceId = copyPathButton.dataset.resourceId ?? "";
       if (resourceId) {
-        void this.copyLocalLibraryPath(resourceId);
+        void copyLibraryResourcePath(uiState.resourceLibrary[this.options?.resourceType ?? "nam"] ?? [], resourceId);
       }
       return;
     }

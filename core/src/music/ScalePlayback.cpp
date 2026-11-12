@@ -304,7 +304,8 @@ void AddPluck(std::vector<double>& mix, const PlayedNote& note, double sampleRat
 
         const double rise = n < attack ? static_cast<double>(n) / static_cast<double>(attack) : 1.0;
         const double fall =
-            n < fadeFrom ? 1.0 : 0.5 + 0.5 * std::cos(kPi * static_cast<double>(n - fadeFrom) / static_cast<double>(fade));
+            n < fadeFrom ? 1.0
+                         : 0.5 + 0.5 * std::cos(kPi * static_cast<double>(n - fadeFrom) / static_cast<double>(fade));
         mix[start + n] += level * rise * fall * heard;
     }
 }

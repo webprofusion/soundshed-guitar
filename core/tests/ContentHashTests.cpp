@@ -96,8 +96,8 @@ fs::path FreshSandbox(const std::string& name)
 {
     // Per-process, so a parallel ctest run of another build cannot delete it mid-test. The
     // settings root moves into it too: without that the controller opens the real profile.
-    const fs::path root =
-        fs::temp_directory_path() / "soundshed-content-hash-tests" / (name + "-" + std::to_string(std::random_device{}()));
+    const fs::path root = fs::temp_directory_path() / "soundshed-content-hash-tests" /
+                          (name + "-" + std::to_string(std::random_device{}()));
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root, ec);
@@ -136,7 +136,8 @@ bool TestTrainerVectors()
     for (const auto& vector : vectors["vectors"])
     {
         // Re-serialised: doubles print back as the same value.
-        const std::string expected = vector["weights_hash"].is_string() ? vector["weights_hash"].get<std::string>() : "(none)";
+        const std::string expected =
+            vector["weights_hash"].is_string() ? vector["weights_hash"].get<std::string>() : "(none)";
         ok &= ExpectEq(HashOfText(vector["model"].dump()), expected, vector["name"].get<std::string>());
     }
 
@@ -152,15 +153,16 @@ bool TestRawLiterals()
     bool ok = ExpectEq(HashOfText(wavenet), expected, "the plain WaveNet vector as written");
 
     // Members in any order, the architecture last: the weights are read before it is known.
-    ok &= ExpectEq(HashOfText(R"({"weights":[0.5,-1.25,3.0,1e-8,0.02],"metadata":{"name":"x"},"architecture":"WaveNet"})"),
-                   expected, "weights before the architecture, another spelling of 1e-08");
+    ok &= ExpectEq(
+        HashOfText(R"({"weights":[0.5,-1.25,3.0,1e-8,0.02],"metadata":{"name":"x"},"architecture":"WaveNet"})"),
+        expected, "weights before the architecture, another spelling of 1e-08");
     ok &= ExpectEq(HashOfText(R"({"architecture":"WaveNet","weights":[0.5,-1.25,3E0,0.00000001,2e-2]})"), expected,
                    "exponent spellings");
 
     for (const char* literal : {"1e309", "-1e309", "NaN", "Infinity", "-Infinity", "true", "null", "\"1\""})
     {
-        ok &= ExpectEq(HashOfText(std::string{R"({"architecture":"WaveNet","weights":[0.5,)"} + literal + "]}"), "(none)",
-                       std::string{"a weight of "} + literal);
+        ok &= ExpectEq(HashOfText(std::string{R"({"architecture":"WaveNet","weights":[0.5,)"} + literal + "]}"),
+                       "(none)", std::string{"a weight of "} + literal);
     }
 
     // Too small for a float32 is zero, not an error: [1e-400] hashes as [0].
@@ -175,8 +177,7 @@ bool TestRawLiterals()
     // A falsy config is an empty one; a truthy non-object is malformed.
     ok &= ExpectEq(HashOfText(R"({"architecture":"WaveNet","config":null,"weights":[0.5,-1.25,3.0,1e-08,0.02]})"),
                    expected, "a null config");
-    ok &= ExpectEq(HashOfText(R"({"architecture":"WaveNet","config":[1],"weights":[0.5]})"), "(none)",
-                   "a list config");
+    ok &= ExpectEq(HashOfText(R"({"architecture":"WaveNet","config":[1],"weights":[0.5]})"), "(none)", "a list config");
     ok &= ExpectEq(HashOfText("not json"), "(none)", "not JSON");
     ok &= ExpectEq(HashOfText(R"({"architecture":"WaveNet","weights":[0.5)"), "(none)", "a truncated file");
     return ok;
@@ -201,8 +202,10 @@ bool TestTestdataFiles()
         {Assets() / "amps/Guitar/TimR/JCM800 2203 1985/JCM800 Hi P6 B8 M4 T7 G10.nam", "nam",
          "nam-content-v1:d58e0069878ff3b47319295362a9421c1345ccda96f98546528c16a677e8716f"},
         // Its odd-sized bext chunk is not followed by a pad byte.
-        {Assets() / "ir/421 1960.wav", "ir", "ir-content-v1:f7f40423cd886ff9813b3101af50783d5cd4ebbf0d0212c047a48701e630f7b5"},
-        {Assets() / "ir/906 1960.wav", "ir", "ir-content-v1:569b49bdce544c090a26f8c0485372d16d7102fd28510a9cc44b27ed097097dd"},
+        {Assets() / "ir/421 1960.wav", "ir",
+         "ir-content-v1:f7f40423cd886ff9813b3101af50783d5cd4ebbf0d0212c047a48701e630f7b5"},
+        {Assets() / "ir/906 1960.wav", "ir",
+         "ir-content-v1:569b49bdce544c090a26f8c0485372d16d7102fd28510a9cc44b27ed097097dd"},
     };
 
     bool ok = true;
@@ -295,7 +298,7 @@ bool TestLibraryKeepsContentHash()
         QuietHost host(sandbox);
         PluginController controller(host);
         controller.Initialize();
-        const auto import =[&](const std::string& type, const std::string& id, const fs::path& path,
+        const auto import = [&](const std::string& type, const std::string& id, const fs::path& path,
                                 const std::string& category) {
             controller.HandleUIMessage(nlohmann::json{{"type", "importRemoteResource"},
                                                       {"requestId", "import-" + id},
@@ -323,13 +326,14 @@ bool TestLibraryKeepsContentHash()
         ok &= ExpectEq(MetadataValue(*wav, kContentHashMetadataKey), irHash, "an imported IR");
 
         // The UI sends a metadata map that replaces the row's; the hash is the file's and stays.
-        controller.HandleUIMessage(nlohmann::json{{"type", "updateLibraryResource"},
-                                                  {"resourceType", "nam"},
-                                                  {"resourceId", "local-nam"},
-                                                  {"name", "Renamed"},
-                                                  {"category", "amp"},
-                                                  {"metadata", {{"toneId", "123"}}}}
-                                       .dump());
+        controller.HandleUIMessage(nlohmann::json{
+            {"type", "updateLibraryResource"},
+            {"resourceType", "nam"},
+            {"resourceId", "local-nam"},
+            {"name", "Renamed"},
+            {"category", "amp"},
+            {"metadata",
+             {{"toneId", "123"}}}}.dump());
         const auto edited = controller.GetResourceLibrary().LookupResource("nam", "local-nam");
         ok &= Expect(edited.has_value(), "the edited row went missing");
 
@@ -403,6 +407,7 @@ bool TestLibraryKeepsContentHash()
     ok &= ExpectEq(store.GetMeta(kContentHashRevisionKey).value_or("(none)"), kContentHashRevision, "revision stamp");
     return ok;
 }
+
 bool TestArchiveReferenceFindsTheSameModel()
 {
     const std::string hash = "nam-content-v1:8bde975150a3ed6bf4208a555090a7237d87dd40643fd051e3c09bac7b633c14";
@@ -415,12 +420,10 @@ bool TestArchiveReferenceFindsTheSameModel()
     library.AddResource(local);
 
     // A shared preset names the Tone3000 model it used; this library has it from a folder.
-    nlohmann::json reference = {{"id", "tone3000:579453"},
-                                {"type", "nam"},
-                                {"provider", "tone3000"},
-                                {"providerKey", "579453"},
-                                {"hash", "0123456789abcdef"},
-                                {"providerData", {{"toneId", "57741"}, {"modelId", "579453"}}}};
+    nlohmann::json reference = {
+        {"id", "tone3000:579453"},    {"type", "nam"},
+        {"provider", "tone3000"},     {"providerKey", "579453"},
+        {"hash", "0123456789abcdef"}, {"providerData", {{"toneId", "57741"}, {"modelId", "579453"}}}};
     bool ok = ExpectEq(FindRemoteResource(library, reference), "", "a reference without a content hash");
 
     reference["contentHash"] = hash;

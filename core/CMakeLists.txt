@@ -604,6 +604,7 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/EffectProcessor.h
     src/dsp/EffectRegistry.h
     src/dsp/EffectRegistry.cpp
+    src/dsp/PitchTracker.cpp
     src/dsp/EffectParamSpec.h
     src/dsp/EffectAnalysis.h
     src/dsp/EffectAnalysis.cpp
@@ -691,6 +692,7 @@ set(GUITARFX_CORE_SOURCES
     src/dsp/reverb/VerbalStages.h
     src/dsp/reverb/VerbalSpring.h
     src/dsp/reverb/VerbalEngine.h
+    src/dsp/reverb/VerbalVoicings.h
     src/dsp/reverb/VerbalPresets.h
     src/dsp/reverb/VerbalEffect.h
     src/dsp/effects/CompressorEffect.h
@@ -777,6 +779,7 @@ set(GUITARFX_CORE_SOURCES
     src/music/ScalePlayback.h
     src/music/ScalePlayback.cpp
     src/music/ScaleGuideView.h
+    src/music/ScaleGuideRequest.cpp
     src/music/ScaleGuideView.cpp
 
     # Utilities
@@ -817,6 +820,8 @@ if(GUITARFX_CORE_ENABLE_WASM_EFFECTS)
     list(APPEND GUITARFX_CORE_SOURCES
         src/dsp/effects/WasmEffect.h
         src/dsp/effects/WasmEffect.cpp
+        src/dsp/effects/WasmDescriptor.h
+        src/dsp/effects/WasmDescriptor.cpp
     )
 endif()
 

@@ -539,6 +539,7 @@ Ptr Shell::BuildScaleGuide(float width)
     };
     const auto playButton = [&, togglePlay] {
         auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+
         // Compact, its glyph alone (still named for a screen reader).
         if (compact)
         {
@@ -587,9 +588,8 @@ Ptr Shell::BuildScaleGuide(float width)
     const float levelWidth = compact ? 84.0f : 104.0f;
     const float instrumentWidth = compact ? 130.0f : width >= 1000.0f ? 240.0f : 180.0f;
     const float actionsWidth = playWidth + 6.0f + levelWidth + 6.0f + instrumentWidth;
-    const auto actions =
-        FixedWidth(actionsWidth, Row({Middle(play), HGap(6), FixedWidth(levelWidth, Middle(level)), HGap(6),
-                                      FixedWidth(instrumentWidth, Middle(instrument))}));
+    const auto actions = FixedWidth(actionsWidth, Row({Middle(play), HGap(6), FixedWidth(levelWidth, Middle(level)),
+                                                       HGap(6), FixedWidth(instrumentWidth, Middle(instrument))}));
     std::vector<Ptr> controls;
 
     if (!compact)
@@ -725,9 +725,9 @@ Ptr Shell::BuildScaleGuide(float width)
     if (!compact)
     {
         controls.push_back(VGap(10));
-        controls.push_back(Row({FixedWidth(labelWidth(positionLabel), Middle(Label(mTheme, positionLabel))), HGap(8),
-                                Middle(positions), Stretch(), FixedWidth(labelWidth("Dots"), Middle(Label(mTheme, "Dots"))),
-                                HGap(8), Middle(labels)}));
+        controls.push_back(Row(
+            {FixedWidth(labelWidth(positionLabel), Middle(Label(mTheme, positionLabel))), HGap(8), Middle(positions),
+             Stretch(), FixedWidth(labelWidth("Dots"), Middle(Label(mTheme, "Dots"))), HGap(8), Middle(labels)}));
     }
     else
     {

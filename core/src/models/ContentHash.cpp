@@ -115,7 +115,7 @@ struct ModelNode
     std::vector<std::unique_ptr<ModelNode>> models; ///< Null entries for non-objects.
 
     ListState weightsState = ListState::Missing;
-    bool weightsValid = true; ///< Every element a number that is a finite float32.
+    bool weightsValid = true;              ///< Every element a number that is a finite float32.
     std::vector<std::uint32_t> weightBits; ///< float32 bit patterns, -0 already +0.
 };
 
@@ -603,7 +603,8 @@ std::optional<std::string> ContentHashOfFile(const std::string& resourceType, co
                 return std::nullopt;
             }
 
-            const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+            const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(file),
+                                                  std::istreambuf_iterator<char>()};
             return IrContentHash(bytes);
         }
     }

@@ -160,10 +160,10 @@ bool SaveLayoutImageCredit(const FileSystem& fileSystem, const std::string& imag
 /// Every image a layout can draw on, each id once, in the order the library first lists it.
 /// Ids are shared by every layout, and when two folders hold the same id the later one wins, in
 /// this order: the legacy shared folder, then each indexed layout's folder in index order, then
-/// the factory layouts, then the factory category folders. That is the file the UI has always shown for an id, so everything that
-/// reads an image by id resolves it here. With `includeUnindexed`, layout folders the index does
-/// not list (a layout never saved, or one a delete left behind) come first, so they only supply an
-/// id found nowhere else. `excludeImagesDir` is left out entirely.
+/// the factory layouts, then the factory category folders. That is the file the UI has always shown for an id, so
+/// everything that reads an image by id resolves it here. With `includeUnindexed`, layout folders the index does not
+/// list (a layout never saved, or one a delete left behind) come first, so they only supply an id found nowhere else.
+/// `excludeImagesDir` is left out entirely.
 [[nodiscard]] std::vector<LayoutImageSource> CollectLayoutImageSources(
     const FileSystem& fileSystem, const std::filesystem::path& factoryLayoutsDir, bool includeUnindexed = false,
     const std::filesystem::path& excludeImagesDir = {});

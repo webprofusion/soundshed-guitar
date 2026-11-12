@@ -162,16 +162,16 @@ void PluginController::SendInputLevellingTraining()
     const bool clipped = active && hold.Clipped();
 
     mInputLevellingLastSent = std::chrono::steady_clock::now();
-    SendMessageToUI(nlohmann::json{
-        {"type", "inputLevellingTraining"},
-        {"active", active},
-        {"livePeakDbfs", DbOrNull(live)},
-        {"capturedPeakDbfs", DbOrNull(captured)},
-        {"clipped", clipped},
-        {"recommendedTrimDb",
-         captured ? DbOrNull(TrimFor(kInputLevellingTargetPeakDbfs, *captured)) : nlohmann::json()},
-        {"targetPeakDbfs", kInputLevellingTargetPeakDbfs}}
-                        .dump());
+    SendMessageToUI(
+        nlohmann::json{{"type", "inputLevellingTraining"},
+                       {"active", active},
+                       {"livePeakDbfs", DbOrNull(live)},
+                       {"capturedPeakDbfs", DbOrNull(captured)},
+                       {"clipped", clipped},
+                       {"recommendedTrimDb",
+                        captured ? DbOrNull(TrimFor(kInputLevellingTargetPeakDbfs, *captured)) : nlohmann::json()},
+                       {"targetPeakDbfs", kInputLevellingTargetPeakDbfs}}
+            .dump());
 }
 
 void PluginController::SetInputLevellingTraining(bool active)

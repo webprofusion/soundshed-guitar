@@ -99,8 +99,8 @@ constexpr double kThruRampSeconds = 0.005;
  * from E4 up, and within 23 ms nine times in ten. A string's pitch is not in the signal until
  * one period after the pluck, 12 ms on a low E. A low note picked hard and palm-muted takes
  * about 40 ms: for its first 45 ms only half of each cycle repeats. Notes waits up to 5 ms more
- * where the first reading is too far off a note's centre to say which note it is. Guitar Thru passes the guitar on, for an instrument layered with
- * it or a chain that carries on; off, only the instrument (through its Plugin Host's Mix) is
+ * where the first reading is too far off a note's centre to say which note it is. Guitar Thru passes the guitar on, for
+ * an instrument layered with it or a chain that carries on; off, only the instrument (through its Plugin Host's Mix) is
  * heard.
  *
  * The notes reach every Plugin Host downstream of this node (SignalGraphExecutor, "Note

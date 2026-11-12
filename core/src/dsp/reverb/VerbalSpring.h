@@ -153,6 +153,7 @@ class VerbalSpring
         {
             StepDampRamp();
         }
+
         std::array<float, kSprings> loopL{};
         std::array<float, kSprings> loopR{};
 

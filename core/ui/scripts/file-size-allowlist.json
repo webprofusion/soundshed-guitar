@@ -1,7 +1,7 @@
 {
   "budget": 800,
   "allowed": {
-    "ts/resourceBrowser.ts": 2139,
+    "ts/resourceBrowser.ts": 2119,
     "ts/layoutDesigner.ts": 1981,
     "ts/views.ts": 1413,
     "ts/riffLibrary.ts": 1382,
@@ -11,8 +11,8 @@
     "ts/practiceTool.ts": 1176,
     "css/settings.css": 1086,
     "ts/performancePads.ts": 965,
-    "css/modals/resource-browser.css": 927,
     "css/controls.css": 924,
-    "css/themes/light.css": 836
+    "css/themes/light.css": 836,
+    "css/modals/resource-browser.css": 815
   }
 }

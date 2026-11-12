@@ -270,8 +270,8 @@ class Sweep
         }
 
         ++mFailures;
-        std::cout << "  FAIL " << info.displayName << " (" << info.type << "): " << scenario << ": "
-                  << stats.Describe() << "\n";
+        std::cout << "  FAIL " << info.displayName << " (" << info.type << "): " << scenario << ": " << stats.Describe()
+                  << "\n";
     }
 
     void Fail(const guitarfx::EffectTypeInfo& info, const std::string& scenario, const std::string& why)
@@ -360,12 +360,15 @@ class Sweep
 
         for (const bool high : {false, true})
         {
-            run(high ? "every parameter at max" : "every parameter at min", [&](guitarfx::EffectProcessor& effect) {
-                for (const auto& param : info.parameters)
-                {
-                    effect.SetParam(param.id, high ? param.maxValue : param.minValue);
-                }
-            }, true);
+            run(
+                high ? "every parameter at max" : "every parameter at min",
+                [&](guitarfx::EffectProcessor& effect) {
+                    for (const auto& param : info.parameters)
+                    {
+                        effect.SetParam(param.id, high ? param.maxValue : param.minValue);
+                    }
+                },
+                true);
         }
     }
 
@@ -465,8 +468,7 @@ int main()
     }
 
     std::cout << "\n========================================\n";
-    std::cout << "Swept " << swept << " effects, " << sweep.Checks() << " checks, " << sweep.Failures()
-              << " failed\n";
+    std::cout << "Swept " << swept << " effects, " << sweep.Checks() << " checks, " << sweep.Failures() << " failed\n";
     std::cout << "========================================\n";
 
     if (swept == 0)

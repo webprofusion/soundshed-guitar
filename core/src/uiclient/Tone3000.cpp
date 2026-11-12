@@ -405,7 +405,8 @@ std::vector<RemoteRef> MissingRemoteRefs(const ClientState& state, const std::st
         ref.provider = Text(reference, "provider");
         ref.providerKey = Text(reference, "providerKey");
         ref.hash = Text(reference, "hash");
-        ref.contentHash = IsContentHash(Text(reference, "contentHash")) ? Text(reference, "contentHash") : std::string{};
+        ref.contentHash =
+            IsContentHash(Text(reference, "contentHash")) ? Text(reference, "contentHash") : std::string{};
 
         if (const auto data = reference.find("providerData"); data != reference.end() && data->is_object())
         {
