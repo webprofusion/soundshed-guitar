@@ -176,7 +176,8 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
     if (stacked)
     {
         heading->Colour(mTheme.Pick(el::rgba(220, 227, 243, 200), mTheme.TextSecondary()));
-        return Col({FixedHeight(16, heading), VGap(6), FixedHeight(26, controls)});
+        // Touch sizes: the row's buttons and field are hit over 36 px (EffectPage.cpp StackedSlot).
+        return Col({FixedHeight(16, heading), VGap(6), FixedHeight(metrics::Touch() ? 36 : 26, controls)});
     }
 
     return Row(

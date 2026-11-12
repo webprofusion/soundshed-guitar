@@ -45,6 +45,7 @@ import { initSignalChainHistory } from "./signalPath/history.js";
 import { initResourceSlotDragHighlight } from "./signalPath/resourceFileDrag.js";
 import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
+import { initializeModalEscape } from "./modalEscape.js";
 import { activateTab, initCompactStageDestinations, initCompactStagePersistence, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
 import { handleDroppedRiffAudioFiles, initializeRiffLibraryPanel } from "./riffLibrary.js";
 import { initializePracticeToolPanel, setPracticeToolPresetRecaller } from "./practiceTool.js";
@@ -239,6 +240,7 @@ async function bootstrap(): Promise<void> {
   initializeAmpCabPowerControls();
   initializePresetControls();
   initializeDialogModals();
+  initializeModalEscape();
   initializeSavePresetModal();
   initializeSaveAsButton();
   initializePresetActionButtons();

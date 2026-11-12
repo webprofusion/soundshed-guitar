@@ -116,7 +116,7 @@ std::string Shell::LastNodeBeforeOutput() const
     return last.kind == ChainItem::Kind::Node ? last.nodeId : last.joinNodeId;
 }
 
-void Shell::OpenNodeMenu(const std::string& nodeId)
+void Shell::OpenNodeMenu(const std::string& nodeId, bool fromEditor)
 {
     if (!mState.activePreset)
     {
@@ -183,7 +183,12 @@ void Shell::OpenNodeMenu(const std::string& nodeId)
     }
 
     const auto name = guitarfx::uiclient::NodeDisplayName(mState, *node);
-    items.push_back({"Show controls", false, false, [this, nodeId] { SelectNode(nodeId); }});
+
+    if (!fromEditor)
+    {
+        items.push_back({"Show controls", false, false, [this, nodeId] { SelectNode(nodeId); }});
+    }
+
     items.push_back({node->enabled ? "Turn off" : "Turn on", false, false,
                      [&commands, nodeId, bypass = node->enabled] { commands.SetNodeBypassed(nodeId, bypass); }});
 

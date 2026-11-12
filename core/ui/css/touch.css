@@ -1,0 +1,673 @@
+/* ===== Touch: hit areas and the text floor =====
+ *
+ * Last in the cascade, after the compact sheets, because it adjusts controls they
+ * size. Two things live here:
+ *
+ *   - Under a coarse pointer, at any density, every control that takes a tap gets
+ *     a hit area of 44px where its bar or row has room, and never under 40. The
+ *     drawing stays as it is wherever it already reads well: an invisible ::after
+ *     with a negative inset is the target, and gaps between neighbours grow so two
+ *     hit areas never overlap (each reaches at most half the gap). A bar grows only
+ *     where its controls could not otherwise reach 40, and says by how much.
+ *
+ *   - At compact density, and on a touch screen at any density, text a person reads
+ *     to operate a control is at least 11px; badges, counts and unit suffixes 10.
+ *
+ * A mouse (pointer: fine) at full density sees nothing from this sheet.
+ *
+ * The hit area helper: a control listed under "position: relative" and "::after"
+ * takes --hit (an inset, negative to grow) from its own rule. The ones already
+ * positioned (absolute) are left out of the first list so they keep their place.
+ * Both lists are :where(), so any rule below that sets one control's inset wins.
+ */
+
+@media (pointer: coarse) {
+  :where(.preset-nav-btn, .preset-action-btn, .control-bar-tab, .preset-selector,
+    .footer-bar .footer-btn, .footer-ab-btn, .footer-demo-select,
+    .scene-badge-label, .scene-badge-close, .scene-badge-add,
+    .default-effect-shell-dsp-toggle, .default-effect-shell-chip-presets,
+    .default-effect-shell-meter-toggle, .resource-nav-btn, .resource-clear-btn,
+    .resource-picker-label, .node-param-tab,
+    .nav-tab, .nav-settings-btn, .tab-btn, .preset-lib-tab, .preset-tag-filter-chip, .preset-tag-chip,
+    .preset-library-close-btn, .preset-library-export-btn, .preset-folder-toolbar-btn,
+    .preset-add-to-mixer-btn, .preset-rating-star, .fx-item-fav, .fx-selector-close,
+    .tone-sharing-card-btn, .tone-sharing-layout-btn, .tone-sharing-account-chip,
+    .looper-btn, .looper-segment, .looper-click-toggle, .looper-tempo-chip,
+    .looper-layers-toggle, .looper-more-btn, .looper-bars-btn,
+    .modal-close, .eq-modal-close, .metronome-close-btn, .metronome-bpm-btn,
+    .tuner-close-btn, .tuner-mute-btn, .gate-learn-button) {
+    position: relative;
+  }
+
+  :where(.preset-nav-btn, .preset-action-btn, .control-bar-tab, .preset-selector,
+    .footer-bar .footer-btn, .footer-ab-btn, .footer-demo-select,
+    .scene-badge-label, .scene-badge-close, .scene-badge-add,
+    .default-effect-shell-dsp-toggle, .default-effect-shell-chip-presets,
+    .default-effect-shell-toggle, .default-effect-shell-meter-toggle,
+    .resource-nav-btn, .resource-clear-btn, .resource-picker-label, .node-param-tab,
+    .nav-tab, .nav-settings-btn, .tab-btn, .preset-lib-tab, .preset-tag-filter-chip, .preset-tag-chip,
+    .preset-library-close-btn, .preset-library-export-btn, .preset-folder-toolbar-btn,
+    .preset-add-to-mixer-btn, .preset-rating-star, .fx-item-fav, .fx-selector-close,
+    .tone-sharing-card-btn, .tone-sharing-layout-btn, .tone-sharing-account-chip,
+    .looper-btn, .looper-segment, .looper-click-toggle, .looper-tempo-chip,
+    .looper-layers-toggle, .looper-more-btn, .looper-bars-btn,
+    .modal-close, .eq-modal-close, .metronome-close-btn, .metronome-bpm-btn,
+    .tuner-close-btn, .tuner-mute-btn, .gate-learn-button,
+    .signal-path-add-menu-trigger, .signal-path-wrap-btn, .signal-path-collapse-btn,
+    .signal-path-resize-handle)::after {
+    content: "";
+    position: absolute;
+    inset: var(--hit, -6px);
+  }
+
+  /* ── Top strip ───────────────────────────────────────────────────────────────
+     The compact strip is 44px tall on a touch screen, so a 32px control reaches
+     its edges with 6px each way. Across, the gaps open to 10px (12px from 720px
+     wide), which costs the preset name 30-40px and gives each control 40-44px. */
+  html :is(.preset-nav-btn, .preset-action-btn) {
+    --hit: -6px -5px;
+  }
+
+  html[data-density="compact"] .preset-selector {
+    height: 32px;
+  }
+
+  /* The pill opens the library from anywhere but its heart; its own content (the
+     name, which drags into a setlist) stays on top of the grown area. */
+  html .preset-selector {
+    z-index: 0;
+    --hit: -6px 0;
+  }
+
+  html .preset-selector::after {
+    z-index: -1;
+  }
+
+  html[data-density="compact"] .preset-selector-row,
+  html[data-density="compact"] .preset-toolbar,
+  html[data-density="compact"][data-compact-layout] .preset-toolbar,
+  html[data-density="compact"] .preset-actions,
+  html[data-density="compact"] .control-bar-body-inner,
+  html[data-density="compact"] .preset-group {
+    gap: 10px;
+  }
+
+  html[data-density="compact"] .control-bar-tab[data-control-bar-tab="controls"] {
+    min-height: 32px;
+    --hit: -6px -5px;
+  }
+
+  html[data-density="compact"] .preset-extra-actions-btn {
+    min-width: 30px;
+  }
+
+  /* Narrow: the strip is two lines 10px apart, so each line's controls reach 5px
+     up and down (42px) and meet the other line's halfway. */
+  @media (max-width: 540px) {
+    html[data-density="compact"] :is(.preset-nav-btn, .preset-action-btn,
+      .control-bar-tab[data-control-bar-tab="controls"]) {
+      --hit: -5px;
+    }
+
+    html[data-density="compact"] .preset-selector {
+      --hit: -5px 0;
+    }
+
+    /* The strip's body clipped them at its edges: 5px each way (10px taller). */
+    html[data-density="compact"] .control-bar-body {
+      padding-block: 5px;
+    }
+  }
+
+  /* The stacked layout's tab bar (Play, Tones, Jam) is 44px, 8px more, like full
+     density's; the Chain and Effect tabs are 36px with 4px each way. */
+  html[data-density="compact"][data-compact-layout="stack"] .icon-bar {
+    height: 44px;
+  }
+
+  html[data-density] .compact-stage-tab {
+    position: relative;
+    min-height: 36px;
+  }
+
+  html .compact-stage-tab::after {
+    content: "";
+    position: absolute;
+    inset: -4px -1px;
+  }
+
+  /* ── Footer ──────────────────────────────────────────────────────────────────
+     Compact: the bar grows 2px (38 to 40) so its 32px buttons reach 40; going to
+     44 would cost a landscape phone 6px of a ~290px stage. Full density's bar is
+     46px already. Gaps open to 12px for 44px across. */
+  html[data-density="compact"] .footer-bar {
+    min-height: 40px;
+    padding-top: 4px;
+    padding-bottom: calc(4px + var(--ssg-safe-bottom));
+  }
+
+  html .footer-bar :is(.footer-btn, .footer-demo-select) {
+    --hit: -4px -6px;
+  }
+
+  html:not([data-density="compact"]) .footer-bar :is(.footer-btn, .footer-demo-select) {
+    --hit: -6px -6px;
+  }
+
+  html .footer-bar :is(.footer-compact-shortcuts, .footer-chain-history, .footer-group,
+    .footer-demo-controls, .footer-right, .footer-zoom-control, .footer-theme-select) {
+    gap: 12px;
+  }
+
+  /* A and B: each half of the switch is 40 wide, and reaches the bar's edges. */
+  html .footer-ab-btn {
+    min-width: 40px;
+    --hit: -7px 0;
+  }
+
+  html .footer-ab-btn:first-child {
+    --hit: -7px 0 -7px -5px;
+  }
+
+  html .footer-ab-btn:last-child {
+    --hit: -7px -5px -7px 0;
+  }
+
+  html .footer-ab-switch {
+    margin-inline: 6px;
+  }
+
+  /* A phone held upright has no room for 12px gaps: 8px, and each button reaches
+     4px across (40 wide). */
+  @media (max-width: 420px) {
+    html .footer-bar :is(.footer-compact-shortcuts, .footer-chain-history, .footer-group,
+      .footer-demo-controls, .footer-right, .footer-zoom-control, .footer-theme-select) {
+      gap: 8px;
+    }
+
+    html .footer-bar .footer-btn {
+      --hit: -4px;
+    }
+
+    html .footer-ab-switch {
+      margin-inline: 4px;
+    }
+  }
+
+  /* Inside the OPTIONS sheet the rows are 8px apart; nothing reaches past a row. */
+  html[data-density="compact"] .footer-actions-panel :is(.footer-btn, .footer-demo-select) {
+    --hit: -4px -6px;
+  }
+
+  /* A select draws no ::after: its box is its hit area. */
+  html .footer-actions-panel select {
+    min-height: 40px;
+  }
+
+  html #preset-favorite::after {
+    inset: -7px;
+  }
+
+  /* ── Scenes ──────────────────────────────────────────────────────────────────
+     The tray is 40px tall (14px more) so its 26px chips reach 40; the chain under
+     it keeps clear of it by as much. Each chip's name and its × split the chip's
+     width between them and do not reach into each other: the × is 36px wide with
+     its glyph at the left, so a tap on the name never lands on it. */
+  html .signal-path-scene-badges {
+    gap: 8px;
+    padding: 7px 4px;
+  }
+
+  html .signal-path-scene-badges:not([hidden]) ~ .signal-path-scroll {
+    padding-top: 44px;
+  }
+
+  /* The name keeps its ellipsis, but clips 8px out rather than at its edge, so its
+     hit area is not cut back to the drawing. */
+  html .scene-badge-label {
+    overflow: clip;
+    overflow-clip-margin: 8px;
+    --hit: -8px 0 -8px -4px;
+  }
+
+  html .scene-badge-close {
+    width: 36px;
+    justify-content: flex-start;
+    padding-left: 4px;
+    border-radius: var(--radius-pill);
+    --hit: -8px -4px -8px 0;
+  }
+
+  html .scene-badge-add {
+    min-width: 40px;
+    --hit: -7px -4px;
+  }
+
+  /* Where the chain's collapse chevron shows, the tray moves off it so the
+     chevron gets a 44x40 corner of its own. */
+  html:is(:not([data-density="compact"]), [data-compact-split]) .signal-path-scene-badges {
+    left: 46px;
+  }
+
+  html .signal-path-collapse-btn::after {
+    inset: 0 auto auto -2px;
+    width: 44px;
+    height: 40px;
+  }
+
+  /* ── Chain ───────────────────────────────────────────────────────────────── */
+
+  /* The floating add button sits in the chain's bottom-right corner. The chain
+     keeps clear of it, so the last node on a line that reaches the right edge (the
+     Output, often) is never under or against it. */
+  html .signal-path-bar:not(.mix-tab-active) .signal-path-nodes {
+    padding-right: 48px;
+  }
+
+  html .signal-path-add-menu-trigger {
+    --hit: -3px;
+  }
+
+  /* In split the + leaves the chain for the scene tray's row: 40px (the tray's
+     height) at the row's right end, short of the wrap button's hit area, and the
+     tray stops short of it. The chain under that row needs no clearance, so the
+     default preset stays on one line. A preset with no scenes has no row: there
+     the chain's first line keeps clear of the + instead. */
+  html[data-compact-split] .signal-path-add-menu {
+    top: 0;
+    right: 54px;
+    bottom: auto;
+  }
+
+  /* A real 44px button, no grown hit area: a tap a little outside a drawing went
+     to the chain under it (touch adjustment goes by the boxes, not ::after). */
+  html[data-compact-split] .signal-path-add-menu-trigger {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+    --hit: 0;
+  }
+
+  html[data-compact-split] .signal-path-scene-badges {
+    max-width: calc(100% - 46px - 108px);
+  }
+
+  html[data-compact-split] .signal-path-scene-badges:not([hidden]) ~ .signal-path-scroll .signal-path-nodes {
+    padding-right: 0;
+  }
+
+  /* A node's icon tab stands 16px above it: the first line starts that much lower
+     so a tab at the line's right end stays clear of the + above it. */
+  html[data-compact-split] .signal-path-scene-badges:not([hidden]) ~ .signal-path-scroll {
+    padding-top: 60px;
+  }
+
+  html .signal-path-wrap-btn::after {
+    inset: 0 0 -10px -12px;
+  }
+
+  /* The resize handle: a 24px band of its own (16px more). Reaching up over the
+     chain instead took taps meant for the nodes of its last line. */
+  html .signal-path-resize-handle {
+    position: relative;
+    height: 24px;
+  }
+
+  html .signal-path-resize-handle::after {
+    inset: 0;
+  }
+
+  /* Bypass and remove on a selected node: 36px each, out from the node's corners
+     and well short of its middle. An icon-only chain (dragged small) keeps them
+     small: there the 40px node has no room for two. */
+  html .signal-path-bar:not([data-density="compact"]) :is(.signal-node-delete, .signal-node-bypass)::after {
+    content: "";
+    position: absolute;
+    top: -12px;
+    width: 36px;
+    height: 36px;
+  }
+
+  html .signal-path-bar:not([data-density="compact"]) .signal-node-delete::after {
+    left: -12px;
+  }
+
+  html .signal-path-bar:not([data-density="compact"]) .signal-node-bypass::after {
+    right: -12px;
+  }
+
+  /* ── Effect panel ────────────────────────────────────────────────────────── */
+
+  html .default-effect-shell-header-actions,
+  html .default-effect-shell .resource-selector-row {
+    gap: 10px;
+  }
+
+  html :is(.default-effect-shell-dsp-toggle, .default-effect-shell-chip-presets,
+    .default-effect-shell-toggle) {
+    --hit: -7px -5px;
+  }
+
+  html .default-effect-shell-meter-toggle {
+    --hit: -12px 0;
+  }
+
+  html .default-effect-shell-title-edit::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset: -8px -6px -14px -16px;
+  }
+
+  html :is(.resource-nav-btn, .resource-clear-btn, .resource-picker-label) {
+    --hit: -6px -5px;
+  }
+
+  html .node-param-tabs {
+    margin-top: 6px;
+  }
+
+  html .node-param-tab {
+    --hit: -7px -8px;
+  }
+
+  /* ── Controls sheet ──────────────────────────────────────────────────────────
+     The gate, levelling and input mode triggers grow to 40. Mute and the status
+     chevron under the output meter are stacked in a 36px column: each takes the
+     chevron under the output meter sit side by side under it (the column is 4px
+     wider), 14px tall, each with its 40x40 reaching outward from the pair. */
+  html :is(.gate-settings-trigger, .input-vu-meter-dropdown-trigger)::after {
+    inset: -12px -12px;
+  }
+
+  html .input-mode-trigger::after {
+    inset: -13px -6px;
+  }
+
+  html .output-vu-meter {
+    display: grid;
+    grid-template-columns: 18px 18px;
+    column-gap: 4px;
+    justify-content: center;
+  }
+
+  html .output-vu-meter > :not(.output-quick-mute-btn, .output-status-trigger) {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+
+  html .output-vu-meter .output-status-trigger {
+    height: 14px;
+    margin-top: 0;
+  }
+
+  html .output-quick-mute-btn::after {
+    inset: -13px -2px -13px -20px;
+  }
+
+  html .output-status-trigger::after {
+    inset: -13px -20px -13px -2px;
+  }
+
+  /* ── Header at full density ──────────────────────────────────────────────────
+     36px tall: its tabs and settings button reach 40 with the bar grown 8px. */
+  html:not([data-density="compact"]) .icon-bar {
+    height: 44px;
+  }
+
+  html:not([data-density="compact"]) .nav-tab {
+    --hit: -4px 0;
+  }
+
+  html:not([data-density="compact"]) .nav-settings-btn {
+    --hit: -6px;
+  }
+
+  html[data-density="compact"] .nav-tab {
+    --hit: 0;
+  }
+
+  html[data-density="compact"] .nav-settings-btn {
+    --hit: -6px;
+  }
+
+  /* ── Panels ─────────────────────────────────────────────────────────────── */
+
+  /* Section chips (Tones, Jam, Settings) are 29-33px rows; the gap between rows of
+     chips and what follows leaves 6px each way. */
+  html :is(.tab-btn, .preset-lib-tab, .preset-tag-filter-chip) {
+    --hit: -6px -3px;
+  }
+
+  html :is(.preset-library-close-btn, .preset-library-export-btn) {
+    --hit: -8px;
+  }
+
+  html .preset-folder-toolbar {
+    gap: 10px;
+  }
+
+  html .preset-folder-toolbar-btn {
+    --hit: -5px;
+  }
+
+  html .preset-folder-item {
+    min-height: 40px;
+  }
+
+  html .preset-add-to-mixer-btn {
+    --hit: -10px -6px;
+  }
+
+  /* Five stars in a row cannot each be 40 across: each is a column the row's
+     height, drawn over the row's other parts. */
+  html .preset-rating-star {
+    z-index: 1;
+    padding-inline: 4px;
+    --hit: -13px 0;
+  }
+
+  /* Section tab rows (Tones, Jam) scroll sideways, which clips at their padding
+     box: 6px of padding each way (the row 12px taller) lets the tabs' hit areas
+     show. */
+  html :has(> .tone-sharing-nav-btn) {
+    padding-block: 6px;
+  }
+
+  html .fx-item-fav {
+    --hit: -8px;
+  }
+
+  html .fx-selector-close {
+    --hit: -6px -2px;
+  }
+
+  /* Tones cards: the buttons grow to 32x30 and 12px apart, the card a little taller. */
+  html .tone-sharing-card-btn {
+    min-width: 32px;
+    min-height: 30px;
+    --hit: -5px -6px;
+  }
+
+  html :is(.tone-sharing-card-actions, :has(> .tone-sharing-card-btn)) {
+    gap: 12px;
+  }
+
+  /* Dialog buttons and the metronome's pickers: 40px tall drawn (their rows have
+     the room); Save As's tag chips 32px with 8px between rows. */
+  html .modal :is(.btn, .metro-select-trigger, select, .tuner-unit-btn),
+  html .modal .modal-footer button {
+    height: auto;
+    min-height: 40px;
+  }
+
+  /* Fields in panels, dialogs and the add-effect library: 40px tall. */
+  html :is(.panel-content, .modal, .fx-selector-panel, .looper-more-sheet)
+    :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], select) {
+    min-height: 40px;
+  }
+
+  html :is(.setlist-toggle, .tone-sharing-toolbar-btn, #jam-search-button) {
+    min-height: 40px;
+  }
+
+  html .tone-sharing-nav-btn {
+    min-height: 32px;
+  }
+
+  html .tone-sharing-account-chip {
+    min-height: 30px;
+  }
+
+  html .modal .preset-modal-tab-btn {
+    min-height: 36px;
+    --hit: -2px -3px;
+  }
+
+  html .preset-tag-chip {
+    min-height: 32px;
+    --hit: -4px -3px;
+  }
+
+  html :has(> .preset-tag-chip) {
+    gap: 8px 6px;
+  }
+
+  html :is(.tone-sharing-layout-btn, .tone-sharing-account-chip) {
+    --hit: -6px;
+  }
+
+  /* Looper strip: 28px buttons 6px apart reach 40 tall within the strip. */
+  html :is(.looper-btn, .looper-segment, .looper-click-toggle, .looper-tempo-chip,
+    .looper-layers-toggle, .looper-more-btn, .looper-bars-btn) {
+    --hit: -6px -3px;
+  }
+
+  html .gate-learn-button {
+    --hit: -9px -4px;
+  }
+
+  /* ── Dialogs ─────────────────────────────────────────────────────────────── */
+
+  html :is(.modal-close, .eq-modal-close, .metronome-close-btn, .tuner-close-btn, .tuner-mute-btn) {
+    --hit: -8px;
+  }
+
+  html :is(.metronome-close-btn, .tuner-close-btn) {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  html .metronome-bpm-btn {
+    min-width: 40px;
+    min-height: 40px;
+    --hit: 0;
+  }
+
+  /* The tuner's reference steppers stood stacked, 13px each. Side by side they are
+     40px squares, down then up. */
+  html .tuner-ref-buttons {
+    flex-direction: row;
+  }
+
+  html .tuner-ref-input {
+    min-height: 40px;
+  }
+
+  html .tuner-ref-btn {
+    min-width: 40px;
+    font-size: 14px;
+  }
+
+  html .tuner-ref-btn:first-child {
+    order: 2;
+    border-bottom: 1px solid var(--modal-border-medium);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+  }
+
+  html .tuner-ref-btn:last-child {
+    order: 1;
+    border-radius: 0;
+  }
+
+  html .tuner-ref-btn::after {
+    content: none;
+  }
+
+  html .metro-beat {
+    min-width: 32px;
+    min-height: 40px;
+  }
+}
+
+/* ── Text floor ──────────────────────────────────────────────────────────────
+ * The same lists twice: at compact density, and under a coarse pointer at any
+ * density. !important because each of these is sized in several places (base,
+ * compact, rail) and the floor has to win over all of them.
+ */
+
+html[data-density="compact"] .icon-bar .nav-tab,
+html[data-density="compact"] :is(.control-bar-tab, .footer-actions-toggle, .compact-stage-tab,
+  .node-name, .node-type, .node-param-label, .node-param-value, .node-param-group-title,
+  .node-param-tab, .default-effect-shell-subtitle,
+  .node-resource-selector label, .resource-picker-label-hint, .fx-item-name, .settings-hint,
+  .knob-label, .knob-value, .control-stack-label, .toggle-label, .metronome-label,
+  .eq-band-title, .preset-add-to-mixer-btn, .preset-folder-path, .gate-learn-band-label,
+  .tone-sharing-card-btn, .tone-sharing-card-item-title, .tone-sharing-card-creator-handle,
+  .tone-sharing-card-item-description, .tone-sharing-row-title) {
+  font-size: 11px !important;
+}
+
+html[data-density="compact"] :is(.node-architecture-badge, .default-effect-shell-architecture-badge,
+  .node-bypass-badge, .node-calibration-badge, .fx-item-type, .fx-category-count, .fx-item-badge,
+  .tone-sharing-card-item-meta, .tone-sharing-meta-chip, .jam-meta-chip, .vu-readout,
+  .gate-learn-scale, .eq-visualizer-range, .eq-visualizer-header, .preset-selector-status,
+    .default-effect-shell-toggle) {
+  font-size: 10px !important;
+}
+
+/* The effect's ON/OFF switch: its 7px state word at 10px needs a wider pill, and
+   the thumb travels the extra width. */
+html[data-density="compact"] .default-effect-shell-toggle {
+  width: 48px;
+}
+
+html[data-density="compact"] .default-effect-shell-toggle:not(.bypassed) .default-effect-shell-toggle-track {
+  transform: translateX(28px);
+}
+
+@media (pointer: coarse) {
+  html .default-effect-shell-toggle {
+    width: 48px;
+  }
+
+  html .default-effect-shell-toggle:not(.bypassed) .default-effect-shell-toggle-track {
+    transform: translateX(28px);
+  }
+
+  html :is(.control-bar-tab, .footer-actions-toggle, .compact-stage-tab,
+    .node-name, .node-type, .node-param-label, .node-param-value, .node-param-group-title,
+    .node-param-tab, .default-effect-shell-subtitle,
+    .node-resource-selector label, .resource-picker-label-hint, .fx-item-name, .settings-hint,
+    .knob-label, .knob-value, .control-stack-label, .toggle-label, .metronome-label,
+    .eq-band-title, .preset-add-to-mixer-btn, .preset-folder-path, .gate-learn-band-label,
+    .tone-sharing-card-btn, .tone-sharing-card-item-title, .tone-sharing-card-creator-handle,
+    .tone-sharing-card-item-description, .tone-sharing-row-title) {
+    font-size: 11px !important;
+  }
+
+  html :is(.node-architecture-badge, .default-effect-shell-architecture-badge,
+    .node-bypass-badge, .node-calibration-badge, .fx-item-type, .fx-category-count, .fx-item-badge,
+    .tone-sharing-card-item-meta, .tone-sharing-meta-chip, .jam-meta-chip, .vu-readout,
+    .gate-learn-scale, .eq-visualizer-range, .eq-visualizer-header, .preset-selector-status,
+    .default-effect-shell-toggle) {
+    font-size: 10px !important;
+  }
+}
+
+/* The rail's labels at 11px: trimming the tracking keeps SETLIST and EFFECT
+   inside the 50px a rail button has. */
+html[data-density="compact"][data-compact-layout="rail"] .icon-bar .nav-tab {
+  letter-spacing: 0 !important;
+}

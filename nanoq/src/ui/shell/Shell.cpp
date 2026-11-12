@@ -170,6 +170,8 @@ void Shell::BuildRoot()
     mFrameSlot = MakeSlot();
     mWide = WantsWide();
     mSplit = !mWide && WantsSplit();
+    mTouch = TouchSizes();
+    metrics::gTouchSizes = mTouch;
     Fill(*mFrameSlot, BuildFrame());
     Ptr frame = mFrameSlot;
 
@@ -506,12 +508,19 @@ void Shell::OnTick()
     // A window resized (or zoomed) across the breakpoint gets the other frame, every region
     // built for it; and so does the compact frame going between split and staged, as its rail
     // and pages change with it.
-    const bool wide = WantsWide();
+    // A press held still is a right click (LongPress.h).
+    LongPress::Tick();
 
-    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit)
+    const bool wide = WantsWide();
+    const bool touch = TouchSizes();
+
+    // Touch sizes change every bar's height and every control's room, so they rebuild it all.
+    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit || touch != mTouch)
     {
         mWide = wide;
         mSplit = split;
+        mTouch = touch;
+        metrics::gTouchSizes = touch;
         mPlayStageShown = false;
         CloseOverlay();
         CloseDropdown();

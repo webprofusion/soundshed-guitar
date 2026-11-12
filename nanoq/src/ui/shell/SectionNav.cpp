@@ -46,15 +46,17 @@ class SectionTab final : public Pressable
             return {{100.0f, 33.0f}, {el::full_extent, 33.0f}};
         }
 
+        // Touch sizes: the chips and the account are hit over 40 px, drawn 30 tall in the middle.
         const float w = MeasureTextWidth(mLabel, LabelFont()) + (mStyle == Style::Chip ? 24.0f : 28.0f);
-        return {{w, 30.0f}, {w, 30.0f}};
+        const float h = metrics::Hit(30.0f, 40.0f);
+        return {{w, h}, {w, h}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = mStyle == Style::Side ? ctx.bounds : metrics::Face(ctx.bounds, ctx.bounds.width(), 30.0f);
 
         if (mStyle == Style::Account)
         {
@@ -195,7 +197,8 @@ Ptr Shell::WithSectionNav(SectionNav nav, Ptr content)
     }
 
     row.push_back(HGap(4));
-    return Col({FixedHeight(46, Pad(0, 8, 0, 8, Row(row))), rule(false), content});
+    const float padY = metrics::Touch() ? 5.0f : 8.0f;
+    return Col({FixedHeight(metrics::Touch() ? 50 : 46, Pad(0, padY, 0, padY, Row(row))), rule(false), content});
 }
 
 void Shell::OpenPublishInfo(bool pack)

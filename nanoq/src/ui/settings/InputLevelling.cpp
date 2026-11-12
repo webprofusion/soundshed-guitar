@@ -51,7 +51,7 @@ Ptr Shell::BuildInputLevellingButton()
 {
     // The web UI's chevron under the input meter; lit while a profile is applied.
     auto button = std::make_shared<IconButton>(mTheme, mIcons, "ui-caret");
-    button->Size(20, 18).IconSize(11);
+    button->Size(20, 18).IconSize(11).TouchTarget(36);
     button->onClick = [this, b = button.get()] { OpenInputLevelling(b->Bounds()); };
     mLive.Bind(
         button,

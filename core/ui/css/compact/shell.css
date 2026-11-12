@@ -16,7 +16,9 @@
  *     preset step, A/B, undo and the chain itself stay on the bars; options and
  *     level trims are what collapse.
  *   - Never shrink a control below 26px (32px under a coarse pointer). Reclaim
- *     height by removing chrome, not by making targets unhittable.
+ *     height by removing chrome, not by making targets unhittable. Under a coarse
+ *     pointer the hit areas grow past the drawing to 44px, never under 40
+ *     (css/touch.css).
  */
 
 /* ── Header ───────────────────────────────────────────────────────────────── */
@@ -598,7 +600,8 @@ html[data-density="compact"] .notification-toast {
  * 12.9" iPad) is touched as much as the compact one, and kept 26px settings, 28px
  * footer buttons and a 24px add button. So they match at every density; where a
  * compact rule sizes the same control, :is() lends them its specificity so they
- * still win over it.
+ * still win over it. These size the drawing; css/touch.css grows each hit area
+ * past it to 44px.
  */
 
 @media (pointer: coarse) {
@@ -769,13 +772,13 @@ html[data-density="compact"]:not([data-compact-split])[data-main-panel="visualiz
   At every density: the full shell's are the same size on a tablet.
 */
 @media (pointer: coarse) {
-  html :is(#preset-favorite, .default-effect-shell-title-edit,
+  html :is(.preset-favorite, .default-effect-shell-title-edit,
     .gate-settings-trigger, .output-quick-mute-btn, .output-status-trigger,
     .input-vu-meter-dropdown-trigger, .tuner-ref-btn) {
     position: relative;
   }
 
-  html :is(#preset-favorite, .default-effect-shell-title-edit,
+  html :is(.preset-favorite,
     .gate-settings-trigger, .output-quick-mute-btn, .output-status-trigger,
     .input-vu-meter-dropdown-trigger, .input-mode-trigger)::after {
     content: "";

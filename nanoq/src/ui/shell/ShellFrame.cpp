@@ -148,17 +148,58 @@ Ptr Shell::BuildTopBar()
     controls->onClick = [this] { OpenControls(); };
     mLive.Bind(controls, [this] { return mControlsOpen; }, [](IconButton& b, bool open) { b.Lit(open); });
 
+    auto update = BuildUpdateButton();
+
+    if (metrics::Touch())
+    {
+        // Touch sizes: each button is hit over 44 px, which spaces their faces as the gaps did,
+        // and what a narrow bar has no room for goes: Share first (only a pointer to Soundshed
+        // Guitar), then Random.
+        const int extras = TouchBarExtras(StageWidth(), update != nullptr);
+        std::vector<Ptr> items{HGap(7), prev, pill, next, HGap(2), create, edit, save};
+
+        if (extras >= 1)
+        {
+            items.push_back(random);
+        }
+
+        if (extras >= 2)
+        {
+            items.push_back(publish);
+        }
+
+        items.insert(items.end(), {more, HGap(4)});
+
+        if (update)
+        {
+            items.insert(items.end(), {Pad(0, 7, 0, 7, update), HGap(4)});
+        }
+
+        items.insert(items.end(), {controls, HGap(6)});
+        return FixedHeight(metrics::TopBarHeight(), Fill(mTheme.Tertiary(), PadXY(0, 2, Row(items))));
+    }
+
     std::vector<Ptr> items{HGap(15), prev, HGap(6), pill,   HGap(6), next,    HGap(10), create, HGap(4), edit,
                            HGap(4),  save, HGap(8), random, HGap(8), publish, HGap(4),  more,   HGap(19)};
 
-    if (auto update = BuildUpdateButton())
+    if (update)
     {
         items.insert(items.end(), {Pad(0, 1, 0, 1, update), HGap(8)});
     }
 
     items.insert(items.end(), {controls, HGap(6)});
     auto bar = Row(items);
-    return FixedHeight(metrics::kTopBarHeight, Fill(mTheme.Tertiary(), PadXY(0, 6, bar)));
+    return FixedHeight(metrics::TopBarHeight(), Fill(mTheme.Tertiary(), PadXY(0, 6, bar)));
+}
+
+int Shell::TouchBarExtras(float width, bool update)
+{
+    // The touch bar's buttons, the pill's least width and CONTROLS (BuildTopBar), and the update
+    // button when there is one.
+    constexpr float kHit = metrics::kTouchTarget;
+    const float base =
+        7.0f + kHit + 160.0f + kHit + 2.0f + 4.0f * kHit + 4.0f + 82.0f + 6.0f + (update ? 110.0f : 0.0f);
+    return width >= base + 2.0f * kHit ? 2 : width >= base + kHit ? 1 : 0;
 }
 
 MenuItem Shell::NewPresetItem()
@@ -253,6 +294,7 @@ Ptr Shell::BuildScenes()
         chips.push_back(add);
     }
 
+    const bool touch = metrics::Touch();
     auto wrap = std::make_shared<IconButton>(mTheme, mIcons, "ui-wrap");
     wrap->Size(24, 16).IconSize(12).Ink(mWrapChain ? mTheme.Accent() : mTheme.TextMuted());
     wrap->onClick = [this] {
@@ -277,14 +319,23 @@ Ptr Shell::BuildScenes()
         }
 
         tray->push_back(HGap(2));
-        row.push_back(
-            Rounded(mTheme.Pick(el::rgba(24, 24, 30, 184), mTheme.Text().opacity(0.06f)), 11.0f, PadXY(0, 2, tray)));
+        const auto trayColour = mTheme.Pick(el::rgba(24, 24, 30, 184), mTheme.Text().opacity(0.06f));
+
+        if (touch)
+        {
+            // The chips are hit over the row's 40 px; the tray is drawn round their faces as ever.
+            row.push_back(Over(tray, Middle(FixedHeight(22, el::share(el::rbox(trayColour, 11.0f))))));
+        }
+        else
+        {
+            row.push_back(Rounded(trayColour, 11.0f, PadXY(0, 2, tray)));
+        }
     }
 
     row.push_back(Stretch());
-    row.push_back(Pad(0, 0, 0, 6, wrap));
+    row.push_back(touch ? Ptr(wrap) : Pad(0, 0, 0, 6, wrap));
     row.push_back(HGap(6));
-    Ptr scenes = FixedHeight(24, Pad(0, 2, 0, 0, Row(row)));
+    Ptr scenes = touch ? FixedHeight(40, Row(row)) : FixedHeight(24, Pad(0, 2, 0, 0, Row(row)));
 
     // With two or more presets in the mix, their tabs and the Mix tab come first.
     if (auto tabs = BuildMixerTabs())
@@ -329,7 +380,11 @@ Ptr Shell::BuildChainStage()
     auto add = std::make_shared<RoundAdd>(mTheme, 24.0f);
     add->onClick = [this, a = add.get()] { OpenAddMenu(a->Bounds()); };
 
-    auto body = Col({mSceneSlot, mChainSlot, FixedHeight(24, Row({Stretch(), add, HGap(12)})), VGap(20)});
+    // Touch sizes: hit over 40 px, in a row as tall with the gap under it (ChainStrip.cpp).
+    const bool touch = metrics::Touch();
+    auto body = Col({mSceneSlot, mChainSlot,
+                     FixedHeight(touch ? 40.0f : 24.0f, Row({Stretch(), add, HGap(touch ? 4.0f : 12.0f)})),
+                     VGap(touch ? 8.0f : 20.0f)});
     return Over(body, std::make_shared<StageBackdrop>(mTheme));
 }
 
@@ -355,6 +410,19 @@ Ptr Shell::BuildHistoryControls()
              el::share(Surface(mTheme.Bar(), mTheme.Pick(el::rgba(58, 58, 72, 255), mTheme.BorderStrong()), 6.0f)));
     auto copy = ToolButton(mTheme, mIcons, "ui-swap", [this] { CopyChainSlot(); }, 26.0f, 15.0f);
     copy->Disabled(!seeded);
+
+    if (metrics::Touch())
+    {
+        // Each half is hit over 40 px, its face drawn against the other's in the middle, in the
+        // pair's box as ever.
+        a->FaceAt(1.0f);
+        b->FaceAt(0.0f);
+        auto box =
+            el::share(Surface(mTheme.Bar(), mTheme.Pick(el::rgba(58, 58, 72, 255), mTheme.BorderStrong()), 6.0f));
+        auto pair = Over(Tight({a, HGap(2), b}), Centred(FixedWidth(54, FixedHeight(25, box))));
+        return Tight({undo, redo, pair, copy});
+    }
+
     return Tight({undo, HGap(2), redo, HGap(6), FixedWidth(54, FixedHeight(25, ab)), HGap(4), copy});
 }
 
@@ -385,21 +453,27 @@ Ptr Shell::BuildTransport()
     options->Size(64, 26).Label("OPTIONS", 10.0f);
     options->onClick = [this, o = options.get()] { OpenOptions(o->Bounds()); };
 
-    auto divider = [this] {
-        return Pad(6, 4, 6, 4, FixedWidth(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
+    // Touch sizes: the buttons are hit over 44 px, which spaces them, and the demo clip needs a
+    // wider footer to fit.
+    const bool touch = metrics::Touch();
+    const float gap = touch ? 0.0f : 4.0f;
+    auto divider = [this, touch] {
+        const float inset = touch ? 8.0f : 4.0f;
+        return Pad(6, inset, 6, inset,
+                   FixedWidth(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
     };
 
-    std::vector<Ptr> row{HGap(8), pads, HGap(4), tuner};
+    std::vector<Ptr> row{HGap(8), pads, HGap(gap), tuner};
 
     for (auto& b : BuildCaptureButtons(26.0f))
     {
-        row.insert(row.end(), {HGap(4), b});
+        row.insert(row.end(), {HGap(gap), b});
     }
 
-    if (width >= 760.0f)
+    if (width >= (touch ? 850.0f : 760.0f))
     {
         row.push_back(divider());
-        row.push_back(BuildDemoControls(width >= 860.0f ? 132.0f : 104.0f, false));
+        row.push_back(BuildDemoControls(width >= (touch ? 940.0f : 860.0f) ? 132.0f : 104.0f, false));
     }
 
     row.push_back(Stretch());
@@ -414,7 +488,7 @@ Ptr Shell::BuildTransport()
 
     row.push_back(options);
     row.push_back(HGap(8));
-    return FixedHeight(metrics::kFooterHeight, Fill(mTheme.Footer(), PadXY(0, 3, Row(row))));
+    return FixedHeight(metrics::FooterHeight(), Fill(mTheme.Footer(), PadXY(0, touch ? 0 : 3, Row(row))));
 }
 
 void Shell::OpenOptions(el::rect anchor)
@@ -559,15 +633,62 @@ void Shell::OpenOptions(el::rect anchor)
 
     viewRow.push_back(Stretch());
 
+    // Touch sizes: 40 px rows, and the touch sizes' own choice under the view's (no room in it).
+    const bool touch = metrics::Touch();
+    const float rowHeight = touch ? 40.0f : 28.0f;
+    const float space = touch ? 0.0f : 10.0f;
     auto rule = [this] { return FixedHeight(1, Fill(mTheme.Text().opacity(0.07f), std::make_shared<el::element>())); };
-    auto panel =
-        Pad(10, 10, 10, 10,
-            Col({FixedHeight(28, Row({clipButton, Stretch(), play, HGap(6), loop})), VGap(8), rule(), VGap(8),
-                 FixedHeight(28, Row({pads, HGap(10), tuner, HGap(10), midi, HGap(10), io, HGap(10), mute, Stretch()})),
-                 VGap(8), rule(), VGap(8),
-                 FixedHeight(28, Row({HGap(8), FixedWidth(72, tempo), HGap(6), tap, HGap(10), metronome, HGap(6), tick,
-                                      Stretch()})),
-                 VGap(8), rule(), VGap(8), FixedHeight(28, Row(viewRow))}));
-    ShowPopover(panel, anchor, 350.0f, 190.0f, true);
+    std::vector<Ptr> rows{FixedHeight(rowHeight, Row({clipButton, Stretch(), play, HGap(touch ? 0 : 6), loop})),
+                          VGap(8),
+                          rule(),
+                          VGap(8),
+                          FixedHeight(rowHeight, Row({pads, HGap(space), tuner, HGap(space), midi, HGap(space), io,
+                                                      HGap(space), mute, Stretch()})),
+                          VGap(8),
+                          rule(),
+                          VGap(8),
+                          FixedHeight(rowHeight, Row({HGap(8), FixedWidth(72, tempo), HGap(6), tap, HGap(space),
+                                                      metronome, HGap(touch ? 0 : 6), tick, Stretch()})),
+                          VGap(8),
+                          rule(),
+                          VGap(8),
+                          FixedHeight(rowHeight, Row(viewRow))};
+
+    if (touch)
+    {
+        rows.insert(rows.end(), {VGap(8), FixedHeight(rowHeight, Row({TouchControlsButton(), Stretch()}))});
+    }
+
+    ShowPopover(Pad(10, 10, 10, 10, Col(rows)), anchor, 350.0f,
+                touch ? 20.0f + 5.0f * 40.0f + 3.0f * 17.0f + 8.0f : 190.0f, true);
+}
+
+std::shared_ptr<IconButton> Shell::TouchControlsButton()
+{
+    // Touch sizes: as the device is (TouchFirst), or on or off whatever it is.
+    const auto touch = StringSetting(mState.appSettings, kTouchControlsSetting, "auto");
+    auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    button->Size(150, 28)
+        .Label(touch == "on"    ? "Touch sizes: On"
+               : touch == "off" ? "Touch sizes: Off"
+                                : "Touch sizes: Auto",
+               11.0f)
+        .Caret(true);
+    button->onClick = [this, b = button.get(), touch] {
+        std::vector<MenuItem> items;
+
+        static const std::pair<const char*, const char*> kChoices[] = {
+            {"auto", "Auto (touch screens)"}, {"on", "On"}, {"off", "Off"}};
+
+        for (const auto& choice : kChoices)
+        {
+            const std::string id = choice.first;
+            items.push_back({choice.second, touch == id, false,
+                             [this, id] { mSession.Commands().SetSetting(kTouchControlsSetting, id); }});
+        }
+
+        OpenDropdown(b->Bounds(), std::move(items), 190.0f);
+    };
+    return button;
 }
 } // namespace nanoq::ui

@@ -267,6 +267,13 @@ class Connector final : public el::element, public Drawn, public Focusable
     bool HitsPlus(const el::context& ctx, el::point p) const
     {
         const auto c = PlusCentre(ctx.bounds);
+
+        // With touch sizes, the cable's whole width over 36 px of its height.
+        if (metrics::Touch())
+        {
+            return p.x >= ctx.bounds.left && p.x <= ctx.bounds.left + kConnectorWidth && std::abs(p.y - c.y) <= 18.0f;
+        }
+
         return std::abs(p.x - c.x) <= 14.0f && std::abs(p.y - c.y) <= 14.0f;
     }
 

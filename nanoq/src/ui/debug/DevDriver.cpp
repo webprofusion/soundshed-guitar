@@ -138,155 +138,195 @@ std::optional<DevDriver> DevDriver::FromEnvironment()
 
 void DevDriver::Poll(el::view& view)
 {
-    std::error_code ec;
+    std::vector<std::string> lines;
 
-    if (!std::filesystem::exists(mFile, ec))
+    if (mHoldUntil)
     {
-        return;
+        // A hold under way: let go once its time is up, then play what waited for it.
+        if (std::chrono::steady_clock::now() < *mHoldUntil)
+        {
+            return;
+        }
+
+        mHoldUntil.reset();
+        view.click(el::mouse_button{false, 1, el::mouse_button::left, 0, mHoldAt});
+        lines = std::move(mAfterHold);
+        mAfterHold.clear();
+    }
+    else
+    {
+        std::error_code ec;
+
+        if (!std::filesystem::exists(mFile, ec))
+        {
+            return;
+        }
+
+        {
+            std::ifstream in(mFile);
+
+            for (std::string line; std::getline(in, line);)
+            {
+                lines.push_back(line);
+            }
+        }
+        std::filesystem::remove(mFile, ec);
     }
 
-    std::vector<std::string> lines;
+    for (std::size_t i = 0; i < lines.size(); ++i)
     {
-        std::ifstream in(mFile);
-
-        for (std::string line; std::getline(in, line);)
+        if (!Play(view, lines[i]))
         {
-            lines.push_back(line);
+            mAfterHold.assign(lines.begin() + static_cast<std::ptrdiff_t>(i) + 1, lines.end());
+            return;
         }
     }
-    std::filesystem::remove(mFile, ec);
+}
 
+bool DevDriver::Play(el::view& view, const std::string& line)
+{
     auto button = [](bool down, int clicks, el::mouse_button::what which, float x, float y) {
         return el::mouse_button{down, clicks, which, 0, el::point{x, y}};
     };
 
-    for (const auto& line : lines)
+    if (line.rfind("setting ", 0) == 0)
     {
-        if (line.rfind("setting ", 0) == 0)
+        const auto rest = line.substr(8);
+        const auto space = rest.find(' ');
+
+        if (space != std::string::npos && onSetting)
         {
-            const auto rest = line.substr(8);
-            const auto space = rest.find(' ');
-
-            if (space != std::string::npos && onSetting)
-            {
-                onSetting(rest.substr(0, space), rest.substr(space + 1));
-            }
-
-            continue;
+            onSetting(rest.substr(0, space), rest.substr(space + 1));
         }
 
-        if (line.rfind("key ", 0) == 0)
-        {
-            if (auto k = ParseKey(line.substr(4)))
-            {
-                view.key(*k);
-                k->action = el::key_action::release;
-                view.key(*k);
-            }
+        return true;
+    }
 
-            continue;
+    if (line.rfind("key ", 0) == 0)
+    {
+        if (auto k = ParseKey(line.substr(4)))
+        {
+            view.key(*k);
+            k->action = el::key_action::release;
+            view.key(*k);
         }
 
-        if (line.rfind("drop ", 0) == 0)
-        {
-            // drop x y <path>: a file dropped from the desktop, as Elements' host delivers it.
-            std::istringstream words(line.substr(5));
-            float x = 0.0f, y = 0.0f;
-            std::string path;
+        return true;
+    }
 
-            if (words >> x >> y && std::getline(words >> std::ws, path) && !path.empty())
-            {
-                el::drop_info info;
-                info.data["text/uri-list"] = std::string("file://") + path;
-                info.where = el::point{x, y};
-                view.track_drop(info, el::cursor_tracking::entering);
-                view.drop(info);
-            }
-
-            continue;
-        }
-
-        if (line.rfind("type ", 0) == 0)
-        {
-            // Text, as typed into whatever has focus.
-            for (const char ch : line.substr(5))
-            {
-                view.text(el::text_info{static_cast<std::uint32_t>(static_cast<unsigned char>(ch)), 0});
-            }
-
-            continue;
-        }
-
-        if (line.rfind("shot ", 0) == 0)
-        {
-            // Drawn offscreen, so it works while the window is hidden or the session is locked
-            // (a GPU window then captures black).
-            const auto size = view.size();
-            cycfi::artist::image img{size.x, size.y};
-            {
-                cycfi::artist::offscreen_image offscreen{img};
-                cycfi::artist::canvas cnv{offscreen.context()};
-                view.draw(cnv);
-            }
-            img.save_png(line.substr(5));
-            continue;
-        }
-
-        std::istringstream words(line);
-        std::string verb;
+    if (line.rfind("drop ", 0) == 0)
+    {
+        // drop x y <path>: a file dropped from the desktop, as Elements' host delivers it.
+        std::istringstream words(line.substr(5));
         float x = 0.0f, y = 0.0f;
+        std::string path;
 
-        if (!(words >> verb >> x >> y))
+        if (words >> x >> y && std::getline(words >> std::ws, path) && !path.empty())
         {
-            continue;
+            el::drop_info info;
+            info.data["text/uri-list"] = std::string("file://") + path;
+            info.where = el::point{x, y};
+            view.track_drop(info, el::cursor_tracking::entering);
+            view.drop(info);
         }
 
-        if (verb == "move")
+        return true;
+    }
+
+    if (line.rfind("type ", 0) == 0)
+    {
+        // Text, as typed into whatever has focus.
+        for (const char ch : line.substr(5))
         {
-            view.cursor(el::point{x, y}, el::cursor_tracking::hovering);
+            view.text(el::text_info{static_cast<std::uint32_t>(static_cast<unsigned char>(ch)), 0});
         }
-        else if (verb == "click" || verb == "right" || verb == "double")
-        {
-            const auto which = verb == "right" ? el::mouse_button::right : el::mouse_button::left;
-            view.cursor(el::point{x, y}, el::cursor_tracking::hovering);
-            view.click(button(true, 1, which, x, y));
-            view.click(button(false, 1, which, x, y));
 
-            if (verb == "double")
-            {
-                view.click(button(true, 2, which, x, y));
-                view.click(button(false, 2, which, x, y));
-            }
+        return true;
+    }
+
+    if (line.rfind("shot ", 0) == 0)
+    {
+        // Drawn offscreen, so it works while the window is hidden or the session is locked
+        // (a GPU window then captures black).
+        const auto size = view.size();
+        cycfi::artist::image img{size.x, size.y};
+        {
+            cycfi::artist::offscreen_image offscreen{img};
+            cycfi::artist::canvas cnv{offscreen.context()};
+            view.draw(cnv);
         }
-        else if (verb == "drag")
+        img.save_png(line.substr(5));
+        return true;
+    }
+
+    std::istringstream words(line);
+    std::string verb;
+    float x = 0.0f, y = 0.0f;
+
+    if (!(words >> verb >> x >> y))
+    {
+        return true;
+    }
+
+    if (verb == "hold")
+    {
+        // Pressed now, let go after `ms` (Poll), with the pointer still.
+        float ms = 600.0f;
+        words >> ms;
+        view.cursor(el::point{x, y}, el::cursor_tracking::hovering);
+        view.click(button(true, 1, el::mouse_button::left, x, y));
+        mHoldAt = el::point{x, y};
+        mHoldUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(static_cast<int>(ms));
+        return false;
+    }
+
+    if (verb == "move")
+    {
+        view.cursor(el::point{x, y}, el::cursor_tracking::hovering);
+    }
+    else if (verb == "click" || verb == "right" || verb == "double")
+    {
+        const auto which = verb == "right" ? el::mouse_button::right : el::mouse_button::left;
+        view.cursor(el::point{x, y}, el::cursor_tracking::hovering);
+        view.click(button(true, 1, which, x, y));
+        view.click(button(false, 1, which, x, y));
+
+        if (verb == "double")
         {
-            float x2 = 0.0f, y2 = 0.0f;
-
-            if (!(words >> x2 >> y2))
-            {
-                continue;
-            }
-
-            view.click(button(true, 1, el::mouse_button::left, x, y));
-            constexpr int kSteps = 12;
-
-            for (int i = 1; i <= kSteps; ++i)
-            {
-                const float t = static_cast<float>(i) / kSteps;
-                view.drag(button(true, 1, el::mouse_button::left, x + (x2 - x) * t, y + (y2 - y) * t));
-            }
-
-            view.click(button(false, 1, el::mouse_button::left, x2, y2));
-        }
-        else if (verb == "scroll")
-        {
-            float dy = 0.0f;
-
-            if (words >> dy)
-            {
-                view.scroll(el::point{0.0f, dy}, el::point{x, y});
-            }
+            view.click(button(true, 2, which, x, y));
+            view.click(button(false, 2, which, x, y));
         }
     }
+    else if (verb == "drag")
+    {
+        float x2 = 0.0f, y2 = 0.0f;
+
+        if (!(words >> x2 >> y2))
+        {
+            return true;
+        }
+
+        view.click(button(true, 1, el::mouse_button::left, x, y));
+        constexpr int kSteps = 12;
+
+        for (int i = 1; i <= kSteps; ++i)
+        {
+            const float t = static_cast<float>(i) / kSteps;
+            view.drag(button(true, 1, el::mouse_button::left, x + (x2 - x) * t, y + (y2 - y) * t));
+        }
+
+        view.click(button(false, 1, el::mouse_button::left, x2, y2));
+    }
+    else if (verb == "scroll")
+    {
+        float dy = 0.0f;
+
+        if (words >> dy)
+        {
+            view.scroll(el::point{0.0f, dy}, el::point{x, y});
+        }
+    }
+
+    return true;
 }
 } // namespace nanoq::ui

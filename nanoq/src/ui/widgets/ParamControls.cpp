@@ -5,6 +5,7 @@
 
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
+#include "ui/widgets/LongPress.h"
 
 #include <algorithm>
 #include <cctype>
@@ -324,7 +325,7 @@ void ParamKnob::draw(const el::context& ctx)
     const auto b = ctx.bounds;
     const bool light = mTheme.IsLight();
     // The web UI's .node-param-label and .node-param-value.
-    const auto labelFont = Font(Weight::SemiBold).size(mLarge ? 10.0f : 9.0f);
+    const auto labelFont = Font(Weight::SemiBold).size(metrics::Readable(mLarge ? 10.0f : 9.0f));
     const auto valueFont = Font(Weight::SemiBold).size(mLarge ? 12.0f : 10.0f);
     const float nameHeight = mLarge ? kLargeNameHeight : kKnobNameHeight;
     const float valueHeight = mLarge ? kLargeValueHeight : kKnobValueHeight;
@@ -632,6 +633,17 @@ bool ParamKnob::click(const el::context& ctx, el::mouse_button btn)
         mDragging = true;
         mDragStartY = btn.pos.y;
         mDragStartValue = mValue;
+
+        // Held, a finger's press is the right click: MIDI Learn (LongPress.h).
+        if (onMenu)
+        {
+            LongPress::Press(btn.pos, [self = weak_from_this(), at = btn.pos] {
+                if (const auto knob = self.lock())
+                {
+                    static_cast<ParamKnob&>(*knob).HeldForMenu(at);
+                }
+            });
+        }
     }
     else
     {
@@ -640,6 +652,28 @@ bool ParamKnob::click(const el::context& ctx, el::mouse_button btn)
     }
 
     return true;
+}
+
+void ParamKnob::HeldForMenu(el::point at)
+{
+    if (mDragging && mValue != mDragStartValue)
+    {
+        mValue = mDragStartValue;
+
+        if (onChange)
+        {
+            onChange(mValue);
+        }
+    }
+
+    mDragging = false;
+    RepaintSoon(DrawnArea());
+
+    if (onMenu)
+    {
+        const auto menu = onMenu; // it opens a menu over whatever rebuilds
+        menu(at);
+    }
 }
 
 void ParamKnob::drag(const el::context& ctx, el::mouse_button btn)

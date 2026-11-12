@@ -634,7 +634,7 @@ Ptr Shell::BuildChain()
                                         : std::max(floor, ViewSize().y / 3.0f);
         // Dragged, the chain gets that room whatever it holds (centred in it, or scrolling).
         const float area = limit > 0.0f ? most : std::min(wanted, most);
-        mChainAreaHeight = area + SceneRowHeight() + 30.0f; // the scene chips (and rig tabs), the add button
+        mChainAreaHeight = area + SceneRowHeight() + AddRowHeight(); // the scene chips (and rig tabs), the add button
         const auto centred = [area](Ptr block, float height) -> Ptr {
             if (height >= area)
             {
@@ -660,7 +660,7 @@ Ptr Shell::BuildChain()
     }
 
     // Staged: the stage less the scene chips (and rig tabs) and the add button's row under it.
-    const float stageHeight = StageHeight() - SceneRowHeight() - 44.0f;
+    const float stageHeight = StageHeight() - SceneRowHeight() - (metrics::Touch() ? 48.0f : 44.0f);
 
     if (!mWrapChain)
     {

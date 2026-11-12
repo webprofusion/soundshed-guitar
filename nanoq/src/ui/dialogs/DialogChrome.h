@@ -89,14 +89,16 @@ class CloseCross final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{28.0f, 28.0f}, {28.0f, 28.0f}};
+        // Touch sizes: hit over 40 px, drawn the same 28 in the middle.
+        const float size = metrics::Hit(28.0f, 40.0f);
+        return {{size, size}, {size, size}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = metrics::Face(ctx.bounds, 28.0f, 28.0f);
 
         if (mHover)
         {
@@ -677,12 +679,26 @@ class Stepper final : public el::element, public Drawn, public Focusable
 
     el::view_limits limits(const el::basic_context&) const override
     {
+        // Touch sizes: a minus before the number and a plus after it, each hit over 40 px.
+        if (metrics::Touch())
+        {
+            const float w = mWidth - kArrows + 2.0f * kTouchArrow;
+            return {{w, kTouchArrow}, {w, kTouchArrow}};
+        }
+
         return {{mWidth, 32.0f}, {mWidth, 32.0f}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
+
+        if (metrics::Touch())
+        {
+            DrawTouch(ctx);
+            return;
+        }
+
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
         const auto field = el::rect{b.left, b.top, b.right - kArrows, b.bottom};
@@ -783,15 +799,65 @@ class Stepper final : public el::element, public Drawn, public Focusable
 
   private:
     static constexpr float kArrows = 20.0f;
+    static constexpr float kTouchArrow = 40.0f;
 
     [[nodiscard]] static int Arrow(el::rect b, el::point p)
     {
+        if (metrics::Touch())
+        {
+            return p.x < b.left + kTouchArrow ? -1 : p.x >= b.right - kTouchArrow ? 1 : 0;
+        }
+
         if (p.x < b.right - kArrows)
         {
             return 0;
         }
 
         return p.y < b.top + b.height() * 0.5f ? 1 : -1;
+    }
+
+    /// The touch layout: [-] number [+], the signs in 40 px zones at either end.
+    void DrawTouch(const el::context& ctx)
+    {
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const auto field = el::rect{b.left + kTouchArrow, b.top, b.right - kTouchArrow, b.bottom};
+        cnv.fill_style(mTheme.Bar());
+        cnv.fill_round_rect(b, 6.0f);
+        cnv.stroke_style(mTheme.ModalRule());
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 6.0f);
+        cnv.fill_style(mTheme.ModalRule());
+        cnv.fill_rect(el::rect{field.left - 1.0f, b.top, field.left, b.bottom});
+        cnv.fill_rect(el::rect{field.right, b.top, field.right + 1.0f, b.bottom});
+
+        if (mEdit.Active())
+        {
+            mEdit.Draw(cnv, field.inset(3.0f, 4.0f), mTheme, Font(Weight::Medium).size(14.0f));
+        }
+        else
+        {
+            FillText(cnv, mText, Font(Weight::Medium).size(14.0f), mTheme.ModalText(), field, HAlign::Centre);
+        }
+
+        for (int dir : {-1, 1})
+        {
+            const float cx = dir > 0 ? b.right - kTouchArrow * 0.5f : b.left + kTouchArrow * 0.5f;
+            const float cy = b.top + b.height() * 0.5f;
+            cnv.stroke_style(mHoverArrow == dir ? mTheme.ModalText() : mTheme.ModalTextSecondary());
+            cnv.line_width(2.0f);
+            cnv.begin_path();
+            cnv.move_to(cx - 5.0f, cy);
+            cnv.line_to(cx + 5.0f, cy);
+
+            if (dir > 0)
+            {
+                cnv.move_to(cx, cy - 5.0f);
+                cnv.line_to(cx, cy + 5.0f);
+            }
+
+            cnv.stroke();
+        }
     }
 
     const Theme& mTheme;

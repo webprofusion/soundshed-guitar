@@ -564,7 +564,8 @@ export function renderUserInputCalibrationToolbarMenu(profiles: UserInputCalibra
 
 export async function handleUserInputCalibrationToolbarMenuClick(event: MouseEvent): Promise<void> {
   const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  // Element, not HTMLElement: a tap on a button's icon lands on its SVG.
+  if (!(target instanceof Element)) {
     return;
   }
 

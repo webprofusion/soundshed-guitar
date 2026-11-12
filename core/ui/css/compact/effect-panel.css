@@ -132,6 +132,18 @@ html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-sub
   overflow: hidden;
 }
 
+/* A narrow header drops the type words ("Amp · Neural Amp (NAM)") before the
+   title is cut: the chain node says the same, and the architecture badge stays. */
+html[data-density="compact"]:not([data-compact-split]) .default-effect-shell-header {
+  container: effect-header / inline-size;
+}
+
+@container effect-header (max-width: 700px) {
+  .default-effect-shell-subtitle-text {
+    display: none;
+  }
+}
+
 /*
   The level meter strip goes; the stats behind the DSP chip stay. Below 900px the
   base sheet hides the whole rail, stats included, which leaves the chip lit but

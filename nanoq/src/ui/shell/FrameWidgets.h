@@ -56,7 +56,7 @@ class RailTab final : public Pressable
         const auto ink = mActive ? mTheme.Accent() : (mHover ? mTheme.TextSecondary() : mTheme.TextMuted());
         const float cx = (b.left + b.right) * 0.5f;
         mIcons.Draw(cnv, mIcon, el::rect{cx - 9.0f, b.top + 7.0f, cx + 9.0f, b.top + 25.0f}, ink);
-        FillText(cnv, mLabel, Font(Weight::SemiBold).size(9.0f), ink,
+        FillText(cnv, mLabel, Font(Weight::SemiBold).size(metrics::Readable(9.0f)), ink,
                  el::rect{b.left, b.top + 28.0f, b.right, b.top + 40.0f}, HAlign::Centre);
     }
 
@@ -105,14 +105,14 @@ class PresetPill final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{160.0f, mHeight}, {el::full_extent, mHeight}};
+        return {{160.0f, mHeight}, {el::full_extent, metrics::Hit(mHeight)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = Face(ctx.bounds);
         cnv.fill_style(mTheme.IsLight() ? mTheme.Input() : el::rgba(17, 17, 24, 255));
         cnv.fill_round_rect(b, 10.0f);
         {
@@ -159,8 +159,7 @@ class PresetPill final : public Pressable
 
     bool click(const el::context& ctx, el::mouse_button btn) override
     {
-        if (btn.state == el::mouse_button::left && !btn.down &&
-            HeartRect(ctx.bounds).inset(-6.0f, -6.0f).includes(btn.pos))
+        if (btn.state == el::mouse_button::left && !btn.down && HeartZone(ctx.bounds).includes(btn.pos))
         {
             mDown = false;
 
@@ -177,8 +176,7 @@ class PresetPill final : public Pressable
 
     bool cursor(const el::context& ctx, el::point p, el::cursor_tracking status) override
     {
-        const bool heart =
-            status != el::cursor_tracking::leaving && HeartRect(ctx.bounds).inset(-6.0f, -6.0f).includes(p);
+        const bool heart = status != el::cursor_tracking::leaving && HeartZone(ctx.bounds).includes(p);
 
         if (heart != mHoverHeart)
         {
@@ -190,6 +188,26 @@ class PresetPill final : public Pressable
     }
 
   private:
+    /// Where it is drawn: its bounds, or with touch sizes its height's face in the middle of them.
+    [[nodiscard]] el::rect Face(const el::rect& bounds) const
+    {
+        return metrics::Touch() ? metrics::Face(bounds, bounds.width(), mHeight) : bounds;
+    }
+
+    /// Where a tap favourites it: round the heart, or with touch sizes the pill's whole height from
+    /// its left edge to past the heart.
+    [[nodiscard]] el::rect HeartZone(const el::rect& bounds) const
+    {
+        const auto heart = HeartRect(Face(bounds));
+
+        if (metrics::Touch())
+        {
+            return el::rect{bounds.left, bounds.top, heart.right + 10.0f, bounds.bottom};
+        }
+
+        return heart.inset(-6.0f, -6.0f);
+    }
+
     static el::rect HeartRect(const el::rect& b)
     {
         const float cy = b.top + b.height() * 0.5f;
@@ -247,17 +265,18 @@ class SceneChip final : public Pressable
 
     el::view_limits limits(const el::basic_context& ctx) const override
     {
-        const float w = mAdd ? 20.0f
-                             : el::measure_text(ctx.canvas, mLabel, Font(Weight::SemiBold).size(10.0f)).x + 16.0f +
-                                   (onRemove ? 12.0f : 0.0f);
-        return {{w, 18.0f}, {w, 18.0f}};
+        // With touch sizes the chip is hit over its row's height, and its x over a zone of its
+        // own past the face, kRemoveZone wide, so a tap on the name never removes the scene.
+        const float face = FaceWidth(ctx.canvas);
+        const float w = !metrics::Touch() ? face : onRemove ? face + kRemoveZone - 12.0f : metrics::Hit(face);
+        return {{w, 18.0f}, {w, metrics::Hit(18.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = FaceRect(ctx.bounds, cnv);
         const el::color fill =
             mActive ? mTheme.Accent().opacity(0.12f)
                     : mTheme.Pick(el::rgba(38, 38, 46, mHover ? 230 : 153), mHover ? mTheme.Elevated() : mTheme.Card());
@@ -270,7 +289,7 @@ class SceneChip final : public Pressable
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 9.0f);
 
-        const auto font = Font(Weight::SemiBold).size(mAdd ? 12.0f : 10.0f);
+        const auto font = Font(Weight::SemiBold).size(LabelSize());
 
         if (mAdd)
         {
@@ -307,7 +326,16 @@ class SceneChip final : public Pressable
             return true;
         }
 
-        if (onRemove && btn.state == el::mouse_button::left && !btn.down && btn.pos.x > ctx.bounds.right - 18.0f)
+        // Held, a finger's press renames it, as a right click does (LongPress.h).
+        if (btn.state == el::mouse_button::left && btn.down && onMenu)
+        {
+            LongPress::Press(btn.pos, onMenu);
+        }
+
+        const float removeZone = metrics::Touch() ? kRemoveZone : 18.0f;
+
+        if (onRemove && btn.state == el::mouse_button::left && !btn.down && btn.pos.x > ctx.bounds.right - removeZone &&
+            ctx.bounds.includes(btn.pos) && mDown && !LongPress::Fired())
         {
             mDown = false;
             onRemove();
@@ -318,6 +346,40 @@ class SceneChip final : public Pressable
     }
 
   private:
+    static constexpr float kRemoveZone = 32.0f;
+
+    [[nodiscard]] float FaceWidth(el::canvas& cnv) const
+    {
+        return mAdd ? 20.0f
+                    : el::measure_text(cnv, mLabel, Font(Weight::SemiBold).size(LabelSize())).x + 16.0f +
+                          (onRemove ? 12.0f : 0.0f);
+    }
+
+    /// Where the chip is drawn: its bounds, or with touch sizes an 18 px face centred in them
+    /// (at the left of a chip with an x, whose zone runs on past it).
+    [[nodiscard]] el::rect FaceRect(const el::rect& bounds, el::canvas& cnv) const
+    {
+        if (!metrics::Touch())
+        {
+            return bounds;
+        }
+
+        const float w = FaceWidth(cnv);
+        const auto face = metrics::Face(bounds, w, 18.0f);
+
+        if (onRemove)
+        {
+            return el::rect{bounds.left, face.top, bounds.left + w, face.bottom};
+        }
+
+        return face;
+    }
+
+    [[nodiscard]] float LabelSize() const
+    {
+        return mAdd ? 12.0f : metrics::Readable(10.0f);
+    }
+
     const Theme& mTheme;
     std::string mLabel;
     bool mActive, mAdd;
@@ -332,6 +394,14 @@ class AbButton final : public Pressable
     {
     }
 
+    /// With touch sizes, where its 24 px face sits across its wider hit area: 1 at the right (A,
+    /// which meets B in the middle of the pair), 0 at the left (B).
+    AbButton& FaceAt(float along)
+    {
+        mFaceAt = along;
+        return *this;
+    }
+
     [[nodiscard]] AccessInfo Describe() const override
     {
         AccessInfo info = Pressable::Describe();
@@ -343,14 +413,22 @@ class AbButton final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{24.0f, 21.0f}, {24.0f, 21.0f}};
+        return {{metrics::Hit(24.0f, metrics::kTouchFloor), 21.0f},
+                {metrics::Hit(24.0f, metrics::kTouchFloor), metrics::Hit(21.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        auto b = ctx.bounds;
+
+        if (metrics::Touch())
+        {
+            const auto face = metrics::Face(b, 24.0f, 21.0f);
+            const float left = b.left + (b.width() - 24.0f) * mFaceAt;
+            b = el::rect{left, face.top, left + 24.0f, face.bottom};
+        }
 
         if (mActive)
         {
@@ -374,6 +452,7 @@ class AbButton final : public Pressable
     const Theme& mTheme;
     std::string mLabel;
     bool mActive;
+    float mFaceAt = 0.5f;
 };
 
 /// The round + (.signal-add-btn, .signal-path-add-menu-trigger).
@@ -393,7 +472,9 @@ class RoundAdd final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{mSize, mSize}, {mSize, mSize}};
+        // With touch sizes it is hit over 40 px, drawn its size in the middle.
+        const float hit = metrics::Hit(mSize, metrics::kTouchFloor);
+        return {{hit, hit}, {hit, hit}};
     }
 
     void draw(const el::context& ctx) override

@@ -184,12 +184,13 @@ function closeMoreOnOutsideClick(event: MouseEvent): void {
   }
 }
 
-function layerIdOf(target: HTMLElement): string {
+function layerIdOf(target: Element): string {
   return target.closest<HTMLElement>(".looper-layer-row")?.dataset.layerId ?? "";
 }
 
 function handleClick(event: MouseEvent): void {
-  const target = event.target instanceof HTMLElement ? event.target : null;
+  // Element, not HTMLElement: a tap on a button's icon lands on its SVG.
+  const target = event.target instanceof Element ? event.target : null;
   const status = getLooperStatus();
 
   if (!target || !status) {

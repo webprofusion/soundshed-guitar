@@ -236,7 +236,10 @@ void Shell::OpenMenu(const std::string& title, std::vector<MenuItem> items)
                 .width = DialogWidth(view, 420.0f),
                 .height = height,
                 .padX = 10.0f,
-                .padY = 10.0f});
+                .padY = 10.0f,
+                // The list scrolls in itself: it takes the whole body, or it shares it with the
+                // filler under it and scrolls in half the dialog over an empty half.
+                .stretch = true});
 }
 
 void Shell::OpenPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,

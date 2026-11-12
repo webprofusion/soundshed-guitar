@@ -43,7 +43,9 @@ class TempoArrow final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{28.0f, 24.0f}, {28.0f, 24.0f}};
+        // Touch sizes: hit over 40 by 40, drawn the same 28 by 24 in the middle.
+        const float w = metrics::Hit(28.0f, 40.0f), h = metrics::Hit(24.0f, 40.0f);
+        return {{w, h}, {w, h}};
     }
 
     bool click(const el::context& ctx, el::mouse_button btn) override
@@ -56,7 +58,7 @@ class TempoArrow final : public Pressable
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = metrics::Face(ctx.bounds, 28.0f, 24.0f);
         const float fade = mEnabled ? 1.0f : 0.6f;
         cnv.fill_style((mHover && mEnabled ? mTheme.Elevated() : mTheme.Tertiary()).opacity(fade));
         cnv.fill_round_rect(b, 6.0f);

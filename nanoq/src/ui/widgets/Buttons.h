@@ -166,18 +166,23 @@ class IconButton final : public Pressable
         return *this;
     }
 
+    /// With touch sizes, the size it is hit over (44 unless set; never under 36).
+    IconButton& TouchTarget(float target)
+    {
+        mTouchTarget = std::max(36.0f, target);
+        return *this;
+    }
+
     el::view_limits limits(const el::basic_context& ctx) const override
     {
-        float w = mW;
+        const float w = FaceWidth(ctx.canvas);
 
-        if (!mLabel.empty())
+        // With touch sizes it is hit over 44 px across, and as tall as its bar allows up to 44,
+        // its face drawn as ever in the middle.
+        if (metrics::Touch())
         {
-            const float text = el::measure_text(ctx.canvas, mLabel, Font(Weight::SemiBold).size(mLabelSize)).x;
-            w = std::max(w, (mIcon.empty() ? 0.0f : mIconSize + 6.0f) + text + (mCaret ? 12.0f : 0.0f) + 20.0f);
-        }
-        else if (mCaret)
-        {
-            w += 12.0f;
+            const float hit = metrics::Hit(w, mTouchTarget);
+            return {{hit, mH}, {hit, metrics::Hit(mH, mTouchTarget)}};
         }
 
         return {{w, mH}, {w, mH}};
@@ -187,7 +192,7 @@ class IconButton final : public Pressable
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = metrics::Touch() ? metrics::Face(ctx.bounds, FaceWidth(cnv), mH) : ctx.bounds;
         float radius = 8.0f;
         el::color fill = el::rgba(0, 0, 0, 0), line = el::rgba(0, 0, 0, 0);
         el::color ink = mTheme.Ink();
@@ -276,7 +281,7 @@ class IconButton final : public Pressable
         }
 
         // Icon, label and caret, centred as one group.
-        const auto font = Font(Weight::SemiBold).size(mLabelSize);
+        const auto font = Font(Weight::SemiBold).size(LabelSize());
         const float textW = mLabel.empty() ? 0.0f : el::measure_text(cnv, mLabel, font).x;
         const float iconW = mIcon.empty() ? 0.0f : mIconSize;
         const float gap = (!mIcon.empty() && !mLabel.empty()) ? 6.0f : 0.0f;
@@ -305,11 +310,36 @@ class IconButton final : public Pressable
     }
 
   private:
+    /// A label is read to work the button: 11 px at the least with touch sizes.
+    [[nodiscard]] float LabelSize() const
+    {
+        return metrics::Readable(mLabelSize);
+    }
+
+    /// The width it draws at: its size, or what its label needs.
+    [[nodiscard]] float FaceWidth(el::canvas& cnv) const
+    {
+        float w = mW;
+
+        if (!mLabel.empty())
+        {
+            const float text = el::measure_text(cnv, mLabel, Font(Weight::SemiBold).size(LabelSize())).x;
+            w = std::max(w, (mIcon.empty() ? 0.0f : mIconSize + 6.0f) + text + (mCaret ? 12.0f : 0.0f) + 20.0f);
+        }
+        else if (mCaret)
+        {
+            w += 12.0f;
+        }
+
+        return w;
+    }
+
     const Theme& mTheme;
     Icons& mIcons;
     std::string mIcon, mLabel;
     Look mLook;
     float mW = 28.0f, mH = 28.0f, mIconSize = 14.0f, mLabelSize = 10.0f;
+    float mTouchTarget = metrics::kTouchTarget;
     bool mCaret = false, mLit = false, mHasInk = false;
     el::color mInk;
 };
@@ -339,14 +369,14 @@ class PowerSwitch final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{40.0f, 24.0f}, {40.0f, 24.0f}};
+        return {{metrics::Hit(40.0f), 24.0f}, {metrics::Hit(40.0f), metrics::Hit(24.0f, 36.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = metrics::Touch() ? metrics::Face(ctx.bounds, 40.0f, 24.0f) : ctx.bounds;
         const float radius = b.height() * 0.5f;
         // Sliding: the grey track under the accent one, which fades in as the thumb goes right.
         const float on = mMotion.Position(mOn, DrawnArea());
@@ -457,17 +487,21 @@ class UnderlineTab final : public Pressable
 
     el::view_limits limits(const el::basic_context& ctx) const override
     {
-        const float w = el::measure_text(ctx.canvas, mLabel, Font(Weight::SemiBold).size(10.0f)).x + 16.0f;
-        return {{w, 26.0f}, {w, 26.0f}};
+        const float w =
+            metrics::Hit(el::measure_text(ctx.canvas, mLabel, Font(Weight::SemiBold).size(LabelSize())).x + 16.0f);
+        return {{w, 26.0f}, {w, metrics::Hit(26.0f, 40.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        // A touch-sized hit area keeps the label and its underline at the foot, where they sit.
+        const auto b = metrics::Touch() ? el::rect{ctx.bounds.left, std::max(ctx.bounds.top, ctx.bounds.bottom - 26.0f),
+                                                   ctx.bounds.right, ctx.bounds.bottom}
+                                        : ctx.bounds;
         const auto ink = mActive ? mTheme.Accent() : (mHover ? mTheme.Text() : mTheme.TextSecondary());
-        FillText(cnv, mLabel, Font(Weight::SemiBold).size(10.0f), ink,
+        FillText(cnv, mLabel, Font(Weight::SemiBold).size(LabelSize()), ink,
                  el::rect{b.left, b.top, b.right, b.bottom - 3.0f}, HAlign::Centre);
 
         if (mActive)
@@ -478,6 +512,11 @@ class UnderlineTab final : public Pressable
     }
 
   private:
+    [[nodiscard]] static float LabelSize()
+    {
+        return metrics::Readable(10.0f);
+    }
+
     const Theme& mTheme;
     std::string mLabel;
     bool mActive;
@@ -504,14 +543,14 @@ class SelectField final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{120.0f, 26.0f}, {el::full_extent, 26.0f}};
+        return {{120.0f, 26.0f}, {el::full_extent, metrics::Hit(26.0f, 36.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto b = metrics::Touch() ? metrics::Face(ctx.bounds, ctx.bounds.width(), 26.0f) : ctx.bounds;
         const auto accent = mWarn ? mTheme.Error() : mTheme.Accent();
         cnv.fill_style(mChosen ? accent.opacity(mHover ? 0.3f : 0.22f).level(0.75f)
                                : (mHover ? mTheme.Elevated() : mTheme.Input()));
@@ -568,7 +607,7 @@ class ParamToggle final : public Pressable
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
-        const auto label = Font(Weight::SemiBold).size(9.0f);
+        const auto label = Font(Weight::SemiBold).size(metrics::Readable(9.0f));
         FillText(cnv, Ellipsize(cnv, mName, label, b.width() + 6.0f), label,
                  mTheme.Pick(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()),
                  el::rect{b.left, b.top, b.right, b.top + 12.0f}, HAlign::Centre);
@@ -599,7 +638,9 @@ class ParamToggle final : public Pressable
     SwitchMotion mMotion;
 };
 
-/// The little switch beside a Controls strip label (GATE, EQ, DOUBLER): 22 by 12.
+/// The little switch beside a Controls strip label (GATE, EQ, DOUBLER): 22 by 12. With touch
+/// sizes the Controls cell gives it its label to draw (Title), so a tap on either flips it, as
+/// a label does a checkbox.
 class MiniSwitch final : public Pressable
 {
   public:
@@ -612,6 +653,15 @@ class MiniSwitch final : public Pressable
         mOn = on;
     }
 
+    /// The label drawn before it, as one control with it, at `size`.
+    MiniSwitch& Title(std::string title, float size, el::color ink)
+    {
+        mTitle = std::move(title);
+        mTitleSize = size;
+        mTitleInk = ink;
+        return *this;
+    }
+
     [[nodiscard]] AccessInfo Describe() const override
     {
         AccessInfo info = Pressable::Describe();
@@ -620,16 +670,38 @@ class MiniSwitch final : public Pressable
         return info;
     }
 
-    el::view_limits limits(const el::basic_context&) const override
+    el::view_limits limits(const el::basic_context& ctx) const override
     {
-        return {{22.0f, 12.0f}, {22.0f, 12.0f}};
+        if (!mTitle.empty())
+        {
+            const float w = TitleWidth(ctx.canvas) + kTitleGap + 22.0f;
+            return {{w, 12.0f}, {el::full_extent, metrics::Hit(12.0f, 36.0f)}};
+        }
+
+        return {{metrics::Hit(22.0f, metrics::kTouchFloor), 12.0f}, {metrics::Hit(22.0f), metrics::Hit(12.0f, 36.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        el::rect b = ctx.bounds;
+
+        if (!mTitle.empty())
+        {
+            // The label and the switch, centred as one.
+            const float titleW = TitleWidth(cnv);
+            const float left = b.left + std::max(0.0f, (b.width() - titleW - kTitleGap - 22.0f) * 0.5f);
+            FillText(cnv, mTitle, Font(Weight::SemiBold).size(mTitleSize), mTitleInk,
+                     el::rect{left, b.top, left + titleW + 1.0f, b.bottom}, HAlign::Left);
+            const float cy = b.top + b.height() * 0.5f;
+            b = el::rect{left + titleW + kTitleGap, cy - 6.0f, left + titleW + kTitleGap + 22.0f, cy + 6.0f};
+        }
+        else if (metrics::Touch())
+        {
+            b = metrics::Face(b, 22.0f, 12.0f);
+        }
+
         const float on = mMotion.Position(mOn, DrawnArea());
         cnv.fill_style(
             SwitchMotion::Mix(mTheme.ToggleBg().level(mHover ? 1.2f : 1.0f), mTheme.Accent().level(0.92f), on));
@@ -645,8 +717,18 @@ class MiniSwitch final : public Pressable
         mMotion.NoteToggled(DrawnArea());
     }
 
+    static constexpr float kTitleGap = 5.0f;
+
+    [[nodiscard]] float TitleWidth(el::canvas& cnv) const
+    {
+        return el::measure_text(cnv, mTitle, Font(Weight::SemiBold).size(mTitleSize)).x;
+    }
+
     const Theme& mTheme;
     bool mOn;
     SwitchMotion mMotion;
+    std::string mTitle;
+    float mTitleSize = 9.0f;
+    el::color mTitleInk;
 };
 } // namespace nanoq::ui

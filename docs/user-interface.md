@@ -543,6 +543,27 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   `(pointer: coarse)` size-ups (footer buttons, preset and settings buttons, the + add button,
   effect header controls, the looper's buttons, tag chips, hit areas) apply to the full shell
   on a touch screen too.
+- **Touch hit areas and text** (`css/touch.css`). Under `(pointer: coarse)` every tap
+  control's hit area is at least 44x44 where its bar or row allows and never under 40: an
+  `::after` with a negative inset grows past the drawing, the gaps between neighbours are
+  twice the growth so no two hit areas overlap, and a mouse sees no change. Bars grew only
+  where they had to (compact footer 38 to 40, scene tray to 40, full-density and stacked
+  header 36 to 44, the chain's resize handle 8 to 24, the narrow top strip 10px, Tones and
+  Jam tab rows 12px). In split the floating + moves to the scene tray's row (40px, the row's height), so
+  the chain needs no clearance beside it; elsewhere the chain keeps 48px clear of it.
+  Icons inside buttons take no pointer events, so a tap on an icon is a tap on its button
+  (`css/base.css`). At compact density, and on touch at any density, text read to operate a
+  control is 11px or more; badges and units may be 10 (the effect's ON/OFF switch is 48px
+  wide for it), and a narrow effect header drops its type words before the title is cut.
+- **The preset name keeps its room** (`ts/presets/toolbarFit.ts`). At compact density the
+  name's pill keeps at least 200px or 40% of the strip; when the toolbar's buttons do not
+  fit beside that, Random, then Publish, Edit and Save leave the bar for entries in the
+  "..." menu (New and "..." stay), measured on every resize. The entries click the buttons
+  and carry their disabled state.
+- **Escape closes the top dialog** (`ts/modalEscape.ts`) by clicking its own × (or Cancel),
+  for the dialogs without Escape handling of their own; the riff capture and the dialogs
+  that handle Escape themselves are left alone, and a field in the dialog that uses Escape
+  wins.
 - **Tones and Jam put results first** (`css/compact/panels.css`). A Tones section scrolls as
   one, so its search and paging move away with the results; the community search is one
   line; a feed of one row drops the heading its chip already says; pack cards are 150px; and

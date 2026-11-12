@@ -19,6 +19,7 @@ import { stepPresetHistory } from "./history.js";
 import { filterPresets, updatePresetDropdownSelection } from "./filter.js";
 import { applyPresetFromLibrary } from "./load.js";
 import { closePresetExtraActionsMenu, closePresetLibraryPopover, syncPresetLibraryFeatureVisibility, togglePresetLibraryPopover } from "./popover.js";
+import { initializePresetToolbarFit } from "./toolbarFit.js";
 import { createSetlist, renderSetlistPanel, setSetlistExpanded } from "./setlists.js";
 
 export function getActivePresetIndex(): number {
@@ -150,6 +151,9 @@ export function initializePresetControls(): void {
       void stepPresetHistory(offset, applyPresetFromLibrary);
     });
   }
+
+  // At compact density the toolbar's last buttons move into the "..." menu when the name needs the room.
+  initializePresetToolbarFit(closePresetExtraActionsMenu);
 
   if (randomPresetBtn) {
     randomPresetBtn.addEventListener("click", async () => {

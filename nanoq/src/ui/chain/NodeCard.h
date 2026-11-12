@@ -6,9 +6,11 @@
 #include "ui/Drawn.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
+#include "ui/widgets/LongPress.h"
 #include "ui/widgets/Widgets.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -102,16 +104,35 @@ constexpr float kPowerSize = 16.0f;
 constexpr float kIconCardSize = 40.0f;
 constexpr float kIconRowHeight = 48.0f;
 
+/// The card's name, its detail and its model's badge: 10, 9 and 8 px, or with touch sizes 11, 10
+/// and 10.
+inline float CardNameSize()
+{
+    return metrics::Readable(10.0f);
+}
+
+inline float CardDetailSize()
+{
+    return metrics::Readable(9.0f, 10.0f);
+}
+
+inline float CardBadgeSize()
+{
+    return metrics::Readable(8.0f, 10.0f);
+}
+
 /// A card's width for its text, estimated from its length so the wrap can be worked out before
 /// anything is measured: the 10 px capitals run about 6.6 px a letter and the 9 px detail about
-/// 5.2, inside 12 px of padding each side (min-width 72, the text at most 160).
+/// 5.2 (in proportion at the touch sizes), inside 12 px of padding each side (min-width 72, the
+/// text at most 160).
 inline float CardWidthFor(const std::string& name, const std::string& detail)
 {
     const auto chars = [](const std::string& s) {
         return static_cast<float>(
             std::count_if(s.begin(), s.end(), [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
     };
-    const float wanted = std::min(160.0f, std::max(chars(name) * 6.6f, chars(detail) * 5.2f)) + 24.0f;
+    const float nameLetter = metrics::Touch() ? 7.3f : 6.6f, detailLetter = metrics::Touch() ? 5.8f : 5.2f;
+    const float wanted = std::min(160.0f, std::max(chars(name) * nameLetter, chars(detail) * detailLetter)) + 24.0f;
     return std::clamp(wanted, 72.0f, 185.0f);
 }
 
@@ -474,12 +495,13 @@ class NodeCard final : public el::element, public Drawn, public Focusable
 
             // The name, in capitals as the web UI's are, the effect under it, and the model's badge.
             const el::color ink = ghost(mTheme.Text());
-            const auto nameFont = Font(Weight::Medium).size(10.0f);
-            const auto detailFont = Font(Weight::Medium).size(9.0f);
+            const auto nameFont = Font(Weight::Medium).size(CardNameSize());
+            const auto detailFont = Font(Weight::Medium).size(CardDetailSize());
             const float textWidth = std::min(160.0f, r.width() - 16.0f);
+            const float nameRow = metrics::Touch() ? 13.0f : 12.0f;
             FillText(cnv, Ellipsize(cnv, Upper(mLook.name), nameFont, textWidth), nameFont, ink,
-                     el::rect{r.left + 6.0f, y, r.right - 6.0f, y + 12.0f}, HAlign::Centre);
-            y += 14.0f;
+                     el::rect{r.left + 6.0f, y, r.right - 6.0f, y + nameRow}, HAlign::Centre);
+            y += nameRow + 2.0f;
 
             if (!mLook.detail.empty())
             {
@@ -491,7 +513,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable
 
             if (!mLook.badge.empty())
             {
-                const auto badgeFont = Font(Weight::SemiBold).size(8.0f);
+                const auto badgeFont = Font(Weight::SemiBold).size(CardBadgeSize());
                 const float w = el::measure_text(cnv, mLook.badge, badgeFont).x + 12.0f;
                 const el::rect pill{cx - w * 0.5f, y, cx + w * 0.5f, y + 13.0f};
                 cnv.fill_style(el::rgba(56, 118, 98, 71));
@@ -529,7 +551,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable
 
         // The corners (.signal-node-delete, .signal-node-bypass): remove at the top left and the
         // power at the top right, shown while the card is hovered or chosen; the power also
-        // while the card is off.
+        // while the card is off. With touch sizes a hover is only a tap on its way, as the web
+        // UI's (hover: none) rule has it, so only the chosen card shows them.
         const auto corner = [&](el::rect at, bool hot, el::color ring) {
             const auto c = artist::center_point(at);
             cnv.fill_style(hot ? mTheme.Elevated() : el::rgba(0, 0, 0, 64));
@@ -540,7 +563,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable
             cnv.add_circle(artist::circle(c, kPowerSize * 0.5f - 0.5f));
             cnv.stroke();
         };
-        const bool showCorners = mHover || mLook.selected;
+        const bool showCorners = mLook.selected || (mHover && !metrics::Touch());
 
         if (mLook.canRemove && showCorners)
         {
@@ -587,17 +610,35 @@ class NodeCard final : public el::element, public Drawn, public Focusable
 
         if (btn.down)
         {
+            // A corner takes the press only where it is drawn: unseen, a tap near it selected
+            // nothing and turned the effect off (the power), or removed it.
             mDown = true;
-            mDownOnPower = mLook.canBypass && PowerRect(r).inset(-4.0f, -4.0f).includes(btn.pos);
-            mDownOnRemove = !mDownOnPower && mLook.canRemove && (mHover || mLook.selected) &&
-                            RemoveRect(r).inset(-4.0f, -4.0f).includes(btn.pos);
+            mDownOnPower =
+                mLook.canBypass && (CornersLive() || !mLook.enabled) && CornerHit(PowerRect(r)).includes(btn.pos);
+            mDownOnRemove =
+                !mDownOnPower && mLook.canRemove && CornersLive() && CornerHit(RemoveRect(r)).includes(btn.pos);
             mDownAt = btn.pos;
             mDragging = false;
+
+            // Held, a finger's press opens the card's menu, as a right click does (LongPress.h).
+            if (!mDownOnPower && !mDownOnRemove && onMenu)
+            {
+                LongPress::Press(btn.pos, onMenu);
+            }
+
             return true;
         }
 
         const bool wasDown = mDown;
         mDown = false;
+
+        if (LongPress::Fired())
+        {
+            mDragging = false;
+            mDragOffset = {0.0f, 0.0f};
+            ctx.view.refresh();
+            return true;
+        }
 
         if (mDragging)
         {
@@ -658,6 +699,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable
             return;
         }
 
+        // Moved, it is a drag and not a hold.
+        LongPress::Cancel();
         mDragging = true;
         mDragOffset = offset;
         onDrag(mDownAt, btn.pos, false);
@@ -668,8 +711,13 @@ class NodeCard final : public el::element, public Drawn, public Focusable
     {
         const bool inside = status != el::cursor_tracking::leaving;
         const auto r = CardRect(ctx.bounds, CardHeight());
-        const bool power = inside && mLook.canBypass && PowerRect(r).inset(-4.0f, -4.0f).includes(p);
-        const bool remove = inside && mLook.canRemove && RemoveRect(r).inset(-4.0f, -4.0f).includes(p);
+        const bool power = inside && mLook.canBypass && CornerHit(PowerRect(r)).includes(p);
+        const bool remove = inside && mLook.canRemove && CornerHit(RemoveRect(r)).includes(p);
+
+        if (inside && !mHover)
+        {
+            mHoverSince = std::chrono::steady_clock::now();
+        }
 
         if (inside != mHover || power != mHoverPower || remove != mHoverRemove)
         {
@@ -714,6 +762,32 @@ class NodeCard final : public el::element, public Drawn, public Focusable
     std::function<void(el::point from, el::point to, bool done)> onDrag;
 
   private:
+    /// Whether the corners take a press: drawn on the chosen card, and on a hovered one once the
+    /// pointer has rested there long enough for them to be seen. A tap reaches the card as a
+    /// hover and a press together (Windows' touch, the DevDriver), and has seen nothing.
+    [[nodiscard]] bool CornersLive() const
+    {
+        if (mLook.selected)
+        {
+            return true;
+        }
+
+        constexpr std::chrono::milliseconds kSeen{120};
+        return mHover && !metrics::Touch() && std::chrono::steady_clock::now() - mHoverSince >= kSeen;
+    }
+
+    /// A corner's hit area: 4 px round it, or with touch sizes a 36 px square on its centre.
+    [[nodiscard]] static el::rect CornerHit(const el::rect& corner)
+    {
+        if (metrics::Touch())
+        {
+            const auto c = artist::center_point(corner);
+            return el::rect{c.x - 18.0f, c.y - 18.0f, c.x + 18.0f, c.y + 18.0f};
+        }
+
+        return corner.inset(-4.0f, -4.0f);
+    }
+
     [[nodiscard]] float CardHeight() const
     {
         if (mLook.iconOnly)
@@ -759,5 +833,6 @@ class NodeCard final : public el::element, public Drawn, public Focusable
     el::point mDownAt{0.0f, 0.0f};
     el::point mDragOffset{0.0f, 0.0f};
     bool mDragging = false;
+    std::chrono::steady_clock::time_point mHoverSince;
 };
 } // namespace nanoq::ui

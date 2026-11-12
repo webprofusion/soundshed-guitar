@@ -6,6 +6,7 @@
 #include "ui/Drawn.h"
 #include "ui/input/Focus.h"
 #include "ui/widgets/Layout.h"
+#include "ui/widgets/LongPress.h"
 #include "ui/widgets/Widgets.h"
 
 #include <functional>
@@ -102,10 +103,18 @@ class Pressable : public el::element, public Drawn, public Focusable, public Tap
         {
             mDown = true;
             ctx.view.refresh(ctx);
+
+            // Held, a finger's press is the right click (LongPress.h).
+            if (onMenu)
+            {
+                mBounds = ctx.bounds;
+                LongPress::Press(btn.pos, [menu = onMenu, at = btn.pos] { menu(at); });
+            }
+
             return true;
         }
 
-        const bool fire = mDown && ctx.bounds.includes(btn.pos);
+        const bool fire = mDown && ctx.bounds.includes(btn.pos) && !LongPress::Fired();
         mDown = false;
         mBounds = ctx.bounds;
         ctx.view.refresh(ctx);

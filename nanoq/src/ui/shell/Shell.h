@@ -193,6 +193,9 @@ class Shell
     [[nodiscard]] bool WantsWide() const;
     /// The compact frame's stage is tall enough for the chain over the editor (kCompactSplitMinHeight).
     [[nodiscard]] bool WantsSplit() const;
+    /// Hit areas for a finger (metrics::Touch): the ui.touchControls setting, whose Auto follows
+    /// TouchFirst().
+    [[nodiscard]] bool TouchSizes() const;
 
     /// The chain and the editor share one play stage, the chain over the editor (the full
     /// layout, or the compact frame's split); false where they take turns as Chain and Effect.
@@ -220,16 +223,22 @@ class Shell
     /// The page slot's height: the view less the frame's bars, and the looper strip when it is out.
     [[nodiscard]] float StageHeight() const
     {
-        const float bars = mWide ? metrics::kTabBarHeight + 1.0f + metrics::kHeaderHeight + metrics::kWideFooterHeight
-                                 : metrics::kTopBarHeight + metrics::kFooterHeight;
+        const float bars = mWide ? metrics::kTabBarHeight + 1.0f + metrics::HeaderHeight() + metrics::kWideFooterHeight
+                                 : metrics::TopBarHeight() + metrics::FooterHeight();
         return ViewSize().y - bars - (mLooperOpen ? LooperStripHeight() : 0.0f);
     }
 
     /// The scene chips over the chain, and the Multi-Rig tabs over them when there are two rigs
-    /// or more (BuildScenes).
+    /// or more (BuildScenes). Touch sizes give the chips a 40 px row.
     [[nodiscard]] float SceneRowHeight() const
     {
-        return 24.0f + (MultiRigShown() ? 26.0f : 0.0f);
+        return (metrics::Touch() ? 40.0f : 24.0f) + (MultiRigShown() ? 26.0f : 0.0f);
+    }
+
+    /// The row under the split stage's chain that holds its round add button.
+    [[nodiscard]] static float AddRowHeight()
+    {
+        return metrics::Touch() ? 46.0f : 30.0f;
     }
 
     /// The frame for the layout in force, around the region slots.
@@ -263,6 +272,8 @@ class Shell
     Ptr BuildChainStage();
     /// The footer's theme drop-down, in either frame.
     [[nodiscard]] std::shared_ptr<IconButton> BuildThemeButton();
+    /// Touch sizes' Auto, On or Off, in a drop-down (the Options popover, ShellFrame.cpp).
+    [[nodiscard]] std::shared_ptr<IconButton> TouchControlsButton();
 
     // The full layout (WideFrame.cpp).
     Ptr BuildTabBar();
@@ -352,6 +363,8 @@ class Shell
     [[nodiscard]] std::string SceneSignature() const;
     /// What the preset bar (or the full control bar) shows that a rebuild would change.
     [[nodiscard]] std::string TopBarSignature() const;
+    /// With touch sizes, how many of Random and Share the compact bar has room for: 0, 1 or 2.
+    [[nodiscard]] static int TouchBarExtras(float width, bool update);
 
     // EffectPage.cpp
     [[nodiscard]] std::string EffectPageSignature() const;
@@ -815,7 +828,9 @@ class Shell
 
     // Menus.cpp
     void OpenPresetMenu(std::optional<el::rect> anchor = std::nullopt);
-    void OpenNodeMenu(const std::string& nodeId);
+    /// A node's menu: its card's right click, or the editor header's "..." (`fromEditor`: no Show
+    /// controls, as they are showing).
+    void OpenNodeMenu(const std::string& nodeId, bool fromEditor = false);
     void RenameNodeWithPrompt(const std::string& nodeId);
     void SaveActivePreset(bool asNew);
     /// The save dialog: name, category, description, folder and tags (Dialogs.cpp).
@@ -847,6 +862,7 @@ class Shell
     Page mPage = Page::Chain;
     bool mWide = false;               // the full layout is in force
     bool mSplit = false;              // compact, with the chain over the editor (WantsSplit)
+    bool mTouch = false;              // touch sizes are in force (TouchSizes, metrics::Touch)
     bool mControlsOpen = false;       // the compact layout's Controls strip is out
     el::extent mLastSize{0.0f, 0.0f}; // the regions sized to the window are rebuilt when it changes
     bool mPlayStageShown = false;     // the full layout's page slot holds the chain and editor

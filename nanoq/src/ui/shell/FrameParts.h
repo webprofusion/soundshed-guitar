@@ -18,6 +18,8 @@ inline constexpr const char* kDemoRenderRateSetting = "demoAudio.renderSampleRat
 inline constexpr const char* kDemoRepeatSetting = "nativeUi.demoRepeat";
 /// The web UI's density preference (compactMode.ts): auto, compact or full.
 inline constexpr const char* kDensitySetting = "ui.density";
+/// Touch sizes (Shell::TouchSizes): auto (a touch-first device), on or off.
+inline constexpr const char* kTouchControlsSetting = "ui.touchControls";
 
 inline bool BoolSetting(const nlohmann::json& settings, const char* key, bool fallback)
 {

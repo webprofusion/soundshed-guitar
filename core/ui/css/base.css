@@ -60,6 +60,13 @@ html {
   display: none !important;
 }
 
+/* A tap on a button's icon is a tap on the button: the event's target is the
+   button, not an SVG that a handler reading HTML elements would not recognise.
+   :where() keeps it at zero specificity, so a drawing that wants taps can say so. */
+:where(button, [role="button"], [role="tab"], [role="menuitem"]) svg {
+  pointer-events: none;
+}
+
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-optical-sizing: auto;

@@ -38,6 +38,7 @@ constexpr float kLabelWidth = 230.0f; // the longest label, INTERFACE CALIBRATIO
 
 using frame::BoolSetting;
 using frame::kDensitySetting;
+using frame::kTouchControlsSetting;
 using frame::NumberSetting;
 using frame::StringSetting;
 } // namespace
@@ -284,6 +285,16 @@ Ptr Shell::BuildSettingsPage()
             },
             [&commands](int i) {
                 commands.SetSetting(kDensitySetting, i == 1 ? "compact" : i == 2 ? "full" : "auto");
+            });
+        // Hit areas for a finger (Shell::TouchSizes): Auto has them on a touch-first device.
+        pick(
+            "Touch Sizes", {"Auto", "On", "Off"},
+            [this] {
+                const auto touch = StringSetting(mState.appSettings, kTouchControlsSetting, "auto");
+                return touch == "on" ? 1 : touch == "off" ? 2 : 0;
+            },
+            [&commands](int i) {
+                commands.SetSetting(kTouchControlsSetting, i == 1 ? "on" : i == 2 ? "off" : "auto");
             });
         endCard();
         beginCard("Controls");

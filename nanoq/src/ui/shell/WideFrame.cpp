@@ -30,8 +30,9 @@ namespace
 bool ToolbarLabelsFit(float viewWidth)
 {
     constexpr float kHeaderSides = 2.0f * (28.0f + 30.0f + 14.0f) + 5.0f * 84.0f + 72.0f;
-    constexpr float kLabelledToolbar = 406.0f;
-    return viewWidth - kHeaderSides >= kLabelledToolbar + 8.0f;
+    // With touch sizes every button is hit over 44 px, and the toolbar is 596 px spelt out.
+    const float labelledToolbar = metrics::Touch() ? 596.0f : 406.0f;
+    return viewWidth - kHeaderSides >= labelledToolbar + 8.0f;
 }
 } // namespace
 
@@ -78,6 +79,12 @@ bool Shell::WantsSplit() const
     return ViewSize().y >= metrics::kCompactSplitMinHeight;
 }
 
+bool Shell::TouchSizes() const
+{
+    const auto touch = StringSetting(mState.appSettings, kTouchControlsSetting, "auto");
+    return touch == "on" || (touch != "off" && TouchFirst());
+}
+
 Ptr Shell::BuildFrame()
 {
     if (mWide)
@@ -86,7 +93,7 @@ Ptr Shell::BuildFrame()
             return FixedHeight(1, Fill(mTheme.Text().opacity(0.06f), std::make_shared<el::element>()));
         };
         return Col({FixedHeight(metrics::kTabBarHeight, Yielding(mRailSlot)), rule(),
-                    FixedHeight(metrics::kHeaderHeight - 1.0f, Yielding(mTopSlot)), rule(), Yielding(mPageSlot),
+                    FixedHeight(metrics::HeaderHeight() - 1.0f, Yielding(mTopSlot)), rule(), Yielding(mPageSlot),
                     mLooperSlot, FixedHeight(metrics::kWideFooterHeight, Yielding(mTransportSlot))});
     }
 
@@ -94,22 +101,25 @@ Ptr Shell::BuildFrame()
     // yield their minimum sizes: each is built for the window's size and rebuilt when it changes
     // (OnTick), and the window's own floor is the root's (MinSize).
     return Row({FixedWidth(metrics::kRailWidth, Yielding(mRailSlot)),
-                Col({FixedHeight(metrics::kTopBarHeight, Yielding(mTopSlot)), Yielding(mPageSlot), mLooperSlot,
-                     FixedHeight(metrics::kFooterHeight, Yielding(mTransportSlot))})});
+                Col({FixedHeight(metrics::TopBarHeight(), Yielding(mTopSlot)), Yielding(mPageSlot), mLooperSlot,
+                     FixedHeight(metrics::FooterHeight(), Yielding(mTransportSlot))})});
 }
 
 std::string Shell::TopBarSignature() const
 {
     const auto* summary = mState.FindPresetSummary(mState.activePresetId);
-    std::string s = std::string(mWide    ? "w"
-                                : mSplit ? "s"
-                                         : "c") +
-                    std::to_string(static_cast<int>(mPage)) + "|" + mState.activePresetId + "|" + PresetTitle(mState) +
-                    "|" + (mState.activePresetDirty ? "d" : "") + (mState.activePreset ? "p" : "") +
-                    (guitarfx::uiclient::IsPresetFavorite(mState, mState.activePresetId) ? "f" : "") + "|" +
-                    (summary != nullptr ? summary->source : std::string()) + "|" +
-                    (mPresetTrail.CanGoBack() ? "<" : "") + (mPresetTrail.CanGoForward() ? ">" : "") +
-                    (mUpdate ? "|u" : "") + (mWide && ToolbarLabelsFit(ViewSize().x) ? "|l" : "");
+    std::string s =
+        std::string(mWide    ? "w"
+                    : mSplit ? "s"
+                             : "c") +
+        std::to_string(static_cast<int>(mPage)) + "|" + mState.activePresetId + "|" + PresetTitle(mState) + "|" +
+        (mState.activePresetDirty ? "d" : "") + (mState.activePreset ? "p" : "") +
+        (guitarfx::uiclient::IsPresetFavorite(mState, mState.activePresetId) ? "f" : "") + "|" +
+        (summary != nullptr ? summary->source : std::string()) + "|" + (mPresetTrail.CanGoBack() ? "<" : "") +
+        (mPresetTrail.CanGoForward() ? ">" : "") + (mUpdate ? "|u" : "") +
+        (mWide && ToolbarLabelsFit(ViewSize().x) ? "|l" : "") +
+        (metrics::Touch() ? "|t" + std::to_string(mWide ? 0 : TouchBarExtras(StageWidth(), static_cast<bool>(mUpdate)))
+                          : "");
     return s;
 }
 
@@ -292,7 +302,8 @@ Ptr Shell::BuildHeader()
         if (below)
         {
             parts.push_back(VGap(2));
-            parts.push_back(FixedHeight(18, Row({Stretch(), std::move(below), Stretch()})));
+            parts.push_back(
+                FixedHeight(metrics::Touch() ? 36.0f : 18.0f, Row({Stretch(), std::move(below), Stretch()})));
         }
 
         parts.push_back(std::make_shared<el::element>());
@@ -325,8 +336,9 @@ Ptr Shell::BuildPlayStage()
     // split stage is this one too, between its rail, preset bar and footer.
     auto add = std::make_shared<RoundAdd>(mTheme, 24.0f);
     add->onClick = [this, a = add.get()] { OpenAddMenu(a->Bounds()); };
-    auto chain = Over(Col({mSceneSlot, mChainSlot, FixedHeight(30, Pad(0, 0, 0, 6, Row({Stretch(), add, HGap(14)})))}),
-                      std::make_shared<StageBackdrop>(mTheme));
+    auto chain = Over(
+        Col({mSceneSlot, mChainSlot, FixedHeight(AddRowHeight(), Pad(0, 0, 0, 6, Row({Stretch(), add, HGap(14)})))}),
+        std::make_shared<StageBackdrop>(mTheme));
     // The bar between them is dragged to give the chain more room or less (kept in Nano Q's
     // own UI settings, as chainAreaHeight). Dragged 12 px past the cards' least height the
     // chain turns to icon tiles, and 12 px down from them back to cards, as the web UI's
@@ -337,7 +349,7 @@ Ptr Shell::BuildPlayStage()
 
         if (mChainDragStart < 0.0f)
         {
-            mChainDragStart = mChainAreaHeight - SceneRowHeight() - 30.0f;
+            mChainDragStart = mChainAreaHeight - SceneRowHeight() - AddRowHeight();
             mChainDragIcons = IconChain();
         }
 
@@ -615,6 +627,7 @@ Ptr Shell::BuildWideFooter()
 
     row.push_back(themeButton);
     row.push_back(HGap(12));
-    return Fill(mTheme.Footer(), PadXY(0, 8, Row(row)));
+    // Touch sizes: the buttons are hit over the footer's whole height.
+    return Fill(mTheme.Footer(), PadXY(0, metrics::Touch() ? 0 : 8, Row(row)));
 }
 } // namespace nanoq::ui

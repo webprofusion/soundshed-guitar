@@ -213,7 +213,7 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
     const bool overEditor = PlayStageShown() && mEditorArea.height() > (mWide ? 200.0f : 324.0f);
     const float width =
         overEditor ? std::min(860.0f, mEditorArea.width() - 24.0f) : std::min(860.0f, stageWidth - 24.0f);
-    const float top = overEditor ? mEditorArea.top + 8.0f : metrics::kTopBarHeight + 8.0f;
+    const float top = overEditor ? mEditorArea.top + 8.0f : metrics::TopBarHeight() + 8.0f;
     const float height =
         overEditor ? std::clamp(mEditorArea.height() - 24.0f, 300.0f, 400.0f) : std::min(460.0f, view.y - top - 48.0f);
     const float x = overEditor ? mEditorArea.left + (mEditorArea.width() - width) * 0.5f

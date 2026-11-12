@@ -253,9 +253,13 @@ void Shell::OpenMetronome()
 
     auto divider = FixedHeight(1, Fill(mTheme.BorderStrong().opacity(0.6f), std::make_shared<el::element>()));
 
-    auto arrows = Middle(FixedHeight(54, Col({FixedHeight(24, up), VGap(6), FixedHeight(24, down)})));
-    auto tempo = FixedWidth(190, Middle(Col({FixedHeight(13, Middle(Label(mTheme, "BPM"))), VGap(12),
-                                             FixedHeight(58, Row({FixedWidth(28, arrows), HGap(12), readout}))})));
+    // Touch sizes: the arrows are hit over 40 by 40 each, one on the other.
+    const bool touch = metrics::Touch();
+    auto arrows = touch ? Middle(FixedHeight(80, Col({FixedHeight(40, up), FixedHeight(40, down)})))
+                        : Middle(FixedHeight(54, Col({FixedHeight(24, up), VGap(6), FixedHeight(24, down)})));
+    auto tempo = FixedWidth(190, Middle(Col({FixedHeight(13, Middle(Label(mTheme, "BPM"))), VGap(touch ? 2 : 12),
+                                             FixedHeight(touch ? 80 : 58, Row({FixedWidth(touch ? 40 : 28, arrows),
+                                                                               HGap(touch ? 0 : 12), readout}))})));
     constexpr float kBottomRow = 84.0f;
     auto bottom = FixedHeight(kBottomRow, Row({tempo, HGap(20), Middle(tap), HGap(20),
                                                FixedWidth(130, picker("Rhythm", rhythm)), Stretch(), Middle(play)}));

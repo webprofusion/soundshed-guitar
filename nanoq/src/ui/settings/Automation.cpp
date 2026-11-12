@@ -471,7 +471,7 @@ Ptr Shell::BuildMidiAutomationBody()
         rows.push_back(VGap(8));
         help(
             "Map automation slots to MIDI control messages, keyboard keys, or DAW parameters. Default slots are always available;");
-        help("custom slots can target any effect parameter. Right-click a knob for MIDI Learn.");
+        help("custom slots can target any effect parameter. Right-click a knob, or press and hold it, for MIDI Learn.");
 
         // ── The slots ──
         const auto slotRow = [&](const AutomationSlotInfo& slot) {

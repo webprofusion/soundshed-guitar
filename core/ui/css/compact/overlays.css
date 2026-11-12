@@ -197,3 +197,20 @@ html[data-density="compact"] .preset-library-popover.open .preset-list {
     grid-row: 1 / span 2;
   }
 }
+
+/* The FX library's effects fill the list's width, 200px or more each: a third
+   each with a 140px floor left two to a row and a third of the row empty, the
+   names cut to a letter or two. */
+html[data-density="compact"] .fx-selector-effects-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-content: start;
+}
+
+html[data-density="compact"] .fx-selector-effects-list > .fx-item {
+  min-width: 0;
+}
+
+html[data-density="compact"] .fx-selector-effects-list > :not(.fx-item) {
+  grid-column: 1 / -1;
+}

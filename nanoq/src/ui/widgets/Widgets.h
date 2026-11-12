@@ -143,6 +143,13 @@ class Button : public el::element, public Drawn, public Focusable, public TapTar
     Button& Flexible(bool flexible);
     Button& Alignment(HAlign align);
 
+    /// With touch sizes: drawn `h` tall in the middle of a taller hit area (a strip's buttons).
+    Button& FaceHeight(float h)
+    {
+        mFaceHeight = h;
+        return *this;
+    }
+
     [[nodiscard]] bool IsOn() const
     {
         return mOn;
@@ -163,6 +170,7 @@ class Button : public el::element, public Drawn, public Focusable, public TapTar
     float mSize = metrics::kTextSize;
     bool mFlexible = false;
     HAlign mAlign = HAlign::Centre;
+    float mFaceHeight = 0.0f;
 };
 
 /// One effect parameter: its name, its value as text, and a track to drag. The value is
@@ -349,6 +357,9 @@ class ParamKnob : public el::element, public Drawn, public Focusable
   private:
     /// Turns it to `normalised` as a drag would, and redraws it.
     void Turn(const el::context& ctx, double normalised);
+    /// A finger held still on it (LongPress.h): the press was for its menu, not a turn, so what
+    /// the finger's wander turned goes back, and the menu opens at `at`.
+    void HeldForMenu(el::point at);
     void BeginEdit(std::string text);
     void FinishEdit(bool commit);
     [[nodiscard]] el::rect ValueBox(const el::rect& b) const;

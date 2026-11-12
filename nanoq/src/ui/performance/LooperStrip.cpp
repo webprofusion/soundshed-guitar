@@ -181,8 +181,11 @@ Ptr Shell::BuildLooperStrip()
     // threshold is a multiple of 40, as LooperShape rebuilds the strip in 40 px steps.
     const float width = StageWidth();
     std::vector<Ptr> row{HGap(10), mLooperMain, HGap(6), stop, HGap(2), undo};
+    // Touch sizes: the buttons are hit over 40 px (the icons 44 wide), drawn as before; Redo and
+    // Clear then need 80 px more.
+    const bool touch = metrics::Touch();
 
-    if (mWide || width >= 680.0f)
+    if (mWide || width >= (touch ? 760.0f : 680.0f))
     {
         row.insert(row.end(), {HGap(2), redo, HGap(2), clear});
     }
@@ -243,10 +246,29 @@ Ptr Shell::BuildLooperStrip()
     }
 
     SyncLooperLive();
+    // Touch sizes: the row is the strip's height less 3 px each side, and the buttons are drawn
+    // as tall as before in the middle of it.
+    const float padY = touch ? 3.0f : 8.0f;
+
+    if (touch)
+    {
+        const float face = LooperStripHeight() - 16.0f;
+
+        for (auto& e : row)
+        {
+            if (auto b = std::dynamic_pointer_cast<Button>(e))
+            {
+                b->FaceHeight(face);
+            }
+        }
+
+        std::replace(row.begin(), row.end(), display, Middle(FixedHeight(face, display)));
+    }
+
     // No minimum width: a strip built for a wider window must not hold the window at that width
     // while the window shrinks; it is rebuilt for the new width at the next tick (LooperShape).
     return el::share(
-        WidthYielding(el::hold_any(FixedHeight(LooperStripHeight(), Fill(mTheme.Bar(), PadXY(0, 8, Row(row)))))));
+        WidthYielding(el::hold_any(FixedHeight(LooperStripHeight(), Fill(mTheme.Bar(), PadXY(0, padY, Row(row)))))));
 }
 
 void Shell::SyncLooperLive()

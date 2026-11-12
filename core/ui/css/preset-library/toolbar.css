@@ -231,6 +231,12 @@
   display: none;
 }
 
+/* A toolbar button (or group) that left the bar for the "..." menu, at compact
+   density when the preset name needs the room (ts/presets/toolbarFit.ts). */
+html[data-density="compact"] .preset-toolbar .is-toolbar-overflow {
+  display: none;
+}
+
 .preset-extra-action-item-danger {
   color: color-mix(in srgb, var(--color-error), #fff 18%);
 }

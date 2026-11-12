@@ -15,14 +15,18 @@
 //   key <spec>         a key press and release: "space", "escape", "delete", "f2", "ctrl+shift+z"
 //   type <text>        characters, as typed into whatever has focus
 //   drop x y <path>    a file dropped there from the desktop
+//   hold x y ms        a press held still for ms milliseconds, then let go (a touch's long press);
+//                      the lines after it wait for the release
 //   setting <key> <json>  sets an app setting, as the UI would (to seed a test profile)
 
 #include <elements.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <optional>
+#include <vector>
 
 namespace nanoq::ui
 {
@@ -43,6 +47,13 @@ class DevDriver
     {
     }
 
+    /// Plays one line into the view; false for a hold, which ends the batch until it is let go.
+    bool Play(cycfi::elements::view& view, const std::string& line);
+
     std::filesystem::path mFile;
+    /// A hold under way: where, until when, and the lines waiting for its release.
+    std::optional<std::chrono::steady_clock::time_point> mHoldUntil;
+    cycfi::elements::point mHoldAt{0.0f, 0.0f};
+    std::vector<std::string> mAfterHold;
 };
 } // namespace nanoq::ui

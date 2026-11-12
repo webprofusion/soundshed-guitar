@@ -91,6 +91,11 @@
                   <!-- Compact density only (css/compact/shell.css): the load history buttons are hidden there. -->
                   <button class="preset-extra-action-item preset-extra-history-item" id="preset-history-back-item" type="button" role="menuitem" title="Back to previously loaded preset" disabled>Back to previous preset</button>
                   <button class="preset-extra-action-item preset-extra-history-item" id="preset-history-forward-item" type="button" role="menuitem" title="Forward to next loaded preset" disabled>Forward to next preset</button>
+                  <!-- Compact density, when the bar is short of room (ts/presets/toolbarFit.ts): the buttons that left it. -->
+                  <button class="preset-extra-action-item" data-overflow-for="preset-save-btn" type="button" role="menuitem" title="Save changes to this preset" hidden>Save preset</button>
+                  <button class="preset-extra-action-item" data-overflow-for="preset-edit-btn" type="button" role="menuitem" title="Edit preset details" hidden>Edit preset details</button>
+                  <button class="preset-extra-action-item" data-overflow-for="preset-publish-btn" type="button" role="menuitem" title="Publish this preset to Tone Sharing" hidden>Publish to Tone Sharing</button>
+                  <button class="preset-extra-action-item" data-overflow-for="preset-random-btn" type="button" role="menuitem" title="Load a random preset" hidden>Load random preset</button>
                   <button class="preset-extra-action-item" id="preset-save-as-btn" type="button" role="menuitem" title="Save this preset as a new copy">Save As</button>
                   <button class="preset-extra-action-item" id="preset-export-btn" type="button" role="menuitem" title="Export this preset as a file">Export preset</button>
                   <button class="preset-extra-action-item" id="preset-export-session-btn" type="button" role="menuitem" title="Export the active archive session" hidden>Export archive session</button>

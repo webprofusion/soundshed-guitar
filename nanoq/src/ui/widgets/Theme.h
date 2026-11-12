@@ -8,6 +8,7 @@
 
 #include <elements.hpp>
 
+#include <algorithm>
 #include <string>
 
 namespace nanoq::ui
@@ -312,5 +313,60 @@ inline constexpr float kWideLooperStripHeight = 50.0f;
 /// The smallest window the compact layout still fits.
 inline constexpr float kMinWidth = 640.0f;
 inline constexpr float kMinHeight = 400.0f;
+
+// Touch sizes (Shell::TouchSizes): every control a finger taps is hit over at least 44 px where
+// its bar allows, never under 40, while it is drawn the size it always was, centred in that room.
+// The shell sets this before it builds and rebuilds everything when it changes; the controls read
+// it as they lay out and draw. One per process, as the setting is the app's.
+inline bool gTouchSizes = false;
+inline constexpr float kTouchTarget = 44.0f;
+inline constexpr float kTouchFloor = 40.0f;
+
+[[nodiscard]] inline bool Touch() noexcept
+{
+    return gTouchSizes;
+}
+
+/// The compact preset bar and footer, and the full layout's control bar, taller for a finger.
+[[nodiscard]] inline float TopBarHeight() noexcept
+{
+    return Touch() ? 48.0f : kTopBarHeight;
+}
+
+[[nodiscard]] inline float FooterHeight() noexcept
+{
+    return Touch() ? 44.0f : kFooterHeight;
+}
+
+/// The Controls cells grow by this with touch sizes (Shell::BuildControlCells): their labels and
+/// the drop-downs under the knobs take 36 px rows.
+inline constexpr float kTouchCellExtra = 40.0f;
+
+[[nodiscard]] inline float HeaderHeight() noexcept
+{
+    return Touch() ? kHeaderHeight + kTouchCellExtra : kHeaderHeight;
+}
+
+/// The room a control drawn `drawn` across takes: at least `target` with touch sizes.
+[[nodiscard]] inline float Hit(float drawn, float target = kTouchTarget) noexcept
+{
+    return Touch() ? std::max(drawn, target) : drawn;
+}
+
+/// A label read to work a control: at least `floor` px with touch sizes.
+[[nodiscard]] inline float Readable(float size, float floor = 11.0f) noexcept
+{
+    return Touch() ? std::max(size, floor) : size;
+}
+
+/// A face `w` by `h` centred in larger bounds (a control's hit area), never past them.
+[[nodiscard]] inline el::rect Face(const el::rect& bounds, float w, float h) noexcept
+{
+    w = std::min(w, bounds.width());
+    h = std::min(h, bounds.height());
+    const float left = bounds.left + (bounds.width() - w) * 0.5f;
+    const float top = bounds.top + (bounds.height() - h) * 0.5f;
+    return el::rect{left, top, left + w, top + h};
+}
 } // namespace metrics
 } // namespace nanoq::ui

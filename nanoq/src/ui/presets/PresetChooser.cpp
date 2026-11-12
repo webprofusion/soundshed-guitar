@@ -112,8 +112,11 @@ class PresetCard final : public Pressable
 
         // The rating: in words at the left, the stars at the right.
         const auto ratingFont = Font(Weight::Regular).size(11.0f);
-        FillText(cnv, mRating > 0 ? "Rated " + std::to_string(mRating) + " of 5" : std::string("Not Rated"), ratingFont,
-                 mTheme.TextSecondary(), el::rect{b.left + 12.0f, b.bottom - 26.0f, b.right - 110.0f, b.bottom - 8.0f},
+        const float ratingRight = metrics::Touch() ? StarSlot(b, 0).left - 4.0f : b.right - 110.0f;
+        const std::string rating =
+            mRating > 0 ? "Rated " + std::to_string(mRating) + " of 5" : std::string("Not Rated");
+        FillText(cnv, Ellipsize(cnv, rating, ratingFont, std::max(0.0f, ratingRight - b.left - 12.0f)), ratingFont,
+                 mTheme.TextSecondary(), el::rect{b.left + 12.0f, b.bottom - 26.0f, ratingRight, b.bottom - 8.0f},
                  HAlign::Left);
 
         for (int i = 0; i < 5; ++i)
@@ -141,7 +144,7 @@ class PresetCard final : public Pressable
 
             for (int i = 0; i < 5; ++i)
             {
-                if (StarRect(b, i).inset(-2.0f, -6.0f).includes(btn.pos))
+                if (StarHit(ctx.bounds, b, i).includes(btn.pos))
                 {
                     if (!btn.down && onRate)
                     {
@@ -162,10 +165,38 @@ class PresetCard final : public Pressable
         return el::rect{b.right - 12.0f - 64.0f, b.top + 9.0f, b.right - 12.0f, b.top + 29.0f};
     }
 
+    /// With touch sizes each star has a 40 px slot, the five ending 4 px in from the card's edge.
+    static constexpr float kTouchStarSlot = 40.0f;
+
+    static el::rect StarSlot(const el::rect& b, int index)
+    {
+        const float left = b.right - 4.0f - 5.0f * kTouchStarSlot + static_cast<float>(index) * kTouchStarSlot;
+        return el::rect{left, b.bottom - 36.0f, left + kTouchStarSlot, b.bottom + 4.0f};
+    }
+
     static el::rect StarRect(const el::rect& b, int index)
     {
+        if (metrics::Touch())
+        {
+            const auto slot = StarSlot(b, index);
+            const float left = slot.left + (kTouchStarSlot - 13.0f) * 0.5f;
+            return el::rect{left, b.bottom - 23.0f, left + 13.0f, b.bottom - 10.0f};
+        }
+
         const float left = b.right - 12.0f - 5.0f * 16.0f + static_cast<float>(index) * 16.0f;
         return el::rect{left, b.bottom - 23.0f, left + 13.0f, b.bottom - 10.0f};
+    }
+
+    /// Where a star takes a press: its 40 px slot, or 2 by 6 px round it.
+    static el::rect StarHit(const el::rect& bounds, const el::rect& b, int index)
+    {
+        if (metrics::Touch())
+        {
+            const auto slot = StarSlot(b, index);
+            return el::rect{slot.left, slot.top, slot.right, std::min(slot.bottom, bounds.bottom)};
+        }
+
+        return StarRect(b, index).inset(-2.0f, -6.0f);
     }
 
     const Theme& mTheme;
@@ -194,7 +225,7 @@ void Shell::OpenPresetChooser(el::rect anchor)
     const float width = std::min(780.0f, view.x - 24.0f);
     const float centre =
         std::clamp((anchor.left + anchor.right) * 0.5f, 12.0f + width * 0.5f, view.x - 12.0f - width * 0.5f);
-    const float footer = mWide ? metrics::kWideFooterHeight : metrics::kFooterHeight;
+    const float footer = mWide ? metrics::kWideFooterHeight : metrics::FooterHeight();
     const float height = std::max(260.0f, view.y - anchor.bottom - footer - 14.0f);
     ShowPopover(Pad(14, 12, 14, 12, mChooserSlot),
                 el::rect{centre - width * 0.5f, anchor.top, centre + width * 0.5f, anchor.bottom}, width, height);

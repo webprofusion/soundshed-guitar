@@ -16,6 +16,7 @@
 #include "util/PathEncoding.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -56,6 +57,32 @@ constexpr float kPanelPad = 10.0f;
 constexpr float kPanelMinWidth = 448.0f;
 constexpr float kHeaderHeight = 36.0f;
 constexpr float kStackedSlot = 16.0f + 6.0f + 26.0f; // a slot's label over its row
+
+/// A slot's label over its row, whose controls touch sizes give 36 px (NodeControls.cpp).
+float StackedSlot()
+{
+    return metrics::Touch() ? kStackedSlot + 10.0f : kStackedSlot;
+}
+
+/// A control's name in its group's box: inside a group named for a band ("Low-Mid"), the band's
+/// name is the box's title, so "Low-Mid Gain" reads "Gain" under it.
+std::string NameInGroup(const std::string& name, const std::string& group)
+{
+    if (group.empty() || name.size() <= group.size() + 1)
+    {
+        return name;
+    }
+
+    for (std::size_t i = 0; i < group.size(); ++i)
+    {
+        if (std::tolower(static_cast<unsigned char>(name[i])) != std::tolower(static_cast<unsigned char>(group[i])))
+        {
+            return name;
+        }
+    }
+
+    return name[group.size()] == ' ' ? name.substr(group.size() + 1) : name;
+}
 
 /// An enum shown as a list rather than turned through on a knob: the engine asks for it.
 bool WantsPicker(const EffectParamInfo& info)
@@ -438,17 +465,21 @@ Ptr Shell::BuildEffectPage()
                                 : std::string(),
                             11.0f);
                 });
-            auto label = std::make_shared<Text>(mTheme, Upper(info.name), 9.0f, Weight::SemiBold);
+            auto label = std::make_shared<Text>(mTheme, Upper(NameInGroup(info.name, info.group)),
+                                                metrics::Readable(9.0f), Weight::SemiBold);
             label->Colour(mTheme.Pick(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()))
                 .Alignment(Text::Align::Centre);
-            target.cells.emplace_back(kPickerWidth,
-                                      Sized(kPickerWidth, kCellHeight,
-                                            Col({FixedHeight(12, label), VGap(12), FixedHeight(26, picker),
-                                                 std::make_shared<el::element>()})));
+            // Touch sizes: the chip is hit over 36 px.
+            const bool touch = metrics::Touch();
+            target.cells.emplace_back(
+                kPickerWidth, Sized(kPickerWidth, kCellHeight,
+                                    Col({FixedHeight(12, label), VGap(touch ? 2 : 12),
+                                         FixedHeight(touch ? 36 : 26, picker), std::make_shared<el::element>()})));
         }
         else if (IsToggleParam(info))
         {
-            auto toggle = std::make_shared<ParamToggle>(mTheme, info.name);
+            auto toggle = std::make_shared<ParamToggle>(mTheme, NameInGroup(info.name, info.group));
+            toggle->AccessName(info.name);
             toggle->onMenu = menu;
             mLive.Bind(
                 toggle, [valueOf, info] { return valueOf(info) > 0.5 * (info.minValue + info.maxValue); },
@@ -473,7 +504,8 @@ Ptr Shell::BuildEffectPage()
         {
             // A knob: continuous values, and an enum short enough to turn through, as the web
             // UI's Mode knobs are.
-            auto knob = std::make_shared<ParamKnob>(mTheme, info.name);
+            auto knob = std::make_shared<ParamKnob>(mTheme, NameInGroup(info.name, info.group));
+            knob->AccessName(info.name);
             knob->Large(true).DefaultPosition(ParamValueToPosition(info, info.defaultValue));
             knob->onMenu = menu;
             mLive.Bind(
@@ -709,7 +741,17 @@ Ptr Shell::BuildEffectPage()
         };
         rightSide.push_back(dsp);
         rightSide.push_back(HGap(8));
-        channelsWidth += 28.0f + 8.0f;
+        channelsWidth += metrics::Hit(28.0f) + 8.0f;
+
+        // The node's menu (move, replace, turn off, rename, remove), which is otherwise only a
+        // right click or a held press on its card away: a visible way to every one of them.
+        auto more = std::make_shared<IconButton>(mTheme, mIcons, "ui-more", IconButton::Look::Ghost);
+        more->Size(28, 26).IconSize(14).Ink(mTheme.TextSecondary());
+        more->AccessName("Effect menu");
+        more->onClick = [this, nodeId] { OpenNodeMenu(nodeId, true); };
+        rightSide.push_back(more);
+        rightSide.push_back(HGap(8));
+        channelsWidth += metrics::Hit(28.0f) + 8.0f;
     }
 
     if (!IsSplitterType(node->type) && !IsMixerType(node->type))
@@ -760,10 +802,14 @@ Ptr Shell::BuildEffectPage()
 
     if (!rightSide.empty())
     {
-        rightWidth = channelsWidth + ((type != nullptr || boundary) ? 77.0f + 8.0f + 40.0f : 40.0f);
+        const float power = metrics::Hit(40.0f);
+        rightWidth = channelsWidth + ((type != nullptr || boundary) ? 77.0f + 8.0f + power : power);
     }
 
-    const float pencilWidth = boundary ? 0.0f : 22.0f;
+    // With touch sizes the pencil is hit over 36 px, more than the title's row has: it goes to
+    // the head of the controls at the right, hit over 44 by 36.
+    const bool touchPencil = metrics::Touch() && !boundary;
+    const float pencilWidth = boundary ? 0.0f : touchPencil ? metrics::Hit(20.0f) + 8.0f : 22.0f;
     const float roomForTitle = panelWidth - 2.0f * kPanelPad - 14.0f - 8.0f - pencilWidth - rightWidth - 16.0f;
     const float titleWidth =
         std::clamp(MeasureTextWidth(titleText, titleFont) + 2.0f, 40.0f, std::max(40.0f, roomForTitle));
@@ -771,7 +817,7 @@ Ptr Shell::BuildEffectPage()
     auto led = std::make_shared<HeaderLed>(node->enabled, false);
     auto title = std::make_shared<Text>(mTheme, titleText, 12.5f, Weight::SemiBold);
     title->Colour(mTheme.Pick(el::rgba(238, 242, 255, 255), mTheme.Text()));
-    auto subtitle = std::make_shared<Text>(mTheme, subtitleText, 9.0f, Weight::SemiBold);
+    auto subtitle = std::make_shared<Text>(mTheme, subtitleText, metrics::Readable(9.0f, 10.0f), Weight::SemiBold);
     subtitle->Colour(mTheme.TextMuted()).Fixed(true);
 
     // The titles (.default-effect-shell-titles): the name, and under it the kind and the badge.
@@ -782,8 +828,16 @@ Ptr Shell::BuildEffectPage()
         auto pencil = std::make_shared<IconButton>(mTheme, mIcons, "pencil");
         pencil->Size(20, 20).IconSize(11).Ink(mTheme.TextMuted());
         pencil->onClick = [this, nodeId] { RenameNodeWithPrompt(nodeId); };
-        titleRow.push_back(HGap(2));
-        titleRow.push_back(Middle(pencil));
+
+        if (touchPencil)
+        {
+            rightSide.insert(rightSide.begin(), {pencil, HGap(8)});
+        }
+        else
+        {
+            titleRow.push_back(HGap(2));
+            titleRow.push_back(Middle(pencil));
+        }
     }
 
     titleRow.push_back(Stretch());
@@ -852,9 +906,9 @@ Ptr Shell::BuildEffectPage()
 
         if (node->type == guitarfx::EffectGuids::kCabIr)
         {
-            addToSection(BuildResourceSlot(*node, rt, 0, "IR A", false, true), kStackedSlot);
+            addToSection(BuildResourceSlot(*node, rt, 0, "IR A", false, true), StackedSlot());
             addToSection(BuildIrList(*node), mShowIrList ? 28.0f + 150.0f : 28.0f);
-            addToSection(BuildResourceSlot(*node, rt, 1, "IR B", true, true), kStackedSlot);
+            addToSection(BuildResourceSlot(*node, rt, 1, "IR B", true, true), StackedSlot());
         }
         else
         {
@@ -863,7 +917,7 @@ Ptr Shell::BuildEffectPage()
                                            : rt == "ir" ? "IR"
                                                         : "Resource",
                                            false, true),
-                         kStackedSlot);
+                         StackedSlot());
         }
     }
 
@@ -901,9 +955,11 @@ Ptr Shell::BuildEffectPage()
     // The tabs (.node-param-tabs): on their own line, with a rule under them across the section.
     if (auto t = tabs())
     {
-        addToSection(Col({FixedHeight(28, Row({t, Stretch()})),
+        // Touch sizes give the tabs a 40 px row to be hit in.
+        const float tabRow = metrics::Touch() ? 40.0f : 28.0f;
+        addToSection(Col({FixedHeight(tabRow, Row({t, Stretch()})),
                           FixedHeight(1, Fill(mTheme.Border(), std::make_shared<el::element>()))}),
-                     29.0f);
+                     tabRow + 1.0f);
     }
 
     // An EQ's curve over its input's spectrum, above its knobs, as the web UI shows it.

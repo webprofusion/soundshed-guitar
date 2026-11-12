@@ -161,7 +161,8 @@ void Button::draw(const el::context& ctx)
 {
     NoteDrawn(ctx);
     auto& cnv = ctx.canvas;
-    const auto b = ctx.bounds;
+    const auto b = mFaceHeight > 0.0f && metrics::Touch() ? metrics::Face(ctx.bounds, ctx.bounds.width(), mFaceHeight)
+                                                          : ctx.bounds;
     const bool lit = mOn || mSelected;
 
     el::color fill = mTheme.Input();

@@ -69,6 +69,13 @@ Shell::ControlCells Shell::BuildControlCells()
     using Read = std::function<double()>;
     using Write = std::function<void(double)>;
     using Format = std::function<std::string(double)>;
+    // Touch sizes: the labels at 11 px, and a 36 px row each for a label with its switch (the
+    // two one control, MiniSwitch::Title) and for the drop-down under the knob.
+    const bool touch = metrics::Touch();
+    const float titleSize = metrics::Readable(9.0f);
+    const float headHeight = touch ? 36.0f : 12.0f;
+    const float belowHeight = touch ? 36.0f : 16.0f;
+    const auto titleInk = mTheme.Pick(el::rgba(201, 209, 225, 200), mTheme.TextSecondary());
 
     // A cell of the strip: its label (with a switch beside it for a stage that turns off) over a
     // knob and its value, and, for the input, its mode under that.
@@ -105,8 +112,8 @@ Shell::ControlCells Shell::BuildControlCells()
             k.Update(guitarfx::uiclient::ParamValueToPosition(info, v), format(v));
         });
 
-        auto title = std::make_shared<Text>(mTheme, label, 9.0f, Weight::SemiBold);
-        title->Colour(mTheme.Pick(el::rgba(201, 209, 225, 200), mTheme.TextSecondary())).Fixed(true);
+        auto title = std::make_shared<Text>(mTheme, label, titleSize, Weight::SemiBold);
+        title->Colour(titleInk).Fixed(true);
         std::vector<Ptr> head{Stretch(), title};
 
         if (readOn)
@@ -115,21 +122,36 @@ Shell::ControlCells Shell::BuildControlCells()
             toggle->AccessName(std::string(label) + " on");
             toggle->onClick = [readOn, writeOn] { writeOn(!readOn()); };
             mLive.Bind(toggle, readOn, &MiniSwitch::Set);
-            head.push_back(HGap(5));
-            head.push_back(toggle);
+
+            if (touch)
+            {
+                toggle->Title(label, titleSize, titleInk);
+                head = {toggle};
+            }
+            else
+            {
+                head.push_back(HGap(5));
+                head.push_back(toggle);
+            }
         }
 
-        head.push_back(Stretch());
+        if (!touch || !readOn)
+        {
+            head.push_back(Stretch());
+        }
 
-        // The knob draws no name of its own: the label row sits over the space it leaves.
-        auto top =
-            Over(Col({FixedHeight(12, Row(head)), std::make_shared<el::element>()}), Row({Stretch(), knob, Stretch()}));
-        std::vector<Ptr> cell{FixedHeight(67, top)};
+        // The knob draws no name of its own: the label row sits over the space it leaves (and
+        // with touch sizes over a gap above it too).
+        const float knobTop = headHeight - 12.0f;
+        Ptr knobRow = Row({Stretch(), knob, Stretch()});
+        auto top = Over(Col({FixedHeight(headHeight, Row(head)), std::make_shared<el::element>()}),
+                        touch ? Col({VGap(knobTop), knobRow}) : knobRow);
+        std::vector<Ptr> cell{FixedHeight(67 + knobTop, top)};
 
         if (below)
         {
             cell.push_back(VGap(1));
-            cell.push_back(FixedHeight(16, Row({Stretch(), below, Stretch()})));
+            cell.push_back(FixedHeight(belowHeight, Row({Stretch(), below, Stretch()})));
         }
 
         cell.push_back(std::make_shared<el::element>());
@@ -246,10 +268,18 @@ Shell::ControlCells Shell::BuildControlCells()
         mSession.Commands().SetGlobalChainToggle("eq.enabled", !NodeEnabled(chain().postChainGraph, "global_eq"));
     };
     mLive.Bind(eqOn, [chain] { return NodeEnabled(chain().postChainGraph, "global_eq"); }, &MiniSwitch::Set);
-    auto eqTitle = std::make_shared<Text>(mTheme, "EQ", 9.0f, Weight::SemiBold);
-    eqTitle->Colour(mTheme.Pick(el::rgba(201, 209, 225, 200), mTheme.TextSecondary())).Fixed(true);
+    auto eqTitle = std::make_shared<Text>(mTheme, "EQ", titleSize, Weight::SemiBold);
+    eqTitle->Colour(titleInk).Fixed(true);
+    Ptr eqHead = Row({Stretch(), eqTitle, HGap(5), eqOn, Stretch()});
+
+    if (touch)
+    {
+        eqOn->Title("EQ", titleSize, titleInk);
+        eqHead = Row({eqOn});
+    }
+
     auto eq =
-        FixedWidth(72, Col({FixedHeight(12, Row({Stretch(), eqTitle, HGap(5), eqOn, Stretch()})), VGap(8),
+        FixedWidth(72, Col({FixedHeight(headHeight, eqHead), VGap(touch ? 4 : 8),
                             FixedHeight(46, Row({Stretch(), eqButton, Stretch()})), std::make_shared<el::element>()}));
 
     // ── DOUBLER ──
@@ -283,7 +313,7 @@ Shell::ControlCells Shell::BuildControlCells()
     mLive.Feed(outMeter,
                [this](MeterBar& m) { return m.Set(mState.telemetry.output.peakDb, mState.telemetry.output.clipped); });
     auto mute = std::make_shared<IconButton>(mTheme, mIcons, mState.outputMuted ? "ui-mute" : "ui-speaker");
-    mute->Size(20, 18).IconSize(12);
+    mute->Size(20, 18).IconSize(12).TouchTarget(36);
     mute->onClick = [this] { mSession.Commands().SetOutputMuted(!mState.outputMuted); };
     mLive.Bind(mute, [this] { return mState.outputMuted; }, &IconButton::Lit);
 
@@ -304,18 +334,23 @@ Shell::ControlCells Shell::BuildControlCells()
 void Shell::OpenControls()
 {
     auto c = BuildControlCells();
-    auto strip = Row({Stretch(),
-                      Col({FixedHeight(84, c.inMeter), VGap(2),
-                           FixedHeight(18, Row({Stretch(), c.levelling, Stretch()})), std::make_shared<el::element>()}),
-                      HGap(14), c.in, c.gate, c.transpose, Stretch(), c.eq, c.doubler, c.out, HGap(14),
-                      Col({FixedHeight(84, c.outMeter), VGap(2), FixedHeight(18, Row({Stretch(), c.mute, Stretch()})),
-                           std::make_shared<el::element>()}),
-                      Stretch()});
+    // Touch sizes: the chevron and mute under the meters take 36 px rows, as the cells' do.
+    const float under = metrics::Touch() ? 36.0f : 18.0f;
+    // and the gaps beside the meters close up, so the strip is no wider than without them.
+    const float meterGap = metrics::Touch() ? 8.0f : 14.0f;
+    auto strip =
+        Row({Stretch(),
+             Col({FixedHeight(84, c.inMeter), VGap(2), FixedHeight(under, Row({Stretch(), c.levelling, Stretch()})),
+                  std::make_shared<el::element>()}),
+             HGap(meterGap), c.in, c.gate, c.transpose, Stretch(), c.eq, c.doubler, c.out, HGap(meterGap),
+             Col({FixedHeight(84, c.outMeter), VGap(2), FixedHeight(under, Row({Stretch(), c.mute, Stretch()})),
+                  std::make_shared<el::element>()}),
+             Stretch()});
 
     const auto view = ViewSize();
     ShowPopover(Pad(8, 10, 8, 6, strip),
-                el::rect{metrics::kRailWidth + 6.0f, 0.0f, view.x - 6.0f, metrics::kTopBarHeight - 6.0f},
-                view.x - metrics::kRailWidth - 12.0f, 124.0f);
+                el::rect{metrics::kRailWidth + 6.0f, 0.0f, view.x - 6.0f, metrics::TopBarHeight() - 6.0f},
+                view.x - metrics::kRailWidth - 12.0f, 124.0f + (metrics::Touch() ? metrics::kTouchCellExtra : 0.0f));
     // The bar's CONTROLS stays lit while the strip is out, as the web UI's tab does.
     mControlsOpen = true;
     mOnOverlayClosed = [this] { mControlsOpen = false; };
