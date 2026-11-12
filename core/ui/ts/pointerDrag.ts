@@ -20,7 +20,10 @@
  * A source in a scrolling list sets `touchHoldMs`: on a touch screen the finger
  * then has to rest that long before it picks the item up, and a swipe sooner is
  * left to the browser, so the list still scrolls. That is the only way an iPhone
- * drags these: its WKWebView has HTML5 drag-and-drop switched off.
+ * drags these: its WKWebView has HTML5 drag-and-drop switched off. Picked up, the
+ * source wears {@link TOUCH_HELD_CLASS} until the gesture ends (the signal chain's
+ * node lifts) and the device gives a short buzz where it can (Android), so the
+ * finger knows the hold took before it moves.
  */
 
 /** Movement required before a press turns into a drag rather than a click. */
@@ -31,6 +34,12 @@ export const POINTER_DRAG_THRESHOLD_PX = 6;
  * scrolls, short of the long press that opens a menu (touchLongPress.ts).
  */
 export const TOUCH_DRAG_HOLD_MS = 250;
+
+/** On the source from the moment a touch hold picks it up until the gesture ends. */
+export const TOUCH_HELD_CLASS = "touch-held";
+
+/** The buzz that says a touch hold took, in milliseconds (where `navigator.vibrate` exists). */
+const TOUCH_HELD_VIBRATE_MS = 12;
 
 /** How close to an `autoScroll` list's top or bottom edge the pointer scrolls it. */
 export const AUTO_SCROLL_EDGE_PX = 28;
@@ -191,10 +200,10 @@ function endSession(cancelled: boolean): void {
   const target = active.target;
   clearTarget(active);
   active.preview?.remove();
-  spec.source.classList.remove("dragging");
-  // A re-render during the drag leaves a fresh element wearing the class.
-  document.querySelectorAll(`${spec.sourceSelector}.dragging`)
-    .forEach((element) => element.classList.remove("dragging"));
+  spec.source.classList.remove("dragging", TOUCH_HELD_CLASS);
+  // A re-render during the drag leaves a fresh element wearing the classes.
+  document.querySelectorAll(`${spec.sourceSelector}.dragging, ${spec.sourceSelector}.${TOUCH_HELD_CLASS}`)
+    .forEach((element) => element.classList.remove("dragging", TOUCH_HELD_CLASS));
   if (spec.bodyClass) {
     document.body.classList.remove(spec.bodyClass);
   }
@@ -370,6 +379,12 @@ export function beginPointerDrag<TTarget extends PointerDragTarget>(
       started.holdTimer = null;
       started.held = true;
       started.blockTouchScroll = true;
+      spec.source.classList.add(TOUCH_HELD_CLASS);
+      try {
+        navigator.vibrate?.(TOUCH_HELD_VIBRATE_MS);
+      } catch {
+        // A WebView may refuse it; the lift is the cue that matters.
+      }
     }, spec.touchHoldMs);
   }
   session = started;

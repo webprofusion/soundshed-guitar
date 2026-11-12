@@ -3,6 +3,7 @@ import {
   AUTO_SCROLL_EDGE_PX,
   POINTER_DRAG_THRESHOLD_PX,
   TOUCH_DRAG_HOLD_MS,
+  TOUCH_HELD_CLASS,
   beginPointerDrag,
   cancelPointerDrag,
   isPointerDragActive,
@@ -221,6 +222,22 @@ describe("beginPointerDrag with a touch hold", () => {
     expect(drops).toHaveLength(1);
     expect(drops[0].target?.element).toBe(dropZone);
     expect(touchMove().defaultPrevented).toBe(false);
+  });
+
+  it("lifts the source once the hold takes, buzzes where it can, and lets it down at the end", () => {
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, "vibrate", { value: vibrate, configurable: true });
+    try {
+      startTouchDrag();
+      expect(source.classList.contains(TOUCH_HELD_CLASS)).toBe(false);
+      vi.advanceTimersByTime(TOUCH_DRAG_HOLD_MS);
+      expect(source.classList.contains(TOUCH_HELD_CLASS)).toBe(true);
+      expect(vibrate).toHaveBeenCalledTimes(1);
+      document.dispatchEvent(touchEvent("pointerup", 100, 100));
+      expect(source.classList.contains(TOUCH_HELD_CLASS)).toBe(false);
+    } finally {
+      Reflect.deleteProperty(navigator, "vibrate");
+    }
   });
 
   it("does not make a mouse wait", () => {

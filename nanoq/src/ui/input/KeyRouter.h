@@ -22,6 +22,7 @@
 #include "ui/input/Focus.h"
 #include "ui/input/OnScreenKeyboard.h"
 #include "ui/widgets/LongPress.h"
+#include "ui/widgets/TouchHold.h"
 
 #include <elements.hpp>
 
@@ -234,6 +235,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
             }
 
             LongPress::Reset();
+            TouchHold::Reset();
         }
 
         const bool used = proxy_base::click(ctx, btn);
@@ -242,6 +244,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
         if (!btn.down)
         {
             LongPress::Reset();
+            TouchHold::Reset();
         }
 
         // The press found a field, if one has focus now: Elements ended it otherwise.
@@ -262,6 +265,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
         }
 
         LongPress::Move(btn.pos);
+        TouchHold::Move(btn.pos.x, btn.pos.y);
         proxy_base::drag(ctx, btn);
     }
 

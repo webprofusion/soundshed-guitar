@@ -4,9 +4,11 @@
 // note their bounds in. It paints from the theme; the strip decides where it goes.
 
 #include "ui/Drawn.h"
+#include "ui/widgets/DragScroll.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
 #include "ui/widgets/LongPress.h"
+#include "ui/widgets/TouchHold.h"
 #include "ui/widgets/Widgets.h"
 
 #include <algorithm>
@@ -165,7 +167,7 @@ using namespace chain;
 /// One node in the chain. With focus: Enter opens it in the editor (Ctrl+Enter swaps it for
 /// another effect), Space turns it on or off, Delete removes it, the Menu key opens its menu, and
 /// the arrows go along the chain.
-class NodeCard final : public el::element, public Drawn, public Focusable
+class NodeCard final : public el::element, public Drawn, public Focusable, public TapTarget
 {
   public:
     enum class Light
@@ -300,6 +302,18 @@ class NodeCard final : public el::element, public Drawn, public Focusable
         return {{mLook.width, mLook.iconOnly ? kIconRowHeight : kCardHeight}, {mLook.width, el::full_extent}};
     }
 
+    /// With touch sizes a finger rests on the card before it moves it (TouchHold.h): a swipe
+    /// sooner scrolls the chain. A mouse moves it at once, and the chain scrolls from its gaps.
+    [[nodiscard]] bool HoldToDrag() const override
+    {
+        return metrics::Touch() && static_cast<bool>(onDrag);
+    }
+
+    [[nodiscard]] bool GivesWay() const override
+    {
+        return HoldToDrag();
+    }
+
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
@@ -319,6 +333,17 @@ class NodeCard final : public el::element, public Drawn, public Focusable
         }
 
         const auto r = CardRect(ctx.bounds, CardHeight());
+
+        // Picked up by a finger's hold and not yet moved: it lifts, so the finger knows.
+        const bool lifted = Lifted();
+
+        if (lifted)
+        {
+            const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
+            cnv.translate(cx, cy);
+            cnv.scale(1.06f, 1.06f);
+            cnv.translate(-cx, -cy);
+        }
         const auto tint = mLook.tint;
         const bool on = mLook.enabled;
         const bool boundary = mLook.boundary != Boundary::None;
@@ -382,8 +407,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable
             cnv.stroke_round_rect(r.inset(-1.0f, -1.0f), kRadius + 1.0f);
         }
 
-        // A dragged card would land after this one: an accent ring round it.
-        if (mHits && !mNodeId.empty() && mHits->hoverNode == mNodeId)
+        // A dragged card would land after this one, or a held one is picked up: an accent ring.
+        if (lifted || (mHits && !mNodeId.empty() && mHits->hoverNode == mNodeId))
         {
             cnv.stroke_style(mTheme.Accent());
             cnv.line_width(2.0f);
@@ -619,6 +644,12 @@ class NodeCard final : public el::element, public Drawn, public Focusable
                 !mDownOnPower && mLook.canRemove && CornersLive() && CornerHit(RemoveRect(r)).includes(btn.pos);
             mDownAt = btn.pos;
             mDragging = false;
+            mHoldMissed = false;
+
+            if (!mDownOnPower && !mDownOnRemove && HoldToDrag())
+            {
+                TouchHold::Press(btn.pos.x, btn.pos.y);
+            }
 
             // Held, a finger's press opens the card's menu, as a right click does (LongPress.h).
             if (!mDownOnPower && !mDownOnRemove && onMenu)
@@ -631,6 +662,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable
 
         const bool wasDown = mDown;
         mDown = false;
+        mHoldMissed = false;
 
         if (LongPress::Fired())
         {
@@ -696,6 +728,14 @@ class NodeCard final : public el::element, public Drawn, public Focusable
 
         if (!mDragging && std::hypot(offset.x, offset.y) < 6.0f)
         {
+            return;
+        }
+
+        // With touch sizes only a held card moves: one moved sooner was a swipe of the chain, and
+        // stays put for the rest of the press even once the hold would have been up.
+        if (!mDragging && HoldToDrag() && (mHoldMissed || !TouchHold::Held()))
+        {
+            mHoldMissed = true;
             return;
         }
 
@@ -833,6 +873,12 @@ class NodeCard final : public el::element, public Drawn, public Focusable
     el::point mDownAt{0.0f, 0.0f};
     el::point mDragOffset{0.0f, 0.0f};
     bool mDragging = false;
+    bool mHoldMissed = false; // moved before a finger's hold took: not a drag this press
     std::chrono::steady_clock::time_point mHoverSince;
+
+    [[nodiscard]] bool Lifted() const
+    {
+        return mDown && !mDragging && !mHoldMissed && HoldToDrag() && TouchHold::Held();
+    }
 };
 } // namespace nanoq::ui

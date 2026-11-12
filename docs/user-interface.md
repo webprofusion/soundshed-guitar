@@ -587,7 +587,9 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   so the tap only reveals it. Put such reveals under `@media (hover: hover)` (the chain's
   node buttons and + buttons do; on a touch screen the node buttons show on the selected
   node). There is no page zoom (the viewport meta), no text-size adjustment, and no callout
-  on a held press; fields stay selectable.
+  on a held press; fields stay selectable. A swipe on a chain node scrolls the chain; a finger
+  rested on it for 250ms picks it up to reorder, and it lifts to say so (`TOUCH_DRAG_HOLD_MS`,
+  `touch-held`). Nano Q's cards do the same with touch sizes (`widgets/TouchHold.h`).
 - **Narrow (≤ 540px).** The preset name takes the whole first line of the top strip, and
   Controls and the preset actions share the second. Below 600px the effect header, the preset
   library (folders over presets), the FX library (category chips over two columns) and the

@@ -2,6 +2,8 @@
 
 #include "ui/widgets/DragScroll.h"
 
+#include "ui/widgets/TouchHold.h"
+
 #include <algorithm>
 #include <cstdlib>
 
@@ -59,8 +61,10 @@ bool DragScroller::OnScrollBar(const el::context& ctx, el::point p) const
     return mVertical ? p.x >= ctx.bounds.right - width : p.y >= ctx.bounds.bottom - width;
 }
 
-bool DragScroller::PressGivesWay(const el::context& ctx, el::point p)
+bool DragScroller::PressGivesWay(const el::context& ctx, el::point p, bool& holdToDrag)
 {
+    holdToDrag = false;
+
     // Elements' own hit test stops at a scroller, as a scroller takes its clicks itself.
     auto* pressed = el::proxy_base::hit_test(ctx, p, true, true);
 
@@ -75,7 +79,15 @@ bool DragScroller::PressGivesWay(const el::context& ctx, el::point p)
         return inner->mGivesWay && !(inner->mArmed && inner->mVertical == mVertical);
     }
 
-    return dynamic_cast<const TapTarget*>(pressed) != nullptr;
+    const auto* tap = dynamic_cast<const TapTarget*>(pressed);
+
+    if (tap == nullptr || !tap->GivesWay())
+    {
+        return false;
+    }
+
+    holdToDrag = tap->HoldToDrag();
+    return true;
 }
 
 void DragScroller::ScrollTo(const el::context& ctx, double align)
@@ -106,7 +118,7 @@ bool DragScroller::click(const el::context& ctx, el::mouse_button btn)
     {
         const bool taken = el::scroller_base::click(ctx, btn);
         const bool scrollBar = Overflow(ctx) > 0.5f && OnScrollBar(ctx, btn.pos);
-        mGivesWay = !scrollBar && PressGivesWay(ctx, btn.pos);
+        mGivesWay = !scrollBar && PressGivesWay(ctx, btn.pos, mHoldToDrag);
         mArmed = mGivesWay && Overflow(ctx) > 0.5f;
 
         if (mArmed)
@@ -139,6 +151,14 @@ void DragScroller::drag(const el::context& ctx, el::mouse_button btn)
     }
 
     const bool wasScrolling = mGesture.Current() == DragGesture::State::Scrolling;
+
+    // A finger rested on a card before it moved: the card has been picked up, and the drag is its.
+    if (mHoldToDrag && !wasScrolling && TouchHold::Held())
+    {
+        mArmed = false;
+        el::scroller_base::drag(ctx, btn);
+        return;
+    }
 
     switch (mGesture.Move(Along(btn.pos), Across(btn.pos)))
     {

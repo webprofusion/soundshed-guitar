@@ -511,6 +511,12 @@ void Shell::OnTick()
     // A press held still is a right click (LongPress.h).
     LongPress::Tick();
 
+    // A chain card rested on long enough is picked up, and lifts to say so (TouchHold.h).
+    if (TouchHold::Tick() && mChainSlot)
+    {
+        mSession.Repaint(*mChainSlot);
+    }
+
     const bool wide = WantsWide();
     const bool touch = TouchSizes();
 

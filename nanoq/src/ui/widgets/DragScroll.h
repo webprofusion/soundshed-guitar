@@ -9,9 +9,11 @@
 // list watches the pointer (DragGesture). Once it has moved far enough along the list, the list
 // lets go of the control, by releasing it far from anywhere, and the press is a scroll from there.
 //
-// Only a TapTarget gives way like that. Anything else keeps its drag, so a knob still turns and a
-// chain card still moves, and a list scrolls from the gaps round them. A row that can be dragged
-// out of its list (EffectRow) is a TapTarget too: a drag across the list still reaches it.
+// Only a TapTarget gives way like that. Anything else keeps its drag, so a knob still turns, and a
+// list scrolls from the gaps round it. A row that can be dragged out of its list (EffectRow) is a
+// TapTarget too: a drag across the list still reaches it. A chain card with touch sizes is one
+// that a hold picks up (HoldToDrag, TouchHold.h): a swipe sooner scrolls the chain, and once the
+// finger has rested on it the list lets the press go to the card.
 //
 // On Linux, where no one can tell a finger from a mouse, and on iOS, where every pointer is a
 // finger. Off elsewhere, so a mouse drag on a list does what it always did:
@@ -33,6 +35,20 @@ class TapTarget
 {
   public:
     virtual ~TapTarget() = default;
+
+    /// Whether a list may scroll from a drag that starts here, now. A control that is a TapTarget
+    /// only some of the time (a chain card, with touch sizes) says no otherwise.
+    [[nodiscard]] virtual bool GivesWay() const
+    {
+        return true;
+    }
+
+    /// For a control a hold picks up: once TouchHold says the press was held, the list gives the
+    /// drag to it rather than scrolling. False for a control that is only ever tapped.
+    [[nodiscard]] virtual bool HoldToDrag() const
+    {
+        return false;
+    }
 };
 
 /// Where a list releases a press it has taken over. iOS's host lets go at the same place when a
@@ -81,13 +97,15 @@ class DragScroller : public el::scroller_base
     [[nodiscard]] float Overflow(const el::context& ctx);
     [[nodiscard]] bool OnScrollBar(const el::context& ctx, el::point p) const;
     /// Can the press at `p` become a scroll of something? Asked after it reached the content.
-    [[nodiscard]] bool PressGivesWay(const el::context& ctx, el::point p);
+    /// `holdToDrag` is set when it landed on a control a hold picks up.
+    [[nodiscard]] bool PressGivesWay(const el::context& ctx, el::point p, bool& holdToDrag);
     void ScrollTo(const el::context& ctx, double align);
 
     bool mVertical;
     bool mArmed = false;      // this press may become a scroll of this list
     bool mGivesWay = true;    // what the press landed on lets go of a drag: for a list round this one
     double mPressAlign = 0.0; // where the list was at the press, 0..1
+    bool mHoldToDrag = false; // the press is on a control a hold picks up (TouchHold.h)
     DragGesture mGesture;
 };
 } // namespace nanoq::ui

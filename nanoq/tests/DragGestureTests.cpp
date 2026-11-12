@@ -1,10 +1,14 @@
 // Tap or scroll (src/ui/widgets/DragGesture.h): a press on a list stays a tap while a finger wanders a
-// little, and what it becomes after that is decided once.
+// little, and what it becomes after that is decided once. And a finger's hold on a chain card
+// (src/ui/widgets/TouchHold.h): rested long enough it picks the card up; moved sooner it scrolls.
 
 #include "ui/widgets/DragGesture.h"
+#include "ui/widgets/TouchHold.h"
 
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 
 namespace
 {
@@ -75,6 +79,34 @@ void NewPressStartsAgain()
 }
 } // namespace
 
+void HoldPicksUp()
+{
+    using nanoq::ui::TouchHold;
+    TouchHold::Reset();
+    TouchHold::Press(100.0f, 50.0f);
+    Expect(!TouchHold::Tick() && !TouchHold::Held(), "a fresh press is not held yet");
+    TouchHold::Move(100.0f + TouchHold::kSlop - 1.0f, 50.0f); // a finger's wander
+    std::this_thread::sleep_for(std::chrono::duration<double>(TouchHold::kHoldSeconds + 0.03));
+    Expect(TouchHold::Tick(), "a press rested past the hold is picked up");
+    Expect(TouchHold::Held(), "and stays held");
+    Expect(!TouchHold::Tick(), "the hold takes once");
+    TouchHold::Move(300.0f, 50.0f);
+    Expect(TouchHold::Held(), "moving a held card keeps it held: it is being dragged");
+    TouchHold::Reset();
+    Expect(!TouchHold::Held(), "the release lets it go");
+}
+
+void SwipeIsNoHold()
+{
+    using nanoq::ui::TouchHold;
+    TouchHold::Reset();
+    TouchHold::Press(100.0f, 50.0f);
+    TouchHold::Move(100.0f + TouchHold::kSlop + 4.0f, 50.0f);
+    std::this_thread::sleep_for(std::chrono::duration<double>(TouchHold::kHoldSeconds + 0.03));
+    Expect(!TouchHold::Tick() && !TouchHold::Held(), "a press that moved before the hold is a swipe, never picked up");
+    TouchHold::Reset();
+}
+
 int main()
 {
     WanderIsATap();
@@ -82,6 +114,8 @@ int main()
     AcrossIsPassedOn();
     DecidedOnce();
     NewPressStartsAgain();
+    HoldPicksUp();
+    SwipeIsNoHold();
 
     if (gFailures == 0)
     {

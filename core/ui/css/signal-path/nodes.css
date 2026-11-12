@@ -180,10 +180,13 @@ body.signal-path-resizing * {
   min-width: 72px;
   min-height:72px;
   cursor: pointer;
-  /* Nodes are dragged with pointer events, and the browser cancels the gesture
-     the moment it decides the touch was a scroll. The chain still scrolls by
-     dragging the strip between nodes. */
-  touch-action: none;
+  /* A swipe on a node scrolls the chain; a finger rested on it first
+     (TOUCH_DRAG_HOLD_MS, signalPath.ts) picks it up to reorder, and from then
+     pointerDrag.ts stops the scroll. With none, as nodes had, the chain scrolled
+     only from the strip between them, which a full chain hardly has. On touch the
+     vertical flick that bypasses a node needs the hold too; the power corner does
+     it without one. Pinch zoom stays off. */
+  touch-action: pan-x pan-y;
   /* Size properties animate on density switch; interaction colours animate on hover/focus. */
   transition:
     border-color 0.15s ease,
@@ -285,6 +288,15 @@ body.signal-path-resizing * {
 
 .signal-node.utility {
   --node-accent-strong: #97a1b4;
+}
+
+/* A touch hold has picked the node up (pointerDrag.ts): it lifts, so the finger
+   knows it can move it now rather than scroll. */
+.signal-node.touch-held:not(.dragging) {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-xl);
+  transform: scale(1.06);
+  z-index: 100;
 }
 
 .signal-node.dragging {

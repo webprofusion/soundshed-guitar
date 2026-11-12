@@ -318,9 +318,8 @@ function applyNodeDrop(
 }
 
 /**
- * Start dragging a chain node. Splitter and mixer tiles anchor a parallel
- * branch and cannot be moved, and presses that land on a control inside the
- * node belong to that control.
+ * Start dragging a chain node; splitter and mixer tiles cannot move, and a press on a control inside
+ * it is the control's. A touch picks the node up after TOUCH_DRAG_HOLD_MS, so a swipe scrolls (nodes.css).
  */
 function beginNodePointerDrag(event: PointerEvent, source: HTMLElement): void {
   if (event.target instanceof Element && event.target.closest("button, input, select, textarea")) {
@@ -341,6 +340,7 @@ function beginNodePointerDrag(event: PointerEvent, source: HTMLElement): void {
     sourceSelector: ".signal-node",
     previewClass: "signal-node-drag-preview",
     matchPreviewHeight: true,
+    touchHoldMs: TOUCH_DRAG_HOLD_MS,
     resolveTarget: (moveEvent) => resolveNodeDragTarget(moveEvent, nodeId, sourceLeft),
     setTargetHighlight: (target, highlighted) =>
       setSignalPathDropHighlight(target.element, target.drop.kind, highlighted),
