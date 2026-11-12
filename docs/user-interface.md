@@ -593,12 +593,19 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   back/forward buttons become the first two entries of the preset "…" menu. The Factory/User
   badge shows when the name's pill is at least 340px wide (a container query), since it is
   what explains a disabled Save.
-- **The footer bar fills by priority** (`ts/footerFit.ts`, `css/compact/footer.css`). Setlists
-  and Tuner, then Record, Loop, undo/redo, A/B, Copy, the tempo (a tap opens the metronome) and
-  the metronome's play join the bar while they fit on one line, measured on every resize; what
-  does not fit is in the OPTIONS sheet (the history under a "Chain" row). The sheet's rows are
-  labelled (Demo audio, MIDI, Tap tempo, Metronome, Click, Zoom, Theme, Layout), repeat nothing
-  on the bar, and stay open for TAP and Click; the bar is not re-fitted while the sheet is open.
+- **The footer bar keeps the full bar's order** (`ts/footerFit.ts`, `css/compact/footer.css`).
+  The demo clip's chooser and play/stop are first, at the left (the chooser narrows first), then
+  Setlists and Tuner; Record, Loop, the tempo (a tap opens the metronome), the Metronome button
+  and the metronome's play join the bar in that priority while they fit on one line, measured
+  on every resize, with OPTIONS at the right. Undo/redo, A/B and Copy are always in the OPTIONS
+  sheet, its first row ("Chain"); the sheet's demo row keeps the clip's repeat and Render. On
+  the landscape rail the Tuner and Looper are square buttons over the settings gear
+  (`#nav-rail-tuner-btn`, `#nav-rail-looper-btn`; the Looper lights while its strip is open),
+  and the bar shows neither; held upright (no rail) the footer has both. What does not fit is
+  in the sheet. The sheet's rows are labelled (Chain, Demo audio, MIDI, Tap tempo, Metronome,
+  Click, Zoom, Theme, Layout), repeat nothing on the bar, and stay open for TAP and Click; the
+  bar is not re-fitted while the sheet is open. Nano Q's compact frame (`ShellFrame.cpp`) has
+  the same bar, sheet and rail.
 - **Short screens** (`data-compact-short`: compact and 500px tall or less, a phone held
   sideways or an 800x480 panel). The preset library has Presets, Multi-Rig and Setlists tabs,
   a folder drop-down beside the tag chips in place of the tree, and two-line cards (three
@@ -965,7 +972,7 @@ threshold. Both are the web UI's own.
 
 Undo/redo over the active preset's signal chain — nodes, wiring, parameters,
 bypass and per-node config — plus an A/B pair of chains in the footer
-(`#footer-chain-history`). Not to be confused with the preset **navigation**
+(`#footer-chain-history`; at compact density, the OPTIONS sheet's Chain row). Not to be confused with the preset **navigation**
 history in `presets.ts`, which steps between presets and restores nothing
 unsaved.
 

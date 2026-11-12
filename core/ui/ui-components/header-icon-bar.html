@@ -64,6 +64,21 @@
       </nav>
       <span class="icon-bar-spacer"></span>
       <div class="jam-player-dock" id="jam-player-dock" aria-hidden="true"></div>
+      <!-- The rail's tools (css/compact/rail.css), over the gear: the tuner, and the looper
+           while its feature is on (looper.ts hides it with the footer's Loop). Hidden off the rail,
+           where the footer has both. -->
+      <button class="icon-btn nav-rail-tool" id="nav-rail-tuner-btn" type="button" title="Tuner" aria-label="Tuner">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M9 3v7a3 3 0 0 0 6 0V3" />
+          <path d="M12 13v8" />
+        </svg>
+      </button>
+      <button class="icon-btn nav-rail-tool" id="nav-rail-looper-btn" type="button" title="Looper" aria-label="Looper" aria-pressed="false" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M18.5 12a6.5 6.5 0 1 1-2-4.7" />
+          <path d="M17 3.5v4h-4" />
+        </svg>
+      </button>
       <!-- Shown by updateCheck.ts when the update server names a newer release;
            opens #update-modal. Stays up for the session once shown. -->
       <button class="header-update-btn" id="header-update-btn" type="button" title="A new version is available" hidden>

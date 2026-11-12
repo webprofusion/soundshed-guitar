@@ -17,8 +17,10 @@
  * and click handlers, and settings keeps its handler.
  */
 
-/* Rail-only markup in the header, hidden everywhere else. */
+/* Rail-only markup in the header, hidden everywhere else. (.icon-bar for the tools,
+   which are also .icon-btn, whose display this has to beat.) */
 .nav-rail-stage,
+.icon-bar .nav-rail-tool,
 .nav-tab-icon {
   display: none;
 }
@@ -243,6 +245,35 @@ html[data-density="compact"][data-compact-layout="rail"] .nav-settings-btn {
 html[data-density="compact"][data-compact-layout="rail"] .nav-settings-btn svg {
   width: 20px;
   height: 20px;
+}
+
+/* The tuner and the looper, squares over the gear as it is: tools rather than places,
+   so not tabs. They stand in for the footer's Tuner and Loop, which the rail hides
+   (css/compact/footer.css). The looper lights while its strip is open. */
+html[data-density="compact"][data-compact-layout="rail"] .nav-rail-tool {
+  display: inline-flex;
+  align-self: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+html[data-density="compact"][data-compact-layout="rail"] .nav-rail-tool svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html[data-density="compact"][data-compact-layout="rail"] .nav-rail-tool[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
 }
 
 /* An icon-only square above the gear; the label would not fit the rail. */

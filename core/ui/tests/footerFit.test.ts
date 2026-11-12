@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FOOTER_PRIORITY, itemsThatFit } from "../ts/footerFit.js";
+import { FOOTER_DEMO_ON_BAR, FOOTER_PRIORITY, FOOTER_SHEET_ONLY, itemsThatFit } from "../ts/footerFit.js";
 
 describe("itemsThatFit", () => {
   it("keeps every item when the room covers them all", () => {
@@ -21,10 +21,26 @@ describe("itemsThatFit", () => {
 });
 
 describe("FOOTER_PRIORITY", () => {
-  it("puts Record and Loop before the history, and the tempo and play last", () => {
+  it("keeps the full bar's order: Record and Loop, then the tempo, the metronome and its play", () => {
     const order = FOOTER_PRIORITY.map((selectors) => selectors[0]);
-    expect(order.indexOf("#footer-riff-record-btn")).toBeLessThan(order.indexOf("#footer-chain-undo"));
-    expect(order.indexOf("#footer-looper-btn")).toBeLessThan(order.indexOf("#footer-chain-undo"));
-    expect(order.slice(-2)).toEqual(["#footer-bpm-btn", "#footer-metronome-toggle"]);
+    expect(order).toEqual([
+      "#footer-riff-record-btn",
+      "#footer-looper-btn",
+      "#footer-bpm-btn",
+      "#footer-metronome-btn",
+      "#footer-metronome-toggle",
+    ]);
+  });
+
+  it("never fits the chain's history or A/B onto the compact bar", () => {
+    const fitted = FOOTER_PRIORITY.flat();
+    for (const selector of FOOTER_SHEET_ONLY.flat()) {
+      expect(fitted).not.toContain(selector);
+    }
+    expect(FOOTER_SHEET_ONLY.flat()).toEqual(["#footer-chain-undo", "#footer-chain-redo", ".footer-ab-switch", "#footer-chain-copy"]);
+  });
+
+  it("puts the demo clip's chooser before its play button", () => {
+    expect(FOOTER_DEMO_ON_BAR).toEqual(["#footer-demo-audio-select", "#footer-play-demo-audio"]);
   });
 });

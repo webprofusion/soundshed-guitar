@@ -404,6 +404,13 @@ class AbButton final : public Pressable
         return *this;
     }
 
+    /// Whether this half is the live chain; the Options sheet's pair follows it without a rebuild.
+    AbButton& Active(bool active)
+    {
+        mActive = active;
+        return *this;
+    }
+
     [[nodiscard]] AccessInfo Describe() const override
     {
         AccessInfo info = Pressable::Describe();

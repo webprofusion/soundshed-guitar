@@ -1,6 +1,11 @@
 <!-- The looper strip (ts/looper.ts): docked above the footer, so it stays over every panel. -->
 <div class="looper-strip" id="looper-strip" hidden></div>
 <footer class="footer-bar film-grain">
+      <!-- Compact density: the demo clip's chooser and play button, first on the bar as the
+           full bar has them first after the history (ts/footerFit.ts moves them here, and back). -->
+      <div class="footer-compact-demo" aria-label="Demo audio"></div>
+      <!-- Compact density: Setlists and Tuner, then Record and Loop as they fit. On the landscape
+           rail the Tuner and Loop are rail buttons instead (css/compact/rail.css). -->
       <div class="footer-compact-shortcuts" aria-label="Quick tools">
         <button class="footer-btn footer-icon-btn" id="footer-compact-pads-btn" type="button" aria-label="Setlists" aria-pressed="false" title="Setlists">
           <svg class="footer-tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -17,8 +22,8 @@
           </svg>
         </button>
       </div>
-      <!-- Signal-chain undo/redo and the A/B pair. Outside footer-actions-panel so
-           it stays on the bar at every width — it is a performance control, not an option. -->
+      <!-- Signal-chain undo/redo and the A/B pair. Outside footer-actions-panel so it stays on
+           the full bar at every width; at compact density they are in the OPTIONS sheet's Chain row. -->
       <div id="footer-chain-history" class="footer-chain-history" aria-label="Signal chain history">
         <button class="footer-btn footer-icon-btn footer-chain-step-btn" id="footer-chain-undo" type="button" aria-label="Undo signal chain change" title="Nothing to undo (Ctrl+Z)" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -43,7 +48,7 @@
           </svg>
         </button>
       </div>
-      <!-- Compact density: the tempo and the metronome's play when the bar has room for them
+      <!-- Compact density: the tempo, the metronome and its play when the bar has room for them
            (ts/footerFit.ts moves them here from the tempo group, and back). -->
       <div class="footer-compact-tempo" aria-label="Tempo"></div>
       <button

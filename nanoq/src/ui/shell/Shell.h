@@ -297,7 +297,8 @@ class Shell
     [[nodiscard]] Ptr BuildDemoControls(float chooserWidth, bool withRepeat);
     /// The tempo, tap and the metronome's switch, as both footers show them.
     [[nodiscard]] Ptr BuildTempoControls(bool withTap);
-    /// Undo, redo, the A/B pair and the copy between them, as both footers show them.
+    /// Undo, redo, the A/B pair and the copy between them: the full footer, and the compact
+    /// frame's Options sheet (bound, so they follow an undo made in the sheet without a rebuild).
     [[nodiscard]] Ptr BuildHistoryControls();
     void PlayOrStopDemo();
     /// The zoom's select (100%, ...), for the Options sheet and the full footer.
@@ -677,7 +678,7 @@ class Shell
     void ChangeScaleGuide(const std::function<void(guitarfx::uiclient::scaleguide::Settings&)>& edit);
     /// Steps a progression, the next chord led from the shape showing (or `fromFrets`).
     void ScaleGuideStep(int index, std::vector<int> fromFrets = {});
-    /// Every tick: LISTEN on while the guide shows with it on, and the readings it brings.
+    /// Every tick: LISTEN on while the guide shows (it has no switch), and the readings it brings.
     void SyncScaleGuideListen();
     /// Every tick: Play followed on the neck and in the tab, a progression's chords shown as they come.
     void SyncScaleGuidePlayback();
@@ -801,7 +802,8 @@ class Shell
     [[nodiscard]] std::string LooperShape() const;
     Ptr BuildLooperStrip();
     /// `labelled`: each spelt out beside its icon, as the full footer does when it is wide.
-    std::vector<Ptr> BuildCaptureButtons(float size, bool labelled = false);
+    /// `withLoop`: the Loop button too; the compact frame has it on the rail instead.
+    std::vector<Ptr> BuildCaptureButtons(float size, bool labelled = false, bool withLoop = true);
     void SyncLooper();
     void SyncLooperLive();
     void RepaintLooperLive();

@@ -106,8 +106,8 @@ void Shell::ToggleLooper()
 
     SyncLooper();
     // The strip takes its height from the stage: the chain and the editor are sized for what is
-    // left (StageHeight, in their signatures).
-    Mark(kTransport | kChain | kPage);
+    // left (StageHeight, in their signatures). The compact rail's Looper button lights with it.
+    Mark(kTransport | kChain | kPage | kRail);
 }
 
 std::string Shell::LooperShape() const
@@ -323,7 +323,7 @@ void Shell::SyncLooper()
             mLooperOpen = false;
         }
 
-        Mark(kTransport | kChain | kPage);
+        Mark(kTransport | kChain | kPage | kRail);
     }
 
     if (!mLooperOpen)

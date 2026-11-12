@@ -72,6 +72,27 @@ Ptr Shell::BuildRail()
 
     // No Presets tab, as in the web UI's rail: the preset pill opens the presets.
     items.push_back(std::make_shared<el::element>());
+
+    // The tuner and the looper, over the gear: tools rather than places, so squares like it, not
+    // tabs. The looper lights while its strip is open. At the shortest window (400 px) the five
+    // tabs, these two and the gear still fit.
+    auto tool = [this](const char* icon, const char* name, bool lit, std::function<void()> onClick) {
+        auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Boxed);
+        b->Size(42, 42).IconSize(20).Lit(lit);
+        b->Ink(lit ? mTheme.Accent() : mTheme.TextSecondary());
+        b->AccessName(name);
+        b->onClick = std::move(onClick);
+        return FixedHeight(42, Row({HGap(9), b, Stretch()}));
+    };
+    items.push_back(tool("ui-tuner", "Tuner", false, [this] { OpenTuner(); }));
+    items.push_back(VGap(4));
+
+    if (LooperShown())
+    {
+        items.push_back(tool("ui-loop", "Looper", mLooperOpen, [this] { ToggleLooper(); }));
+        items.push_back(VGap(4));
+    }
+
     items.push_back(FixedHeight(42, Row({HGap(9), settings, Stretch()})));
     items.push_back(VGap(6));
     auto rail = Col(items);
@@ -413,6 +434,22 @@ Ptr Shell::BuildHistoryControls()
     auto copy = ToolButton(mTheme, mIcons, "ui-swap", [this] { CopyChainSlot(); }, 26.0f, 15.0f);
     copy->Disabled(!seeded);
 
+    // The footer is rebuilt when the history moves; the Options sheet is not, so its copies follow
+    // through bindings.
+    mLive.Bind(undo, [this] { return mHistory.CanUndo(); }, [](IconButton& w, bool can) { w.Disabled(!can); });
+    mLive.Bind(redo, [this] { return mHistory.CanRedo(); }, [](IconButton& w, bool can) { w.Disabled(!can); });
+    mLive.Bind(copy, [this] { return mHistory.IsSeeded(); }, [](IconButton& w, bool can) { w.Disabled(!can); });
+    auto bindHalf = [this](const std::shared_ptr<AbButton>& half, Slot slot) {
+        mLive.Bind(
+            half, [this, slot] { return std::make_pair(mHistory.IsSeeded(), mHistory.ActiveSlot() == slot); },
+            [](AbButton& w, std::pair<bool, bool> key) {
+                w.Enabled(key.first);
+                w.Active(key.second);
+            });
+    };
+    bindHalf(a, Slot::A);
+    bindHalf(b, Slot::B);
+
     if (metrics::Touch())
     {
         // Each half is hit over 40 px, its face drawn against the other's in the middle, in the
@@ -435,28 +472,25 @@ Ptr Shell::BuildTransport()
         return BuildWideFooter();
     }
 
-    // The compact footer keeps the everyday tools in reach rather than behind Options: the
-    // setlists and tuner, the demo clip and its play button, the chain's history and A/B, the
-    // tempo and the metronome, then Options for the rest. What does not fit a narrow window
-    // goes first (the demo clip, then the tempo).
+    // The compact footer keeps the everyday tools in reach rather than behind Options, in the full
+    // footer's order: the demo clip and its play button at the left, then the setlists and Rec,
+    // then the tempo and the metronome, then Options for the rest. The chain's history and A/B
+    // are in Options; the tuner and the looper are on the rail.
     const float width = StageWidth();
     auto pads = ToolButton(mTheme, mIcons, "ui-pads", [this] { TogglePads(); }, 26.0f, 16.0f);
-    pads->Lit(mPage == Page::Pads);
+    pads->Lit(mPage == Page::Pads).AccessName("Setlists");
 
     if (mPage != Page::Pads)
     {
         pads->Ink(mTheme.TextSecondary());
     }
 
-    auto tuner = ToolButton(mTheme, mIcons, "ui-tuner", [this] { OpenTuner(); }, 26.0f, 16.0f);
-    tuner->Ink(mTheme.TextSecondary());
-
     auto options = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
     options->Size(64, 26).Label("OPTIONS", 10.0f);
     options->onClick = [this, o = options.get()] { OpenOptions(o->Bounds()); };
 
     // Touch sizes: the buttons are hit over 44 px, which spaces them, and the demo clip needs a
-    // wider footer to fit.
+    // wider footer to grow.
     const bool touch = metrics::Touch();
     const float gap = touch ? 0.0f : 4.0f;
     auto divider = [this, touch] {
@@ -465,29 +499,17 @@ Ptr Shell::BuildTransport()
                    FixedWidth(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
     };
 
-    std::vector<Ptr> row{HGap(8), pads, HGap(gap), tuner};
+    std::vector<Ptr> row{HGap(8), BuildDemoControls(width >= (touch ? 820.0f : 720.0f) ? 150.0f : 112.0f, false),
+                         divider(), pads};
 
-    for (auto& b : BuildCaptureButtons(26.0f))
+    for (auto& b : BuildCaptureButtons(26.0f, false, false))
     {
         row.insert(row.end(), {HGap(gap), b});
     }
 
-    if (width >= (touch ? 850.0f : 760.0f))
-    {
-        row.push_back(divider());
-        row.push_back(BuildDemoControls(width >= (touch ? 940.0f : 860.0f) ? 132.0f : 104.0f, false));
-    }
-
     row.push_back(Stretch());
-    row.push_back(BuildHistoryControls());
-    row.push_back(Stretch());
-
-    if (width >= 640.0f)
-    {
-        row.push_back(BuildTempoControls(false));
-        row.push_back(divider());
-    }
-
+    row.push_back(BuildTempoControls(false));
+    row.push_back(divider());
     row.push_back(options);
     row.push_back(HGap(8));
     return FixedHeight(metrics::FooterHeight(), Fill(mTheme.Footer(), PadXY(0, touch ? 0 : 3, Row(row))));
@@ -497,32 +519,15 @@ void Shell::OpenOptions(el::rect anchor)
 {
     auto& commands = mSession.Commands();
 
-    // Demo audio: the clip (a tap opens the list), play/stop and repeat.
-    const auto* clip = SelectedDemoClip();
-    const bool playing = mState.demo.playing;
-    const bool repeat = BoolSetting(mState.appSettings, kDemoRepeatSetting, false);
-
-    auto clipButton = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    clipButton->Size(200, 28).Label(clip != nullptr ? clip->title : "Demo", 11.0f).Caret(true);
-    clipButton->Disabled(clip == nullptr);
-    clipButton->onClick = [this] { OpenDemoClips(); };
-
-    auto play = ToolButton(
-        mTheme, mIcons, playing ? "ui-stop" : "ui-play",
-        [this] {
-            PlayOrStopDemo();
-            CloseOverlay();
-        },
-        28.0f, 13.0f);
-    play->Lit(playing).Disabled(clip == nullptr);
+    // The chain's history and A/B (the bar has the demo clip in their place), and the demo's repeat.
+    // It changes in place, through a binding, as TAP and the metronome's switch do.
+    const auto repeating = [this] { return BoolSetting(mState.appSettings, kDemoRepeatSetting, false); };
     auto loop = ToolButton(
         mTheme, mIcons, "ui-loop",
-        [this, repeat] {
-            mSession.Commands().SetSetting(kDemoRepeatSetting, !repeat);
-            CloseOverlay();
-        },
-        28.0f, 15.0f);
-    loop->Lit(repeat);
+        [this, repeating] { mSession.Commands().SetSetting(kDemoRepeatSetting, !repeating()); }, 28.0f, 15.0f);
+    loop->Label("Repeat demo", 11.0f).AccessName("Repeat demo");
+    mLive.Bind(loop, repeating,
+               [this](IconButton& b, bool on) { b.Lit(on).Ink(on ? mTheme.Accent() : mTheme.TextSecondary()); });
 
     // The tools: setlists, tuner, input and output, mute.
     auto pads = ToolButton(
@@ -640,7 +645,7 @@ void Shell::OpenOptions(el::rect anchor)
     const float rowHeight = touch ? 40.0f : 28.0f;
     const float space = touch ? 0.0f : 10.0f;
     auto rule = [this] { return FixedHeight(1, Fill(mTheme.Text().opacity(0.07f), std::make_shared<el::element>())); };
-    std::vector<Ptr> rows{FixedHeight(rowHeight, Row({clipButton, Stretch(), play, HGap(touch ? 0 : 6), loop})),
+    std::vector<Ptr> rows{FixedHeight(rowHeight, Row({BuildHistoryControls(), Stretch(), loop})),
                           VGap(8),
                           rule(),
                           VGap(8),

@@ -1,7 +1,8 @@
 /**
- * The looper strip: a bar docked above the footer, opened from the footer's Loop button, with the
- * transport, the loop's waveform and time, the record modes, and the layers panel. Behind the
- * Looper feature flag, and only in the standalone app (the engine says whether it is available).
+ * The looper strip: a bar docked above the footer, opened from the footer's Loop button (or the
+ * compact rail's Looper), with the transport, the loop's waveform and time, the record modes, and
+ * the layers panel. Behind the Looper feature flag, and only in the standalone app (the engine
+ * says whether it is available).
  *
  * The engine is the looper (LooperService); this sends presses and settings and shows what it
  * reports. docs/plans/looper.md is the design.
@@ -60,7 +61,8 @@ const NOTICES: Record<string, string> = {
 };
 
 let strip: HTMLElement | null = null;
-let button: HTMLButtonElement | null = null;
+/** The footer's Loop button and the compact rail's Looper button. */
+let buttons: HTMLButtonElement[] = [];
 let lastShape = "";
 let lastNotice = "";
 let enabledSent: boolean | null = null;
@@ -97,7 +99,7 @@ function render(full: boolean): void {
     enabledSent = null;
   }
 
-  if (button) {
+  for (const button of buttons) {
     button.hidden = !(on && available);
     button.setAttribute("aria-pressed", String(isLooperStripOpen()));
   }
@@ -386,17 +388,21 @@ export function initializeLooper(): void {
 
   initialized = true;
   strip = document.getElementById("looper-strip");
-  button = document.getElementById("footer-looper-btn") as HTMLButtonElement | null;
+  buttons = ["footer-looper-btn", "nav-rail-looper-btn"]
+    .map((id) => document.getElementById(id))
+    .filter((element): element is HTMLButtonElement => element instanceof HTMLButtonElement);
   registerLooperRenderer(render);
 
-  button?.addEventListener("click", () => {
-    setLooperStripOpen(!isLooperStripOpen());
-    render(true);
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      setLooperStripOpen(!isLooperStripOpen());
+      render(true);
 
-    if (isLooperStripOpen()) {
-      requestLooperProjects();
-    }
-  });
+      if (isLooperStripOpen()) {
+        requestLooperProjects();
+      }
+    });
+  }
 
   strip?.addEventListener("click", handleClick);
   strip?.addEventListener("input", handleInput);

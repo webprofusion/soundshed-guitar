@@ -144,6 +144,7 @@ export function initializeTuner(): void {
   const tunerButtons = [
     document.getElementById("footer-tuner-btn"),
     document.getElementById("footer-compact-tuner-btn"),
+    document.getElementById("nav-rail-tuner-btn"),
   ].filter((button): button is HTMLElement => Boolean(button));
   if (tunerButtons.length > 0) {
     tunerButtons.forEach((button) => button.addEventListener("click", openTuner));

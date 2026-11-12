@@ -1,13 +1,17 @@
 /* ===== Compact density: the footer bar and its OPTIONS sheet =====
  *
  * ts/footerFit.ts puts what fits on the bar, by priority, and leaves the rest in
- * the sheet: Record and Loop join Setlists and Tuner at the left, the history and
- * A/B keep the middle, the tempo and the metronome's play stand by OPTIONS at the
- * right. These rules lay the bar out for that and turn the sheet into labelled
- * rows. The bar's base rules are in css/compact/shell.css; the full bar in
- * css/footer.css never shows the pieces added here.
+ * the sheet, keeping the full bar's order: the demo clip and its play button at
+ * the left, then Setlists and Tuner with Record and Loop as they fit, then the
+ * tempo, the metronome and its play by OPTIONS at the right. The chain's history
+ * and A/B are always in the sheet. On the landscape rail the Tuner and Loop are
+ * rail buttons (css/compact/rail.css), so the bar has neither. These rules lay the
+ * bar out for that and turn the sheet into labelled rows. The bar's base rules are
+ * in css/compact/shell.css; the full bar in css/footer.css never shows the pieces
+ * added here.
  */
 
+.footer-compact-demo,
 .footer-compact-tempo,
 .footer-sheet-label,
 .footer-layout-control,
@@ -17,6 +21,28 @@
 
 /* ── The bar ─────────────────────────────────────────────────────────────── */
 
+/* The clip's chooser gives up width (down to 76px) before anything else on the bar
+   does; past that, ts/footerFit.ts sends the lowest priority items to the sheet. */
+html[data-density="compact"] .footer-compact-demo:not(:empty) {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-density="compact"] .footer-compact-demo .footer-demo-select {
+  flex: 0 1 150px;
+  width: 150px;
+  min-width: 76px;
+  max-width: 150px;
+}
+
+/* ts/footerFit.ts measures the bar with the chooser at its narrowest. */
+html[data-density="compact"] .footer-bar[data-fit-measuring] .footer-compact-demo .footer-demo-select {
+  flex-basis: 76px;
+  width: 76px;
+}
+
 html[data-density="compact"] .footer-compact-tempo:not(:empty) {
   display: inline-flex;
   flex: none;
@@ -25,13 +51,19 @@ html[data-density="compact"] .footer-compact-tempo:not(:empty) {
   margin-left: auto;
 }
 
-/* The history sits in the middle of what is left between the two ends. */
+/* The history and A/B are in the sheet; their place on the full bar is empty here. */
 html[data-density="compact"] .footer-bar > .footer-chain-history {
-  margin-inline: auto;
+  display: none;
 }
 
 html[data-density="compact"] .footer-compact-tempo .bpm-display {
   padding-inline: 8px;
+}
+
+/* The rail has its own Tuner and Looper over the gear. */
+html[data-density="compact"][data-compact-layout="rail"] #footer-compact-tuner-btn,
+html[data-density="compact"][data-compact-layout="rail"] .footer-actions-panel #footer-looper-btn {
+  display: none;
 }
 
 /* ── The sheet ───────────────────────────────────────────────────────────── */
@@ -74,7 +106,8 @@ html[data-density="compact"] .footer-actions-panel :is(.footer-demo-group, .foot
   margin-bottom: 0;
 }
 
-/* The chain's history comes into the sheet only on a bar too narrow for it. */
+/* The chain's history and A/B, first in the sheet. The demo row keeps the clip's
+   repeat and Render (the chooser and play are on the bar), and goes with no clips. */
 html[data-density="compact"] .footer-actions-panel .footer-history-sheet-group:has(> :not(.footer-sheet-label)) {
   display: flex;
   align-items: center;
@@ -85,6 +118,10 @@ html[data-density="compact"] .footer-actions-panel .footer-history-sheet-group:h
 
 html[data-density="compact"] .footer-actions-panel .footer-history-sheet-group .footer-ab-switch {
   margin-inline: 4px;
+}
+
+html[data-density="compact"] .footer-actions-panel .footer-demo-group:not(:has(.footer-demo-controls > *)) {
+  display: none;
 }
 
 html[data-density="compact"] .footer-actions-panel .footer-demo-audio-container {

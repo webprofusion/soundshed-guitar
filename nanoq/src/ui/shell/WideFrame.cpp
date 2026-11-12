@@ -513,7 +513,7 @@ Ptr Shell::ZoomButton()
 
 /// The footers' Rec (the riff capture dialog, counting in at once: the standalone app with the
 /// riff library on, as the web UI's) and Loop (the looper strip) buttons, those that apply.
-std::vector<Ptr> Shell::BuildCaptureButtons(float size, bool labelled)
+std::vector<Ptr> Shell::BuildCaptureButtons(float size, bool labelled, bool withLoop)
 {
     std::vector<Ptr> buttons;
 
@@ -531,7 +531,7 @@ std::vector<Ptr> Shell::BuildCaptureButtons(float size, bool labelled)
         buttons.push_back(rec);
     }
 
-    if (LooperShown())
+    if (withLoop && LooperShown())
     {
         auto loop = ToolButton(mTheme, mIcons, "ui-loop", [this] { ToggleLooper(); }, size, 16.0f);
         loop->Lit(mLooperOpen).AccessName("Looper");
