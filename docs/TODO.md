@@ -4,15 +4,9 @@ This document tracks outstanding tasks and improvements for the GuitarFX project
 
 ## DSP (Digital Signal Processing)
 
-### Correctness & Stability
-- [ ] Fix NoiseGateEffect hold implementation: Currently sets hold parameter but doesn't use it in Process()—gate is instantaneous without hold time. Implement proper hold logic to maintain gate state for specified duration after signal drops below threshold.
-
 ### Testing
-- [ ] Add unit tests for edge cases:
-  - Extreme parameter values (e.g., max/min gains, Q factors, feedback levels)
-  - Various buffer sizes (32, 64, 128, 256, 512, 1024, 2048, 4096 samples)
-  - Sample rate transitions (44.1kHz, 48kHz, 88.2kHz, 96kHz)
-  - Signal integrity checks (no NaN/Inf, silence detection, frequency response validation)
+- [x] Edge-case sweep over every built-in effect (`core/tests/EffectEdgeCaseSweepTests.cpp`): sample rates 44.1–192 kHz, block sizes 1–4096 and varying per call, each parameter at its min and max, and recovery after a NaN or infinity on the input.
+- [ ] Still open: the same sweep for resource-backed effects (NAM, IR) with a test model, a live sample-rate change mid-stream (re-Prepare while running), per-effect frequency-response checks, and non-finite parameter values (a NaN parameter currently makes several effects output NaN, and crashes Digital Delay).
 
 ### Performance Optimization
 - [ ] Implement SIMD optimizations in hot paths:
@@ -23,9 +17,6 @@ This document tracks outstanding tasks and improvements for the GuitarFX project
   - Profile CPU usage against <30% target for typical presets
   - Measure latency for convolution effects (limit IR length to maintain <10ms total latency)
   - Implement basic profiling infrastructure (e.g., chrono timers) for ongoing monitoring
-
-### Other
-- [ ] Review convolution resampling: Current linear interpolation may introduce aliasing—consider cubic interpolation for better quality at large sample rate mismatches.
 
 ---
 
@@ -40,13 +31,13 @@ Shipped: see [features.md §7](features.md) and [fx-library.md](fx-library.md). 
 - **Per-capture level matching** for models without calibration metadata, so a crossfade does not also change the level.
 
 
-# Facotry Presets general notes
+# Factory Presets general notes
 - Preset archive export from a presets folder should include information on the preset subfolder structure, import should (optionally) recreate that subfolder structure. Factory preset import should create/update the folder structure
 
 - Hash the factory preset archive to decide if it has changed on startup, if it has changed re-import it. New factory presets should be added, existing presets should be updated
 
 - Factory preset import should change the preset category to Factory in import
 
-- Factory preset import should persits the imported persets and folder structure in the users preset structure, under a top level Factory Pesets folder
+- Factory preset import should persist the imported presets and folder structure in the users preset structure, under a top level Factory Presets folder
 
 - Factory presets should Import to a Factory Presets folder with a folder structure, it should also import to our resource library with resource item metadata. Like a partial resource library export/import.
