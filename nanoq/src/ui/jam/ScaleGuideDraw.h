@@ -197,6 +197,31 @@ class RunTabView final : public el::element, public Drawn
     std::vector<int> mPlaying;
 };
 
+/// The chord showing in Chords as tab (the web UI's chordTab.ts): strummed as one column, then picked
+/// string by string from the lowest that sounds. The highest string is on top, × marks a muted string,
+/// and the root's frets are in the accent.
+class ChordTabView final : public el::element, public Drawn
+{
+  public:
+    ChordTabView(const Theme& theme, GuideShape shape, std::vector<int> openMidi, std::vector<std::string> stringNames,
+                 int rootPitchClass);
+
+    el::view_limits limits(const el::basic_context& ctx) const override;
+    void draw(const el::context& ctx) override;
+
+    /// Its width, for laying it out beside the boxes.
+    [[nodiscard]] float Width() const;
+
+  private:
+    const Theme& mTheme;
+    GuideShape mShape;
+    std::vector<int> mOpenMidi;
+    std::vector<std::string> mStringNames;
+    int mRootPitchClass;
+    /// The strings that sound, lowest first: the picked half.
+    std::vector<int> mPicked;
+};
+
 /// A progression's arpeggios as one diagram (the web UI's runTab.ts with a flow): it runs on to new
 /// lines at the width given, a bar line after each chord, the chord's name over its first note and
 /// the string names at the start of each line. A tap on a chord's bar reports that chord.
@@ -276,6 +301,9 @@ class ChordBoxView final : public Pressable
 
     el::view_limits limits(const el::basic_context& ctx) const override;
     void draw(const el::context& ctx) override;
+
+    /// A box's width for `strings` strings, for laying the boxes out.
+    [[nodiscard]] static float WidthFor(std::size_t strings);
 
   private:
     const Theme& mTheme;

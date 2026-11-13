@@ -28,6 +28,16 @@ interface TimedNote {
 
 let playing = false;
 let timers: number[] = [];
+/**
+ * Until when LISTEN treats what it hears as the guide's own sound: from a play's request (its
+ * start is reported a moment later, and a clicked note's never is) to a little after it ends,
+ * while the analyser's window still holds it.
+ */
+let soundingUntil = 0;
+const REQUEST_GRACE_MS = 600;
+const TAIL_MS = 700;
+/** A clicked note is not followed, so its ring is guessed. */
+const NOTE_RING_MS = 2000;
 /** How loud Play's guitar is, 0 to 1, sent with everything played. */
 let volume = 1;
 
@@ -82,12 +92,25 @@ export function isScaleGuidePlaying(): boolean {
   return playing;
 }
 
+/** Whether the guide's own playing may be what LISTEN hears, so a strum it reads must not count. */
+export function isScaleGuideSounding(): boolean {
+  return playing || performance.now() < soundingUntil;
+}
+
+function expectSound(ms: number): void {
+  soundingUntil = Math.max(soundingUntil, performance.now() + ms);
+}
+
 export function onScaleGuidePlaybackStarted(): void {
   playing = true;
   showScaleGuidePlaying();
 }
 
 export function onScaleGuidePlaybackEnded(): void {
+  if (playing) {
+    expectSound(TAIL_MS);
+  }
+
   playing = false;
   clearFollowing();
   showScaleGuidePlaying();
@@ -122,18 +145,21 @@ export function toggleScaleGuidePlay(action: "play" | "playScale", request: unkn
   if (playing) {
     stopScaleGuidePlayback();
   } else {
+    expectSound(REQUEST_GRACE_MS);
     postMessage({ type: "scaleGuide", action, request, volume });
   }
 }
 
 /** A bar of a progression's tab clicked: that chord's arpeggio alone, in place of whatever is sounding. */
 export function playScaleGuideBar(request: unknown, bar: number): void {
+  expectSound(REQUEST_GRACE_MS);
   postMessage({ type: "scaleGuide", action: "play", request, bar, volume });
 }
 
 /** A chord box clicked: its shape, strummed on the request's strings. */
 export function playScaleGuideChord(request: unknown, frets: number[] | undefined): void {
   if (frets?.length) {
+    expectSound(REQUEST_GRACE_MS);
     postMessage({ type: "scaleGuide", action: "playChord", request, frets, volume });
   }
 }
@@ -159,11 +185,13 @@ export function stopScaleGuidePlayback(): void {
 
 export function playScaleGuideNote(midi: number): void {
   if (Number.isFinite(midi)) {
+    expectSound(NOTE_RING_MS);
     postMessage({ type: "scaleGuide", action: "playNote", midi, volume });
   }
 }
 
 export function resetPlaybackForTests(): void {
   playing = false;
+  soundingUntil = 0;
   clearFollowing();
 }

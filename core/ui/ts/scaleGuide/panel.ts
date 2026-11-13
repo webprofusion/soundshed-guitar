@@ -10,6 +10,7 @@ import type { IncomingPayload } from "../messages/types.js";
 import { escapeHtml } from "../utils.js";
 import { effectiveLabels, isArpeggioStyle, renderRunCard, renderArpeggioControls, watchRunCard } from "./arpeggioView.js";
 import { renderChordBoxSvg } from "./chordBox.js";
+import { renderChordTabCard } from "./chordTab.js";
 import { onListenReading, renderListen, resetListenForTests, resetRound, syncListening, type ListenHost } from "./listenController.js";
 import { watchNeckSpace } from "./neckSpace.js";
 import {
@@ -763,6 +764,7 @@ function renderView(): void {
       .join("");
   }
 
+  renderChordTabCard(element<HTMLElement>("sg-chord-tab"), model);
   renderSummary(model);
 
   if (draft) {

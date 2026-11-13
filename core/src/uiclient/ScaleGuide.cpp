@@ -365,6 +365,14 @@ void StrumGate::Reset()
     mRearmWait = 0;
 }
 
+void StrumGate::Disarm(double levelDb)
+{
+    mLevels.assign(1, levelDb);
+    mArmed = false;
+    mHeld = 0;
+    mRearmWait = 0;
+}
+
 bool NoteFollower::Push(std::optional<int> midi)
 {
     const auto remove = [this](int note) {

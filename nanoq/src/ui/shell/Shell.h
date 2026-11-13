@@ -684,6 +684,9 @@ class Shell
     void SyncScaleGuidePlayback();
     [[nodiscard]] std::vector<int> ScaleGuideHeard() const;
     [[nodiscard]] bool ScaleGuidePlaying() const;
+    /// LISTEN takes what it hears for the guide's own sound for this long: a strum it reads must not count.
+    void ExpectScaleGuideSound(double seconds);
+    double mScaleGuideSoundingUntil = 0.0;
     nlohmann::json mScaleGuideView;
     std::string mScaleGuideViewKey;
     int mScaleGuideStep = 0;

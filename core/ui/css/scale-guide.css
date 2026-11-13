@@ -461,7 +461,40 @@
   fill: none;
 }
 
-/* ── Chord boxes ── */
+/* ── Chord boxes, and the current chord as tab to their right (ts/scaleGuide/chordTab.ts) ── */
+.sg-chord-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* The boxes take what they need, wrapping before the tab is pushed under them. */
+.sg-chord-row > .sg-boxes {
+  flex: 0 1 auto;
+  min-width: min(100%, 260px);
+}
+
+.scale-guide .sg-chord-tab {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  padding: 10px 14px 8px;
+}
+
+.scale-guide .sg-chord-row[hidden],
+.scale-guide .sg-chord-tab[hidden] {
+  display: none;
+}
+
+.sg-chord-tab-hint {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .sg-boxes {
   display: flex;
   flex-wrap: wrap;

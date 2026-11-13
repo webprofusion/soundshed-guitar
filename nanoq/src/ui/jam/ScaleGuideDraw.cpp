@@ -42,6 +42,8 @@ constexpr float kTabBarGap = 14.0f;
 constexpr float kTabChordRow = 20.0f;
 constexpr float kTabLineGap = 12.0f;
 constexpr int kTabFewestSlots = 6;
+/// A chord's tab: the top string's line, under the Strum and Picked labels.
+constexpr float kChordTabTop = 30.0f;
 /// A slide's slanted line beside its number: how far it runs and how much it rises.
 constexpr float kTabSlideLength = 12.0f;
 constexpr float kTabSlideRise = 4.0f;
@@ -709,6 +711,112 @@ void RunTabView::draw(const el::context& ctx)
     }
 }
 
+ChordTabView::ChordTabView(const Theme& theme, GuideShape shape, std::vector<int> openMidi,
+                           std::vector<std::string> stringNames, int rootPitchClass)
+    : mTheme(theme), mShape(std::move(shape)), mOpenMidi(std::move(openMidi)), mStringNames(std::move(stringNames)),
+      mRootPitchClass(rootPitchClass)
+{
+    for (std::size_t s = 0; s < mShape.frets.size(); ++s)
+    {
+        if (mShape.frets[s] >= 0)
+        {
+            mPicked.push_back(static_cast<int>(s));
+        }
+    }
+}
+
+float ChordTabView::Width() const
+{
+    return kTabLeft + kTabSlot + kTabBarGap + static_cast<float>(mPicked.size()) * kTabSlot + kTabRight;
+}
+
+el::view_limits ChordTabView::limits(const el::basic_context&) const
+{
+    const auto strings = static_cast<float>(std::max<std::size_t>(1, mShape.frets.size()));
+    const float height = kChordTabTop + (strings - 1.0f) * kTabStringGap + 10.0f;
+    return {{Width(), height}, {Width(), height}};
+}
+
+void ChordTabView::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds;
+    const int strings = static_cast<int>(mShape.frets.size());
+    const auto stringY = [&](int s) {
+        return b.top + kChordTabTop + static_cast<float>(strings - 1 - s) * kTabStringGap;
+    };
+    const float strumX = b.left + kTabLeft + kTabSlot * 0.5f;
+    const float pickFrom = b.left + kTabLeft + kTabSlot + kTabBarGap;
+    const auto pickX = [&](std::size_t i) { return pickFrom + (static_cast<float>(i) + 0.5f) * kTabSlot; };
+    const float end = pickFrom + static_cast<float>(mPicked.size()) * kTabSlot;
+    const auto small = Font(Weight::Regular).size(11.0f);
+    const auto number = Font(Weight::SemiBold).size(13.0f);
+    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
+    const auto isRoot = [&](int s, int fret) {
+        const int midi =
+            (static_cast<std::size_t>(s) < mOpenMidi.size() ? mOpenMidi[static_cast<std::size_t>(s)] : 0) + fret;
+        return ((midi % 12) + 12) % 12 == mRootPitchClass;
+    };
+    const auto numberAt = [&](float cx, float y, const std::string& text, bool root) {
+        FillText(cnv, text, number, root ? mTheme.Accent() : mTheme.Text(),
+                 {cx - 12.0f, y - 9.0f, cx + 12.0f, y + 9.0f}, HAlign::Centre);
+    };
+
+    FillText(cnv, "Strum", small, mTheme.TextMuted(), {strumX - 20.0f, b.top + 2.0f, strumX + 20.0f, b.top + 18.0f},
+             HAlign::Centre);
+
+    if (!mPicked.empty())
+    {
+        FillText(cnv, "Picked", small, mTheme.TextMuted(), {pickFrom + 2.0f, b.top + 2.0f, end, b.top + 18.0f},
+                 HAlign::Left);
+    }
+
+    for (int s = 0; s < strings; ++s)
+    {
+        const float y = stringY(s);
+        const int fret = mShape.frets[static_cast<std::size_t>(s)];
+        const auto pick = std::find(mPicked.begin(), mPicked.end(), s);
+        // Each string is broken where a number sits on it: the strum column always, and its picked note.
+        std::vector<float> gaps = {strumX};
+
+        if (pick != mPicked.end())
+        {
+            gaps.push_back(pickX(static_cast<std::size_t>(pick - mPicked.begin())));
+        }
+
+        float from = b.left + kTabLeft - 8.0f;
+        cnv.stroke_style(line);
+        cnv.line_width(1.0f);
+
+        for (const float x : gaps)
+        {
+            Line(cnv, from, y, x - kTabNumberGap * 0.5f, y);
+            from = x + kTabNumberGap * 0.5f;
+        }
+
+        Line(cnv, from, y, end, y);
+        const auto name = static_cast<std::size_t>(s) < mStringNames.size() ? mStringNames[static_cast<std::size_t>(s)]
+                                                                            : std::string();
+        FillText(cnv, name, small, mTheme.TextMuted(), {b.left + 2.0f, y - 8.0f, b.left + 22.0f, y + 8.0f},
+                 HAlign::Centre);
+        numberAt(strumX, y, fret < 0 ? "\xC3\x97" : std::to_string(fret), fret >= 0 && isRoot(s, fret));
+
+        if (pick != mPicked.end())
+        {
+            numberAt(pickX(static_cast<std::size_t>(pick - mPicked.begin())), y, std::to_string(fret), isRoot(s, fret));
+        }
+    }
+
+    // A bar line between the strum and the picking, and a heavier one closing it, as a progression's tab has them.
+    cnv.stroke_style(line);
+    cnv.line_width(1.5f);
+    const float barX = b.left + kTabLeft + kTabSlot + kTabBarGap * 0.5f;
+    Line(cnv, barX, stringY(strings - 1), barX, stringY(0));
+    cnv.line_width(3.5f);
+    Line(cnv, end, stringY(strings - 1), end, stringY(0));
+}
+
 ProgressionTabView::ProgressionTabView(const Theme& theme, GuideProgressionRun whole,
                                        std::vector<std::string> stringNames, float width, int activeChord)
     : mTheme(theme), mWhole(std::move(whole)), mStringNames(std::move(stringNames)), mActive(activeChord)
@@ -1032,10 +1140,14 @@ ChordBoxView::ChordBoxView(const Theme& theme, GuideShape shape, std::vector<int
     AccessName(mTitle + " at fret " + std::to_string(mShape.position));
 }
 
+float ChordBoxView::WidthFor(std::size_t strings)
+{
+    return kBoxPadX * 2.0f + (static_cast<float>(std::max<std::size_t>(1, strings)) - 1.0f) * kBoxStringGap + 12.0f;
+}
+
 el::view_limits ChordBoxView::limits(const el::basic_context&) const
 {
-    const auto strings = static_cast<float>(std::max<std::size_t>(1, mShape.frets.size()));
-    const float width = kBoxPadX * 2.0f + (strings - 1.0f) * kBoxStringGap + 12.0f;
+    const float width = WidthFor(mShape.frets.size());
     const float height = (mTitle.empty() ? 0.0f : 18.0f) + kBoxTop + kBoxRows * kBoxFretGap + 26.0f;
     return {{width, height}, {width, height}};
 }

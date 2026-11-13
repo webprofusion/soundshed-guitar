@@ -146,6 +146,30 @@ void TestUiClient()
 
     Expect(hits == 1, "a ringing strum does not re-arm on the quiet before it");
 
+    // The guide's own strum, disarmed while it sounds: its fading tail never counts, a fresh strum does.
+    sg::StrumGate own;
+
+    for (int i = 0; i < 6; ++i)
+    {
+        own.Disarm(-42.0 - i);
+    }
+
+    hits = 0;
+
+    for (int i = 0; i < 6; ++i)
+    {
+        hits += own.Push(-48.0 - i * 0.5, true) ? 1 : 0;
+    }
+
+    Expect(hits == 0, "the guide's fading strum does not count once it stops");
+
+    for (int i = 0; i < 4; ++i)
+    {
+        hits += own.Push(-30.0, true) ? 1 : 0;
+    }
+
+    Expect(hits == 1, "a strum after the guide's counts");
+
     sg::NoteFollower follower;
     Expect(!follower.Push(57) && follower.Push(57) && follower.Current() == 57, "a note shows once read twice");
     follower.Push(60);

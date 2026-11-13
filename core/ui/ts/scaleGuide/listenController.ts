@@ -9,7 +9,7 @@ import { postMessage } from "../bridge.js";
 import type { IncomingPayload } from "../messages/types.js";
 import { matchChord, NoteFollower, readingMidi, StrumGate } from "./listen.js";
 import { noteReadout, setReadout, showMatch, showNotes } from "./listenView.js";
-import { isScaleGuidePlaying } from "./playback.js";
+import { isScaleGuidePlaying, isScaleGuideSounding } from "./playback.js";
 import type { ScaleGuideSettings, ScaleGuideView } from "./types.js";
 
 export interface ListenHost {
@@ -137,6 +137,12 @@ export function onListenReading(host: ListenHost, payload: IncomingPayload): boo
   const level = typeof payload.levelDb === "number" ? payload.levelDb : -120;
 
   if (!chroma) {
+    return true;
+  }
+
+  // The guide strumming a chord box or playing a progression would otherwise match its own chord and step on.
+  if (isScaleGuideSounding()) {
+    strums.disarm(level);
     return true;
   }
 

@@ -115,6 +115,17 @@ export class StrumGate {
     this.held = 0;
     this.rearmWait = 0;
   }
+
+  /**
+   * The guide's own sound is ringing: nothing it plays counts, and once it stops only a strum that
+   * jumps above its fading tail arms the gate again.
+   */
+  disarm(levelDb: number): void {
+    this.levels = [levelDb];
+    this.armed = false;
+    this.held = 0;
+    this.rearmWait = 0;
+  }
 }
 
 /**

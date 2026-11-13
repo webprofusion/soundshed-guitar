@@ -141,6 +141,9 @@ class StrumGate
     /// True when this reading completes a clean strum.
     bool Push(double levelDb, bool clean);
     void Reset();
+    /// The guide's own sound is ringing: nothing it plays counts, and once it stops only a strum
+    /// that jumps above its fading tail arms the gate again.
+    void Disarm(double levelDb);
 
   private:
     std::vector<double> mLevels;

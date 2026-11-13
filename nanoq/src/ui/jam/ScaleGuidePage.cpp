@@ -29,6 +29,12 @@ namespace
 {
 /// The engine's id for a position being played, which sets it apart from a demo clip.
 constexpr const char* kPlayedPosition = "scale-guide";
+/// How long LISTEN takes what it hears for the guide's own sound (as ts/scaleGuide/playback.ts):
+/// from a play's request until its start is reported, a little after it ends while the analyser's
+/// window still holds it, and a clicked note's ring, which is never reported.
+constexpr double kPlayRequestGraceSec = 0.6;
+constexpr double kPlayTailSec = 0.7;
+constexpr double kNoteRingSec = 2.0;
 
 const nlohmann::json& Catalog()
 {
@@ -126,6 +132,11 @@ std::string Shell::ScaleGuideSignature() const
 bool Shell::ScaleGuidePlaying() const
 {
     return mState.demo.playing && mState.demo.previewId == kPlayedPosition;
+}
+
+void Shell::ExpectScaleGuideSound(double seconds)
+{
+    mScaleGuideSoundingUntil = std::max(mScaleGuideSoundingUntil, UiSession::Now() + seconds);
 }
 
 void Shell::ChangeScaleGuide(const std::function<void(sg::Settings&)>& edit)
@@ -530,10 +541,12 @@ Ptr Shell::BuildScaleGuide(float width)
         }
         else if (scaleExample)
         {
+            ExpectScaleGuideSound(kPlayRequestGraceSec);
             mSession.Commands().PlayScaleExample(nlohmann::json::parse(mScaleGuideViewKey), volume());
         }
         else
         {
+            ExpectScaleGuideSound(kPlayRequestGraceSec);
             mSession.Commands().PlayScaleGuide(nlohmann::json::parse(mScaleGuideViewKey), volume());
         }
     };
@@ -558,6 +571,7 @@ Ptr Shell::BuildScaleGuide(float width)
     };
     // A chord box strums its shape: the request only says which strings there are.
     const auto strum = [this, volume](const std::vector<int>& frets) {
+        ExpectScaleGuideSound(kPlayRequestGraceSec);
         mSession.Commands().PlayScaleGuideChord(nlohmann::json::parse(mScaleGuideViewKey), frets, volume());
     };
     auto play = playButton();
@@ -798,7 +812,11 @@ Ptr Shell::BuildScaleGuide(float width)
     // ── The neck ──
     auto neck = std::make_shared<ScaleNeck>(mTheme, model, settings.labels, settings.leftHanded);
     mScaleNeck = neck;
-    neck->onNote = [this, volume](int midi) { mSession.Commands().PlayScaleGuideNote(midi, volume()); };
+    neck->onNote = [this, volume](int midi) {
+        // A clicked note is not followed, so its ring is guessed.
+        ExpectScaleGuideSound(kNoteRingSec);
+        mSession.Commands().PlayScaleGuideNote(midi, volume());
+    };
     // LISTEN follows notes in Scales and Arpeggios; a chord is matched, not followed.
     neck->SetHeard(chordMode ? std::vector<int>{} : ScaleGuideHeard(), settings.listenEverywhere);
     neck->SetPlaying(mScaleGuideMoment.places);
@@ -865,10 +883,76 @@ Ptr Shell::BuildScaleGuide(float width)
         }
     }
 
-    // ── An arpeggio's run as tab, or why there is none ──
     const auto face = [this](Ptr content) {
         return Rounded(mTheme.Pick(el::rgba(255, 255, 255, 7), el::rgba(20, 24, 34, 6)), 12.0f, std::move(content));
     };
+
+    // ── The chord showing, as tab beside the boxes (the web UI's chordTab.ts): the progression's
+    // current chord, or the shape picked; a hint while the whole neck shows ──
+    Ptr chordTabCard;
+    float chordTabWidth = 0.0f;
+
+    if (chordMode && !boxes.empty())
+    {
+        std::optional<GuideShape> shape;
+        std::string name = view.value("title", "");
+        std::string caption;
+        int root = model.rootPitchClass;
+
+        if (progression.is_object())
+        {
+            const auto& chords = progression["chords"];
+            const int at = progression.value("step", 0);
+
+            if (chords.is_array() && at >= 0 && at < static_cast<int>(chords.size()))
+            {
+                const auto& c = chords[static_cast<std::size_t>(at)];
+                name = c.value("name", "");
+                caption = Numeral(c.value("numeral", ""));
+                root = c.value("rootPitchClass", 0);
+
+                if (const auto it = c.find("shape"); it != c.end() && it->is_object())
+                {
+                    shape = ReadGuideShape(*it);
+                }
+            }
+        }
+        else if (model.position > 0 && model.position <= static_cast<int>(model.shapes.size()))
+        {
+            shape = model.shapes[static_cast<std::size_t>(model.position - 1)];
+            caption = shape->caged.empty() ? "" : shape->caged + " shape";
+        }
+
+        auto title = std::make_shared<Text>(mTheme, name, 15.0f, Weight::SemiBold);
+        title->Colour(mTheme.Text()).Fixed(true);
+        auto sub = std::make_shared<Text>(mTheme, caption, 13.0f);
+        sub->Colour(mTheme.TextSecondary()).Fixed(true);
+        Ptr body;
+
+        if (shape)
+        {
+            auto tab = std::make_shared<ChordTabView>(mTheme, *shape, model.openMidi, model.stringNames, root);
+            chordTabWidth = tab->Width();
+            body = tab;
+        }
+        else
+        {
+            chordTabWidth = 200.0f;
+            auto hint = std::make_shared<Paragraph>(
+                mTheme, progression.is_object() ? "No shape for this chord." : "Pick a shape to see it as tab.",
+                chordTabWidth, 12.0f);
+            hint->Colour(mTheme.TextMuted());
+            body = hint;
+        }
+
+        chordTabWidth += 28.0f;
+        chordTabCard = FixedWidth(
+            chordTabWidth,
+            face(Pad(14, 10, 14, 8,
+                     Col({FixedHeight(24, Row({Middle(title), HGap(8), Middle(sub), Stretch()})), VGap(4), body}))));
+    }
+
+    // ── An arpeggio's run as tab, or why there is none ──
     Ptr tabCard;
 
     if (arpeggioMode || model.Run() != nullptr)
@@ -919,6 +1003,7 @@ Ptr Shell::BuildScaleGuide(float width)
                 const auto request =
                     sg::ViewRequest(sg::LoadSettings(mState.appSettings), sg::LoadProgressions(mState.appSettings),
                                     mScaleGuideStep, {}, mScaleGuideAnchor);
+                ExpectScaleGuideSound(kPlayRequestGraceSec);
                 mSession.Commands().PlayScaleGuide(request, volume(), mScaleGuideStep);
             };
             tabCard = face(
@@ -1049,7 +1134,34 @@ Ptr Shell::BuildScaleGuide(float width)
     if (!boxes.empty())
     {
         page.push_back(VGap(10));
-        page.push_back(HScroll(Row(boxes)));
+        // Each box is followed by its gap.
+        float boxesWidth = 0.0f;
+
+        for (std::size_t i = 0; i + 1 < boxes.size(); i += 2)
+        {
+            boxesWidth += ChordBoxView::WidthFor(model.openMidi.size()) + 8.0f;
+        }
+
+        if (!chordTabCard)
+        {
+            page.push_back(HScroll(Row(boxes)));
+        }
+        else if (boxesWidth + 2.0f + chordTabWidth <= width)
+        {
+            // The tab right after the boxes.
+            page.push_back(Row({Row(boxes), HGap(2), chordTabCard, Stretch()}));
+        }
+        else if (width >= chordTabWidth * 2.0f + 40.0f)
+        {
+            // The boxes scroll in what the tab leaves them.
+            page.push_back(Row({HScroll(Row(boxes)), HGap(10), chordTabCard}));
+        }
+        else
+        {
+            page.push_back(HScroll(Row(boxes)));
+            page.push_back(VGap(10));
+            page.push_back(Row({chordTabCard, Stretch()}));
+        }
     }
 
     if (tabCard)
@@ -1210,6 +1322,19 @@ void Shell::SyncScaleGuideListen()
 
     if (!tuner.hasChroma)
     {
+        return;
+    }
+
+    // The guide strumming a chord box or playing a progression would otherwise match its own chord
+    // and step on: from a play's request until a little after it ends, nothing heard counts.
+    if (ScaleGuidePlaying())
+    {
+        ExpectScaleGuideSound(kPlayTailSec);
+    }
+
+    if (UiSession::Now() < mScaleGuideSoundingUntil)
+    {
+        mScaleGuideStrums.Disarm(tuner.levelDb);
         return;
     }
 

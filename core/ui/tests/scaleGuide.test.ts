@@ -12,8 +12,10 @@ vi.mock("../ts/appSettingsStore.js", () => ({
 }));
 
 import { boxBaseFret, renderChordBoxSvg } from "../ts/scaleGuide/chordBox";
+import { renderChordTabSvg } from "../ts/scaleGuide/chordTab";
 import { dotLabel, neckDrawingWidth, noteMarkersSvg, noteX, renderNeckSvg } from "../ts/scaleGuide/neck";
 import { onScaleGuideCatalog, onScaleGuideReading, onScaleGuideView, renderScaleGuidePanel, resetScaleGuideForTests } from "../ts/scaleGuide/panel";
+import { onScaleGuidePlaybackEnded, onScaleGuidePlaybackStarted } from "../ts/scaleGuide/playback";
 import { normalizeProgressions, PROGRESSIONS_SETTING, romanToken } from "../ts/scaleGuide/progressions";
 import { DEFAULT_SETTINGS, normalizeSettings, SCALE_GUIDE_SETTING } from "../ts/scaleGuide/state";
 
@@ -148,6 +150,18 @@ describe("scale guide chord box", () => {
     expect(svg).toContain('class="sg-box-base"');
     expect(svg).toContain("A shape");
     expect(svg).not.toContain('class="sg-box-nut"');
+  });
+});
+
+describe("scale guide chord tab", () => {
+  it("writes the chord strummed, then picked from the lowest string that sounds, highest string on top", () => {
+    const view = ukuleleView({ strings: [{ openMidi: 40, name: "E" }, ...ukuleleView().strings.slice(1)] });
+    const svg = renderChordTabSvg({ ...OPEN_C, frets: [-1, 0, 0, 3] }, view, { name: "C", rootPitchClass: 0 });
+    const frets = [...svg.matchAll(/class="sg-tab-fret[^"]*"[^>]*>([^<]*)</g)].map((match) => match[1]);
+    // The strum column string by string from the lowest, then the three picked notes.
+    expect(frets).toEqual(["×", "0", "0", "3", "0", "0", "3"]);
+    expect(svg.match(/sg-tab-root/g)?.length).toBe(4);
+    expect(svg).toContain('aria-label="C as tab: A fret 3, E open, C open, E muted"');
   });
 });
 
@@ -441,6 +455,77 @@ describe("scale guide panel", () => {
     expect(lastViewRequest().requestId).toBeGreaterThan(before);
     expect(lastViewRequest().request).toMatchObject({ step: 1, previousFrets: OPEN_C.frets });
     expect(document.getElementById("sg-live")?.textContent).toContain("Clean");
+  });
+
+  it("does not step on for the guide's own strum, only for one played after it", () => {
+    settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "chord", progression: "b:pop", position: 1 });
+    renderScaleGuidePanel();
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: progressionView(0) });
+    const clean = { type: "tunerUpdate", detected: false, levelDb: -18, chroma: [0.4, 0, 0, 0, 0.3, 0, 0, 0.28, 0, 0, 0, 0.02] };
+    let now = 1000;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+
+    try {
+      // Its box clicked: the request goes out and its strum is heard before and while it is reported playing.
+      (document.querySelector('#sg-boxes [data-sg-goto="0"]') as HTMLElement).click();
+      const steps = (): unknown[] => postMessage.mock.calls.map(([m]) => m as Record<string, unknown>).filter((m) => m.action === "view" && (m.request as { step?: number }).step === 1);
+
+      for (let i = 0; i < 3; i += 1) {
+        onScaleGuideReading({ ...clean, levelDb: i === 0 ? -18 : -19 });
+      }
+
+      onScaleGuidePlaybackStarted();
+
+      for (let i = 0; i < 5; i += 1) {
+        onScaleGuideReading({ ...clean, levelDb: -19 });
+      }
+
+      onScaleGuidePlaybackEnded();
+      now += 200;
+      onScaleGuideReading({ ...clean, levelDb: -24 });
+      expect(steps()).toHaveLength(0);
+
+      // Its ring fades on past the tail without counting; the player's own strum then does.
+      now += 1000;
+
+      for (let i = 0; i < 3; i += 1) {
+        onScaleGuideReading({ ...clean, levelDb: -26 });
+      }
+
+      expect(steps()).toHaveLength(0);
+
+      for (let i = 0; i < 4; i += 1) {
+        onScaleGuideReading({ ...clean, levelDb: -18 });
+      }
+
+      expect(steps()).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("shows the chord picked from the boxes as tab beside them, in Chords only", () => {
+    renderScaleGuidePanel();
+    const card = (): HTMLElement => document.getElementById("sg-chord-tab") as HTMLElement;
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: ukuleleView() });
+    expect(card().hidden).toBe(false);
+    expect(card().textContent).toContain("Pick a shape");
+
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: ukuleleView({ position: 1 }) });
+    expect(card().querySelectorAll(".sg-tab-fret")).toHaveLength(8);
+
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: ukuleleView({ mode: "scale", shapes: undefined }) });
+    expect(card().hidden).toBe(true);
+    expect(document.getElementById("sg-chord-row")?.hidden).toBe(true);
+  });
+
+  it("shows a progression's current chord as tab", () => {
+    renderScaleGuidePanel();
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: progressionView(1) });
+    const card = document.getElementById("sg-chord-tab") as HTMLElement;
+    expect(card.hidden).toBe(false);
+    expect(card.querySelector(".sg-summary-name")?.textContent).toBe("F");
+    expect(card.querySelector("svg")?.getAttribute("aria-label")).toContain("F as tab: A open, E fret 1, C open, G fret 2");
   });
 
   it("fills the pickers from the catalogue", () => {
