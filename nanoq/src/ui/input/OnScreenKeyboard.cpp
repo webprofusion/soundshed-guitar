@@ -112,9 +112,10 @@ bool OnScreenKeyboard::Wanted()
         return std::string_view(setting) != "0";
     }
 
-#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-    // The iOS host view takes no text from UIKit, so without this an iPad with no keyboard
-    // attached cannot type into any field. =0 above turns it off for one that has a keyboard.
+#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(__ANDROID__)
+    // The iOS and Android host views take no text from the system's keyboard, so without this
+    // a tablet or phone with no keyboard attached cannot type into any field. =0 above turns it
+    // off for one that has a keyboard.
     return true;
 #else
     return std::getenv("SOUNDSHED_KIOSK") != nullptr;

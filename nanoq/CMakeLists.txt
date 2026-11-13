@@ -11,6 +11,10 @@
 # iOS and iPadOS: the Xcode generator with -DCMAKE_SYSTEM_NAME=iOS, through nanoq/ios/build.sh,
 # which builds the app in nanoq/ios/cmake/NanoQIos.cmake instead of the plugin formats. See
 # docs/plans/nano-q-ios.md.
+#
+# Android: Gradle (nanoq/android) configures this with the NDK's toolchain, and it builds the
+# app's library in nanoq/android/cmake/NanoQAndroid.cmake instead of the plugin formats. See
+# docs/plans/nano-q-android.md.
 
 cmake_minimum_required(VERSION 3.22)
 
@@ -39,7 +43,7 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # Plain char is unsigned on Linux arm64, and WDL (in the resampler) refuses to compile unless it is
 # signed. As Soundshed Guitar's build (juce/CMakeLists.txt): a no-op on x86_64 Linux.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|Android)$")
     add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-fsigned-char>
                         $<$<COMPILE_LANG_AND_ID:C,GNU,Clang>:-fsigned-char>)
 endif()
@@ -50,6 +54,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(NANOQ_IOS ON)
 else()
     set(NANOQ_IOS OFF)
+endif()
+if(ANDROID)
+    set(NANOQ_ANDROID ON)
+else()
+    set(NANOQ_ANDROID OFF)
 endif()
 
 # ── Q, with QPlug and Elements ──────────────────────────────────────────────────
@@ -74,6 +83,14 @@ if(NANOQ_IOS)
     set(Q_BUILD_IO OFF CACHE BOOL "" FORCE)
     set(_nanoq_q_patch PATCH_COMMAND ${CMAKE_COMMAND}
         -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/ios/patches/q.patch
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
+endif()
+# Android, likewise: no plugin formats, no clap-wrapper, no pkg-config, and no IO library (RtAudio
+# has no Android backend; the app plays through Oboe). nanoq/android/patches/q.patch.
+if(NANOQ_ANDROID)
+    set(Q_BUILD_IO OFF CACHE BOOL "" FORCE)
+    set(_nanoq_q_patch PATCH_COMMAND ${CMAKE_COMMAND}
+        -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/android/patches/q.patch
         -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 endif()
 FetchContent_Declare(q
@@ -116,6 +133,13 @@ if(NANOQ_IOS)
         -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/ios/patches/elements-log-clock.patch
         -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 endif()
+# Android: Artist's Skia backend finds Skia's Android build, and loads the app's own fonts by
+# file instead of through fontconfig, which Android does not have.
+if(NANOQ_ANDROID)
+    list(APPEND _nanoq_elements_patch COMMAND ${CMAKE_COMMAND}
+        -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/android/patches/elements.patch
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
+endif()
 FetchContent_Declare(cycfi_elements
     GIT_REPOSITORY https://github.com/cycfi/elements.git
     GIT_TAG fa180799a4c80d4cd70850c700df766f62917de7 # v1.0.2
@@ -146,6 +170,34 @@ if(NANOQ_IOS)
         set(ARTIST_SKIA OFF CACHE BOOL "" FORCE)
         set(ARTIST_QUARTZ_2D ON CACHE BOOL "" FORCE)
     endif()
+endif()
+
+if(NANOQ_ANDROID)
+    # As Soundshed Guitar's Android build (android/CMakeLists.txt): Wasmtime has no Android C API
+    # bundle, and the SIMD level matters only to an x86_64 emulator.
+    set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "" FORCE)
+    set(GUITARFX_CORE_SIMD_LEVEL "sse2" CACHE STRING "" FORCE)
+
+    # Drawing on the GPU: Artist's Skia backend on OpenGL ES, with the Skia that
+    # nanoq/android/build-skia.sh builds (arm64-v8a). Elements is configured with its headless
+    # host, which needs no system libraries, and Nano Q compiles its own Android host in its
+    # place (Q_PLUG_ELEMENTS_HOST_SOURCES, below).
+    set(NANOQ_ANDROID_SKIA "" CACHE PATH "Skia for Android (vcpkg's installed tree, nanoq/android/build-skia.sh)")
+    if(NOT NANOQ_ANDROID_SKIA OR NOT EXISTS "${NANOQ_ANDROID_SKIA}/share/unofficial-skia/unofficial-skia-config.cmake")
+        message(FATAL_ERROR "Nano Q for Android draws with Skia: build it with nanoq/android/build-skia.ps1 "
+                            "(or build-skia.sh), which installs it in nanoq/android/skia/arm64-android-nanoq. "
+                            "NANOQ_ANDROID_SKIA='${NANOQ_ANDROID_SKIA}'")
+    endif()
+    if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(FATAL_ERROR "Nano Q for Android is built for arm64-v8a only (its Skia is); ANDROID_ABI=${ANDROID_ABI}")
+    endif()
+    set(ELEMENTS_HOST_UI_LIBRARY "headless" CACHE STRING "" FORCE)
+    set(ELEMENTS_SKIA ON CACHE BOOL "" FORCE)
+    set(ELEMENTS_CAIRO OFF CACHE BOOL "" FORCE)
+    set(ARTIST_SKIA ON CACHE BOOL "" FORCE)
+    set(ARTIST_SKIA_PREBUILT OFF CACHE BOOL "" FORCE)
+    list(PREPEND CMAKE_PREFIX_PATH "${NANOQ_ANDROID_SKIA}")
+    list(PREPEND CMAKE_FIND_ROOT_PATH "${NANOQ_ANDROID_SKIA}")
 endif()
 
 # clap-wrapper, declared first for the same reason, at the commit Q pins. Its Linux standalone
@@ -220,6 +272,10 @@ elseif(APPLE)
     set(NANOQ_APPLE_FRAMEWORKS "-framework AppKit" "-framework UniformTypeIdentifiers")
     list(APPEND NANOQ_SOURCES ${NANOQ_APPLE_SOURCES})
 endif()
+# Android: QPlug's view glue for the activity's window (the Elements host is added below).
+if(NANOQ_ANDROID)
+    list(APPEND NANOQ_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/android/q_plug_host_view.cpp")
+endif()
 
 add_library(nanoq_impl STATIC ${NANOQ_SOURCES})
 target_include_directories(nanoq_impl PRIVATE
@@ -277,6 +333,14 @@ if(NANOQ_IOS)
         "${CMAKE_CURRENT_SOURCE_DIR}/ios/elements_host/base_view.mm"
         "${CMAKE_CURRENT_SOURCE_DIR}/ios/elements_host/key.mm")
 endif()
+# Android: Elements has no host for it at all; Nano Q's (nanoq/android/elements_host) draws on
+# OpenGL ES through EGL into the activity's Surface.
+if(NANOQ_ANDROID)
+    set_property(GLOBAL PROPERTY Q_PLUG_ELEMENTS_HOST_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/android/elements_host/base_view.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/android/elements_host/key.cpp")
+    target_link_libraries(nanoq_impl PUBLIC EGL GLESv3 android log)
+endif()
 q_plug_add_host(nanoq_impl SoundshedNanoQ)
 
 # A precompiled header for the UI. Parsing Elements and ui/shell/Shell.h was ~9 s of the ~10 s each UI
@@ -313,6 +377,10 @@ set(_NANOQ_UI_DATA_DIRS presets assets metronome demo data images)
 
 if(NANOQ_IOS)
     include("${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/NanoQIos.cmake")
+    return()
+endif()
+if(NANOQ_ANDROID)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/android/cmake/NanoQAndroid.cmake")
     return()
 endif()
 

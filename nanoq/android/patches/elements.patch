@@ -1,0 +1,115 @@
+diff --git a/lib/artist/lib/CMakeLists.txt b/lib/artist/lib/CMakeLists.txt
+index 95254bf..8cc2c6e 100644
+--- a/lib/artist/lib/CMakeLists.txt
++++ b/lib/artist/lib/CMakeLists.txt
+@@ -155,6 +155,47 @@ if (ARTIST_SKIA)
+       set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}   /MTd")
+       set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ob2 /Oi /Ot /GL /MT")
+ 
++   elseif (ANDROID)
++
++      # A vcpkg Skia for Android (arm64-android). No system harfbuzz or
++      # fontconfig to share with: Skia's own static harfbuzz and freetype, and
++      # fonts from files (font.cpp).
++      find_package(unofficial-skia CONFIG REQUIRED)
++
++      get_target_property(_skia_inc unofficial::skia::skia INTERFACE_INCLUDE_DIRECTORIES)
++      set(SKIA_INCLUDE_BASE "${_skia_inc}")
++      set(ARTIST_SKIA_EXTRA_INCLUDES
++         ${SKIA_INCLUDE_BASE}/core
++         ${SKIA_INCLUDE_BASE}/config
++         ${SKIA_INCLUDE_BASE}/codec
++         ${SKIA_INCLUDE_BASE}/effects
++         ${SKIA_INCLUDE_BASE}/gpu
++         ${SKIA_INCLUDE_BASE}/ports
++         ${SKIA_INCLUDE_BASE}/utils
++         ${SKIA_INCLUDE_BASE}/../harfbuzz
++      )
++
++      get_filename_component(_vcpkg_lib "${SKIA_INCLUDE_BASE}/../../lib" ABSOLUTE)
++      foreach (_lib harfbuzz freetype png16 z brotlidec brotlicommon bz2)
++         string(TOUPPER "ARTIST_ANDROID_${_lib}_LIB" _var)
++         find_library(${_var} ${_lib} PATHS "${_vcpkg_lib}"
++            NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH REQUIRED)
++         list(APPEND _artist_android_libs ${${_var}})
++      endforeach ()
++
++      # Static archives with cyclic dependencies (harfbuzz and freetype use
++      # each other; freetype needs png, zlib, brotli and bz2).
++      set(ARTIST_DEPEPENDENCIES
++         unofficial::skia::skia
++         -Wl,--start-group
++         ${_artist_android_libs}
++         -Wl,--end-group
++         EGL
++         GLESv3
++         android
++         log
++      )
++
+    elseif (UNIX)
+ 
+       find_package(unofficial-skia CONFIG REQUIRED)
+diff --git a/lib/artist/lib/impl/skia/font.cpp b/lib/artist/lib/impl/skia/font.cpp
+index a1a7dfd..c55fb03 100644
+--- a/lib/artist/lib/impl/skia/font.cpp
++++ b/lib/artist/lib/impl/skia/font.cpp
+@@ -14,7 +14,7 @@
+ #include <infra/filesystem.hpp>
+ #include <infra/support.hpp>
+ 
+-#if !defined(__APPLE__) && !defined(_WIN32)
++#if !defined(__APPLE__) && !defined(_WIN32) && !defined(__ANDROID__)
+ # include <fontconfig/fontconfig.h>
+ #endif
+ #include <map>
+@@ -27,6 +27,8 @@
+ # include "sysinfoapi.h"
+ # include "tchar.h"
+ # include <ports/SkTypeface_win.h>   // declares SkFontMgr_New_DirectWrite()
++#elif defined(__ANDROID__)
++# include <ports/SkFontMgr_directory.h>
+ #else
+ # include <ports/SkFontMgr_fontconfig.h>
+ # include <ports/SkFontScanner_FreeType.h>
+@@ -46,6 +48,11 @@ namespace cycfi::artist
+          static sk_sp<SkFontMgr> mgr = SkFontMgr_New_CoreText(nullptr);
+ #elif defined(_WIN32)
+          static sk_sp<SkFontMgr> mgr = SkFontMgr_New_DirectWrite();
++#elif defined(__ANDROID__)
++         // No fontconfig on Android, and the system fonts are not the app's:
++         // a FreeType manager over the bundled fonts, as the scan below uses.
++         static sk_sp<SkFontMgr> mgr =
++            SkFontMgr_New_Custom_Directory(get_user_fonts_directory().string().c_str());
+ #else
+          // m148: SkFontMgr_New_FontConfig now requires an explicit font
+          // scanner. Use the FreeType scanner (matches SK_TYPEFACE_FACTORY_FREETYPE).
+@@ -106,7 +113,7 @@ namespace cycfi::artist
+ 
+       constexpr auto font_map_default_font_family = "";
+ 
+-#if !defined(__APPLE__) && !defined(_WIN32)
++#if !defined(__APPLE__) && !defined(_WIN32) && !defined(__ANDROID__)
+       enum
+       {
+          fc_thin            = 0,
+@@ -156,7 +163,7 @@ namespace cycfi::artist
+       using fc_font_set_ptr = std::unique_ptr<FcFontSet, deleter<FcFontSet, FcFontSetDestroy>>;
+ #endif
+ 
+-#if defined(__APPLE__) || defined(_WIN32)
++#if defined(__APPLE__) || defined(_WIN32) || defined(__ANDROID__)
+       // Read an OpenType 'name' table entry (by name ID) from a typeface,
+       // returned as ASCII. Prefers the Windows (3,1,0x409) record, falling
+       // back to the Mac (1,0) record. Used to recover the typographic family
+@@ -217,8 +224,8 @@ namespace cycfi::artist
+ 
+       void init_font_map()
+       {
+-#if defined(__APPLE__) || defined(_WIN32)
+-         // On macOS and Windows, fontconfig is unavailable. Scan the user fonts
++#if defined(__APPLE__) || defined(_WIN32) || defined(__ANDROID__)
++         // On macOS, Windows and Android, fontconfig is unavailable. Scan the user fonts
+          // directory using Skia (portable across the CoreText and DirectWrite
+          // font managers) so we use the same bundled font files as other
+          // backends. Without this, only system-installed fonts are visible and

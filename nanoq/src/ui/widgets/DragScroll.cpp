@@ -40,7 +40,7 @@ bool TouchFirst()
             return value[0] != '0';
         }
 
-#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(__ANDROID__)
         return true;
 #else
         return std::getenv("SOUNDSHED_KIOSK") != nullptr;

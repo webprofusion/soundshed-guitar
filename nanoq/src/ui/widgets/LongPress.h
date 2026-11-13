@@ -37,7 +37,8 @@ class LongPress
     /// Whether a hold stands in for a right click here.
     [[nodiscard]] static bool Enabled()
     {
-#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+#if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(__ANDROID__)
+        // The iOS and Android hosts turn a held finger into a right click themselves.
         return false;
 #else
         return metrics::Touch();

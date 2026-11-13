@@ -1,0 +1,51 @@
+diff --git a/q_plug/CMakeLists.txt b/q_plug/CMakeLists.txt
+index bba25a8..1a05c6c 100644
+--- a/q_plug/CMakeLists.txt
++++ b/q_plug/CMakeLists.txt
+@@ -24,7 +24,15 @@ set(q_plug_VERSION "${q_plug_VERSION}" CACHE INTERNAL "")
+ # everywhere. Examples pass this to make_clapfirst_plugins, and ask it for
+ # a standalone app as well, which hosts the CLAP with its own audio and
+ # MIDI devices through RtAudio and RtMidi, fetched at configure time.
+-set(formats CLAP VST3)
++# Android takes none of them: a plugin there is linked into the app that
++# hosts it, which is the plugin's own business, and clap-wrapper is not added.
++if(ANDROID)
++   set(Q_PLUG_ANDROID ON)
++   set(formats)
++else()
++   set(Q_PLUG_ANDROID OFF)
++   set(formats CLAP VST3)
++endif()
+ if(APPLE)
+    list(APPEND formats AUV2)
+ endif()
+@@ -68,6 +76,12 @@ FetchContent_Declare(
+    GIT_SHALLOW ON
+ )
+ set(JSON_BuildTests OFF CACHE INTERNAL "")
++if(Q_PLUG_ANDROID)
++   # The CLAP headers without clap-wrapper, which would otherwise add them.
++   FetchContent_MakeAvailable(clap cycfi_elements nlohmann_json)
++   add_library(clap INTERFACE)
++   target_include_directories(clap INTERFACE "${clap_SOURCE_DIR}/include")
++else()
+ FetchContent_MakeAvailable(clap clap_wrapper cycfi_elements
+    nlohmann_json)
+ 
+@@ -81,6 +95,7 @@ set(CLAP_SDK_ROOT "${clap_SOURCE_DIR}" CACHE PATH "" FORCE)
+ 
+ add_subdirectory(${clap_wrapper_SOURCE_DIR} ${clap_wrapper_BINARY_DIR}
+    EXCLUDE_FROM_ALL)
++endif()
+ 
+ # The standalone app plays through RtAudio. q_io already brings the same
+ # release clap-wrapper would download, and the two would clash, so the
+@@ -110,7 +125,7 @@ target_link_libraries(q_plug PUBLIC libq clap nlohmann_json::nlohmann_json)
+ # target, so there is a single infra. Direct2D draws with
+ # system libraries only, so Windows needs neither vcpkg nor pkg-config.
+ 
+-if(NOT WIN32)
++if(NOT WIN32 AND NOT Q_PLUG_ANDROID)
+    find_package(PkgConfig)
+    if(NOT PkgConfig_FOUND)
+       message(FATAL_ERROR

@@ -1,0 +1,11 @@
+# Gradle build output and machine-local config
+local.properties
+.gradle/
+build/
+app/build/
+.cxx/
+*.iml
+.idea/
+
+# Skia for Android (build-skia.ps1 / build-skia.sh): built locally, never committed
+skia/

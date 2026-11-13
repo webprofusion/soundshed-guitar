@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Tone downloads, once Nano Q has an HTTP transport on Android (it has none yet). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Guitar input. Without this the amp has no signal to process. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <uses-feature android:name="android.hardware.audio.low_latency" android:required="false" />
+    <uses-feature android:name="android.hardware.audio.pro" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- The editor draws with OpenGL ES 3 (Skia's Ganesh backend). -->
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:allowBackup="false"
+        android:theme="@style/NanoQTheme">
+
+        <activity
+            android:name="com.soundshed.nanoq.NanoQActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|navigation"
+            android:windowSoftInputMode="stateAlwaysHidden">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A platform theme: the app is one plain android.app.Activity. The background is the dark
+         theme's bgPrimary (ThemeTokens.generated.h), as on iOS, so nothing flashes white before
+         the first frame. -->
+    <style name="NanoQTheme" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/nanoq_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

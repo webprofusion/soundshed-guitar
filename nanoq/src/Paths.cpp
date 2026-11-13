@@ -71,7 +71,11 @@ std::filesystem::path ModuleDirectory()
 
 bool RunningAsStandalone()
 {
-#if defined(_WIN32)
+#if defined(__ANDROID__)
+    // The Android app hosts the plugin linked into its own library (nanoq/android), which the
+    // system loads into its zygote-forked process: never a plugin in someone else's host.
+    return true;
+#elif defined(_WIN32)
     HMODULE self = nullptr;
 
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -153,6 +157,16 @@ std::string StandaloneCommandLine()
 std::vector<std::filesystem::path> ResourceCandidates()
 {
     std::vector<std::filesystem::path> out;
+
+#if defined(__ANDROID__)
+    // An APK's assets are not files: the Android app unpacks them into its data folder and names
+    // it here before the plugin loads (nanoq/android, NanoQActivity).
+    if (const auto root = guitarfx::FileSystem::ReadEnvironmentPath("SOUNDSHED_NANOQ_RESOURCES"); !root.empty())
+    {
+        out.push_back(root);
+    }
+#endif
+
     const auto dir = ModuleDirectory();
 
     if (dir.empty())
