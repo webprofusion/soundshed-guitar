@@ -1048,6 +1048,8 @@ vary in level from unit to unit.
 | `targetDesignType` … `targetCapacitanceTrim` | | | The same for "Sound Like" |
 | `sensing` | 0–1 | 1 | String Sensing: how much of the position and width difference to apply; scaled by Amount too |
 | `sourcePosition`, `targetPosition` | From Pickup / Neck / Middle / Bridge | From Pickup | Where each pickup sits on the string, for String Sensing |
+| `comb` | 0–1 | 0 | String Comb (prototype). Adds the comb one string gets from the target pickup's position, as detail over String Sensing's note average: the first few notches only, fading out above them, and shallower the nearer the two pickups' places are (`PickupStringComb.h`). Scaled by Amount up to 1. Chords, and notes played high up a lower string, get the wrong string's comb |
+| `combString` | Follow Pitch / Low E / A / D / G / B / High E | Follow Pitch | The string the comb runs for. Follow Pitch tracks the note and takes the string it is played on nearest the nut (the D until a note is tracked) |
 
 **Factory presets:** Single Coil to Humbucker (default), Neck Single Coil to Humbucker, Humbucker
 to Single Coil, Neck Humbucker to Single Coil, Single Coil to P-90, and Humbucker to P-90.

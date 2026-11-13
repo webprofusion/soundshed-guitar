@@ -7,9 +7,11 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/FiniteCheck.h"
 #include "dsp/LinearRamp.h"
+#include "dsp/PitchTracker.h"
 #include "dsp/effects/PickupDesign.h"
 #include "dsp/effects/PickupModels.generated.h"
 #include "dsp/effects/PickupSensing.generated.h"
+#include "dsp/effects/PickupStringComb.h"
 #include "dsp/effects/PickupTypes.h"
 
 #include <algorithm>
@@ -18,6 +20,7 @@
 #include <complex>
 #include <cstdio>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <span>
 #include <string>
@@ -49,6 +52,9 @@
  * harmonic number, so by note; String Sensing applies their average over the notes a guitar
  * plays (tools/gen-pickup-sensing.mjs, PickupSensing.generated.h), which holds for chords too.
  * It runs as the target's low shelf, peak and high shelf with the source's undone.
+ *
+ * String Comb (a prototype, off by default) adds the comb one string really gets from the
+ * target's position, as detail over that average: see PickupStringComb.h.
  */
 namespace guitarfx
 {
@@ -181,6 +187,9 @@ enum Param : std::size_t
     kSensing,
     kSourcePosition,
     kTargetPosition,
+    // String Comb: the per-string comb in place of String Sensing's average (PickupStringComb.h).
+    kComb,
+    kCombString,
     kParamCount
 };
 
@@ -200,6 +209,10 @@ enum class PositionChoice
 
 inline constexpr const char* kPositionLabels[] = {"From Pickup", "Neck", "Middle", "Bridge"};
 static_assert(std::size(kPositionLabels) == static_cast<std::size_t>(PositionChoice::Count));
+
+/// The string the comb runs for: the one the tracked pitch is played on, or a fixed one.
+inline constexpr const char* kCombStringLabels[] = {"Follow Pitch", "Low E", "A", "D", "G", "B", "High E"};
+static_assert(std::size(kCombStringLabels) == kOpenStringHz.size() + 1);
 
 inline constexpr double kLastPickup = static_cast<double>(kPickupCount - 1);
 
@@ -250,6 +263,8 @@ inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
     {"sensing", "String Sensing", 1.0, 0.0, 1.0, "amount", "String Sensing", false, 0.0},
     {"sourcePosition", "Your Pickup Position", 0.0, 0.0, 3.0, "enum", "String Sensing", false, 1.0, kPositionLabels},
     {"targetPosition", "Sound Like Position", 0.0, 0.0, 3.0, "enum", "String Sensing", false, 1.0, kPositionLabels},
+    {"comb", "String Comb", 0.0, 0.0, 1.0, "amount", "String Sensing", false, 0.0},
+    {"combString", "Comb String", 0.0, 0.0, 6.0, "enum", "String Sensing", false, 1.0, kCombStringLabels},
 }};
 
 using Values = std::array<double, kParamCount>;
@@ -264,6 +279,7 @@ struct Design
 {
     std::array<BiquadCoefficients, kSectionCount> sections{}; ///< the identity when there is nothing to change
     double gain = 1.0;
+    CombSettings comb; ///< String Comb, at strength 0 unless it is turned up
 };
 
 /// The pickup's loaded response, s^2/w^2 + s/(w Q) + 1, after the bilinear transform
@@ -457,33 +473,27 @@ struct Design
     const std::size_t targetProfile = SensingProfileIndex(values, kTarget);
     const double strength = std::clamp(values[kSensing], 0.0, 1.0) * amount;
 
+    // String Comb is detail over the average, which stays whole. It follows Amount up to 1 and
+    // stops there; a comb has no caricature.
+    design.comb = {sourceProfile != targetProfile ? std::clamp(values[kComb], 0.0, 1.0) * std::min(amount, 1.0) : 0.0,
+                   sourceProfile, targetProfile};
+
     if (strength > 0.0 && sourceProfile != targetProfile)
     {
         const auto& from = kSensingFits[sourceProfile].bands;
         const auto& to = kSensingFits[targetProfile].bands;
-        double sourceScale = -strength;
-        double targetScale = strength;
 
         // Max Treble Boost holds here too: the top end the target's width adds over the source's.
         const double topBoostDb = strength * (to[2].gainDb - from[2].gainDb);
         const double maxBoostDb = std::max(0.0, values[kMaxBoost]);
-
-        if (topBoostDb > maxBoostDb)
-        {
-            const double scale = maxBoostDb / topBoostDb;
-            design.sections[3] = SensingSection(2, to[2], targetScale * scale, sampleRate);
-            design.sections[6] = SensingSection(2, from[2], sourceScale * scale, sampleRate);
-        }
-        else
-        {
-            design.sections[3] = SensingSection(2, to[2], targetScale, sampleRate);
-            design.sections[6] = SensingSection(2, from[2], sourceScale, sampleRate);
-        }
+        const double held = topBoostDb > maxBoostDb ? maxBoostDb / topBoostDb : 1.0;
+        design.sections[3] = SensingSection(2, to[2], strength * held, sampleRate);
+        design.sections[6] = SensingSection(2, from[2], -strength * held, sampleRate);
 
         for (std::size_t band = 0; band < 2; ++band)
         {
-            design.sections[1 + band] = SensingSection(band, to[band], targetScale, sampleRate);
-            design.sections[4 + band] = SensingSection(band, from[band], sourceScale, sampleRate);
+            design.sections[1 + band] = SensingSection(band, to[band], strength, sampleRate);
+            design.sections[4 + band] = SensingSection(band, from[band], -strength, sampleRate);
         }
     }
 
@@ -544,6 +554,11 @@ class PickupMatchEffect : public EffectProcessor
 
         mGain.Finish();
         mRampSamplesRemaining = 0;
+        mTracker.Reset();
+        mTrackedString = pickup_match::kFallbackString;
+        mSeenDetections = 0;
+        mComb.Clear();
+        mComb.SetGoal(CombGoal());
     }
 
     void Process(float** inputs, float** outputs, int numSamples) override
@@ -562,12 +577,19 @@ class PickupMatchEffect : public EffectProcessor
         for (int i = 0; i < numSamples; ++i)
         {
             AdvanceRamp();
+            const bool comb = mComb.Engaged();
+
+            if (comb)
+            {
+                const float left = inputs[0] ? inputs[0][i] : 0.0f;
+                AdvanceComb(inputs[0] && inputs[1] ? 0.5f * (left + inputs[1][i]) : left);
+            }
 
             for (int ch = 0; ch < 2; ++ch)
             {
                 if (inputs[ch] && outputs[ch])
                 {
-                    outputs[ch][i] = ProcessSample(inputs[ch][i], mState[ch]);
+                    outputs[ch][i] = ProcessSample(inputs[ch][i], mState[ch], static_cast<std::size_t>(ch), comb);
                 }
             }
         }
@@ -595,7 +617,14 @@ class PickupMatchEffect : public EffectProcessor
         for (int i = 0; i < numSamples; ++i)
         {
             AdvanceRamp();
-            output[i] = ProcessSample(input[i], mState[0]);
+            const bool comb = mComb.Engaged();
+
+            if (comb)
+            {
+                AdvanceComb(input[i]);
+            }
+
+            output[i] = ProcessSample(input[i], mState[0], 0, comb);
         }
     }
 
@@ -668,6 +697,17 @@ class PickupMatchEffect : public EffectProcessor
             }
 
             magnitudesDb[i] = 20.0 * std::log10(std::max(magnitude, 1.0e-12)) + gainDb;
+
+            // The comb as one string gets it: the chosen string, or while following the pitch
+            // the D, so the curve holds still.
+            if (design.comb.strength > 0.0)
+            {
+                const std::size_t fixed = FixedString();
+                const auto comb = pickup_match::CombValuesFor(
+                    design.comb, fixed < pickup_match::kOpenStringHz.size() ? fixed : pickup_match::kFallbackString,
+                    mSampleRate);
+                magnitudesDb[i] += pickup_match::CombResponseDb(comb, frequenciesHz[i], mSampleRate);
+            }
         }
 
         return true;
@@ -719,6 +759,8 @@ class PickupMatchEffect : public EffectProcessor
     {
         mSampleRate = sampleRate;
         mRampSamples = std::max(1, static_cast<int>(std::lround(sampleRate * kRampSeconds)));
+        mComb.Prepare(sampleRate);
+        mTracker.Prepare(sampleRate);
         UpdateDesign();
         Reset();
     }
@@ -736,6 +778,58 @@ class PickupMatchEffect : public EffectProcessor
         mGain.target = design.gain;
         mRampSamplesRemaining = mRampSamples;
         mGain.Begin(mRampSamples);
+
+        // Coming on, the comb starts from the fallback string with nothing tracked.
+        if (!mComb.Engaged() && design.comb.strength > 0.0)
+        {
+            mTracker.Reset();
+            mTrackedString = pickup_match::kFallbackString;
+            mSeenDetections = 0;
+        }
+
+        mCombSettings = design.comb;
+        mComb.SetGoal(CombGoal());
+    }
+
+    /// The string Comb String fixes, or kOpenStringHz.size() while it follows the pitch.
+    [[nodiscard]] std::size_t FixedString() const noexcept
+    {
+        const long choice = std::lround(mValues[pickup_match::kCombString]);
+        return choice >= 1 ? static_cast<std::size_t>(choice - 1) : pickup_match::kOpenStringHz.size();
+    }
+
+    [[nodiscard]] pickup_match::CombValues CombGoal() const noexcept
+    {
+        const std::size_t fixed = FixedString();
+        return pickup_match::CombValuesFor(
+            mCombSettings, fixed < pickup_match::kOpenStringHz.size() ? fixed : mTrackedString, mSampleRate);
+    }
+
+    /// Once per sample while the comb runs: follows the pitch to its string, and glides the comb.
+    void AdvanceComb(float monitor) noexcept
+    {
+        if (FixedString() == pickup_match::kOpenStringHz.size())
+        {
+            mTracker.Push(IsFinite(monitor) ? monitor : 0.0f);
+
+            if (const auto detections = mTracker.DetectionCount(); detections != mSeenDetections)
+            {
+                mSeenDetections = detections;
+
+                if (const double hz = mTracker.FrequencyHz(); hz > 0.0)
+                {
+                    const std::size_t string = pickup_match::StringForPitch(hz, mTrackedString);
+
+                    if (string != mTrackedString)
+                    {
+                        mTrackedString = string;
+                        mComb.SetGoal(CombGoal());
+                    }
+                }
+            }
+        }
+
+        mComb.Advance();
     }
 
     void AdvanceRamp() noexcept
@@ -766,7 +860,7 @@ class PickupMatchEffect : public EffectProcessor
 
     using ChannelState = std::array<biquad::State, pickup_match::kSectionCount>;
 
-    [[nodiscard]] float ProcessSample(float input, ChannelState& states) noexcept
+    [[nodiscard]] float ProcessSample(float input, ChannelState& states, std::size_t channel, bool comb) noexcept
     {
         // A NaN or infinity would stay in the filters' memory, so it plays as silence.
         // IsFinite, because the fast-math builds fold std::isfinite away.
@@ -775,6 +869,11 @@ class PickupMatchEffect : public EffectProcessor
         for (std::size_t i = 0; i < pickup_match::kSectionCount; ++i)
         {
             wet = states[i].Process(mSections[i].current, wet);
+        }
+
+        if (comb)
+        {
+            wet = mComb.Process(channel, wet);
         }
 
         wet *= mGain.current;
@@ -798,6 +897,12 @@ class PickupMatchEffect : public EffectProcessor
     std::array<ChannelState, 2> mState{};
     int mRampSamples = 1;
     int mRampSamplesRemaining = 0;
+
+    pickup_match::StringComb mComb;
+    pickup_match::CombSettings mCombSettings;
+    PitchTracker mTracker; ///< fed only while the comb follows the pitch
+    std::size_t mTrackedString = pickup_match::kFallbackString;
+    std::uint64_t mSeenDetections = 0;
 };
 
 namespace pickup_match

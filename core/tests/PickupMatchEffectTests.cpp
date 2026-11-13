@@ -11,6 +11,8 @@
  *   - Level follows the pickups' output difference, or holds it at Matched
  *   - Max Treble Boost caps the shelf going to a brighter pickup
  *   - the mono path matches the stereo one sample for sample
+ *   - String Comb: the audio has the comb the curve reports, a notch where the string says, and
+ *     Follow Pitch lands on the string a note is played on
  *   - parameter sweeps stay finite and bounded; NaN input recovers; low sample rates hold
  */
 
@@ -417,6 +419,164 @@ void TestSensing()
           "a custom humbucker is sensed at the bridge, like the generic one");
 }
 
+/// A plucked-string stand-in: a sawtooth's first harmonics, so the tracker has a clear pitch.
+std::vector<float> Tone(double frequencyHz, double seconds)
+{
+    std::vector<float> tone(static_cast<std::size_t>(seconds * kSampleRate));
+
+    for (std::size_t i = 0; i < tone.size(); ++i)
+    {
+        double sample = 0.0;
+
+        for (int harmonic = 1; harmonic <= 8; ++harmonic)
+        {
+            sample += std::sin(2.0 * kPi * frequencyHz * harmonic * i / kSampleRate) / harmonic;
+        }
+
+        tone[i] = static_cast<float>(0.1 * sample);
+    }
+
+    return tone;
+}
+
+void TestStringComb()
+{
+    std::cout << "\nString Comb" << std::endl;
+    using guitarfx::pickup_match::StringForPitch;
+    const double neck = static_cast<double>(guitarfx::pickup_match::PositionChoice::Neck);
+    const double matched = static_cast<double>(guitarfx::pickup_match::LevelMode::Matched);
+    // A bridge single coil moved to the neck: no electrical change, so the comb is all there is.
+    const Params moved = {{"source", P(Pickup::SingleCoilBridge)},
+                          {"target", P(Pickup::SingleCoilBridge)},
+                          {"targetPosition", neck},
+                          {"levelMode", matched},
+                          {"comb", 1.0}};
+    const auto with = [&](double string) {
+        Params params = moved;
+        params.emplace_back("combString", string);
+        return Make(params);
+    };
+
+    Check(StringForPitch(82.41, 2) == 0 && StringForPitch(110.0, 0) == 1 && StringForPitch(150.0, 0) == 2 &&
+              StringForPitch(200.0, 0) == 3 && StringForPitch(250.0, 0) == 4 && StringForPitch(330.0, 0) == 5 &&
+              StringForPitch(1200.0, 0) == 5 && StringForPitch(60.0, 3) == 0,
+          "a pitch goes to the highest string whose open note is at or below it");
+    Check(StringForPitch(104.0, 1) == 1 && StringForPitch(104.0, 0) == 0 && StringForPitch(98.0, 1) == 0,
+          "a note just under an open string stays on the string it was on");
+
+    // The low E under a neck single coil (160 mm of 648): notches every 648 / 160 x 82.41 Hz.
+    auto lowE = with(1.0);
+    const double notchHz = 648.0 / 160.0 * 82.41;
+    Check(ResponseDb(*lowE, notchHz) < ResponseDb(*lowE, 0.5 * notchHz) - 8.0 &&
+              ResponseDb(*lowE, 2.0 * notchHz) < ResponseDb(*lowE, 1.5 * notchHz) - 8.0,
+          "the neck's notches sit where the low E's half-waves fit",
+          std::to_string(ResponseDb(*lowE, notchHz)) + " dB at the notch, " +
+              std::to_string(ResponseDb(*lowE, 0.5 * notchHz)) + " dB between");
+
+    double worst = 0.0;
+
+    for (double f : {90.0, 167.0, 250.0, 334.0, 500.0, 900.0, 1700.0, 3000.0})
+    {
+        worst = std::max(worst, std::abs(MeasuredDb(*lowE, f) - ResponseDb(*lowE, f)));
+    }
+
+    Check(worst < 0.5, "the audio has the comb the curve reports", "worst " + std::to_string(worst) + " dB");
+
+    // On the high E the same move puts the first notch four times higher. The comb alone is
+    // what the curve has over the same settings without it.
+    auto highE = with(6.0);
+    Params plain = moved;
+    plain.back().second = 0.0;
+    auto flat = Make(plain);
+    const auto combDb = [&](auto& effect, double f) { return ResponseDb(effect, f) - ResponseDb(*flat, f); };
+    Check(std::abs(combDb(*highE, 4.0 * notchHz) - combDb(*lowE, notchHz)) < 0.5, "each string has its own comb",
+          std::to_string(combDb(*highE, 4.0 * notchHz)) + " vs " + std::to_string(combDb(*lowE, notchHz)) + " dB");
+
+    // The notches do not run to the top of the band: far above the first few, the comb is gone.
+    double ripple = 0.0;
+
+    for (double f = 8000.0; f < 12000.0; f += 20.0)
+    {
+        ripple = std::max(ripple, std::abs(combDb(*lowE, f) - combDb(*lowE, 8000.0)));
+    }
+
+    Check(ripple < 1.5 && combDb(*lowE, 20.0) > -2.5,
+          "the comb fades out above its first notches and below its first peak",
+          std::to_string(ripple) + " dB of ripple at 8-12 kHz, " + std::to_string(combDb(*lowE, 20.0)) +
+              " dB at 20 Hz");
+
+    // Two pickups in nearly the same place (a bridge single coil and a bridge humbucker) have
+    // nearly the same comb, so there is little to add.
+    auto near = Make({{"source", P(Pickup::SingleCoilBridge)},
+                      {"target", P(Pickup::HumbuckerBridge)},
+                      {"levelMode", matched},
+                      {"comb", 1.0},
+                      {"combString", 1.0}});
+    auto average =
+        Make({{"source", P(Pickup::SingleCoilBridge)}, {"target", P(Pickup::HumbuckerBridge)}, {"levelMode", matched}});
+    double most = 0.0;
+
+    for (double f = 60.0; f < 12000.0; f *= 1.03)
+    {
+        most = std::max(most, std::abs(ResponseDb(*near, f) - ResponseDb(*average, f)));
+    }
+
+    Check(most > 0.2 && most < 2.0, "pickups in nearly the same place get only a shallow comb",
+          std::to_string(most) + " dB at most");
+
+    // The same pickup in the same place: nothing to do, comb or not.
+    auto same = Make({{"source", P(Pickup::HumbuckerBridge)}, {"target", P(Pickup::HumbuckerBridge)}, {"comb", 1.0}});
+    const auto noise = Noise(4096);
+    Check(Run(*same, noise) == noise, "the same pickup on both sides still passes audio bit for bit");
+
+    // Follow Pitch: a note on the A string comes out as it does with the A string chosen.
+    const auto note = Tone(123.47, 0.6); // B2, the A string's second fret
+    auto follow = with(0.0);
+    auto fixedA = with(2.0);
+    const auto followed = Run(*follow, note);
+    const auto fixed = Run(*fixedA, note);
+    double difference = 0.0;
+    double level = 0.0;
+
+    for (std::size_t i = note.size() / 2; i < note.size(); ++i)
+    {
+        difference += std::pow(static_cast<double>(followed[i]) - fixed[i], 2.0);
+        level += static_cast<double>(fixed[i]) * fixed[i];
+    }
+
+    Check(difference < 1.0e-4 * level, "Follow Pitch settles on the string the note is played on",
+          std::to_string(10.0 * std::log10(std::max(difference, 1.0e-30) / level)) + " dB apart");
+
+    // Random comb settings every block, on a note that keeps changing string.
+    auto swept = with(0.0);
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    bool bounded = true;
+
+    for (int block = 0; block < 300; ++block)
+    {
+        swept->SetParam("comb", unit(rng));
+        swept->SetParam("combString", std::floor(unit(rng) * 7.0));
+        swept->SetParam("source", std::floor(unit(rng) * 7.0));
+        swept->SetParam("target", std::floor(unit(rng) * 7.0));
+        const auto out = Run(*swept, Tone(82.41 * std::pow(2.0, std::floor(unit(rng) * 36.0) / 12.0), 0.02));
+        bounded = bounded && std::all_of(out.begin(), out.end(),
+                                         [](float s) { return guitarfx::IsFinite(s) && std::abs(s) < 20.0f; });
+    }
+
+    Check(bounded, "random comb settings every block stay finite and bounded");
+
+    for (double rate : {22050.0, 44100.0, 192000.0})
+    {
+        Params params = moved;
+        params.emplace_back("combString", 6.0);
+        auto effect = Make(params, rate);
+        const auto out = Run(*effect, Noise(8192));
+        Check(std::all_of(out.begin(), out.end(), [](float s) { return guitarfx::IsFinite(s) && std::abs(s) < 20.0f; }),
+              "the comb is stable at " + std::to_string(static_cast<int>(rate)) + " Hz");
+    }
+}
+
 void TestExaggerate()
 {
     std::cout << "\nAmount past 1" << std::endl;
@@ -809,6 +969,7 @@ int main()
     TestRoundTrip();
     TestExaggerate();
     TestSensing();
+    TestStringComb();
     TestLevelMode();
     TestMaxBoost();
     TestMono();
