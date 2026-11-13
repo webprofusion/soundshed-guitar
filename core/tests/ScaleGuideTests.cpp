@@ -112,8 +112,8 @@ void TestIntervals()
     Expect(!music::ParseInterval("x3") && !music::ParseInterval("14") && !music::ParseInterval(""),
            "junk is not an interval");
     Expect(music::ParseFormula("1 b3 x").empty(), "one bad token empties a formula");
-    Expect(music::StepPattern(music::ParseFormula("1 2 3 4 5 6 7")) == "W W H W W W H", "the major steps");
-    Expect(music::StepPattern(music::ParseFormula("1 b3 4 5 b7")) == "W+H W W W+H W", "the pentatonic steps");
+    Expect(music::StepPattern(music::ParseFormula("1 2 3 4 5 6 7")) == "2 2 1 2 2 2 1", "the major steps");
+    Expect(music::StepPattern(music::ParseFormula("1 b3 4 5 b7")) == "3 2 2 3 2", "the pentatonic steps");
 }
 
 void TestSpelling()
@@ -512,7 +512,7 @@ void TestView()
     Expect(view["title"] == "E Minor Pentatonic", "the scale's title");
     Expect(view["strings"].size() == 6 && view["strings"][0]["name"] == "E", "the strings, low first");
     Expect(view["positions"].size() == 5 && view["position"] == 1, "five positions, the first chosen");
-    Expect(view["scale"]["steps"] == "W+H W W W+H W", "the steps");
+    Expect(view["scale"]["steps"] == "3 2 2 3 2", "the steps");
 
     bool rootDot = false;
     int inPosition = 0;

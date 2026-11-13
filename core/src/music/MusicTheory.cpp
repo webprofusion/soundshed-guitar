@@ -487,7 +487,7 @@ std::string StepPattern(const std::vector<Interval>& intervals)
             pattern += ' ';
         }
 
-        pattern += step == 1 ? "H" : step == 2 ? "W" : step == 3 ? "W+H" : step == 4 ? "2W" : "?";
+        pattern += std::to_string(step);
     }
 
     return pattern;

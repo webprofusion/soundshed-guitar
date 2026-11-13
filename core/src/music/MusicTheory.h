@@ -119,7 +119,7 @@ struct RomanChord
 /// Whether a quality reads as minor (a lower-case numeral).
 [[nodiscard]] bool IsMinorQuality(std::string_view quality);
 
-/// The steps between a scale's notes, "W H W W H W W" (W+H for three semitones).
+/// The steps between a scale's notes in semitones, "2 1 2 2 1 2 2" (the last one back to the octave).
 [[nodiscard]] std::string StepPattern(const std::vector<Interval>& intervals);
 
 /// A chord built on one degree of a seven-note scale.

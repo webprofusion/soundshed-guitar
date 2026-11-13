@@ -248,7 +248,7 @@ describe("scale guide panel", () => {
       scale: {
         id: "major",
         name: "Major (Ionian)",
-        steps: "W W H W W W H",
+        steps: "2 2 1 2 2 2 1",
         formula: "R 2 3 4 5 6 7",
         diatonic: [
           { name: "C", numeral: "I", quality: "maj", rootPitchClass: 0 },

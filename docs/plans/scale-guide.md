@@ -39,7 +39,7 @@ One neck view, three modes, sharing the key and tuning.
   (R ♭3 4 …) or scale degree; the root stands out. No labels is an option too.
 - Positions: WHOLE NECK, then the boxes 1..n. A chosen box dims the rest of the neck (rather than
   hiding it), so the player sees where the box sits.
-- Footer: a chip per scale tone (name + interval), the step pattern (W H W W H W W), and for
+- Footer: a chip per scale tone (name + interval), the step pattern in semitones (2 1 2 2 1 2 2), and for
   seven-note scales the diatonic chords (Em F♯dim G Am Bm C D) with their roman numerals.
   Tapping one opens it in Chords mode.
 
