@@ -29,7 +29,7 @@ Every change of branch crossfades over Crossfade (10 ms to start with). Copy, wh
 * Custom Effects run on Wasmtime 48.0.8, the latest security update of its long-term-support release, up from 48.0.6.
 * Updated JUCE to 9.0.5, whose fixes harden how saved and shared data (settings, presets, archives) is read, and the bundled SQLite, JSON, zip and pitch-shifting libraries to their latest releases.
 
-## 1.7.3 (Unreleased)
+## 1.7.3 (Oct 31, 2026)
 * **macOS**: choosing a template from **New Preset** now creates the preset. Before, the menu closed as you clicked and nothing happened.
 * **macOS**: the Standalone's Plugin Host can now load third-party VST3, AU and LV2 plugins. macOS rejected every plugin signed by another developer, so scans came back empty. If a plugin is still blocked, the error now says that macOS may be the cause.
 * **macOS**: naming a Multi-Rig mix, saving a Custom Effect and editing a library item's details now ask for the text in the app's own dialog. The Mac app shows no browser prompt, so these did nothing before.
