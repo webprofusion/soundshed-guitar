@@ -53,8 +53,8 @@ import { isMixTabActive } from "./signalPath/state.js";
 import { setNodeParamsRefresher, setSignalPathRenderer } from "./signalPath/render.js";
 import { SIGNAL_PATH_FULL_HEIGHT, scheduleSignalPathLayoutAdapt } from "./signalPath/layout.js";
 import { renderBoundaryNode, renderConnectorWrapper, renderSignalChainRow, signalChainLineAt } from "./signalPath/chainRow.js";
-import type { EdgeRef } from "./signalPath/graph.js";
-import { buildGraphMaps, normalizeEdge, parseEdgeFromDataset, pickPrimaryOutgoingEdge, sortEdgesByPort } from "./signalPath/graph.js";
+import { nodeThumbnailImage } from "./signalPath/nodeThumbnails.js";
+import { type EdgeRef, buildGraphMaps, normalizeEdge, parseEdgeFromDataset, pickPrimaryOutgoingEdge, sortEdgesByPort } from "./signalPath/graph.js";
 import { collapseSplitTitle, redrawNodeParamsPanelIfOutOfDate, showNodeParamsPanel } from "./signalPath/paramsPanel.js";
 import { buildMissingResourceTooltip, buildNodeLayoutMatchText, getMissingResourceEntries, getNodeArchitectureBadge, getNodeDisplayName, getNodeResourceDisplayName, getNodeUserTitle } from "./signalPath/nodeLabels.js";
 import { isProtectedSignalPathNode, isToggleableSignalPathNode, toggleSignalPathNodeBypass } from "./signalPath/bypass.js";
@@ -944,7 +944,7 @@ function renderNodeElement(node: GraphNode, options?: RenderNodeElementOptions):
     ? ` aria-label="${escapeHtml(nodeTitle)}${nodeBypassed ? " (bypassed)" : ""}"`
     : "";
 
-  // Small avatar over the node's top edge: layout thumbnail, else the custom-effect one, else the same artwork the visualization panel shows.
+  // Avatar over the node's top edge, the whole tile in compact: layout thumbnail, else the custom-effect one, else the visualization panel's artwork.
   const blendId = node.config?.blendId ?? "";
   // Honour the user's layout preference so the avatar matches what the params
   // panel will actually render for this node.
@@ -959,7 +959,7 @@ function renderNodeElement(node: GraphNode, options?: RenderNodeElementOptions):
   const thumbUrl = safeImageDataUrl(nodeLayout?.thumbnailDataUrl ?? nodeTypeInfo?.thumbnailDataUrl)
     || (getEffectVisualizationEquipmentImage(node) || null);
   const thumbAvatar = thumbUrl
-    ? `<span class="node-layout-thumb-wrap" aria-hidden="true"><img class="node-layout-thumb" src="${escapeHtml(thumbUrl)}" alt="" /><span class="node-layout-thumb-icon">${icon}</span></span>`
+    ? `<span class="node-layout-thumb-wrap" aria-hidden="true">${nodeThumbnailImage(thumbUrl)}</span>`
     : "";
   const thumbClass = thumbUrl ? " has-thumb" : "";
   const deleteButton = allowDelete

@@ -50,29 +50,29 @@
   display: none;
 }
 
-/* Relative, not static: in flow like the icon it replaces, but still the badge's
-   containing block. */
+/* The artwork is the whole tile: it covers the node inside its border, cropped to
+   the tile's square with the corners following the node's own. */
 .signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-layout-thumb-wrap {
-  position: relative;
-  top: auto;
-  height: 26px;
+  inset: 0;
+  height: auto;
+  overflow: hidden;
+  border-radius: calc(var(--radius-lg) - 1px);
 }
 
 .signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-layout-thumb {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
   opacity: 1;
 }
 
-.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-layout-thumb-icon {
-  width: 12px;
-  height: 12px;
-}
-
-.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-layout-thumb-icon .fx-effect-icon {
-  width: 8px;
-  height: 8px;
+/* What the node shows over itself stays above the picture (z-index 1). */
+.signal-path-bar[data-density="compact"] .signal-node.has-thumb::after,
+.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-bypass-badge,
+.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-missing-badge,
+.signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-clip-indicator {
+  z-index: 2;
 }
 
 /* Compact connectors retain a fixed, readable spacing. */

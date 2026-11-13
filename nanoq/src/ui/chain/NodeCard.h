@@ -440,18 +440,19 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             cnv.fill_round_rect(strip, 1.0f);
         }
 
-        // Icon-only: the icon fills the tile, or the artwork does in a 26 px square, with no
-        // name, effect or badge (nodes-compact.css).
+        // Icon-only: the icon fills the tile, or the artwork covers the whole of it inside the
+        // border, with no name, effect or badge (nodes-compact.css).
         if (mLook.iconOnly)
         {
             const auto c = artist::center_point(r);
 
             if (mLook.thumbnail)
             {
-                const el::rect picture{c.x - 13.0f, c.y - 13.0f, c.x + 13.0f, c.y + 13.0f};
+                const float edge = mLook.selected ? 2.0f : 1.0f;
+                const el::rect picture = r.inset(edge, edge);
                 auto state = cnv.new_state();
                 cnv.begin_path();
-                cnv.add_round_rect(picture, 4.0f);
+                cnv.add_round_rect(picture, kRadius - edge);
                 cnv.clip();
                 DrawImageCovering(cnv, *mLook.thumbnail, picture);
 
@@ -471,8 +472,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             const float cx = r.left + r.width() * 0.5f;
             float y = r.top + 8.0f;
 
-            // The picture: the artwork over the top edge with the icon in a dark disc on it, or the
-            // icon in a round badge of the category colour.
+            // The picture: the artwork alone over the top edge, or the icon in a round badge of the
+            // category colour.
             if (mLook.thumbnail)
             {
                 const auto& image = *mLook.thumbnail;
@@ -492,12 +493,6 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
                 cnv.stroke_style(el::rgba(255, 255, 255, 31));
                 cnv.line_width(1.0f);
                 cnv.stroke_round_rect(picture.inset(0.5f, 0.5f), 6.0f);
-                const auto c = artist::center_point(picture);
-                cnv.fill_style(el::rgba(9, 11, 17, 102));
-                cnv.add_circle(artist::circle(c, 11.0f));
-                cnv.fill();
-                mIcons.Draw(cnv, mLook.icon, el::rect{c.x - 7.0f, c.y - 7.0f, c.x + 7.0f, c.y + 7.0f},
-                            ghost(tint).opacity(0.85f));
                 y += 24.0f + 4.0f;
             }
             else

@@ -355,31 +355,6 @@ body.signal-path-resizing * {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* One dark rig photo looks much like another, so the effect's own accented icon
-   sits in the middle of the artwork to say what the node actually is: large
-   enough to read, translucent enough to leave the artwork showing. */
-.node-layout-thumb-icon {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-pill);
-  background: rgba(9, 11, 17, 0.4);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  color: var(--node-accent-strong);
-  opacity: 0.85;
-}
-
-.node-layout-thumb-icon .fx-effect-icon {
-  width: 14px;
-  height: 14px;
-}
-
 .signal-node.bypassed {
   opacity: 0.45;
   border-style: dashed;
