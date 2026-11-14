@@ -22,6 +22,7 @@
 
 #include "controller/HostStateRelay.h"
 #include "controller/internal/HostedPluginSupport.h"
+#include "controller/internal/ResourceSources.h"
 #include "controller/internal/SettingsKeys.h"
 #include "dsp/effects/NAMSlimmableSettings.h"
 #include "presets/PresetStorage.h"
@@ -77,6 +78,33 @@ void PluginController::SetEditorWindowSize(int width, int height)
 
     mPendingEditorWindowSize = EditorWindowSize{width, height};
     mEditorWindowSizeChangedSinceIdle = true;
+}
+
+void PluginController::OnEditorClosed()
+{
+    // Nobody is left to confirm or cancel a preview once its window is gone, and someone who
+    // closes the editor on a model they are hearing means to keep it.
+    if (mPreviewState.active && KeepActiveResourcePreview())
+    {
+        NotifyHostStateChanged();
+    }
+}
+
+void PluginController::RepairRestoredResourceRefs(Preset& preset) const
+{
+    for (const auto& repaired : RepairResourceRefs(preset, mResourceLibrary))
+    {
+        AppendSessionLog("Restore: " + repaired.type + " \"" + repaired.fromId + "\" is not in the library; using \"" +
+                         repaired.toId + "\", the same model by its saved source");
+    }
+
+    for (const auto& missing : FindMissingResourceRefs(preset, mResourceLibrary))
+    {
+        const auto name = missing.source.find("name");
+        AppendSessionLog("Restore: " + missing.type + " \"" + missing.id + "\" is missing" +
+                         (name != missing.source.end() ? " (" + name->second + ")" : std::string{}) + " in preset " +
+                         preset.name);
+    }
 }
 
 void PluginController::NotifyHostStateChanged()
@@ -193,6 +221,34 @@ std::string PluginController::BuildHostState(HostedPluginStateSource source) con
             CaptureRuntimePluginStates(presetWithRuntimeState, mActivePresetId);
         }
 
+        // A Tone3000 model still being previewed plays from a temp file that is not the
+        // project's to keep: the slot is saved with what it held before the preview. Closing
+        // the editor keeps the preview in the library (KeepActiveResourcePreview), and the
+        // project then saves that.
+        if (mPreviewState.active && mPreviewState.originalResourceRef && !mPreviewState.tempFilePath.empty())
+        {
+            const auto putBack = [this](SignalGraph& graph) {
+                for (auto& node : graph.nodes)
+                {
+                    for (auto& ref : node.resources)
+                    {
+                        if (!ref.filePath.empty() && ref.filePath == mPreviewState.tempFilePath)
+                        {
+                            ref = *mPreviewState.originalResourceRef;
+                        }
+                    }
+                }
+            };
+
+            putBack(presetWithRuntimeState.graph);
+
+            for (auto& scene : presetWithRuntimeState.scenes)
+            {
+                putBack(scene.graph);
+            }
+        }
+
+        StampResourceSources(presetWithRuntimeState, mResourceLibrary);
         state["preset"] = nlohmann::json::parse(PresetStorage::SerializeToJson(presetWithRuntimeState));
     }
 
@@ -278,6 +334,8 @@ std::string PluginController::BuildHostState(HostedPluginStateSource source) con
             {
                 CaptureMixerSlotHostedPluginState(*slotPreset, id);
             }
+
+            StampResourceSources(*slotPreset, mResourceLibrary);
 
             try
             {
@@ -519,6 +577,7 @@ void PluginController::RestoreHostState(const std::string& json)
 
             if (presetOpt)
             {
+                RepairRestoredResourceRefs(*presetOpt);
                 mActivePresetId = state.value("presetId", presetOpt->id);
                 mActiveSceneId = state.contains("activeSceneId") && state["activeSceneId"].is_string()
                                      ? state["activeSceneId"].get<std::string>()
@@ -623,6 +682,7 @@ void PluginController::RestoreHostState(const std::string& json)
                 {
                     if (auto slotPreset = PresetStorage::DeserializeFromJson(presetData[id].dump()))
                     {
+                        RepairRestoredResourceRefs(*slotPreset);
                         added = AddActivePreset(*slotPreset, id, name);
 
                         if (added)

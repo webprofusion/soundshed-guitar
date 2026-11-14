@@ -49,6 +49,9 @@ SoundshedEditorBase::~SoundshedEditorBase()
     // switches the per-node metering on the audio thread off until an editor comes back.
     reportUiVisible(false);
 
+    // A Tone3000 model left previewing is kept, not left on a temp file the project cannot keep.
+    processorRef.getController().OnEditorClosed();
+
     // One line per editor lifetime, and the pair that matters when a window comes back at
     // the wrong size: what the editor was last laid out at, and what was actually kept.
     const auto remembered = processorRef.getController().GetEditorWindowSize();

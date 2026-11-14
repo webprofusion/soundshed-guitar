@@ -22,6 +22,7 @@ import { NavigationLists } from "./resourceBrowser/navigationListing.js";
 import { copyLibraryResourcePath, renderLibraryItemDetailsPanel } from "./resourceBrowser/libraryDetails.js";
 import { libraryThumbnailAttr, libraryThumbnailImage } from "./resourceBrowser/libraryThumbnails.js";
 import { TONE3000_IR_GEAR_OPTIONS, slotImportCategory, slotLibraryCategoryHint, slotStateKey, slotTitle, slotTone3000IrGear } from "./resourceBrowser/slot.js";
+import { tone3000PreviewPayload } from "./resourceBrowser/tone3000Navigation.js";
 import { Tone3000Tab } from "./resourceBrowser/tone3000Tab.js";
 import type { LibraryFilterSnapshot, NavigationCacheOptions, PersistedResourceBrowserState, PreviewLoadingState, PreviewState, ResourceBrowserOptions, ResourceBrowserTab, ResourceImportedDetail, ResourceNavigationResult, ResourceNavigationState, ResourceType } from "./resourceBrowser/types.js";
 import { deduplicateResourcesByHashAndPath, resolveResourceIdAlias } from "./resourceDedup.js";
@@ -31,7 +32,7 @@ import type { Tone3000Architecture } from "./tone3000ApiTypes.js";
 import { tone3000ToneFromResource } from "./tone3000Shared.js";
 import { canLookUpOnTone3000, lookUpOnTone3000 } from "./tone3000ContentHash.js";
 import type { LibraryResource } from "./types.js";
-import { arrayBufferToBase64, escapeHtml, findResourceById } from "./utils.js";
+import { escapeHtml, findResourceById } from "./utils.js";
 
 export type { ResourceNavigationResult } from "./resourceBrowser/types.js";
 
@@ -1741,22 +1742,19 @@ export class ResourceBrowserModal {
       }
       const contentType = response.headers.get("content-type") ?? "";
       const isZip = contentType.includes("zip") || modelUrl.toLowerCase().endsWith(".zip");
-      
-      // For preview, we send the file data to the plugin for temporary loading
-      const data = arrayBufferToBase64(buffer);
       const tempResourceId = `preview:tone3000:${toneId}:${modelId}`;
       const resourceType = options.resourceType;
-      
-      // Send preview message to plugin
-      postMessage({
-        type: "previewRemoteResource",
-        resourceType,
-        tempResourceId,
-        nodeId: options.nodeId,
-        resourceIndex: options.resourceIndex,
-        isZip,
-        data,
-      });
+
+      // With keepAs: kept under Select's id if the editor closes while it plays.
+      const tone = this.tone3000Tab.tone3000Tones.find((t) => String(t.id) === toneId);
+      const model = this.tone3000Tab.toneModelsCache.get(toneId)?.find((entry) => String(entry.id) === modelId);
+      const category = resourceType === "ir" ? slotImportCategory(options, "") : undefined;
+      const payload = await tone3000PreviewPayload(tone, modelId, model, buffer, isZip, resourceType, category);
+      if (isStale()) {
+        return;
+      }
+      const { nodeId, resourceIndex } = options;
+      postMessage({ type: "previewRemoteResource", resourceType, tempResourceId, nodeId, resourceIndex, ...payload });
       
       this.previewState = {
         active: true,

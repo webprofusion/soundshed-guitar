@@ -212,6 +212,12 @@ class PluginController
     /// transient zero-sized layout pass cannot wipe the remembered size.
     void SetEditorWindowSize(int width, int height);
 
+    /// The editor window is being destroyed (not merely hidden), on the message thread. A
+    /// Tone3000 model still previewing then counts as chosen: it goes into the library and the
+    /// slot keeps it (KeepActiveResourcePreview), rather than playing on from a temp file that
+    /// the project cannot keep.
+    void OnEditorClosed();
+
     /**
      * Tell the controller whether the host is rendering offline (bounce/freeze/export)
      * rather than in real time. Called from the host adapter's setNonRealtime(), on any
@@ -445,6 +451,13 @@ class PluginController
     void HandleDeleteImportedToneSharingPackRequest(const nlohmann::json& payload);
     void HandlePreviewRemoteResourceRequest(const nlohmann::json& payload);
     void HandleCancelPreviewResourceRequest(const nlohmann::json& payload);
+    /// Imports the model or IR being previewed into the library as its preview request
+    /// described it (`keepAs`), points the slot at the library entry and ends the preview.
+    /// Returns false, leaving the preview as it is, when there is nothing to keep.
+    bool KeepActiveResourcePreview();
+    /// Rebuilds the running slots after models or IRs they were missing have been imported
+    /// (the UI's download of a project's missing Tone3000 models), so they play them.
+    void HandleReloadPresetResourcesRequest(const nlohmann::json& payload);
     void HandleSaveBlendDefinitionRequest(const nlohmann::json& payload);
     void HandleDeleteBlendDefinitionRequest(const nlohmann::json& payload);
     void HandleSaveCustomEffectEntryRequest(const nlohmann::json& payload);
@@ -747,6 +760,9 @@ class PluginController
     std::shared_ptr<const bool> mAliveForPostedTasks = std::make_shared<const bool>(true);
     /// The restore itself, on the message thread. See DeserializeState.
     void RestoreHostState(const std::string& json);
+    /// Points a restored preset's models and IRs whose library entries are gone at the copies
+    /// their saved sources describe (RepairResourceRefs), and logs what is still missing.
+    void RepairRestoredResourceRefs(Preset& preset) const;
     /**
      * Tell the host that the state it would save has changed (marks the DAW project dirty).
      *
@@ -1379,6 +1395,10 @@ class PluginController
         std::string resourceType;
         std::filesystem::path tempFilePath;
         std::optional<ResourceRef> originalResourceRef;
+        /// How to import the file if the preview is kept: the importRemoteResource fields
+        /// (resourceId, name, provider, subfolder, fileName, metadata, ...). Null when the UI
+        /// sent none, and the preview is then never kept.
+        nlohmann::json keepAs;
     };
 
     PreviewState mPreviewState;

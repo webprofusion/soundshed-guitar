@@ -197,6 +197,12 @@ export interface ResourceRef {
   parameterId?: string;
   parameterValue?: number;
   parameters?: Record<string, number>;
+  /**
+   * What the library said about the resource when the preset or project was last saved (the
+   * engine's ResourceRef::source): name, category, provider, providerKey, toneId, modelId,
+   * creatorName, hash, contentHash. Kept while the library lacks it, to name it or fetch it again.
+   */
+  source?: Record<string, string>;
 }
 
 export interface GraphNode {

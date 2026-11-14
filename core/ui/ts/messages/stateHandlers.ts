@@ -40,6 +40,7 @@ import { applyToneSharingAppSettings } from "../toneSharingPanel.js";
 import type { AppSettings, AppSettingValue, AutomationSlot, BlendLibrary, CustomEffectLibrary, GlobalSignalChainConfig, MixerPresetState, MixerState, Preset, PresetArchiveSessionState, ResourceLibrary, RiffLibrary, UiSettings, UiViewState } from "../types.js";
 import { triggerUpdateCheck } from "../updateCheck.js";
 import { applyUiSettings } from "../windowSettings.js";
+import { offerMissingPresetResources } from "../presets/missingResources.js";
 import { shouldIgnoreStatePreset } from "./echoGuard.js";
 import { normalizeGlobalSignalChain, normalizePresetResources } from "./normalize.js";
 import type { IncomingPayload } from "./types.js";
@@ -237,6 +238,8 @@ export function onState(payload: IncomingPayload): void {
   updatePresetActionButtons();
   updatePresetDropdownSelection();
   refreshSettingsView();
+  // A project or preset whose models have left the library: name them, offer to fetch them.
+  void offerMissingPresetResources();
 }
 
 /**

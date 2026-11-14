@@ -637,6 +637,380 @@ bool TestPreviewOnAnotherSlotRestoresTheFirst()
     CancelPreview(controller, true, 1);
     return SlotHoldsLibraryResource(controller, "slot-0", 0) && SlotHoldsLibraryResource(controller, "slot-1", 1);
 }
+
+/// A Tone3000 import as the UI's Select sends one: provider fields in the metadata.
+void ImportTone3000Model(guitarfx::PluginController& controller, const std::string& id, const std::string& name,
+                         const std::string& toneId, const std::string& modelId, const Bytes& bytes)
+{
+    controller.HandleUIMessage(nlohmann::json{{"type", "importRemoteResource"},
+                                              {"requestId", "import-" + id},
+                                              {"provider", "tone3000"},
+                                              {"resourceType", "nam"},
+                                              {"resourceId", id},
+                                              {"name", name},
+                                              {"subfolder", "amp/Test Tone"},
+                                              {"fileName", modelId + ".nam"},
+                                              {"metadata",
+                                               {{"provider", "tone3000"},
+                                                {"providerKey", modelId},
+                                                {"toneId", toneId},
+                                                {"modelId", modelId},
+                                                {"creatorName", "Someone"}}},
+                                              {"data", guitarfx::util::EncodeBase64(bytes)}}
+                                   .dump());
+}
+
+/// The first resource of node "node" in a host state blob's focused preset.
+std::optional<nlohmann::json> SavedSlot(const std::string& state)
+{
+    const auto parsed = nlohmann::json::parse(state, nullptr, false);
+
+    if (!parsed.is_object() || !parsed.contains("preset"))
+    {
+        return std::nullopt;
+    }
+
+    // A preset with scenes is saved as its scenes' graphs alone; every one must agree.
+    const auto& preset = parsed["preset"];
+    std::vector<nlohmann::json> graphs;
+
+    if (preset.contains("graph"))
+    {
+        graphs.push_back(preset["graph"]);
+    }
+
+    for (const auto& scene : preset.value("scenes", nlohmann::json::array()))
+    {
+        graphs.push_back(scene.value("graph", nlohmann::json::object()));
+    }
+
+    std::optional<nlohmann::json> found;
+
+    for (const auto& graph : graphs)
+    {
+        for (const auto& node : graph.value("nodes", nlohmann::json::array()))
+        {
+            if (node.value("id", "") != "node" || !node.contains("resources") || node["resources"].empty())
+            {
+                continue;
+            }
+
+            if (found && *found != node["resources"][0])
+            {
+                std::cerr << "  Scenes disagree on the slot: " << found->dump() << " vs "
+                          << node["resources"][0].dump() << "\n";
+                return std::nullopt;
+            }
+
+            found = node["resources"][0];
+        }
+    }
+
+    return found;
+}
+
+/// Host state the way a project two months old holds it: the slot names a library id this
+/// library does not have, with the source that was saved beside it.
+std::string StateWithSlot(const nlohmann::json& slot)
+{
+    guitarfx::Preset preset = BuildResourcePreset("node", "nam", {"placeholder"});
+    nlohmann::json presetJson = nlohmann::json::parse(guitarfx::PresetStorage::SerializeToJson(preset));
+    nlohmann::json state{{"version", 1}, {"presetId", preset.id}};
+
+    const auto replaceSlot = [&](nlohmann::json& nodes) {
+        for (auto& node : nodes)
+        {
+            if (node.value("id", "") == "node")
+            {
+                node["resources"] = nlohmann::json::array({slot});
+            }
+        }
+    };
+
+    if (presetJson.contains("graph") && presetJson["graph"].contains("nodes"))
+    {
+        replaceSlot(presetJson["graph"]["nodes"]);
+    }
+
+    if (presetJson.contains("scenes"))
+    {
+        for (auto& scene : presetJson["scenes"])
+        {
+            if (scene.contains("graph") && scene["graph"].contains("nodes"))
+            {
+                replaceSlot(scene["graph"]["nodes"]);
+            }
+        }
+    }
+
+    state["preset"] = presetJson;
+    return state.dump();
+}
+
+bool TestHostStateNeverSavesAPreviewTempFile()
+{
+    const fs::path sandbox = FreshSandbox("state-skips-preview");
+    RecordingHost host(sandbox);
+    guitarfx::PluginController controller(host);
+
+    ImportTone3000Model(controller, "tone3000:1", "Tone - Chosen", "7", "1", BytesOf("chosen model"));
+
+    if (!LoadPreset(controller, BuildResourcePreset("node", "nam", {"tone3000:1"})))
+    {
+        return false;
+    }
+
+    Preview(controller, "nam", "2", BytesOf("previewed model"), false);
+
+    if (!SlotPlays(controller, BytesOf("previewed model")))
+    {
+        std::cerr << "  The preview is not playing\n";
+        return false;
+    }
+
+    const auto slot = SavedSlot(controller.SerializeState());
+
+    if (!slot || slot->value("resourceId", "") != "tone3000:1" || slot->contains("filePath"))
+    {
+        std::cerr << "  Saved slot is not the original: " << (slot ? slot->dump() : "none") << "\n";
+        return false;
+    }
+
+    // Saved with what the library knows of it, to name and fetch it again.
+    const auto source = slot->value("source", nlohmann::json::object());
+
+    if (source.value("name", "") != "Tone - Chosen" || source.value("provider", "") != "tone3000" ||
+        source.value("toneId", "") != "7" || source.value("modelId", "") != "1")
+    {
+        std::cerr << "  Saved source is wrong: " << source.dump() << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestClosingTheEditorKeepsThePreview()
+{
+    const fs::path sandbox = FreshSandbox("editor-close-keeps-preview");
+    RecordingHost host(sandbox);
+    guitarfx::PluginController controller(host);
+
+    if (!LoadPreset(controller, BuildResourcePreset("node", "nam", {"original"})))
+    {
+        return false;
+    }
+
+    const Bytes model = BytesOf(std::string(2048, 'k') + "kept model");
+    controller.HandleUIMessage(nlohmann::json{{"type", "previewRemoteResource"},
+                                              {"resourceType", "nam"},
+                                              {"tempResourceId", "preview:tone3000:7:42"},
+                                              {"nodeId", "node"},
+                                              {"resourceIndex", 0},
+                                              {"isZip", false},
+                                              {"data", guitarfx::util::EncodeBase64(model)},
+                                              {"keepAs",
+                                               {{"provider", "tone3000"},
+                                                {"resourceType", "nam"},
+                                                {"resourceId", "tone3000:42"},
+                                                {"name", "Test Tone - Kept"},
+                                                {"category", "amp"},
+                                                {"subfolder", "amp/Test Tone"},
+                                                {"fileName", "Kept.nam"},
+                                                {"metadata",
+                                                 {{"provider", "tone3000"},
+                                                  {"providerKey", "42"},
+                                                  {"toneId", "7"},
+                                                  {"modelId", "42"}}}}}}
+                                   .dump());
+
+    const auto tempFile = SlotPlays(controller, model);
+
+    if (!tempFile)
+    {
+        std::cerr << "  The preview is not playing\n";
+        return false;
+    }
+
+    controller.OnEditorClosed();
+
+    if (!SlotHoldsLibraryResource(controller, "tone3000:42"))
+    {
+        std::cerr << "  The slot is not on the kept model\n";
+        return false;
+    }
+
+    const auto kept = ImportedResource(controller, "nam", "tone3000:42");
+
+    if (!kept || ReadBytes(kept->filePath) != model || kept->name != "Test Tone - Kept")
+    {
+        std::cerr << "  The kept model is not in the library as previewed\n";
+        return false;
+    }
+
+    if (fs::exists(*tempFile))
+    {
+        std::cerr << "  The preview's temp file is still there\n";
+        return false;
+    }
+
+    const auto slot = SavedSlot(controller.SerializeState());
+
+    if (!slot || slot->value("resourceId", "") != "tone3000:42" ||
+        slot->value("source", nlohmann::json::object()).value("modelId", "") != "42")
+    {
+        std::cerr << "  Saved slot is not the kept model: " << (slot ? slot->dump() : "none") << "\n";
+        return false;
+    }
+
+    // Closed again with nothing previewing: nothing changes.
+    controller.OnEditorClosed();
+    return SlotHoldsLibraryResource(controller, "tone3000:42");
+}
+
+bool TestClosingTheEditorWithoutKeepAsLeavesThePreview()
+{
+    const fs::path sandbox = FreshSandbox("editor-close-no-keep");
+    RecordingHost host(sandbox);
+    guitarfx::PluginController controller(host);
+
+    if (!LoadPreset(controller, BuildResourcePreset("node", "nam", {"original"})))
+    {
+        return false;
+    }
+
+    Preview(controller, "nam", "9", BytesOf("an older UI's preview"), false);
+    controller.OnEditorClosed();
+
+    // Nothing to import it as: the library is untouched and the project still saves the original.
+    if (controller.GetResourceLibrary().HasResource("nam", "tone3000:9"))
+    {
+        std::cerr << "  A preview without keepAs went into the library\n";
+        return false;
+    }
+
+    const auto slot = SavedSlot(controller.SerializeState());
+    return slot && slot->value("resourceId", "") == "original" && !slot->contains("filePath");
+}
+
+bool TestRestoreFindsAMissingModelBySource()
+{
+    const fs::path sandbox = FreshSandbox("restore-by-source");
+    RecordingHost host(sandbox);
+    guitarfx::PluginController controller(host);
+
+    // Downloaded again since, under a newer id.
+    ImportTone3000Model(controller, "tone3000:42:Model.nam", "Test Tone - Model", "7", "42", BytesOf("model"));
+
+    const nlohmann::json slot{{"resourceType", "nam"},
+                              {"resourceId", "tone3000:old-id"},
+                              {"source",
+                               {{"name", "Test Tone - Model"},
+                                {"provider", "tone3000"},
+                                {"providerKey", "42"},
+                                {"toneId", "7"},
+                                {"modelId", "42"}}}};
+
+    if (!controller.DeserializeState(StateWithSlot(slot)))
+    {
+        std::cerr << "  Restore failed\n";
+        return false;
+    }
+
+    if (!SlotHoldsLibraryResource(controller, "tone3000:42:Model.nam"))
+    {
+        const auto ref = SlotRef(controller, "node", 0);
+        std::cerr << "  Slot was not pointed at the copy: " << (ref ? ref->resourceId : "none") << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestSourceSurvivesWhileTheModelIsMissing()
+{
+    const fs::path sandbox = FreshSandbox("source-survives");
+    RecordingHost host(sandbox);
+    guitarfx::PluginController controller(host);
+
+    const nlohmann::json source{{"name", "Gone Tone - Model"},
+                                {"provider", "tone3000"},
+                                {"providerKey", "77"},
+                                {"toneId", "8"},
+                                {"modelId", "77"}};
+    const nlohmann::json slot{{"resourceType", "nam"}, {"resourceId", "tone3000:77"}, {"source", source}};
+
+    if (!controller.DeserializeState(StateWithSlot(slot)))
+    {
+        std::cerr << "  Restore failed\n";
+        return false;
+    }
+
+    // Saved again before anything is fetched: the project must not forget what it knew.
+    const auto saved = SavedSlot(controller.SerializeState());
+
+    if (!saved || saved->value("resourceId", "") != "tone3000:77" ||
+        saved->value("source", nlohmann::json::object()) != source)
+    {
+        std::cerr << "  Saved slot lost its source: " << (saved ? saved->dump() : "none") << "\n";
+        return false;
+    }
+
+    // Once the model is back under its id, the next save records the library's own source.
+    ImportTone3000Model(controller, "tone3000:77", "Gone Tone - Model (renamed)", "8", "77", BytesOf("back again"));
+    const auto resaved = SavedSlot(controller.SerializeState());
+
+    return resaved && resaved->value("source", nlohmann::json::object()).value("name", "") ==
+                          "Gone Tone - Model (renamed)";
+}
+
+bool TestLibraryResolvesALostIdBySource()
+{
+    const fs::path sandbox = FreshSandbox("library-resolve-by-source");
+    const fs::path file = sandbox / "copy.nam";
+    {
+        std::ofstream out(file, std::ios::binary);
+        out << "model";
+    }
+
+    guitarfx::ResourceLibrary library;
+    guitarfx::LibraryResource zipEntryA;
+    zipEntryA.type = "nam";
+    zipEntryA.id = "tone3000:5:a.nam";
+    zipEntryA.filePath = sandbox / "missing-a.nam";
+    zipEntryA.metadata = {{"provider", "tone3000"}, {"providerKey", "5:a.nam"}, {"toneId", "1"}, {"modelId", "5"}};
+    library.AddResource(zipEntryA);
+
+    guitarfx::LibraryResource zipEntryB = zipEntryA;
+    zipEntryB.id = "tone3000:5:b.nam";
+    zipEntryB.filePath = file;
+    zipEntryB.metadata["providerKey"] = "5:b.nam";
+    library.AddResource(zipEntryB);
+
+    guitarfx::ResourceRef ref;
+    ref.resourceType = "nam";
+    ref.resourceId = "tone3000:gone";
+    ref.source = {{"provider", "tone3000"}, {"providerKey", "5:b.nam"}, {"toneId", "1"}, {"modelId", "5"}};
+
+    const auto resolved = library.ResolveResource(ref);
+
+    if (!resolved || *resolved != file)
+    {
+        std::cerr << "  A lost id did not resolve by provider key\n";
+        return false;
+    }
+
+    // Entry a's key: its own file is gone, and entry b shares its tone and model ids, but is
+    // another model of the zip. Nothing is found rather than the wrong model.
+    ref.source["providerKey"] = "5:a.nam";
+
+    if (library.FindResourceBySource("nam", ref.source))
+    {
+        std::cerr << "  A zip entry was matched to its sibling\n";
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 
 int main()
@@ -660,6 +1034,12 @@ int main()
     run("Consecutive previews restore the true original", TestConsecutivePreviewsRestoreTheTrueOriginal());
     run("Preview on another slot restores the first", TestPreviewOnAnotherSlotRestoresTheFirst());
     run("Remote import shortens long names", TestRemoteImportShortensLongNames());
+    run("Host state never saves a preview's temp file", TestHostStateNeverSavesAPreviewTempFile());
+    run("Closing the editor keeps the preview", TestClosingTheEditorKeepsThePreview());
+    run("Closing the editor without keepAs leaves the preview", TestClosingTheEditorWithoutKeepAsLeavesThePreview());
+    run("Restore finds a missing model by its source", TestRestoreFindsAMissingModelBySource());
+    run("Source survives while the model is missing", TestSourceSurvivesWhileTheModelIsMissing());
+    run("Library resolves a lost id by source", TestLibraryResolvesALostIdBySource());
 
     std::cout << "\nTone3000 resource workflow tests: " << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;

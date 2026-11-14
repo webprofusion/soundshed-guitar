@@ -543,9 +543,17 @@ void PluginController::HandleUpdateNodeResourceRequest(const nlohmann::json& pay
             slot.embeddedId.clear();
             slot.parameters.clear();
             slot.parameterValue.reset();
+            slot.source.clear();
         }
         else
         {
+            // What was saved about the old resource is not about the new one. The next save
+            // records the new one's from the library (StampResourceSources).
+            if (!ref.resourceId.empty() || !ref.filePath.empty())
+            {
+                slot.source.clear();
+            }
+
             if (!ref.resourceId.empty())
             {
                 slot.resourceId = ref.resourceId;

@@ -18,6 +18,7 @@
 #include "controller/internal/InputModeSettings.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/PresetArchiveSupport.h"
+#include "controller/internal/ResourceSources.h"
 #include "presets/PresetStorage.h"
 #include "util/PathEncoding.h"
 
@@ -884,14 +885,19 @@ std::vector<Preset> PluginController::LoadAllUserPresets() const
 
 bool PluginController::SaveUserPreset(const Preset& preset)
 {
+    // Each model and IR is saved with what the library knows of it, so the preset can still
+    // name, find or fetch it if the library entry goes.
+    Preset stamped = preset;
+    StampResourceSources(stamped, mResourceLibrary);
+
     if (IsPresetArchiveSessionActive())
     {
         const auto sessionDir = GetEffectiveUserPresetDirectory();
         [[maybe_unused]] const auto ensuredSessionDir = mFileSystem.EnsureDirectory(sessionDir);
-        return PresetStorage::SaveToFile(preset, sessionDir / (preset.id + ".json"));
+        return PresetStorage::SaveToFile(stamped, sessionDir / (stamped.id + ".json"));
     }
 
-    return PresetStorage::SaveToStore(Store(), preset);
+    return PresetStorage::SaveToStore(Store(), stamped);
 }
 
 bool PluginController::DeleteUserPreset(const std::string& presetId)

@@ -1,4 +1,5 @@
 #include "resources/ResourceLibrary.h"
+#include "models/ContentHash.h"
 #include "util/FileIO.h"
 #include "util/LongPath.h"
 #include "util/PathEncoding.h"
@@ -380,6 +381,14 @@ std::optional<std::filesystem::path> ResourceLibrary::ResolveResource(const Reso
             }
         }
 
+        // The library has lost this id, or its file: what the preset recorded about the resource
+        // when it was saved can still find the same model under another id (imported again,
+        // from another source, or renamed).
+        if (auto described = FindResourceBySource(ref.resourceType, ref.source))
+        {
+            return described->filePath;
+        }
+
         // Last resort: if we have a resolved entry but its file is missing, return its path anyway and let loader fail
         if (resource)
         {
@@ -393,9 +402,87 @@ std::optional<std::filesystem::path> ResourceLibrary::ResolveResource(const Reso
         {
             return ref.filePath;
         }
+
+        if (auto described = FindResourceBySource(ref.resourceType, ref.source))
+        {
+            return described->filePath;
+        }
     }
 
     // Embedded resources are handled separately by the preset loader
+    return std::nullopt;
+}
+
+std::optional<LibraryResource> ResourceLibrary::FindResourceBySource(
+    const std::string& type, const std::map<std::string, std::string>& source) const
+{
+    if (source.empty() || type.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto text = [](const std::map<std::string, std::string>& values, const char* key) {
+        const auto it = values.find(key);
+        return it == values.end() ? std::string{} : it->second;
+    };
+
+    const auto provider = text(source, "provider");
+    const auto providerKey = text(source, "providerKey");
+    const auto toneId = text(source, "toneId");
+    const auto modelId = text(source, "modelId");
+    const auto hash = text(source, "hash");
+    const auto contentHash = text(source, kContentHashMetadataKey);
+
+    const auto find = [&](const auto& matches) -> std::optional<LibraryResource> {
+        for (const auto& [key, resource] : mResources)
+        {
+            if (resource.type == type && matches(resource) && util::PathExists(resource.filePath))
+            {
+                return resource;
+            }
+        }
+
+        return std::nullopt;
+    };
+
+    if (!provider.empty() && !providerKey.empty())
+    {
+        if (auto found = find([&](const LibraryResource& resource) {
+                return text(resource.metadata, "provider") == provider &&
+                       text(resource.metadata, "providerKey") == providerKey;
+            }))
+        {
+            return found;
+        }
+    }
+
+    // Without a key, a Tone3000 model is its tone and model ids. Not with one: a zip's entries
+    // share both ids, and the key is what tells them apart.
+    if (provider == "tone3000" && providerKey.empty() && !toneId.empty() && !modelId.empty())
+    {
+        if (auto found = find([&](const LibraryResource& resource) {
+                return text(resource.metadata, "toneId") == toneId && text(resource.metadata, "modelId") == modelId;
+            }))
+        {
+            return found;
+        }
+    }
+
+    if (!hash.empty())
+    {
+        if (auto found = find([&](const LibraryResource& resource) { return resource.hash == hash; }))
+        {
+            return found;
+        }
+    }
+
+    // The same model under any name, from anywhere: a folder, another provider, a repost.
+    if (IsContentHash(contentHash))
+    {
+        return find(
+            [&](const LibraryResource& resource) { return text(resource.metadata, kContentHashMetadataKey) == contentHash; });
+    }
+
     return std::nullopt;
 }
 

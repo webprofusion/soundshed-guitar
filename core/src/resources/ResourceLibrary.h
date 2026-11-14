@@ -73,6 +73,13 @@ class ResourceLibrary
     // Resolution
     [[nodiscard]] std::optional<std::filesystem::path> ResolveResource(const ResourceRef& ref) const;
 
+    /// A resource of this type whose file exists and which is the one a reference's saved
+    /// `source` describes (ResourceRef::source): the same provider and provider key (a Tone3000
+    /// model without a key by its tone and model ids), else the same file hash, else the same
+    /// model content hash. Empty when no such resource is here, or the source says too little.
+    [[nodiscard]] std::optional<LibraryResource> FindResourceBySource(
+        const std::string& type, const std::map<std::string, std::string>& source) const;
+
     // Persistence
     //
     // The library is backed by the document store: one row per resource, keyed

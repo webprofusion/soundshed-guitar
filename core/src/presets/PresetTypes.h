@@ -29,6 +29,13 @@ struct ResourceRef
     std::optional<double> levelTrimDb; // Blend model: level trim (dB), filled from its definition, never serialized
     std::map<std::string, std::string> metadata; // Transient library metadata, not serialized into presets
 
+    /// What the library said about this resource when the preset or project was last saved:
+    /// "name", "provider", "providerKey", "toneId", "modelId", "contentHash", "hash",
+    /// "creatorName", "category" (ResourceSources.h). Serialized, and kept as read while the
+    /// library lacks the resource, so a project opened where the file has gone can still name it,
+    /// find another copy, or fetch it from its provider again.
+    std::map<std::string, std::string> source;
+
     [[nodiscard]] bool IsLibraryRef() const
     {
         return !resourceType.empty() && !resourceId.empty();

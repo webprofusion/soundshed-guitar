@@ -115,8 +115,22 @@ Older presets and saved global chains may still carry `autoLevelInput`/`autoLeve
 | `parameterId` | string | Blend models only: the primary parameter the model was captured at |
 | `parameterValue` | float | Blend models only: its position on the Blend sweep |
 | `parameters` | map[string, float] | Blend models only: every setting it was captured at, normalised 0..1 |
+| `source` | map[string, string] | What the library said about the resource when the preset or DAW project was last saved: `name`, `category`, `provider`, `providerKey`, `toneId`, `modelId`, `creatorName`, `hash`, `contentHash` (whichever it has). Written on every save of a user preset or host state (`StampResourceSources`), and kept as read while the library lacks the resource |
 
 **Resolution priority**: library → embedded → filePath
+
+**A library id the library has lost** (an entry deleted, a profile moved to another machine, a
+file cleaned away) is resolved through its `source`: the same provider and provider key, a
+Tone3000 model without a key by its tone and model ids, the same file hash, then the same
+model content hash (`ResourceLibrary::FindResourceBySource`). A restored DAW project points
+such slots at the copy it found (`RepairResourceRefs`). Anything still missing is named in the
+UI by `source.name`, and a Tone3000 one can be downloaded again under its old id
+(`core/ui/ts/presets/missingResources.ts`).
+
+**A Tone3000 preview is never saved.** It plays from a temp file under the profile's `temp/`.
+Host state saves the slot's resource from before the preview, and closing the editor while a
+preview plays imports it into the library under the id Select would have used
+(`KeepActiveResourcePreview`), so the project then saves that.
 
 **Presets from outside** — a preset archive, a Tone Sharing pack or a generated pack — are
 cleaned on the way in, by the engine (`SanitizeImportedPreset`, run by

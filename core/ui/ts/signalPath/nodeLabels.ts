@@ -31,8 +31,10 @@ export function getNodeResourceDisplayName(node: GraphNode, index = 0, overrideR
     return getResourceBaseName(resource.filePath);
   }
 
+  // A model the library no longer has is named as it was when the preset was saved.
   const libraryName = getLibraryResourceName(resourceType, resource.id);
-  return libraryName || resource.id;
+  const savedName = typeof resource.source?.name === "string" ? resource.source.name.trim() : "";
+  return libraryName || savedName || resource.id;
 }
 
 function getNodeResourceSummary(node: GraphNode): string {

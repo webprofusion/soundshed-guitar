@@ -126,6 +126,11 @@ nlohmann::json SerializePresetResourceRef(const ResourceRef& ref,
         }
     }
 
+    if (!ref.source.empty())
+    {
+        json["source"] = ref.source;
+    }
+
     return json;
 }
 
@@ -156,6 +161,7 @@ ResourceRef DeserializePresetResourceRef(const nlohmann::json& json,
         }
     }
 
+    ref.source = DeserializeResourceSource(json);
     return ref;
 }
 

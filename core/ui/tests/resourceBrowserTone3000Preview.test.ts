@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResourceBrowserModal } from "../ts/resourceBrowser.js";
 import type { PreviewState, ResourceBrowserOptions } from "../ts/resourceBrowser/types.js";
 import { uiState } from "../ts/state.js";
+import type { Tone3000Model, Tone3000Tone } from "../ts/tone3000ApiTypes.js";
 
 /// The modal's own preview state and entry points, reached past `private` for the test.
 type PreviewInternals = {
@@ -9,6 +10,7 @@ type PreviewInternals = {
   previewState: PreviewState | null;
   startPreview(toneId: string, modelId: string, modelUrl: string): Promise<void>;
   cancelPreview(restoreOriginal?: boolean): void;
+  tone3000Tab: { tone3000Tones: Tone3000Tone[]; toneModelsCache: Map<string, Tone3000Model[]> };
 };
 
 describe("Tone3000 preview in the resource browser", () => {
@@ -103,5 +105,31 @@ describe("Tone3000 preview in the resource browser", () => {
 
     expect(sent.map((message) => message.type)).toEqual(["previewRemoteResource", "cancelPreviewResource"]);
     expect(sent[1]).toMatchObject({ restoreOriginal: true });
+  });
+
+  // Closing the editor while a preview plays keeps it (the engine imports it), so a project saved
+  // then does not point at a temp file. It must land where Select would have put it.
+  it("tells the engine to keep the preview as Select would import it", async () => {
+    const modal = previewingModal();
+    modal.tone3000Tab.tone3000Tones = [{ id: 1, title: "Test Tone", gear: "amp", description: "A tone" } as Tone3000Tone];
+    modal.tone3000Tab.toneModelsCache.set("1", [{ id: "a", name: "Model A", architecture_version: "2" } as unknown as Tone3000Model]);
+
+    await modal.startPreview("1", "a", "https://www.tone3000.com/api/v1/models/1/download/a.nam");
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      type: "previewRemoteResource",
+      isZip: false,
+      keepAs: {
+        provider: "tone3000",
+        resourceType: "nam",
+        resourceId: "tone3000:a",
+        name: "Test Tone - Model A",
+        subfolder: "amp/Test-Tone",
+        fileName: "Model-A.nam",
+        metadata: { toneId: "1", modelId: "a", provider: "tone3000" },
+      },
+    });
+    expect((sent[0].keepAs as Record<string, unknown>).data).toBeUndefined();
   });
 });

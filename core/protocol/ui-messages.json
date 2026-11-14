@@ -110,6 +110,7 @@
     "previewRiffTake",
     "queryResourceUsage",
     "recoverLooperSession",
+    "reloadPresetResources",
     "removeActivePreset",
     "removeAutomationSlot",
     "removeCompositePreset",

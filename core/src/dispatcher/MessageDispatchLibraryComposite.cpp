@@ -60,6 +60,12 @@ bool MessageDispatcher::DispatchLibraryAndComposite(PluginController& c, const n
         return true;
     }
 
+    if (type == "reloadPresetResources")
+    {
+        c.HandleReloadPresetResourcesRequest(msg);
+        return true;
+    }
+
     if (type == "saveBlendDefinition")
     {
         c.HandleSaveBlendDefinitionRequest(msg);

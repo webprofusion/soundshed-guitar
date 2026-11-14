@@ -24,6 +24,128 @@ import type { NavigationCacheOptions, ResourceBrowserOptions, ResourceNavigation
 
 const importRemoteResource = (payload: Record<string, unknown>): Promise<void> => importRemoteResourceAndWait(payload, "tone3000-import");
 
+/** One file of a Tone3000 model as the library imports it (an importRemoteResource payload). */
+export interface Tone3000ImportEntry {
+  provider: "tone3000";
+  resourceType: "nam" | "ir";
+  resourceId: string;
+  name: string;
+  description: string;
+  category: string;
+  subfolder: string;
+  fileName: string;
+  metadata: Record<string, string>;
+  /** The file, base64. */
+  data: string;
+}
+
+/**
+ * The library entries a downloaded Tone3000 model becomes: one for a single file, one per model
+ * or IR in a zip, in zip order. A preview plays the first, and is kept under its id, so a kept
+ * preview and a Select of the same model are the same library entry.
+ */
+function tone3000EntryCommon(tone: Tone3000Tone, resourceType: "nam" | "ir", category?: string) {
+  const gearFolder = sanitizeFilename(tone.gear ?? "other");
+  const toneFolder = sanitizeFilename(tone.title ?? tone.name ?? "tone");
+  return {
+    provider: "tone3000" as const,
+    resourceType,
+    description: tone.description ?? "",
+    category: category ?? tone.gear ?? "",
+    subfolder: `${gearFolder}/${toneFolder}`,
+  };
+}
+
+function tone3000SingleFileEntry(
+  tone: Tone3000Tone,
+  modelId: string,
+  modelName: string,
+  architectureVersion: string,
+  buffer: ArrayBuffer,
+  resourceType: "nam" | "ir",
+  category?: string,
+): Tone3000ImportEntry {
+  const extension = resourceType === "ir" ? ".wav" : ".nam";
+  return {
+    ...tone3000EntryCommon(tone, resourceType, category),
+    resourceId: `tone3000:${modelId}`,
+    name: `${tone.title} - ${modelName}`,
+    fileName: `${sanitizeFilename(modelName)}${extension}`,
+    metadata: tone3000ResourceMetadata(tone, { id: modelId, name: modelName, architectureVersion }),
+    data: arrayBufferToBase64(buffer),
+  };
+}
+
+/**
+ * A `previewRemoteResource` payload's file fields: the file the preview plays (a zip's first
+ * model or IR, as Select imports first) and `keepAs`, the import the engine makes of it if the
+ * editor closes while it plays. Without the tone, the bytes go as they came and nothing is kept.
+ */
+export async function tone3000PreviewPayload(
+  tone: Tone3000Tone | undefined,
+  modelId: string,
+  model: Tone3000Model | undefined,
+  buffer: ArrayBuffer,
+  isZip: boolean,
+  resourceType: "nam" | "ir",
+  category?: string,
+): Promise<{ isZip: boolean; data: string; keepAs?: Omit<Tone3000ImportEntry, "data"> }> {
+  if (!tone) {
+    return { isZip, data: arrayBufferToBase64(buffer) };
+  }
+  const [entry] = await buildTone3000ImportEntries(
+    tone, modelId, model?.name ?? modelId, model?.architecture_version ?? "", buffer, isZip, resourceType, category,
+  );
+  if (!entry) {
+    throw new Error(resourceType === "ir" ? "No IR in the archive" : "No NAM model in the archive");
+  }
+  const { data, ...keepAs } = entry;
+  return { isZip: false, data, keepAs };
+}
+
+export async function buildTone3000ImportEntries(
+  tone: Tone3000Tone,
+  modelId: string,
+  modelName: string,
+  architectureVersion: string,
+  buffer: ArrayBuffer,
+  isZip: boolean,
+  resourceType: "nam" | "ir",
+  category?: string,
+): Promise<Tone3000ImportEntry[]> {
+  if (!isZip) {
+    return [tone3000SingleFileEntry(tone, modelId, modelName, architectureVersion, buffer, resourceType, category)];
+  }
+  const common = tone3000EntryCommon(tone, resourceType, category);
+
+  const zipLib = window.JSZip;
+  if (!zipLib) {
+    throw new Error("JSZip not loaded");
+  }
+
+  const zip = await zipLib.loadAsync(buffer);
+  const entries: Tone3000ImportEntry[] = [];
+  for (const entry of Object.values(zip.files) as JSZipObject[]) {
+    if (entry.dir) continue;
+    const lowerName = entry.name.toLowerCase();
+    const isNam = lowerName.endsWith(".nam") || lowerName.endsWith(".json");
+    const isIr = lowerName.endsWith(".wav") || lowerName.endsWith(".ir");
+    if ((resourceType === "nam" && !isNam) || (resourceType === "ir" && !isIr)) {
+      continue;
+    }
+    const fileBuffer = await entry.async("arraybuffer");
+    entries.push({
+      ...common,
+      resourceId: `tone3000:${modelId}:${sanitizeFilename(entry.name)}`,
+      name: `${tone.title} - ${entry.name}`,
+      fileName: sanitizeFilename(entry.name.split("/").pop() ?? modelName),
+      metadata: tone3000ResourceMetadata(tone, { id: modelId, name: modelName, architectureVersion }, entry.name),
+      data: arrayBufferToBase64(fileBuffer),
+    });
+  }
+  return entries;
+}
+
 /**
  * What the navigator needs from the Tone3000 tab: the result set the user was
  * last looking at, and the models already fetched for those tones.
@@ -62,81 +184,17 @@ export class Tone3000Navigator {
     /// picked for a slot goes to that slot ("cab" or "reverb"), whatever its gear says.
     category?: string,
   ): Promise<string> {
-    const gearFolder = sanitizeFilename(tone.gear ?? "other");
-    const toneFolder = sanitizeFilename(tone.title ?? tone.name ?? "tone");
-    const subfolder = `${gearFolder}/${toneFolder}`;
-    
-    if (isZip) {
-      // Handle zip file
-      const zipLib = window.JSZip;
-      if (!zipLib) {
-        throw new Error("JSZip not loaded");
-      }
-      
-      const zip = await zipLib.loadAsync(buffer);
-      const entries = Object.values(zip.files) as JSZipObject[];
-      let firstImportedId = "";
-      
-      for (const entry of entries) {
-        if (entry.dir) continue;
-        const lowerName = entry.name.toLowerCase();
-        const isNam = lowerName.endsWith(".nam") || lowerName.endsWith(".json");
-        const isIr = lowerName.endsWith(".wav") || lowerName.endsWith(".ir");
-        
-        if ((resourceType === "nam" && !isNam) || (resourceType === "ir" && !isIr)) {
-          continue;
-        }
-        
-        const fileBuffer = await entry.async("arraybuffer");
-        const data = arrayBufferToBase64(fileBuffer);
-        const fileName = sanitizeFilename(entry.name.split("/").pop() ?? modelName);
-        const resourceId = `tone3000:${modelId}:${sanitizeFilename(entry.name)}`;
-        
-        await importRemoteResource({
-          provider: "tone3000",
-          resourceType,
-          resourceId,
-          name: `${tone.title} - ${entry.name}`,
-          description: tone.description ?? "",
-          category: category ?? tone.gear ?? "",
-          subfolder,
-          fileName,
-          metadata: tone3000ResourceMetadata(tone, { id: modelId, name: modelName, architectureVersion }, entry.name),
-          data,
-        });
-        
-        if (!firstImportedId) {
-          firstImportedId = resourceId;
-        }
-      }
-      
-      if (!firstImportedId) {
-        throw new Error("No supported files found in archive");
-      }
-      
-      return firstImportedId;
-    } else {
-      // Single file
-      const data = arrayBufferToBase64(buffer);
-      const extension = resourceType === "ir" ? ".wav" : ".nam";
-      const fileName = `${sanitizeFilename(modelName)}${extension}`;
-      const resourceId = `tone3000:${modelId}`;
-      
-      await importRemoteResource({
-        provider: "tone3000",
-        resourceType,
-        resourceId,
-        name: `${tone.title} - ${modelName}`,
-        description: tone.description ?? "",
-        category: category ?? tone.gear ?? "",
-        subfolder,
-        fileName,
-        metadata: tone3000ResourceMetadata(tone, { id: modelId, name: modelName, architectureVersion }),
-        data,
-      });
-      
-      return resourceId;
+    // A single file is sent without waiting a tick, as it always was.
+    const entries = isZip
+      ? await buildTone3000ImportEntries(tone, modelId, modelName, architectureVersion, buffer, isZip, resourceType, category)
+      : [tone3000SingleFileEntry(tone, modelId, modelName, architectureVersion, buffer, resourceType, category)];
+    if (entries.length === 0) {
+      throw new Error("No supported files found in archive");
     }
+    for (const entry of entries) {
+      await importRemoteResource({ ...entry });
+    }
+    return entries[0].resourceId;
   }
 
   /// Remembers the Tone3000 result set the user just picked from. Called on a

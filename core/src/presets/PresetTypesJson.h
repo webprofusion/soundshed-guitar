@@ -53,7 +53,34 @@ inline nlohmann::json SerializeResourceRef(const ResourceRef& ref)
         }
     }
 
+    if (!ref.source.empty())
+    {
+        json["source"] = ref.source;
+    }
+
     return json;
+}
+
+/// The string fields of a resource reference's "source" object; anything else in it is dropped.
+inline std::map<std::string, std::string> DeserializeResourceSource(const nlohmann::json& json)
+{
+    std::map<std::string, std::string> source;
+    const auto it = json.find("source");
+
+    if (it == json.end() || !it->is_object())
+    {
+        return source;
+    }
+
+    for (const auto& [key, value] : it->items())
+    {
+        if (value.is_string() && !value.get_ref<const std::string&>().empty())
+        {
+            source[key] = value.get<std::string>();
+        }
+    }
+
+    return source;
 }
 
 inline ResourceRef DeserializeResourceRef(const nlohmann::json& json)
@@ -81,6 +108,7 @@ inline ResourceRef DeserializeResourceRef(const nlohmann::json& json)
         }
     }
 
+    ref.source = DeserializeResourceSource(json);
     return ref;
 }
 

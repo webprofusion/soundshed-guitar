@@ -1729,6 +1729,10 @@ void PluginController::HandlePreviewRemoteResourceRequest(const nlohmann::json& 
     mPreviewState.resourceIndex = resourceIndex;
     mPreviewState.resourceType = resourceType;
     mPreviewState.tempFilePath = tempPath;
+    // Only for the file the UI described: the entry a zip preview plays is the one the UI's own
+    // import would take first, which is what its keepAs names.
+    const auto keepAs = payload.find("keepAs");
+    mPreviewState.keepAs = keepAs != payload.end() && keepAs->is_object() ? *keepAs : nlohmann::json{};
 
     if (!nodeId.empty())
     {
@@ -1781,6 +1785,96 @@ void PluginController::HandleCancelPreviewResourceRequest(const nlohmann::json& 
 
     mPreviewState = PreviewState{};
     AppendSessionLog("Preview cancelled");
+}
+
+bool PluginController::KeepActiveResourcePreview()
+{
+    if (!mPreviewState.active || !mPreviewState.keepAs.is_object() || mPreviewState.nodeId.empty())
+    {
+        return false;
+    }
+
+    const nlohmann::json& keepAs = mPreviewState.keepAs;
+    const std::string resourceId = keepAs.value("resourceId", "");
+
+    if (resourceId.empty())
+    {
+        return false;
+    }
+
+    // The library may have it already (picked before, or kept by another instance): the slot
+    // takes that copy and nothing is written.
+    std::string libraryId;
+
+    if (const auto existing = mResourceLibrary.LookupResource(mPreviewState.resourceType, resourceId);
+        existing && util::PathExists(existing->filePath))
+    {
+        libraryId = existing->id;
+    }
+    else
+    {
+        const std::vector<std::uint8_t> bytes = util::ReadFileBytes(mPreviewState.tempFilePath);
+
+        if (bytes.empty())
+        {
+            AppendSessionLog("Keep preview: could not read " + util::PathToUtf8(mPreviewState.tempFilePath));
+            return false;
+        }
+
+        LibraryResource resource;
+        resource.type = mPreviewState.resourceType;
+        resource.id = resourceId;
+        resource.name = keepAs.value("name", resourceId);
+        resource.category = keepAs.value("category", "");
+        resource.description = keepAs.value("description", "");
+
+        if (const auto metadata = keepAs.find("metadata"); metadata != keepAs.end() && metadata->is_object())
+        {
+            for (const auto& [key, value] : metadata->items())
+            {
+                if (value.is_string())
+                {
+                    resource.metadata[key] = value.get<std::string>();
+                }
+            }
+        }
+
+        std::string error;
+        const auto imported = ImportResourceFile(std::move(resource), keepAs.value("provider", "remote"),
+                                                 keepAs.value("subfolder", ""), keepAs.value("fileName", ""), bytes,
+                                                 error);
+
+        if (!imported)
+        {
+            AppendSessionLog("Keep preview: import failed: " + error);
+            return false;
+        }
+
+        libraryId = imported->id;
+        TouchSharedSyncState({"resourceLibrary"});
+    }
+
+    const PreviewState kept = mPreviewState;
+    mPreviewState = PreviewState{};
+
+    HandleUpdateNodeResourceRequest(nlohmann::json{{"nodeId", kept.nodeId},
+                                                   {"resourceType", kept.resourceType},
+                                                   {"resourceId", libraryId},
+                                                   {"resourceIndex", kept.resourceIndex}});
+
+    std::error_code ec;
+    std::filesystem::remove(kept.tempFilePath, ec);
+
+    BroadcastState();
+    AppendSessionLog("Preview kept as " + kept.resourceType + ":" + libraryId);
+    return true;
+}
+
+void PluginController::HandleReloadPresetResourcesRequest(const nlohmann::json& /*payload*/)
+{
+    AppendSessionLog("Reloading running presets for newly imported resources");
+    RebuildRunningSlotsAndGlobalChain();
+    BroadcastState();
 }
 
 void PluginController::HandleRequestResourceDataRequest(const nlohmann::json& payload)
