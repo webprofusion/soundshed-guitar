@@ -141,7 +141,11 @@ void PluginController::HandleAutomationKeyRequest(const nlohmann::json& payload)
 
     if (const auto match = mAutomationSlots.MatchKey(key, payload.value("repeat", false)))
     {
-        mAutomationSlots.ApplyAutomationLocked(match->first, match->second, AutomationSource::Keyboard);
+        // A Trigger key on a bypass switches the effect each press, from the state it is in.
+        if (!match->trigger || !mAutomationSlots.ToggleBypassLocked(match->slotId, AutomationSource::Keyboard))
+        {
+            mAutomationSlots.ApplyAutomationLocked(match->slotId, match->value, AutomationSource::Keyboard);
+        }
     }
 }
 
@@ -241,7 +245,7 @@ void PluginController::HandleSetAutomationSlotRequest(const nlohmann::json& payl
         }
         else if (!presetId.empty())
         {
-            mAutomationSlots.SetPresetSlot(slotId, presetId, label, address, midiMap);
+            mAutomationSlots.SetPresetSlot(slotId, presetId, label, address, nodeSelector, midiMap);
         }
         else
         {
@@ -422,6 +426,14 @@ void PluginController::HandleSetAutomationValueRequest(const nlohmann::json& pay
     auto src = sourceStr == "keyboard" ? AutomationSource::Keyboard : AutomationSource::UI;
 
     std::lock_guard<std::mutex> lock(mDSPMutex);
+
+    // `toggle` (the panel's Test button) switches a bypass from the state its effect is in; the
+    // value the UI last saw for the slot can be out of date.
+    if (payload.value("toggle", false) && mAutomationSlots.ToggleBypassLocked(slotId, src))
+    {
+        return;
+    }
+
     mAutomationSlots.ApplyAutomationLocked(slotId, value, src);
 }
 
@@ -496,9 +508,14 @@ void PluginController::ReplaceAutomationSlots(const nlohmann::json& automation, 
 void PluginController::HandleArmMidiLearnRequest(const nlohmann::json& payload)
 {
     const std::string slotId = payload.value("slotId", "");
+    // The mode the captured mapping gets; anything but a known one learns as Absolute.
+    const int mode = payload.value("mode", 0);
+    const auto learnMode = (mode >= 0 && mode <= static_cast<int>(MidiControlMap::Mode::Pickup))
+                               ? static_cast<MidiControlMap::Mode>(mode)
+                               : MidiControlMap::Mode::Absolute;
     // mMidiLearnSlotId is read by the audio thread (under mDSPMutex) in HandleMidi.
     std::lock_guard<std::mutex> lock(mDSPMutex);
-    mAutomationSlots.ArmMidiLearn(slotId);
+    mAutomationSlots.ArmMidiLearn(slotId, learnMode);
 }
 
 void PluginController::HandleCancelMidiLearnRequest()

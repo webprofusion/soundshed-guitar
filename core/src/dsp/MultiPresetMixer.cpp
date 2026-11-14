@@ -811,6 +811,81 @@ bool MultiPresetMixer::SetAutomatedNodesEnabled(const std::string& canonicalType
     return updated;
 }
 
+namespace
+{
+/// `visit` on the executor of the preset playing as `presetId`, or when none plays under that id,
+/// on each live instance's in turn until one answers. Searching only the mapping's own preset
+/// when it is playing keeps a node id another rig happens to share from answering.
+template <typename Fn>
+auto VisitAutomationInstances(PresetVoicePool& voices, const std::string& presetId, Fn&& visit)
+    -> decltype(visit(std::declval<SignalGraphExecutor&>()))
+{
+    if (auto* own = presetId.empty() ? nullptr : voices.Find(presetId))
+    {
+        return visit(own->executor);
+    }
+
+    for (const auto& inst : voices.Instances())
+    {
+        if (inst->IsRetiring())
+        {
+            continue;
+        }
+
+        if (auto found = visit(inst->executor))
+        {
+            return found;
+        }
+    }
+
+    return {};
+}
+} // namespace
+
+SignalGraphExecutor::AutomationTarget MultiPresetMixer::FindAutomationTargetById(const std::string& canonicalType,
+                                                                                 const std::string& nodeId,
+                                                                                 const std::string& presetId)
+{
+    return VisitAutomationInstances(mVoices, presetId, [&](SignalGraphExecutor& executor) {
+        return executor.FindAutomationTargetById(canonicalType, nodeId);
+    });
+}
+
+const std::shared_ptr<const std::string>* MultiPresetMixer::SetAutomatedNodeEnabledById(
+    const std::string& canonicalType, const std::string& nodeId, const std::string& presetId, bool enabled)
+{
+    return VisitAutomationInstances(mVoices, presetId, [&](SignalGraphExecutor& executor) {
+        return executor.SetAutomatedNodeEnabledById(canonicalType, nodeId, enabled);
+    });
+}
+
+std::optional<bool> MultiPresetMixer::IsAutomatedNodeEnabled(const std::string& canonicalType,
+                                                             const std::string& nodeId, const std::string& presetId)
+{
+    if (nodeId.empty())
+    {
+        // By type: the first node SetAutomatedNodesEnabled would switch.
+        for (const auto& inst : mVoices.Instances())
+        {
+            if (inst->IsRetiring())
+            {
+                continue;
+            }
+
+            if (const auto enabled = inst->executor.IsAutomatedNodeEnabled(canonicalType, std::string_view{}))
+            {
+                return enabled;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    return VisitAutomationInstances(mVoices, presetId, [&](SignalGraphExecutor& executor) {
+        return executor.IsAutomatedNodeEnabled(canonicalType, nodeId);
+    });
+}
+
 std::string MultiPresetMixer::GetNodeConfig(const std::string& presetId, const std::string& nodeId,
                                             const std::string& key) const
 {

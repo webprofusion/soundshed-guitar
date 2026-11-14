@@ -518,7 +518,7 @@ void PluginController::OnIdle()
                 }
                 else if (!presetId.empty())
                 {
-                    mAutomationSlots.SetPresetSlot(slotId, presetId, label, address, *captured);
+                    mAutomationSlots.SetPresetSlot(slotId, presetId, label, address, nodeSelector, *captured);
                 }
                 else
                 {

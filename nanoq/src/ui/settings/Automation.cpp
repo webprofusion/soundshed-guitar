@@ -533,7 +533,8 @@ Ptr Shell::BuildMidiAutomationBody()
                     [this, &commands, slotId] {
                         if (const auto* s = mState.automation.FindSlot(slotId))
                         {
-                            commands.SetAutomationValue(slotId, TestValue(mState.automation, *s));
+                            commands.SetAutomationValue(slotId, TestValue(mState.automation, *s),
+                                                        IsBypassAddress(s->address));
                         }
                     },
                     44.0f));

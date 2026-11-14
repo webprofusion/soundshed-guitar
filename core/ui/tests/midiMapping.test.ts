@@ -10,8 +10,11 @@ import {
   findPresetSlotForAddress,
   findSlotForAddress,
   formatMidiChannel,
+  isBypassAddress,
   nextCustomSlotId,
   nextPresetSlotId,
+  nodeIdFromSelector,
+  nodeSelectorFor,
   resolveMidiLearnTarget,
   withCurrentTargetOption,
 } from "../ts/midiMapping.js";
@@ -81,6 +84,7 @@ const aliases = new Map([["amp_legacy", AMP_TYPE]]);
 
 const nodes = new Map<string, GraphNode>([
   ["amp1", { id: "amp1", type: "amp_legacy", params: {} } as GraphNode],
+  ["amp2", { id: "amp2", type: AMP_TYPE, title: "Clean Amp", params: {} } as GraphNode],
   ["plugin1", { id: "plugin1", type: EffectGuids.kPluginHost, params: {} } as GraphNode],
   ["__input__", { id: "__input__", type: "input", params: {} } as GraphNode],
   ["__output__", { id: "__output__", type: "output", params: {} } as GraphNode],
@@ -131,9 +135,9 @@ describe("resolveMidiLearnTarget", () => {
         </label>
       </div>
     `;
-    expect(resolveAt("#gain-knob")).toEqual({ address: `node.${AMP_TYPE}.gain`, label: "Amp: Gain" });
+    expect(resolveAt("#gain-knob")).toEqual({ address: `node.${AMP_TYPE}.gain`, label: "Amp: Gain", nodeId: "amp1", nodeLabel: "Amp: Gain" });
     expect(resolveAt("#gain-label")?.address).toBe(`node.${AMP_TYPE}.gain`);
-    expect(resolveAt("#bright-slider")).toEqual({ address: `node.${AMP_TYPE}.bright`, label: "Amp: Bright" });
+    expect(resolveAt("#bright-slider")).toMatchObject({ address: `node.${AMP_TYPE}.bright`, label: "Amp: Bright", nodeId: "amp1" });
   });
 
   it("maps the chain's Input and Output node gains, which a preset can map for itself", () => {
@@ -144,11 +148,34 @@ describe("resolveMidiLearnTarget", () => {
       </div>
       <div class="knob node-param-knob" id="out-gain" data-node-id="__output__" data-param-key="gainDb"></div>
     `;
-    expect(resolveAt("#in-gain")).toEqual({ address: "node.input.gainDb", label: "Input: Gain" });
+    expect(resolveAt("#in-gain")).toMatchObject({ address: "node.input.gainDb", label: "Input: Gain", nodeId: "__input__" });
     expect(resolveAt("#in-gain-label")?.address).toBe("node.input.gainDb");
-    expect(resolveAt("#out-gain")).toEqual({ address: "node.output.gainDb", label: "Output: Gain" });
+    expect(resolveAt("#out-gain")).toMatchObject({ address: "node.output.gainDb", label: "Output: Gain", nodeId: "__output__" });
     expect(allowsPresetMapping("node.input.gainDb")).toBe(true);
     expect(allowsPresetMapping("node.output.gainDb")).toBe(true);
+  });
+
+  it("maps an effect's on/off button to its enabled address, naming the node for a per-preset mapping", () => {
+    document.body.innerHTML = `
+      <div class="signal-node" data-node-id="amp2"><button class="signal-node-bypass" id="tile-bypass"><span id="tile-icon"></span></button></div>
+      <button class="node-bypass-btn" data-node-id="amp1" id="panel-bypass"><span id="panel-track"></span></button>
+      <div class="signal-node" data-node-id="missing"><button class="signal-node-bypass" id="missing-bypass"></button></div>
+    `;
+    expect(resolveAt("#tile-icon")).toEqual({
+      address: `node.${AMP_TYPE}.enabled`,
+      label: "Amp: On/Off",
+      nodeId: "amp2",
+      nodeLabel: "Clean Amp: On/Off",
+    });
+    expect(resolveAt("#panel-track")).toMatchObject({ address: `node.${AMP_TYPE}.enabled`, nodeId: "amp1" });
+    expect(resolveAt("#missing-bypass")).toBeNull();
+    expect(isBypassAddress(`node.${AMP_TYPE}.enabled`)).toBe(true);
+    expect(isBypassAddress(`node.${AMP_TYPE}.gain`)).toBe(false);
+  });
+
+  it("names the node a per-preset parameter mapping drives", () => {
+    document.body.innerHTML = `<div class="knob node-param-knob" id="gain2" data-node-id="amp2" data-param-key="gain"></div>`;
+    expect(resolveAt("#gain2")).toEqual({ address: `node.${AMP_TYPE}.gain`, label: "Amp: Gain", nodeId: "amp2", nodeLabel: "Clean Amp: Gain" });
   });
 
   it("does not guess which control a shared group's label belongs to", () => {
@@ -309,6 +336,20 @@ describe("buildMidiLearnMenuItems", () => {
       .toEqual(["cancel: Listening…", "clear: CC 11 ch1 Abs · this preset"]);
   });
 
+  it("offers a latch and a toggle learn for this preset on an effect's on/off", () => {
+    const labels = (state: Partial<MidiLearnMenuState>) => buildMidiLearnMenuItems({ ...noMappings, ...state }).map((item) => item.label);
+    expect(menu({ presetId: "presetA", address: "node.gain.enabled" }))
+      .toEqual(["learn", "learnPreset: 127 on, 0 off", "learnPresetToggle: Each press switches it"]);
+    expect(labels({ presetId: "presetA", address: "node.gain.enabled" }))
+      .toEqual(["MIDI Learn…", "MIDI Learn latch for this preset…", "MIDI Learn toggle for this preset…"]);
+    expect(menu({ presetId: null, address: "node.gain.enabled" })).toEqual(["learn"]);
+    expect(menu({ presetId: "presetA", address: "node.gain.enabled", presetSlotCount: 16, maxPresetSlots: 16 })).toEqual([
+      "learn",
+      "learnPreset (disabled): All 16 preset slots in use",
+      "learnPresetToggle (disabled): All 16 preset slots in use",
+    ]);
+  });
+
   it("disables the per-preset learn when the preset's slots are all taken", () => {
     expect(menu({ presetId: "presetA", presetSlotCount: 16, maxPresetSlots: 16 }))
       .toEqual(["learn", "learnPreset (disabled): All 16 preset slots in use"]);
@@ -336,6 +377,21 @@ describe("per-preset slots", () => {
     expect(countPresetSlots(slots, "presetA")).toBe(1);
     expect(nextPresetSlotId(slots)).toBe("preset.8");
     expect(nextCustomSlotId(slots)).toBe("custom.2");
+  });
+
+  it("are found per node when they name one, so two effects of one type keep their own", () => {
+    const tied = (slotId: string, nodeId: string): AutomationSlot => ({ ...presetSlot(slotId, "presetA", "node.amp.enabled"), nodeSelector: nodeSelectorFor(nodeId) });
+    const amps = [tied("preset.2", "amp1"), tied("preset.3", "amp2")];
+    expect(findPresetSlotForAddress(amps, "presetA", "node.amp.enabled", "amp1")?.slotId).toBe("preset.2");
+    expect(findPresetSlotForAddress(amps, "presetA", "node.amp.enabled", "amp2")?.slotId).toBe("preset.3");
+    // Another node of the type has none yet.
+    expect(findPresetSlotForAddress(amps, "presetA", "node.amp.enabled", "amp3")).toBeUndefined();
+    // A mapping from before mappings named their node is found, to be tied to the one learned on.
+    const legacy = [presetSlot("preset.4", "presetA", "node.amp.enabled")];
+    expect(findPresetSlotForAddress(legacy, "presetA", "node.amp.enabled", "amp1")?.slotId).toBe("preset.4");
+    expect(nodeIdFromSelector("id:amp1")).toBe("amp1");
+    expect(nodeIdFromSelector("2")).toBeNull();
+    expect(nodeIdFromSelector(undefined)).toBeNull();
   });
 });
 

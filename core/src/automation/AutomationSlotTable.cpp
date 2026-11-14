@@ -639,13 +639,14 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
         if (address)
         {
             newSlot.address = *address;
-            newSlot.nodeBinding = BindNodeAddress(*address);
         }
 
         if (nodeSelector)
         {
             newSlot.nodeSelector = *nodeSelector;
         }
+
+        newSlot.nodeBinding = BindNodeAddress(newSlot.address, newSlot.nodeSelector);
 
         if (midiMap)
         {
@@ -670,12 +671,16 @@ bool AutomationSlotTable::SetCustomSlot(const std::string& slotId, const std::op
     if (address)
     {
         slot->address = *address;
-        slot->nodeBinding = BindNodeAddress(*address);
     }
 
     if (nodeSelector)
     {
         slot->nodeSelector = *nodeSelector;
+    }
+
+    if (address || nodeSelector)
+    {
+        slot->nodeBinding = BindNodeAddress(slot->address, slot->nodeSelector);
     }
 
     if (midiMap)
@@ -738,6 +743,7 @@ bool AutomationSlotTable::RemoveCustomSlot(const std::string& slotId)
 bool AutomationSlotTable::SetPresetSlot(const std::string& slotId, const std::string& presetId,
                                         const std::optional<std::string>& label,
                                         const std::optional<std::string>& address,
+                                        const std::optional<std::string>& nodeSelector,
                                         const std::optional<MidiControlMap>& midiMap)
 {
     auto* slot = FindSlot(slotId);
@@ -769,7 +775,16 @@ bool AutomationSlotTable::SetPresetSlot(const std::string& slotId, const std::st
     if (address)
     {
         slot->address = *address;
-        slot->nodeBinding = BindNodeAddress(*address);
+    }
+
+    if (nodeSelector)
+    {
+        slot->nodeSelector = *nodeSelector;
+    }
+
+    if (address || nodeSelector)
+    {
+        slot->nodeBinding = BindNodeAddress(slot->address, slot->nodeSelector);
     }
 
     if (midiMap)
@@ -895,6 +910,20 @@ bool AutomationSlotTable::ApplyNodeSlotLocked(AutomationSlot& slot)
     {
         const bool enabled = binding.highMeansEnabled ? normalized >= 0.5f : normalized < 0.5f;
 
+        if (!binding.nodeId.empty())
+        {
+            const auto* nodeId =
+                mMixer->SetAutomatedNodeEnabledById(binding.effectType, binding.nodeId, slot.presetId, enabled);
+
+            if (!nodeId)
+            {
+                return false;
+            }
+
+            mNodeChanges.Post(slot.nodeBinding, nodeId, enabled ? 1.0 : 0.0);
+            return true;
+        }
+
         if (!mMixer->SetAutomatedNodesEnabled(binding.effectType, enabled))
         {
             return false;
@@ -904,7 +933,9 @@ bool AutomationSlotTable::ApplyNodeSlotLocked(AutomationSlot& slot)
         return true;
     }
 
-    const auto target = mMixer->FindAutomationTarget(binding.effectType);
+    const auto target = binding.nodeId.empty()
+                            ? mMixer->FindAutomationTarget(binding.effectType)
+                            : mMixer->FindAutomationTargetById(binding.effectType, binding.nodeId, slot.presetId);
 
     if (!target)
     {
@@ -935,6 +966,43 @@ bool AutomationSlotTable::ApplyNodeSlotLocked(AutomationSlot& slot)
     return true;
 }
 
+bool AutomationSlotTable::IsBypassSlot(const AutomationSlot& slot)
+{
+    return slot.nodeBinding && slot.nodeBinding->isBypass;
+}
+
+float AutomationSlotTable::ToggledBypassValue(AutomationSlot& slot)
+{
+    // From the node as it is, not from the value the slot last set: a preset loads with its own
+    // bypass states, and the editor switches effects too, so the slot's value can say "on" for
+    // an effect that is off, and the first press would then set the state it is already in.
+    if (mMixer)
+    {
+        const NodeAddressBinding& binding = *slot.nodeBinding;
+
+        if (const auto enabled = mMixer->IsAutomatedNodeEnabled(binding.effectType, binding.nodeId, slot.presetId))
+        {
+            const bool high = binding.highMeansEnabled ? *enabled : !*enabled;
+            return high ? 0.0f : 1.0f;
+        }
+    }
+
+    return (slot.value.load() < 0.5f) ? 1.0f : 0.0f;
+}
+
+bool AutomationSlotTable::ToggleBypassLocked(const std::string& slotId, AutomationSource src)
+{
+    auto* slot = FindSlot(slotId);
+
+    if (!slot || !IsBypassSlot(*slot))
+    {
+        return false;
+    }
+
+    slot->SetValue(ToggledBypassValue(*slot), src);
+    return ApplySlotLocked(*slot);
+}
+
 // ── node.* address binding ───────────────────────────────────────────────
 
 const EffectRegistry& AutomationSlotTable::TypeRegistry() const
@@ -949,13 +1017,14 @@ void AutomationSlotTable::SetEffectRegistry(const EffectRegistry* registry)
 
     for (auto& slot : mSlots)
     {
-        slot.nodeBinding = BindNodeAddress(slot.address);
+        slot.nodeBinding = BindNodeAddress(slot.address, slot.nodeSelector);
     }
 
     mNodeBindingsGeneration = TypeRegistry().GetGeneration();
 }
 
-std::shared_ptr<const NodeAddressBinding> AutomationSlotTable::BindNodeAddress(const std::string& address) const
+std::shared_ptr<const NodeAddressBinding> AutomationSlotTable::BindNodeAddress(const std::string& address,
+                                                                               const std::string& nodeSelector) const
 {
     std::string effectType;
     std::string paramId;
@@ -968,6 +1037,7 @@ std::shared_ptr<const NodeAddressBinding> AutomationSlotTable::BindNodeAddress(c
     auto binding = std::make_shared<NodeAddressBinding>();
     binding->effectType = TypeRegistry().Resolve(effectType);
     binding->paramId = paramId;
+    binding->nodeId = NodeIdFromSelector(nodeSelector);
 
     if (IsBypassParam(paramId))
     {
@@ -1009,7 +1079,7 @@ AutomationSlotTable::NodeBindings AutomationSlotTable::ResolveNodeBindings() con
 
     for (const auto& slot : mSlots)
     {
-        bindings.bySlot.push_back(BindNodeAddress(slot.address));
+        bindings.bySlot.push_back(BindNodeAddress(slot.address, slot.nodeSelector));
     }
 
     return bindings;
@@ -1128,7 +1198,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         captured.eventType = eventType;
         captured.channel = channel;
         captured.controller = controller;
-        captured.mode = MidiControlMap::Mode::Absolute;
+        captured.mode = mMidiLearnMode;
         captured.sensitivity = 0.1f;
         captured.pickupRange = 0.1f;
         mMidiLearnCapture = captured;
@@ -1208,7 +1278,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         }
 
         float normalized = 0.0f;
-        const bool isBypassAddress = slot.nodeBinding && slot.nodeBinding->isBypass;
+        const bool isBypassAddress = IsBypassSlot(slot);
 
         switch (mm.mode)
         {
@@ -1219,7 +1289,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
             {
                 // Discrete events commonly carry only "on" values. For bypass
                 // targets, flip state so both directions work from a single press.
-                normalized = (slot.value.load() < 0.5f) ? 1.0f : 0.0f;
+                normalized = ToggledBypassValue(slot);
             }
             else if (eventType == MidiControlMap::EventType::PitchBend)
             {
@@ -1269,7 +1339,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
                 }
 
                 slot.lastToggleGate.store(true);
-                normalized = (slot.value.load() < 0.5f) ? 1.0f : 0.0f;
+                normalized = isBypassAddress ? ToggledBypassValue(slot) : ((slot.value.load() < 0.5f) ? 1.0f : 0.0f);
                 break;
             }
             else if (eventType == MidiControlMap::EventType::PitchBend)
@@ -1291,7 +1361,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
                 continue;
             }
 
-            normalized = (slot.value.load() < 0.5f) ? 1.0f : 0.0f;
+            normalized = isBypassAddress ? ToggledBypassValue(slot) : ((slot.value.load() < 0.5f) ? 1.0f : 0.0f);
             break;
         }
         case MidiControlMap::Mode::Pickup: {

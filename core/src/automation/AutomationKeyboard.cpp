@@ -62,7 +62,7 @@ bool AutomationSlotTable::IsUnmappableKey(const std::string& key)
     return std::any_of(kModifiers.begin(), kModifiers.end(), [&key](const char* name) { return key == name; });
 }
 
-std::optional<std::pair<std::string, float>> AutomationSlotTable::MatchKey(const std::string& key, bool repeat) const
+std::optional<AutomationSlotTable::KeyMatch> AutomationSlotTable::MatchKey(const std::string& key, bool repeat) const
 {
     const std::string pressed = NormalizeMappedKey(key);
 
@@ -80,7 +80,8 @@ std::optional<std::pair<std::string, float>> AutomationSlotTable::MatchKey(const
                 continue;
             }
 
-            return std::make_pair(slot.slotId, map.mode == KeyboardMap::Mode::Trigger ? 1.0f : map.value);
+            const bool trigger = map.mode == KeyboardMap::Mode::Trigger;
+            return KeyMatch{slot.slotId, trigger ? 1.0f : map.value, trigger};
         }
     }
 
@@ -100,7 +101,7 @@ std::vector<KeyboardMap> AutomationSlotTable::LearnedKeyMaps(const AutomationSlo
         }
     }
 
-    const bool trigger = IsTriggerSlot(slot);
+    const bool trigger = IsTriggerSlot(slot) || IsBypassSlot(slot);
     KeyboardMap map;
     map.key = learned;
     map.mode = trigger ? KeyboardMap::Mode::Trigger : KeyboardMap::Mode::SetValue;

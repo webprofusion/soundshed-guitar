@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace guitarfx
@@ -86,8 +87,15 @@ struct NodeAddressBinding
     std::string effectType;
     std::string paramId;
 
-    /// "bypassed", "bypass" or "enabled": switches every node of the type rather than setting a
-    /// parameter. For "enabled" a high value enables, for the others it bypasses.
+    /// The one node the slot drives, from an `id:<nodeId>` node selector; empty to go by type.
+    /// A per-preset mapping names its node this way, so two effects of the same type in one
+    /// preset (two amps in parallel) each answer to their own control. A node with the id
+    /// must also be of `effectType`, or the slot drives nothing.
+    std::string nodeId;
+
+    /// "bypassed", "bypass" or "enabled": switches the node, or without a `nodeId` every node of
+    /// the type, rather than setting a parameter. For "enabled" a high value enables, for the
+    /// others it bypasses.
     bool isBypass = false;
     bool highMeansEnabled = false;
 
@@ -105,13 +113,24 @@ struct NodeAddressBinding
     bool nodeMayNarrowRange = false;
 };
 
+/// The node selector that names one node by its id: `id:<nodeId>`.
+inline constexpr std::string_view kNodeSelectorIdPrefix = "id:";
+
+/// The node id an `id:<nodeId>` selector names, or empty for any other selector (the default,
+/// the first enabled node of the type).
+[[nodiscard]] inline std::string NodeIdFromSelector(std::string_view selector)
+{
+    return selector.starts_with(kNodeSelectorIdPrefix) ? std::string(selector.substr(kNodeSelectorIdPrefix.size()))
+                                                       : std::string{};
+}
+
 /// A single automation slot (default or custom).
 struct AutomationSlot
 {
     std::string slotId;       ///< Stable ID: "default.inputLevel", "custom.3"
     std::string label;        ///< User-facing label
     std::string address;      ///< ParamAddress: "global.inputTrim", "node.amp_nam.inputGain", "setlist.preset"
-    std::string nodeSelector; ///< Optional selector for node.* addresses (empty = first)
+    std::string nodeSelector; ///< Optional selector for node.* addresses: empty = first, "id:<nodeId>" = that node
     bool isDefault = false;   ///< Default slots can't be deleted/readdressed
     std::string presetId;     ///< Set for a per-preset mapping: MIDI only, live only while that preset is active
 

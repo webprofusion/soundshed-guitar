@@ -1124,9 +1124,16 @@ void UiCommands::RemoveAutomationSlot(const std::string& slotId)
     mClient.Send("removeAutomationSlot", {{"slotId", slotId}});
 }
 
-void UiCommands::SetAutomationValue(const std::string& slotId, double value)
+void UiCommands::SetAutomationValue(const std::string& slotId, double value, bool toggle)
 {
-    mClient.Send("setAutomationValue", {{"slotId", slotId}, {"value", value}, {"source", "ui"}});
+    nlohmann::json payload = {{"slotId", slotId}, {"value", value}, {"source", "ui"}};
+
+    if (toggle)
+    {
+        payload["toggle"] = true;
+    }
+
+    mClient.Send("setAutomationValue", std::move(payload));
 }
 
 void UiCommands::ArmMidiLearn(const std::string& slotId)

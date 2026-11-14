@@ -545,6 +545,30 @@ void PluginController::FoldAutomationNodeChanges()
 
         for (const auto& change : changes)
         {
+            if (change.nodeId && change.binding->isBypass)
+            {
+                // One node, as a per-preset mapping names it.
+                const bool enabled = change.value != 0.0;
+                forEachGraph([&](SignalGraph& graph, SignalGraph* baselineGraph) {
+                    auto* node = graph.FindNode(*change.nodeId);
+
+                    if (!node)
+                    {
+                        return;
+                    }
+
+                    if (auto* base = baselineGraph ? baselineGraph->FindNode(*change.nodeId) : nullptr;
+                        base && base->enabled == node->enabled)
+                    {
+                        base->enabled = enabled;
+                    }
+
+                    node->enabled = enabled;
+                    bypassChanged = true;
+                });
+                continue;
+            }
+
             if (change.nodeId)
             {
                 const auto& key = change.binding->paramId;
@@ -614,7 +638,8 @@ void PluginController::FoldAutomationNodeChanges()
 
     for (const auto& change : changes)
     {
-        if (!change.nodeId)
+        // A bypass reaches the UI with the preset state broadcast (mPendingPresetStateBroadcast).
+        if (!change.nodeId || change.binding->isBypass)
         {
             continue;
         }

@@ -146,9 +146,11 @@ class AutomationSlotTable
     bool RemoveCustomSlot(const std::string& slotId);
 
     /// Add or update a per-preset MIDI mapping. A new slot needs a presetId and room under
-    /// kMaxPresetSlotsPerPreset. Returns false for a slot that is not a per-preset one.
+    /// kMaxPresetSlotsPerPreset. Returns false for a slot that is not a per-preset one. A
+    /// `nodeSelector` of "id:<nodeId>" ties a node.* mapping to that one node of the preset.
     bool SetPresetSlot(const std::string& slotId, const std::string& presetId, const std::optional<std::string>& label,
-                       const std::optional<std::string>& address, const std::optional<MidiControlMap>& midiMap);
+                       const std::optional<std::string>& address, const std::optional<std::string>& nodeSelector,
+                       const std::optional<MidiControlMap>& midiMap);
 
     /// Remove every per-preset mapping a preset holds. Returns how many were removed.
     int RemovePresetSlots(const std::string& presetId);
@@ -177,6 +179,14 @@ class AutomationSlotTable
     /// Returns true if the apply was performed (target existed).
     bool ApplyAutomationLocked(const std::string& slotId, float normalized, AutomationSource src);
 
+    /// Switches a bypass slot's node(s) to the other state, worked out from the node as it is
+    /// (see ToggledBypassValue). Under mDSPMutex. False for a slot that is not a bypass one, or
+    /// when there is no node to switch. The UI's Test button and a Trigger key take this path.
+    bool ToggleBypassLocked(const std::string& slotId, AutomationSource src);
+
+    /// Whether `slot` enables or bypasses effects (node.<type>.bypassed/bypass/enabled).
+    [[nodiscard]] static bool IsBypassSlot(const AutomationSlot& slot);
+
     /// Resolve a node.* address to a concrete nodeId in the active graph.
     /// Returns empty string if no matching enabled node found.
     [[nodiscard]] std::string ResolveNodeAddress(const std::string& address, const std::string& nodeSelector) const;
@@ -192,8 +202,9 @@ class AutomationSlotTable
     void SetEffectRegistry(const EffectRegistry* registry);
 
     /// Message thread: `address` resolved for applying (see NodeAddressBinding), or null when it
-    /// is not a well-formed node.* address.
-    [[nodiscard]] std::shared_ptr<const NodeAddressBinding> BindNodeAddress(const std::string& address) const;
+    /// is not a well-formed node.* address. An "id:<nodeId>" `nodeSelector` ties it to that node.
+    [[nodiscard]] std::shared_ptr<const NodeAddressBinding> BindNodeAddress(const std::string& address,
+                                                                            const std::string& nodeSelector = {}) const;
 
     /// Every slot's binding, in slot order, and the registry generation they were resolved at.
     struct NodeBindings
@@ -247,9 +258,12 @@ class AutomationSlotTable
     }
 
     /// Arm MIDI learn for a slot. Empty string disarms. Either way a capture made for the slot
-    /// armed before is dropped, so it cannot land on this one.
-    void ArmMidiLearn(const std::string& slotId)
+    /// armed before is dropped, so it cannot land on this one. The captured mapping takes `mode`:
+    /// Toggle for a learn that should switch an effect on each press, say.
+    void ArmMidiLearn(const std::string& slotId, MidiControlMap::Mode mode = MidiControlMap::Mode::Absolute)
     {
+        mMidiLearnMode = mode;
+
         if (slotId.empty())
         {
             mMidiLearnSlotId.reset();
@@ -283,13 +297,22 @@ class AutomationSlotTable
     /// A key no mapping takes: Space, left to a DAW's transport, and a bare modifier.
     [[nodiscard]] static bool IsUnmappableKey(const std::string& key);
 
+    /// What a key press fires: the slot, the value it sets, and whether the key is a Trigger
+    /// (which on a bypass slot switches the effect to its other state; see ToggleBypassLocked).
+    struct KeyMatch
+    {
+        std::string slotId;
+        float value = 0.0f;
+        bool trigger = false;
+    };
+
     /// The slot a key press fires and the value it sets, or nothing. The first slot in order
     /// with a mapping for the key wins; a held Trigger key fires once, not on every repeat.
-    [[nodiscard]] std::optional<std::pair<std::string, float>> MatchKey(const std::string& key, bool repeat) const;
+    [[nodiscard]] std::optional<KeyMatch> MatchKey(const std::string& key, bool repeat) const;
 
     /// `slot`'s key mappings with `key` learned: any mapping the key had is replaced, and the new
-    /// one is a Trigger on a trigger address (a bank step, a setlist slot, a scene) and otherwise
-    /// sets the slot to half way.
+    /// one is a Trigger on a trigger address (a bank step, a setlist slot, a scene) or a bypass,
+    /// which it switches on and off, and otherwise sets the slot to half way.
     [[nodiscard]] std::vector<KeyboardMap> LearnedKeyMaps(const AutomationSlot& slot, const std::string& key) const;
 
   private:
@@ -301,6 +324,10 @@ class AutomationSlotTable
 
     /// ApplySlotLocked for a slot with a node.* binding. Allocates nothing.
     bool ApplyNodeSlotLocked(AutomationSlot& slot);
+
+    /// The value that switches a bypass slot's node to its other state, from the node's own
+    /// state where there is a node, else from the slot's value. Allocates nothing.
+    [[nodiscard]] float ToggledBypassValue(AutomationSlot& slot);
 
     /// Whether `slot` drives a trigger (a setlist preset, a scene, bank up or down). Allocates
     /// nothing.
@@ -347,6 +374,7 @@ class AutomationSlotTable
     // MIDI learn state
     std::optional<std::string> mMidiLearnSlotId;
     std::optional<MidiControlMap> mMidiLearnCapture;
+    MidiControlMap::Mode mMidiLearnMode = MidiControlMap::Mode::Absolute;
 
     /// Each channel's Bank Select, waiting for its Program Change. Audio thread, under mDSPMutex.
     BankSelectLatch mBankSelect;

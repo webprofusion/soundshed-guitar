@@ -16,6 +16,14 @@ import type { AutomationMidiMap, AutomationRegistryEntry, AutomationSlot, GraphN
 export interface MidiLearnTarget {
   address: string;
   label: string;
+  /**
+   * The node the control belongs to, for a `node.*` address. A global mapping names only
+   * the effect type, since node ids differ from preset to preset; a per-preset mapping
+   * names the node too (`nodeSelectorFor`), so two effects of one type each get their own.
+   */
+  nodeId?: string;
+  /** The label for a per-preset mapping, which drives this node: it names the node. */
+  nodeLabel?: string;
 }
 
 export interface MidiLearnTargetContext {
@@ -24,6 +32,8 @@ export interface MidiLearnTargetContext {
   /** A node in the graph the engine is playing; undefined for one a `node.*` address cannot reach. */
   findNode: (nodeId: string) => GraphNode | undefined;
   getEffectInfo: (type: string) => EffectTypeInfo | undefined;
+  /** The name the app shows for a node; without it, its title, else its effect's name. */
+  getNodeName?: (node: GraphNode) => string;
 }
 
 /** The control-bar knobs, by `data-param`, and the global addresses they set. */
@@ -58,8 +68,62 @@ export function resolveMidiLearnTarget(element: Element | null, context: MidiLea
     return null;
   }
   return resolveGlobalKnob(element, context)
+    ?? resolveNodeBypass(element, context)
     ?? resolveNodeParam(element, context)
     ?? resolveSetlistControl(element, context);
+}
+
+/** The node selector that ties a per-preset mapping to one node: `id:<nodeId>`. */
+export function nodeSelectorFor(nodeId: string): string {
+  return `id:${nodeId}`;
+}
+
+/** The node id an `id:<nodeId>` selector names, or null for any other selector. */
+export function nodeIdFromSelector(selector: string | undefined): string | null {
+  return selector?.startsWith("id:") ? selector.slice(3) : null;
+}
+
+/** Whether an address enables or bypasses effects rather than setting a parameter. */
+export function isBypassAddress(address: string): boolean {
+  return /^node\.[^.]+\.(bypassed|bypass|enabled)$/.test(address);
+}
+
+/**
+ * The label for an effect's on/off address. `enabled` turns the effect on with a high
+ * value (CC 127 = on), `bypassed` turns it off with one: the two senses a mapping can have.
+ */
+export function bypassTargetLabel(effectLabel: string, paramId: string): string {
+  return paramId === "enabled" ? `${effectLabel}: On/Off` : `${effectLabel}: Bypass`;
+}
+
+/**
+ * An effect's on/off button — the bypass button on its tile in the signal chain, or the
+ * switch in its panel — drives `node.<type>.enabled`, so a footswitch's 127 turns it on.
+ */
+function resolveNodeBypass(element: Element, context: MidiLearnTargetContext): MidiLearnTarget | null {
+  const button = element.closest<HTMLElement>(".signal-node-bypass, .node-bypass-btn[data-node-id]");
+  const nodeId = button?.dataset.nodeId ?? button?.closest<HTMLElement>(".signal-node[data-node-id]")?.dataset.nodeId;
+  if (!nodeId) {
+    return null;
+  }
+
+  const node = context.findNode(nodeId);
+  const info = node ? context.getEffectInfo(node.type) : undefined;
+  if (!node || !info) {
+    return null;
+  }
+
+  return {
+    address: `node.${info.type}.enabled`,
+    label: bypassTargetLabel(info.displayName || info.type, "enabled"),
+    nodeId,
+    nodeLabel: bypassTargetLabel(nodeLabel(node, info, context), "enabled"),
+  };
+}
+
+/** What the user calls a node: the name the app shows for it, or its title, or its effect's name. */
+function nodeLabel(node: GraphNode, info: EffectTypeInfo, context: MidiLearnTargetContext): string {
+  return context.getNodeName?.(node) || node.title || node.displayName || info.displayName || info.type;
 }
 
 function registryTarget(address: string, context: MidiLearnTargetContext): MidiLearnTarget | null {
@@ -97,6 +161,8 @@ function resolveNodeParam(element: Element, context: MidiLearnTargetContext): Mi
   return {
     address: `node.${info.type}.${paramKey}`,
     label: `${info.displayName || info.type}: ${param.name || paramKey}`,
+    nodeId,
+    nodeLabel: `${nodeLabel(node!, info, context)}: ${param.name || paramKey}`,
   };
 }
 
@@ -182,9 +248,24 @@ export function allowsPresetMapping(address: string): boolean {
   return address.startsWith("node.") || [...GLOBAL_KNOB_ADDRESSES.values()].includes(address);
 }
 
-/** The mapping `presetId` holds for `address` itself, live only while that preset is active. */
-export function findPresetSlotForAddress(slots: readonly AutomationSlot[], presetId: string, address: string): AutomationSlot | undefined {
-  return slots.find((slot) => slot.presetId === presetId && slot.address === address);
+/**
+ * The mapping `presetId` holds for `address` itself, live only while that preset is active.
+ * With a `nodeId`, the mapping for that node: one tied to it, else one from before mappings
+ * named their node (no selector), which a new learn then ties to it. A mapping tied to
+ * another node of the same type is that node's, not this one's.
+ */
+export function findPresetSlotForAddress(
+  slots: readonly AutomationSlot[],
+  presetId: string,
+  address: string,
+  nodeId?: string,
+): AutomationSlot | undefined {
+  const candidates = slots.filter((slot) => slot.presetId === presetId && slot.address === address);
+  if (!nodeId) {
+    return candidates[0];
+  }
+  return candidates.find((slot) => nodeIdFromSelector(slot.nodeSelector) === nodeId)
+    ?? candidates.find((slot) => !slot.nodeSelector);
 }
 
 export function countCustomSlots(slots: readonly AutomationSlot[]): number {
@@ -228,13 +309,31 @@ export function formatMidiChannel(channel: number): string {
 const MIDI_EVENT_NAMES = ["CC", "PC", "NoteOn", "NoteOff", "PBend"];
 const MIDI_MODE_NAMES = ["Abs", "Rel", "Toggle", "Pickup"];
 
+/** `MidiControlMap::Mode::Absolute`: the control's value sets the target (on an on/off, a latch). */
+export const MIDI_MODE_ABSOLUTE = 0;
+/** `MidiControlMap::Mode::Toggle`: each press switches the target. */
+export const MIDI_MODE_TOGGLE = 2;
+
+/**
+ * The modes a MIDI mapping can take, in the engine's order (`MidiControlMap::Mode`), with
+ * what each does. On an effect's on/off, Absolute is the latch: a CC's value sets the state,
+ * so a pedal that sends 127 while held and 0 on release switches the effect only while it is
+ * held. Toggle switches it on each press (a value of 64 or more), from the state it is in.
+ */
+export const MIDI_MODE_OPTIONS: readonly { mode: number; label: string; title: string }[] = [
+  { mode: 0, label: "Absolute", title: "The control's value sets the target. On an effect's on/off: 127 one way, 0 the other (latch)." },
+  { mode: 2, label: "Toggle", title: "Each press (value 64 or more) switches the target; releases are ignored." },
+  { mode: 1, label: "Relative", title: "An endless encoder: values above 64 step up, below 64 step down." },
+  { mode: 3, label: "Pickup", title: "The target only follows once the control reaches its current value." },
+];
+
 /** "CC 7 ch1 Abs". The mode is left off when there is none, as in a learn capture. */
 export function describeMidiMap(map: Pick<AutomationMidiMap, "eventType" | "channel" | "controller"> & { mode?: number }): string {
   const text = `${MIDI_EVENT_NAMES[map.eventType] || "CC"} ${map.controller} ch${formatMidiChannel(map.channel)}`;
   return map.mode === undefined ? text : `${text} ${MIDI_MODE_NAMES[map.mode] || "Abs"}`;
 }
 
-export type MidiLearnMenuAction = "learn" | "learnPreset" | "cancel" | "clear";
+export type MidiLearnMenuAction = "learn" | "learnPreset" | "learnPresetToggle" | "cancel" | "clear";
 
 export interface MidiLearnMenuItem {
   action: MidiLearnMenuAction;
@@ -265,6 +364,8 @@ export interface MidiLearnMenuState {
  * chain control (Cancel MIDI Learn instead, while either of the control's slots is
  * listening), and Clear Mapping when there is a mapping to clear — the active preset's own
  * first, then the global one. A per-preset mapping on any other control can still be cleared.
+ * On an effect's on/off button the per-preset learn comes twice: as a latch (Absolute: 127 on,
+ * 0 off) and as a toggle (Toggle: each press switches the effect).
  */
 export function buildMidiLearnMenuItems(state: MidiLearnMenuState): MidiLearnMenuItem[] {
   const { slot, presetSlot, presetId } = state;
@@ -284,12 +385,18 @@ export function buildMidiLearnMenuItems(state: MidiLearnMenuState): MidiLearnMen
     });
     if (presetId && allowsPresetMapping(state.address)) {
       const noPresetSlot = !presetSlot && state.presetSlotCount >= state.maxPresetSlots;
-      items.push({
-        action: "learnPreset",
-        label: "MIDI Learn for this preset…",
-        hint: noPresetSlot ? `All ${state.maxPresetSlots} preset slots in use` : "",
-        disabled: noPresetSlot,
-      });
+      const hint = noPresetSlot ? `All ${state.maxPresetSlots} preset slots in use` : "";
+      if (isBypassAddress(state.address)) {
+        items.push({ action: "learnPreset", label: "MIDI Learn latch for this preset…", hint: hint || "127 on, 0 off", disabled: noPresetSlot });
+        items.push({
+          action: "learnPresetToggle",
+          label: "MIDI Learn toggle for this preset…",
+          hint: hint || "Each press switches it",
+          disabled: noPresetSlot,
+        });
+      } else {
+        items.push({ action: "learnPreset", label: "MIDI Learn for this preset…", hint, disabled: noPresetSlot });
+      }
     }
   }
 

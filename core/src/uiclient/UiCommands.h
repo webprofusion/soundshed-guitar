@@ -271,7 +271,9 @@ class UiCommands
     void ClearAutomationKeyMap(const std::string& slotId);
     void RemoveAutomationSlot(const std::string& slotId);
     /// Fires a slot from the UI (the panel's Test button), 0..1.
-    void SetAutomationValue(const std::string& slotId, double value);
+    /// `toggle` (the Test button on an effect's on/off) has the engine switch the effect from
+    /// the state it is in, rather than set `value`, which can be out of date.
+    void SetAutomationValue(const std::string& slotId, double value, bool toggle = false);
     /// Listens for the next MIDI event on a slot, replacing any learn already armed.
     void ArmMidiLearn(const std::string& slotId);
     void CancelMidiLearn();

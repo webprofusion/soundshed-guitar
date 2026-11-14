@@ -79,7 +79,8 @@ bool AddPresetSlot(AutomationSlotTable& table, const std::string& slotId, const 
                    const std::string& address, int controller)
 {
     return table.SetPresetSlot(slotId, presetId, std::optional<std::string>(slotId),
-                               std::optional<std::string>(address), std::optional<MidiControlMap>(Cc(controller)));
+                               std::optional<std::string>(address), std::nullopt,
+                               std::optional<MidiControlMap>(Cc(controller)));
 }
 
 /// Each DAW parameter reads a cell its slot mirrors its value into. Slot moves were defaulted, and

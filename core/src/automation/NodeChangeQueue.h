@@ -7,8 +7,8 @@
  * the UI both have to hear what changed. The message thread collects the changes in OnIdle, which
  * only runs while an editor is open, so a plugin automated for an hour with its editor closed must
  * not be holding an hour of events by then. A change therefore replaces any the message thread has
- * not taken yet for the same thing: the same parameter on a node with the same id, or the bypass of
- * the same effect type. That is all the working copy needs, since it keeps only the last value.
+ * not taken yet for the same thing: the same parameter on a node with the same id, the bypass of a
+ * node with the same id, or the bypass of the same effect type. That is all the working copy needs, since it keeps only the last value.
  *
  * Realtime rules. Post never allocates, frees or blocks: the cells are part of the queue, and what
  * a change names is held through shared pointers that Post only copies. Take moves them out, so
@@ -45,15 +45,15 @@ class NodeChangeQueue
     {
         /// The slot's binding: the effect type, and for a parameter its id.
         std::shared_ptr<const NodeAddressBinding> binding;
-        /// The node whose parameter was set. Empty for a bypass, which switches every node of the
-        /// effect type.
+        /// The node whose parameter was set, or which was enabled or bypassed (the binding says
+        /// which). Empty for a bypass of every node of the effect type.
         std::shared_ptr<const std::string> nodeId;
         /// The native value the parameter was set to, or for a bypass 1 enabled and 0 bypassed.
         double value = 0.0;
     };
 
-    /// Records a change of `binding`'s parameter on the node `nodeId`, or with no `nodeId`, of its
-    /// effect type's bypass. False, and counted, when there is no cell for it.
+    /// Records a change of `binding`'s parameter, or of its bypass, on the node `nodeId`, or with
+    /// no `nodeId`, of its effect type's bypass. False, and counted, when there is no cell for it.
     bool Post(const std::shared_ptr<const NodeAddressBinding>& binding,
               const std::shared_ptr<const std::string>* nodeId, double value)
     {
@@ -168,8 +168,8 @@ class NodeChangeQueue
     }
 
     /// Whether `pending` is a change to the same thing: a node id and param id for a parameter,
-    /// the effect type for a bypass. By id rather than by node, since the id is all the working
-    /// copy and the UI go by.
+    /// a node id for one node's bypass, the effect type for a type's bypass. By id rather than by
+    /// node, since the id is all the working copy and the UI go by.
     static bool Matches(const Change& pending, const NodeAddressBinding& binding,
                         const std::shared_ptr<const std::string>* nodeId)
     {
@@ -178,7 +178,13 @@ class NodeChangeQueue
             return !pending.nodeId && pending.binding->effectType == binding.effectType;
         }
 
-        return pending.nodeId && *pending.nodeId == **nodeId && pending.binding->paramId == binding.paramId;
+        if (!pending.nodeId || *pending.nodeId != **nodeId || pending.binding->isBypass != binding.isBypass)
+        {
+            return false;
+        }
+
+        // A bypass is one state whichever of its names ("bypassed", "enabled") the slot used.
+        return binding.isBypass || pending.binding->paramId == binding.paramId;
     }
 
     std::array<Cell, kCapacity> mCells;

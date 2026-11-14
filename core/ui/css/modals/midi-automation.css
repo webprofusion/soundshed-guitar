@@ -62,7 +62,7 @@
 
 .automation-slot-row {
   display: grid;
-  grid-template-columns: 120px 1fr 140px 120px auto;
+  grid-template-columns: 120px 1fr 210px 120px auto;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
@@ -94,6 +94,24 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The mapping's mode (Absolute, Toggle, ...), beside its CC. */
+.automation-midi-mode {
+  margin-left: 4px;
+  padding: 1px 4px;
+  border: 1px solid var(--modal-border-medium);
+  border-radius: var(--radius-md);
+  background: var(--modal-bg-raised);
+  color: var(--modal-text);
+  font-size: 11px;
+  font-family: inherit;
+  max-width: 88px;
+}
+
+.automation-midi-mode:focus {
+  outline: none;
+  border-color: var(--color-accent);
 }
 
 .automation-learn-btn,

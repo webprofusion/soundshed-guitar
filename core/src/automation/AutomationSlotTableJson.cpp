@@ -178,6 +178,11 @@ nlohmann::json AutomationSlotTable::SaveToJson() const
         s["label"] = slot.label;
         s["address"] = slot.address;
 
+        if (!slot.nodeSelector.empty())
+        {
+            s["nodeSelector"] = slot.nodeSelector;
+        }
+
         if (slot.midiMap)
         {
             s["midiMap"] = MidiMapToJson(*slot.midiMap);
@@ -279,6 +284,7 @@ std::vector<AutomationSlot> AutomationSlotTable::BuildSlotsFromJson(const nlohma
             slot.presetId = ps.value("presetId", "");
             slot.label = ps.value("label", "");
             slot.address = ps.value("address", "");
+            slot.nodeSelector = ps.value("nodeSelector", "");
 
             if (ps.contains("midiMap") && ps["midiMap"].is_object())
             {
@@ -294,7 +300,7 @@ std::vector<AutomationSlot> AutomationSlotTable::BuildSlotsFromJson(const nlohma
 
     for (auto& slot : slots)
     {
-        slot.nodeBinding = BindNodeAddress(slot.address);
+        slot.nodeBinding = BindNodeAddress(slot.address, slot.nodeSelector);
     }
 
     return slots;

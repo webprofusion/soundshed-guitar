@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string_view>
 
 namespace guitarfx
 {
@@ -297,6 +298,23 @@ class SignalGraphExecutor
 
     /// SetNodeEnabled on every node of the type, enabled or not. Returns whether there was one.
     bool SetAutomatedNodesEnabled(const std::string& canonicalType, bool enabled);
+
+    /// The node with this id, enabled or not, if it is of the type. A per-preset mapping names
+    /// its node, so it drives that node even while it is bypassed.
+    [[nodiscard]] AutomationTarget FindAutomationTargetById(const std::string& canonicalType,
+                                                            const std::string& nodeId);
+
+    /// SetNodeEnabled on the node with this id, if it is of the type. Returns the node's shared
+    /// id (see AutomationTarget::id), or null when there is no such node.
+    const std::shared_ptr<const std::string>* SetAutomatedNodeEnabledById(const std::string& canonicalType,
+                                                                         const std::string& nodeId, bool enabled);
+
+    /// Whether automation would find the node enabled: the node with `nodeId`, or with no id the
+    /// first node of the type in execution order, enabled or not. Nothing when there is no such
+    /// node. A toggle reads it, so it flips the node from where it is rather than from where the
+    /// mapping last left it.
+    [[nodiscard]] std::optional<bool> IsAutomatedNodeEnabled(const std::string& canonicalType,
+                                                             std::string_view nodeId) const;
 
     // Queries
     [[nodiscard]] std::string FindFirstNodeOfType(const std::string& type) const;

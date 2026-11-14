@@ -9,12 +9,19 @@
 
 import { postMessage } from "./bridge.js";
 import { updateAppSetting } from "./appSettingsStore.js";
-import { uiState } from "./state.js";
+import { getNodeDisplayName } from "./signalPath/nodeLabels.js";
+import { getActivePresetForRender, uiState } from "./state.js";
 import type { AutomationSlot, AutomationRegistryEntry } from "./types.js";
-import { BUILTIN_EFFECTS, EffectTypeRegistry } from "./presetV2.js";
+import { buildTargetOptions, deriveLabel } from "./automationTargets.js";
 import { getXMarkSvg } from "./iconAssets.js";
-import { describeMidiMap, formatMidiChannel, withCurrentTargetOption } from "./midiMapping.js";
-import type { AutomationTargetOption } from "./midiMapping.js";
+import {
+  MIDI_MODE_OPTIONS,
+  describeMidiMap,
+  formatMidiChannel,
+  isBypassAddress,
+  nodeIdFromSelector,
+  withCurrentTargetOption,
+} from "./midiMapping.js";
 import { escapeHtml } from "./utils.js";
 import { syncSetlistMidiOutControls, wireSetlistMidiOutControls } from "./midiSetlistOut.js";
 
@@ -119,9 +126,9 @@ export function getArmedMidiLearnSlotId(): string | null {
 }
 
 /** Listen for the next MIDI event on a slot, replacing any learn already armed. */
-export function armMidiLearn(slotId: string): void {
+export function armMidiLearn(slotId: string, mode?: number): void {
   pendingLearnSlotId = slotId;
-  postMessage({ type: "armMidiLearn", slotId });
+  postMessage({ type: "armMidiLearn", slotId, ...(mode === undefined ? {} : { mode }) });
   renderAutomationPanel();
   notifyMidiLearnChange(null);
 }
@@ -352,11 +359,18 @@ function renderAutomationPanel(): void {
 function renderSlotRow(slot: AutomationSlot, registry: AutomationRegistryEntry[]): string {
   const entry = registry.find((e) => e.address === slot.address);
   const rangeText = entry ? `(${entry.min}..${entry.max}${entry.unit ? " " + entry.unit : ""})` : "";
-  const addressText = slot.presetId ? `${presetDisplayName(slot.presetId)} · ${slot.address}` : slot.address;
+  const nodeText = describeSelectedNode(slot);
+  const addressText = slot.presetId
+    ? `${presetDisplayName(slot.presetId)} · ${slot.address}${nodeText ? ` · ${nodeText}` : ""}`
+    : slot.address;
   const isLearn = pendingLearnSlotId === slot.slotId;
   const showTestButton = Boolean(entry?.isTrigger) || !slot.isDefault;
 
-  const midiText = slot.midiMap ? describeMidiMap(slot.midiMap) : "—";
+  // The mode has a picker of its own, so the text leaves it out.
+  const midiText = slot.midiMap
+    ? describeMidiMap({ eventType: slot.midiMap.eventType, channel: slot.midiMap.channel, controller: slot.midiMap.controller })
+    : "—";
+  const modePicker = slot.midiMap ? renderMidiModePicker(slot) : "";
 
   let keyText = "—";
   if (slot.keyMap && slot.keyMap.length > 0) {
@@ -370,7 +384,7 @@ function renderSlotRow(slot: AutomationSlot, registry: AutomationRegistryEntry[]
     <div class="automation-slot-row" data-slot-id="${escapeHtml(slot.slotId)}">
       <span class="automation-slot-label">${escapeHtml(slot.label)}</span>
       <span class="automation-slot-address" title="${escapeHtml(addressText)}">${escapeHtml(addressText)} ${escapeHtml(rangeText)}</span>
-      <span class="automation-slot-midi">${escapeHtml(midiText)}${slot.midiMap ? ` <button class="automation-clear-btn automation-clear-midi" data-slot-id="${escapeHtml(slot.slotId)}" title="Clear MIDI mapping">${getXMarkSvg()}</button>` : ""}</span>
+      <span class="automation-slot-midi">${escapeHtml(midiText)}${modePicker}${slot.midiMap ? ` <button class="automation-clear-btn automation-clear-midi" data-slot-id="${escapeHtml(slot.slotId)}" title="Clear MIDI mapping">${getXMarkSvg()}</button>` : ""}</span>
       <span class="automation-slot-key">${escapeHtml(keyText)}${(slot.keyMap && slot.keyMap.length > 0) ? ` <button class="automation-clear-btn automation-clear-key" data-slot-id="${escapeHtml(slot.slotId)}" title="Clear keyboard mapping">${getXMarkSvg()}</button>` : ""}</span>
       <div>
         <button class="automation-learn-btn ${isLearn ? "active" : ""}" data-slot-id="${escapeHtml(slot.slotId)}">
@@ -391,7 +405,8 @@ function wireSlotEvents(container: HTMLElement): void {
       if (pendingLearnSlotId === slotId) {
         cancelMidiLearn();
       } else {
-        armMidiLearn(slotId);
+        // Learning again changes the control, not how the mapping acts: the mode chosen stays.
+        armMidiLearn(slotId, uiState.automation?.slots.find((slot) => slot.slotId === slotId)?.midiMap?.mode);
       }
       blurActive();
     });
@@ -419,7 +434,10 @@ function wireSlotEvents(container: HTMLElement): void {
         value = slot.value < 0.99 ? 1.0 : 0.0;
       }
 
-      postMessage({ type: "setAutomationValue", slotId, value, source: "ui" });
+      // An effect's on/off switches from the state the effect is in, which the engine reads:
+      // the slot's value is only what it last set, and the editor or a preset load moves it.
+      const toggle = slot ? isBypassAddress(slot.address) : false;
+      postMessage({ type: "setAutomationValue", slotId, value, source: "ui", ...(toggle ? { toggle: true } : {}) });
       blurActive();
     });
   });
@@ -450,6 +468,18 @@ function wireSlotEvents(container: HTMLElement): void {
     });
   });
 
+  container.querySelectorAll<HTMLSelectElement>(".automation-midi-mode").forEach((select) => {
+    select.addEventListener("change", () => {
+      const slotId = select.dataset.slotId || "";
+      const slot = uiState.automation?.slots.find((s) => s.slotId === slotId);
+      if (!slot?.midiMap) {
+        return;
+      }
+      postMessage({ type: "setAutomationSlot", slotId, midiMap: { ...slot.midiMap, mode: Number(select.value) } });
+      blurActive();
+    });
+  });
+
   const addBtn = container.querySelector<HTMLButtonElement>("#automation-add-slot");
   if (addBtn) {
     addBtn.addEventListener("click", () => {
@@ -465,72 +495,27 @@ function wireSlotEvents(container: HTMLElement): void {
 
 // ── Target picker (custom slot address selector) ───────────────────────────
 
-function buildTargetOptions(registry: AutomationRegistryEntry[]): AutomationTargetOption[] {
-  const opts: AutomationTargetOption[] = [];
-
-  for (const e of registry) {
-    let group = "Other";
-    if (e.address.startsWith("global.")) group = "Global";
-    else if (e.address.startsWith("setlist.")) group = "Setlist";
-    opts.push({ address: e.address, label: e.label, group });
+/**
+ * The node a per-preset mapping drives, when it names one (`id:<nodeId>`): the name the node
+ * has in the active preset, or its id while another preset is playing.
+ */
+function describeSelectedNode(slot: AutomationSlot): string {
+  const nodeId = nodeIdFromSelector(slot.nodeSelector);
+  if (!nodeId) {
+    return "";
   }
-
-  // The chain's Input and Output nodes are hidden from the effect catalog, but their trim
-  // is a node address like any other and "MIDI Learn…" on the knob points a slot at it —
-  // which the picker has to be able to show, or editing that slot's target would silently
-  // retarget it. Their gain is all they have; there is no bypassing a boundary node.
-  for (const routing of BUILTIN_EFFECTS) {
-    for (const param of routing.parameters) {
-      opts.push({
-        address: `node.${routing.type}.${param.key}`,
-        label: `${routing.displayName || routing.type}: ${param.name || param.key}`,
-        group: "Signal Chain",
-      });
-    }
-  }
-
-  const effects = EffectTypeRegistry.getAll()
-    .filter((t) => t.catalogHidden !== true && t.parameters.length > 0);
-
-  effects.sort((a, b) => {
-    const c = (a.category || "").localeCompare(b.category || "");
-    return c !== 0 ? c : (a.displayName || a.type).localeCompare(b.displayName || b.type);
-  });
-
-  for (const eff of effects) {
-    const group = eff.category || "Effects";
-    const effLabel = eff.displayName || eff.type;
-    opts.push({ address: `node.${eff.type}.bypassed`, label: `${effLabel}: Bypass`, group });
-    for (const p of eff.parameters) {
-      const address = `node.${eff.type}.${p.key}`;
-      const paramLabel = p.name || p.key;
-      opts.push({ address, label: `${effLabel}: ${paramLabel}`, group });
-    }
-  }
-
-  return opts;
+  const preset = slot.presetId === uiState.activePresetId ? getActivePresetForRender() : null;
+  const graphs = preset ? [preset.graph, ...(preset.scenes ?? []).map((scene) => scene.graph)] : [];
+  const node = graphs.map((graph) => graph?.nodes.find((candidate) => candidate.id === nodeId)).find(Boolean);
+  return node ? getNodeDisplayName(node) : `node ${nodeId}`;
 }
 
-function deriveLabel(address: string, registry: AutomationRegistryEntry[]): string {
-  const entry = registry.find((e) => e.address === address);
-  if (entry) return entry.label;
-
-  const nodeMatch = address.match(/^node\.([^.]+)\.(.+)$/);
-  if (nodeMatch) {
-    const eff = EffectTypeRegistry.get(nodeMatch[1]);
-    const effName = eff?.displayName || nodeMatch[1];
-    if (nodeMatch[2] === "bypassed" || nodeMatch[2] === "bypass" || nodeMatch[2] === "enabled") {
-      return `${effName}: Bypass`;
-    }
-    const param = eff?.parameters.find((p) => p.key === nodeMatch[2]);
-    const paramName = param?.name || nodeMatch[2];
-    return `${effName}: ${paramName}`;
-  }
-  return "Custom";
-}
-
-function isBypassAddress(address: string): boolean {
-  return /^node\.[^.]+\.(bypassed|bypass|enabled)$/.test(address);
+/** The mode picker beside a MIDI mapping. */
+function renderMidiModePicker(slot: AutomationSlot): string {
+  const current = slot.midiMap?.mode ?? 0;
+  const options = MIDI_MODE_OPTIONS.map((option) =>
+    `<option value="${option.mode}" title="${escapeHtml(option.title)}"${option.mode === current ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+  return ` <select class="automation-midi-mode" data-slot-id="${escapeHtml(slot.slotId)}" aria-label="MIDI mode for ${escapeHtml(slot.label)}" title="How the MIDI control drives the target">${options}</select>`;
 }
 
 function renderTargetEditor(slot: AutomationSlot, registry: AutomationRegistryEntry[]): string {

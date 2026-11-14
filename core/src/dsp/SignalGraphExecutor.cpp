@@ -1882,6 +1882,81 @@ bool SignalGraphExecutor::SetAutomatedNodesEnabled(const std::string& canonicalT
     return found;
 }
 
+SignalGraphExecutor::AutomationTarget SignalGraphExecutor::FindAutomationTargetById(const std::string& canonicalType,
+                                                                                    const std::string& nodeId)
+{
+    for (const auto& [state, node] : mAutomationNodes)
+    {
+        if (state->id == nodeId)
+        {
+            if (state->canonicalType != canonicalType)
+            {
+                return {};
+            }
+
+            return {state->processor.get(), state->twin.get(), node, &state->sharedId};
+        }
+    }
+
+    return {};
+}
+
+const std::shared_ptr<const std::string>* SignalGraphExecutor::SetAutomatedNodeEnabledById(
+    const std::string& canonicalType, const std::string& nodeId, bool enabled)
+{
+    for (const auto& [state, node] : mAutomationNodes)
+    {
+        if (state->id != nodeId)
+        {
+            continue;
+        }
+
+        if (state->canonicalType != canonicalType)
+        {
+            return nullptr;
+        }
+
+        if (node)
+        {
+            node->enabled = enabled;
+        }
+
+        const bool wasEnabled = state->processor && state->processor->IsEnabled();
+
+        if (state->processor)
+        {
+            state->processor->SetEnabled(enabled);
+        }
+
+        if (state->twin)
+        {
+            state->twin->SetEnabled(enabled);
+        }
+
+        OnNodeBypassChanged(*state, wasEnabled);
+        return &state->sharedId;
+    }
+
+    return nullptr;
+}
+
+std::optional<bool> SignalGraphExecutor::IsAutomatedNodeEnabled(const std::string& canonicalType,
+                                                                std::string_view nodeId) const
+{
+    for (const auto& [state, node] : mAutomationNodes)
+    {
+        if (state->canonicalType != canonicalType || (!nodeId.empty() && state->id != nodeId))
+        {
+            continue;
+        }
+
+        // FindAutomationTarget's test of whether a node is enabled.
+        return state->processor ? state->processor->IsEnabled() : (node == nullptr || node->enabled);
+    }
+
+    return std::nullopt;
+}
+
 std::string SignalGraphExecutor::FindFirstNodeOfTypes(const std::vector<std::string>& types) const
 {
     for (const auto& nodeId : mExecutionOrder)

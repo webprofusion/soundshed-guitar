@@ -10,6 +10,7 @@ set(TEST_SOURCES
     AutomationBypassEndToEndTests.cpp
     AutomationNodeParamRangeTests.cpp
     AutomationNodeRealtimeTests.cpp
+    AutomationPerNodeTests.cpp
     AutomationPresetMappingTests.cpp
     AutomationSlotMidiToggleTests.cpp
     AutomationSlotThreadTests.cpp

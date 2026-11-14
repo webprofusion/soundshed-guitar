@@ -514,6 +514,28 @@ class MultiPresetMixer
     /// SetNodeEnabledByType for a type already resolved, without allocating.
     bool SetAutomatedNodesEnabled(const std::string& canonicalType, bool enabled);
 
+    // The same for one node, by id, as a per-preset mapping names it. Node ids are only unique
+    // within a preset, so the preset playing as `presetId` is searched first; the other
+    // instances only when no instance plays under that id. Allocates nothing.
+
+    /// The node with this id, enabled or not, if it is of the type.
+    [[nodiscard]] SignalGraphExecutor::AutomationTarget FindAutomationTargetById(const std::string& canonicalType,
+                                                                                 const std::string& nodeId,
+                                                                                 const std::string& presetId);
+
+    /// Enables or bypasses the node with this id, if it is of the type. Returns its shared id,
+    /// or null when there is no such node.
+    const std::shared_ptr<const std::string>* SetAutomatedNodeEnabledById(const std::string& canonicalType,
+                                                                         const std::string& nodeId,
+                                                                         const std::string& presetId, bool enabled);
+
+    /// Whether the node automation would switch is enabled: with a `nodeId` that node, without
+    /// one the first node of the type in the first instance that has one. Nothing when there is
+    /// no such node. Allocates nothing.
+    [[nodiscard]] std::optional<bool> IsAutomatedNodeEnabled(const std::string& canonicalType,
+                                                             const std::string& nodeId,
+                                                             const std::string& presetId);
+
     /// A node's identity plus a snapshot of some of its parameters.
     struct NodeReadout
     {

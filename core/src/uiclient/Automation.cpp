@@ -560,7 +560,12 @@ std::string DeriveSlotLabel(const ClientState& state, const std::string& address
     {
         const std::string effect = EffectName(state, type);
 
-        if (param == "bypassed" || param == "bypass" || param == "enabled")
+        if (param == "enabled")
+        {
+            return effect + ": On/Off";
+        }
+
+        if (param == "bypassed" || param == "bypass")
         {
             return effect + ": Bypass";
         }
@@ -645,6 +650,9 @@ std::vector<AutomationTargetOption> BuildTargetOptions(const ClientState& state)
     {
         const std::string group = info->category.empty() ? "Effects" : info->category;
         const std::string name = info->name.empty() ? info->type : info->name;
+        // Both senses of on/off, as the web UI offers them: "enabled" turns the effect on with
+        // a high value, "bypassed" turns it off.
+        options.push_back({"node." + info->type + ".enabled", name + ": On/Off", group});
         options.push_back({"node." + info->type + ".bypassed", name + ": Bypass", group});
 
         for (const auto& param : info->parameters)
