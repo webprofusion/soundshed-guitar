@@ -20,6 +20,8 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
+import com.soundshed.audio.UsbAudioPath;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -69,6 +71,7 @@ public class NanoQActivity extends Activity
     private boolean resumed;
     private boolean frameScheduled;
     private boolean audioStarted;
+    private UsbAudioPath usbAudioPath;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +97,9 @@ public class NanoQActivity extends Activity
                 getFilesDir().getAbsolutePath(),
                 new File(getFilesDir(), "plugin-state.bin").getAbsolutePath(),
                 getResources().getDisplayMetrics().density);
+        // Before audio opens: whether a USB interface rules out AAudio's MMAP path.
+        usbAudioPath = new UsbAudioPath(this);
+        usbAudioPath.start();
 
         surfaceView = new SurfaceView(this);
         surfaceView.getHolder().addCallback(this);
@@ -160,6 +166,7 @@ public class NanoQActivity extends Activity
 
     @Override
     protected void onDestroy() {
+        if (usbAudioPath != null) usbAudioPath.stop();
         if (handle != 0) {
             nativeDestroy(handle);
             handle = 0;

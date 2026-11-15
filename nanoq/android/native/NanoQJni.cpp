@@ -12,6 +12,8 @@
 
 #include "../elements_host/android_host.hpp"
 
+#include "AndroidUsbAudioPath.h"
+
 #include <android/native_window_jni.h>
 #include <jni.h>
 
@@ -102,6 +104,9 @@ JNIEXPORT jlong JNICALL Java_com_soundshed_nanoq_NanoQActivity_nativeCreate(JNIE
         if (app->host->LoadState(app->statePath.c_str()))
             AppLog("Nano Q: the plugin's state was restored");
         app->audio = std::make_unique<nanoq::android::AudioIO>(*app->host);
+        // A USB interface the MMAP path mangles came or went: reopen on the path now allowed.
+        auto* audio = app->audio.get();
+        soundshed::android_audio::SetUsbAudioPathHandler([audio] { audio->Restart(); });
     }
     return static_cast<jlong>(reinterpret_cast<intptr_t>(app.release()));
 }
@@ -111,6 +116,7 @@ JNIEXPORT void JNICALL Java_com_soundshed_nanoq_NanoQActivity_nativeDestroy(JNIE
     auto* app = FromHandle(handle);
     if (app == nullptr)
         return;
+    soundshed::android_audio::SetUsbAudioPathHandler({});
     if (app->audio)
         app->audio->Stop();
     app->audio.reset();

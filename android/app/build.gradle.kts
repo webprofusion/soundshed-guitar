@@ -129,6 +129,8 @@ android {
             // for a feature this app does not use.
             java.srcDirs(
                 "src/main/java",
+                // Java shared with Nano Q's Android app (com.soundshed.audio).
+                "../shared/java",
                 "$juceModules/juce_core/native/java/app",
                 "$juceModules/juce_core/native/javacore/app",
                 "$juceModules/juce_core/native/javacore/init",

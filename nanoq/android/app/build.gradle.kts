@@ -88,6 +88,8 @@ android {
     sourceSets {
         getByName("main") {
             assets.directories.add(stagedAssets.get().asFile.absolutePath)
+            // Java shared with Soundshed Guitar's Android app (com.soundshed.audio).
+            java.directories.add(rootDir.resolve("../../android/shared/java").canonicalPath)
         }
     }
 

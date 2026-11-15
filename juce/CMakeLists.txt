@@ -465,6 +465,8 @@ set(CommonSourceFiles
     "${CMAKE_CURRENT_SOURCE_DIR}/source/Main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/AndroidAudioThread.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/AndroidAudioThread.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/AndroidUsbAudioPath.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/source/AndroidUsbAudioPath.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/JuceHostedPluginEffect.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/source/ControllerMidiOutput.h"

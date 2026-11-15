@@ -3,6 +3,8 @@
 #include "AppLog.h"
 #include "ClapHost.h"
 
+#include <oboe/OboeExtensions.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -55,6 +57,9 @@ bool AudioIO::Start(bool withInput)
     mWithInput = withInput;
     mRestart = false;
 
+    // Whether these streams may take AAudio's MMAP path is decided per process, by
+    // AndroidUsbAudioPath (a USB interface with no 16-bit format rules it out); it calls Restart
+    // when that changes.
     oboe::AudioStreamBuilder out;
     out.setDirection(oboe::Direction::Output)
         ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
@@ -155,6 +160,9 @@ bool AudioIO::Start(bool withInput)
            mOutput->getSharingMode() == oboe::SharingMode::Exclusive ? "exclusive" : "shared",
            mInput ? (mInput->getSharingMode() == oboe::SharingMode::Exclusive ? "exclusive" : "shared") : "none",
            mInputChannels);
+    AppLog("Nano Q audio: output device %d%s, input device %d%s", mOutput->getDeviceId(),
+           oboe::OboeExtensions::isMMapUsed(mOutput.get()) ? " (MMAP)" : "", mInput ? mInput->getDeviceId() : -1,
+           mInput && oboe::OboeExtensions::isMMapUsed(mInput.get()) ? " (MMAP)" : "");
     return true;
 }
 
@@ -172,6 +180,15 @@ void AudioIO::Stop()
     // The streams are closed, so no data callback can still be running.
     mHost.Deactivate();
     mPlacement.release();
+}
+
+void AudioIO::Restart()
+{
+    if (!mRunning)
+        return;
+    const bool withInput = mWithInput;
+    Stop();
+    Start(withInput);
 }
 
 void AudioIO::CloseStreams()

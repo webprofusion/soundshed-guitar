@@ -48,6 +48,12 @@ few times a second. `adb shell setprop debug.soundshed.audio.cores off|auto|big|
 (log tag `SoundshedGuitar`). The `NanoQ` log reports the DSP load every 10 s: the average, and the
 worst single callback against its own frames.
 
+A USB interface with no 16-bit format (the POGO) turns AAudio's MMAP path off for the process,
+because Samsung's MMAP path opens USB at 16 bits and mangles it. The streams are then restarted.
+The rule is shared with the WebView app; see "USB interfaces with no 16-bit format" in
+`docs/android-build.md`. On the S21 the POGO runs shared at burst 192 and block 256, with a DSP
+load of 24-42% on the big cores.
+
 ### Touch
 
 As on iOS: the first finger is the left button, a 0.5 s hold is a right click, two fingers scroll,

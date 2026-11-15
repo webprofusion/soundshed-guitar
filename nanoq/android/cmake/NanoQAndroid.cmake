@@ -17,6 +17,9 @@ add_library(nanoq SHARED
     # Moves the audio callback off the little cores (ADPF, else affinity): shared with Soundshed
     # Guitar's Android app, plain C++ with no JUCE in it.
     "${CMAKE_CURRENT_SOURCE_DIR}/../juce/source/AndroidAudioThread.cpp"
+    # Keeps AAudio off its MMAP path for USB interfaces with no 16-bit format (shared likewise;
+    # its Java half is android/shared/java, compiled by app/build.gradle.kts).
+    "${CMAKE_CURRENT_SOURCE_DIR}/../juce/source/AndroidUsbAudioPath.cpp"
     # The CLAP entry the app calls, as clap-wrapper compiles it into each format on the desktop.
     "${CMAKE_CURRENT_SOURCE_DIR}/src/clap_entry.cpp")
 # Log.h, for nanoq::Log (AppLog.cpp).

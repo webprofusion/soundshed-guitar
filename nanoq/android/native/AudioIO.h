@@ -41,6 +41,8 @@ public:
     /// silent input. False if the output could not be opened.
     bool Start(bool withInput);
     void Stop();
+    /// Reopens running streams as they were opened (after the MMAP rule changes).
+    void Restart();
     bool Running() const
     {
         return mRunning;

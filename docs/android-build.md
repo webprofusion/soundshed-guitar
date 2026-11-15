@@ -415,6 +415,39 @@ The emulator has no low-latency audio path and routes the host microphone, so
 treat it as a way to check that the app boots and the UI works, not as a way to
 judge tone or latency.
 
+### USB interfaces with no 16-bit format (the MMAP rule)
+
+On the Galaxy S21 (Android 15) AAudio's MMAP path, which runs through the
+primary HAL rather than the USB HAL, opens a USB interface at 16-bit PCM
+whatever formats the interface offers. An interface that only offers 24-in-32
+(our POD Go firmware, "POGO": `AudioDeviceInfo.getEncodings()` is `[4, 22]`,
+float and PCM_32BIT) then plays distorted and records full-scale noise. Android's
+ordinary (non-MMAP) path converts properly and sounds clean, at a cost of a
+192-frame burst and a 256-frame block, about 2 ms more each way.
+
+So both apps follow one rule. If any attached USB audio device lists encodings
+and none of them is PCM_16, the MMAP path is off (`AAudio_setMMapPolicy(NEVER)`,
+reached through `dlsym` from `libaaudio.so`). Otherwise MMAP policy is `AUTO`.
+The policy is process-wide and applies to streams opened afterwards, so the
+audio device is reopened when the decision changes:
+
+- `android/shared/java/com/soundshed/audio/UsbAudioPath.java` watches devices
+  with an `AudioDeviceCallback` and tells the native side. Both apps add
+  `android/shared/java` to their Java sources.
+- `juce/source/AndroidUsbAudioPath.{h,cpp}` sets the policy and calls a handler.
+  The WebView app's handler (`juce/source/Main.cpp`) closes and restarts the JUCE
+  audio device. Nano Q's (`nanoq/android/native/NanoQJni.cpp`) calls
+  `AudioIO::Restart()`.
+
+The log says which way it went (`adb logcat -s SoundshedGuitar`): "USB audio:
+MMAP path off for USB-Audio - POGO output [4, 22] (no 16-bit format)". Nano Q
+also logs whether each stream opened MMAP. `adb shell dumpsys media.audio_flinger`
+lists `Mmap` threads only when the MMAP path is in use. The `aaudio.mmap_policy`
+system property can't be set on a retail phone, so the app has to do this itself.
+
+An interface that adds a 16-bit alternate setting gets the MMAP path back
+automatically. JUCE's Oboe device list is still read only once, at startup.
+
 ### Buffer size
 
 JUCE's default on Android is 40 ms of output buffering on a "low latency"

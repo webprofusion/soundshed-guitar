@@ -13,6 +13,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #if JUCE_ANDROID
+    #include "AndroidUsbAudioPath.h"
+
     #include <sys/system_properties.h>
 
     #include <optional>
@@ -360,6 +362,24 @@ class MainWindow : public juce::DocumentWindow
         // microphone permission, and any later reopen.
         mPluginHolder->deviceManager.addChangeListener(this);
         applyAndroidBufferSize(*mPluginHolder);
+
+        // A USB interface that AAudio's MMAP path mangles came or went (AndroidUsbAudioPath):
+        // reopen the device so its streams take the path now allowed. If it was ruled out
+        // before this window existed, a device the holder already opened is reopened now.
+        soundshed::android_audio::SetUsbAudioPathHandler(
+            [safe = juce::Component::SafePointer<MainWindow>(this)] {
+                juce::MessageManager::callAsync([safe] {
+                    if (safe != nullptr)
+                    {
+                        safe->reopenAudioDevice();
+                    }
+                });
+            });
+
+        if (!soundshed::android_audio::UsbMMapAllowed())
+        {
+            reopenAudioDevice();
+        }
 #endif
 
 #if !SOUNDSHED_MOBILE
@@ -428,6 +448,7 @@ class MainWindow : public juce::DocumentWindow
         }
 
 #if JUCE_ANDROID
+        soundshed::android_audio::SetUsbAudioPathHandler({});
 
         if (mPluginHolder != nullptr)
         {
@@ -502,6 +523,21 @@ class MainWindow : public juce::DocumentWindow
 
   private:
 #if JUCE_ANDROID
+    // Closes and reopens the open device as it was set up, so its streams are opened again under
+    // AAudio's current MMAP policy.
+    void reopenAudioDevice()
+    {
+        if (mPluginHolder == nullptr || mPluginHolder->deviceManager.getCurrentAudioDevice() == nullptr)
+        {
+            return;
+        }
+
+        juce::Logger::writeToLog(juce::String("[audio] reopening the device: USB MMAP path ") +
+                                 (soundshed::android_audio::UsbMMapAllowed() ? "allowed" : "off"));
+        mPluginHolder->deviceManager.closeAudioDevice();
+        mPluginHolder->deviceManager.restartLastAudioDevice();
+    }
+
     void changeListenerCallback(juce::ChangeBroadcaster*) override
     {
         // Also fires for MIDI device changes and for the open that happened

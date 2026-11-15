@@ -9,6 +9,8 @@ import android.os.PowerManager;
 import android.util.Log;
 import android.view.View;
 
+import com.soundshed.audio.UsbAudioPath;
+
 /**
  * The app's only activity.
  *
@@ -35,6 +37,7 @@ public class MainActivity extends Activity
     private static final int REQUEST_RECORD_AUDIO = 1001;
 
     private ClockFloor clockFloor;
+    private UsbAudioPath usbAudioPath;
 
     @Override
     protected void onCreate (Bundle savedInstanceState)
@@ -45,6 +48,11 @@ public class MainActivity extends Activity
 
         requestSustainedPerformance();
         clockFloor = new ClockFloor (this);
+
+        // Whether a USB interface rules out AAudio's MMAP path; the native side reopens the
+        // audio device when that changes (juce/source/AndroidUsbAudioPath.cpp).
+        usbAudioPath = new UsbAudioPath (this);
+        usbAudioPath.start();
 
         // Without RECORD_AUDIO the audio device opens with no input and the amp
         // has nothing to process.
@@ -69,6 +77,7 @@ public class MainActivity extends Activity
     @Override
     protected void onDestroy()
     {
+        usbAudioPath.stop();
         clockFloor.close();
         super.onDestroy();
     }
