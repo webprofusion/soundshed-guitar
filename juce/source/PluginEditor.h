@@ -43,6 +43,7 @@ class PluginEditor : public soundshed::editor::SoundshedEditorBase
 
     // Handle deep link from another instance of the app
     void handleDeepLinkFromAnotherInstance(const juce::String& deepLinkQuery) override;
+    void openSettings() override;
 
   private:
     void idleTick() override;

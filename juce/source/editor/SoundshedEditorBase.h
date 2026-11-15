@@ -47,6 +47,11 @@ class SoundshedEditorBase : public juce::AudioProcessorEditor, private juce::Tim
     /// A deep link handed over by a second launch of the standalone app.
     virtual void handleDeepLinkFromAnotherInstance(const juce::String& deepLinkQuery);
 
+    /// The standalone's app menu "Settings…" (⌘, on macOS): shows the Settings panel.
+    virtual void openSettings()
+    {
+    }
+
     /// For the standalone's MainWindow, to drop its launch curtain once the editor has
     /// something worth looking at: calls `callback` once, from notifyReadyToShow(), or now if
     /// that has already happened, so an editor that is ready before MainWindow asks does not

@@ -904,3 +904,8 @@ void PluginEditor::handleDeepLinkFromAnotherInstance(const juce::String& deepLin
     // Also bring the window to focus
     SoundshedEditorBase::handleDeepLinkFromAnotherInstance(deepLinkQuery);
 }
+
+void PluginEditor::openSettings()
+{
+    processorRef.SendMessageToUI(R"({"type":"openSettings"})");
+}

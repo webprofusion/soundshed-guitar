@@ -774,10 +774,17 @@ class SoundshedGuitarApplication : public juce::JUCEApplication
 #else
         mMainWindow = std::make_unique<MainWindow>(getApplicationName(), createPluginHolder());
 #endif
+
+#if JUCE_MAC
+        installAppMenu();
+#endif
     }
 
     void shutdown() override
     {
+#if JUCE_MAC
+        juce::MenuBarModel::setMacMainMenu(nullptr);
+#endif
         mMainWindow = nullptr;
         mAppProperties.saveIfNeeded();
     }
@@ -839,7 +846,95 @@ class SoundshedGuitarApplication : public juce::JUCEApplication
         }
     }
 
+#if JUCE_MAC
+    void getAllCommands(juce::Array<juce::CommandID>& commands) override
+    {
+        juce::JUCEApplication::getAllCommands(commands);
+        commands.add(openSettingsCommand);
+    }
+
+    void getCommandInfo(juce::CommandID commandID, juce::ApplicationCommandInfo& result) override
+    {
+        if (commandID == openSettingsCommand)
+        {
+            result.setInfo("Settings" + juce::String::charToString(0x2026), "Open Settings", "Application", 0);
+            result.addDefaultKeypress(',', juce::ModifierKeys::commandModifier);
+            return;
+        }
+
+        juce::JUCEApplication::getCommandInfo(commandID, result);
+    }
+
+    bool perform(const InvocationInfo& info) override
+    {
+        if (info.commandID == openSettingsCommand)
+        {
+            openSettings();
+            return true;
+        }
+
+        return juce::JUCEApplication::perform(info);
+    }
+#endif
+
   private:
+#if JUCE_MAC
+    static constexpr juce::CommandID openSettingsCommand = 0x5e7701;
+
+    // Only the app menu: no top-level menus of its own.
+    struct AppMenuModel : juce::MenuBarModel
+    {
+        juce::StringArray getMenuBarNames() override
+        {
+            return {};
+        }
+
+        juce::PopupMenu getMenuForIndex(int, const juce::String&) override
+        {
+            return {};
+        }
+
+        void menuItemSelected(int, int) override
+        {
+        }
+    };
+
+    // "Settings…" (⌘,) in the app menu, as every macOS app has. The menu takes its key
+    // equivalent from the command manager's mapping, and invokes the command through it.
+    void installAppMenu()
+    {
+        mCommandManager.registerAllCommandsForTarget(this);
+        mCommandManager.setFirstCommandTarget(this);
+
+        juce::PopupMenu appMenuItems;
+        appMenuItems.addCommandItem(&mCommandManager, openSettingsCommand);
+        juce::MenuBarModel::setMacMainMenu(&mAppMenuModel, &appMenuItems);
+    }
+
+    void openSettings()
+    {
+        if (mMainWindow == nullptr)
+        {
+            return;
+        }
+
+        if (mMainWindow->isMinimised())
+        {
+            mMainWindow->setMinimised(false);
+        }
+
+        mMainWindow->toFront(true);
+
+        if (auto* editor = dynamic_cast<soundshed::editor::SoundshedEditorBase*>(mMainWindow->getContentComponent()))
+        {
+            editor->openSettings();
+        }
+    }
+
+    juce::ApplicationCommandManager mCommandManager;
+    AppMenuModel mAppMenuModel;
+#endif
+
     std::unique_ptr<juce::StandalonePluginHolder> createPluginHolder()
     {
         constexpr auto autoOpenMidiDevices =
