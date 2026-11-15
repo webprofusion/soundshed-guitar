@@ -181,4 +181,35 @@ class NoteFollower
     int mSeen = 0;
     int mSilent = 0;
 };
+
+/// What the engine says LISTEN heard, whatever the guide shows: `heard` in a tunerUpdate
+/// (music/ListenAnalysis.h, ts/scaleGuide/heardView.ts). The chord comes only in Chords.
+struct Heard
+{
+    bool hasKey = false;
+    std::string key; ///< "A minor"
+    int keyTonic = 0;
+    bool keyMinor = false;
+    std::string scale;     ///< the simplest scale on the tonic holding every note heard, or empty
+    std::string scaleName; ///< "A Minor Pentatonic"
+    std::string alternative;
+
+    bool hasChord = false;
+    std::string chord; ///< "Am7"
+    int chordRoot = 0;
+    std::string chordId;
+    bool ringing = false; ///< still heard, rather than the last chord heard
+    std::vector<std::string> recent;
+
+    bool operator==(const Heard&) const = default;
+};
+
+[[nodiscard]] Heard ParseHeard(const nlohmann::json& heard);
+
+/// The key's line, "Key A minor · A Minor Pentatonic fits · or C major"; empty without a key.
+[[nodiscard]] std::string HeardKeyText(const Heard& heard);
+
+/// A tap on what was heard shows it, as the web UI's heardChange: the chord on its own in Chords
+/// (`chord`), else the key's scale in Scales. False when there is nothing to show.
+bool ApplyHeard(const Heard& heard, bool chord, Settings& settings);
 } // namespace guitarfx::uiclient::scaleguide

@@ -46,6 +46,12 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
+namespace
+{
+/// How long the Scale Guide's own sound rings through a preset after it ends (playback.ts TAIL_MS).
+constexpr double kScaleGuideSoundTail = 0.7;
+} // namespace
+
 // ════════════════════════════════════════════════════════════════════
 // Construction / Lifecycle
 // ════════════════════════════════════════════════════════════════════
@@ -86,11 +92,19 @@ PluginController::PluginController(IPluginHost& host) : mHost(host)
                                {[this] { return mHost.GetSampleRate(); }, [this] { return GetEffectiveTempoBpm(); },
                                 [this] { return mMetronome->BarSeconds(); },
                                 [this](std::vector<float> samples, double sampleRate, bool announce, bool onBar) {
-                                    return mDemoPreview->StartPreviewFromSamples(
+                                    // What LISTEN hears until the guide's sound has died away is not the player's.
+                                    const double seconds =
+                                        sampleRate > 0.0 ? static_cast<double>(samples.size()) / sampleRate : 0.0;
+                                    const double wait = mDemoPreview->StartPreviewFromSamples(
                                         std::move(samples), sampleRate, "scale-guide", "Scale Guide", announce,
                                         onBar ? &mMetronome->Clock() : nullptr);
+                                    mTuner->HoldListen(wait + seconds + kScaleGuideSoundTail);
+                                    return wait;
                                 },
-                                [this] { HandleStopDemoRequest(); }});
+                                [this] {
+                                    HandleStopDemoRequest();
+                                    mTuner->HoldListen(kScaleGuideSoundTail);
+                                }});
     mGateLearn = std::make_unique<GateLearnService>(sendToUI, mPresetMixer, mDSPMutex, [this]() {
         return mActivePresetId.empty() ? std::string("p1") : mActivePresetId;
     });

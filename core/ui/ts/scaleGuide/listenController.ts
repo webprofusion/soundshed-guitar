@@ -2,11 +2,13 @@
  * The Scale Guide's LISTEN, wired to the panel through `ListenHost` (panel.ts): asks the engine to
  * listen whenever the guide is on screen (`tuner {action: "listen"}`; there is no switch), follows the
  * played note in Scales and Arpeggios mode, and in Chords mode turns chroma readings into clean strums that step a
- * progression on. listen.ts holds the logic, listenView.ts the page writes.
+ * progression on. listen.ts holds the logic, listenView.ts the page writes. What the engine says it
+ * heard whatever the guide shows (the chord, the key) is heardView.ts's.
  */
 
 import { postMessage } from "../bridge.js";
 import type { IncomingPayload } from "../messages/types.js";
+import { heardChange, parseHeard, resetHeardForTests, showHeard, shownHeard } from "./heardView.js";
 import { matchChord, NoteFollower, readingMidi, StrumGate } from "./listen.js";
 import { noteReadout, setReadout, showMatch, showNotes } from "./listenView.js";
 import { isScaleGuidePlaying, isScaleGuideSounding } from "./playback.js";
@@ -17,6 +19,8 @@ export interface ListenHost {
   view(): ScaleGuideView | null;
   step(): number;
   goStep(index: number): void;
+  /** Applies a change to the guide's settings, as its own controls do. */
+  change(patch: Partial<ScaleGuideSettings>): void;
 }
 
 let sentListen: { enabled: boolean; chroma: boolean } | null = null;
@@ -26,6 +30,8 @@ let matchSignature = "";
 let flashUntil = 0;
 let round = 1;
 let cleanCount = 0;
+/** The guide roots whose Heard section answers clicks (a test's page is a new root). */
+const heardBound = new WeakSet<HTMLElement>();
 
 function element<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -57,7 +63,30 @@ export function syncListening(host: ListenHost): void {
   follower.reset();
   strums.reset();
   matchSignature = "";
+  const root = element<HTMLElement>("scale-guide");
+
+  if (root) {
+    showHeard(root, null, host.settings().mode);
+  }
+
   renderListen(host);
+}
+
+/** A click on what was heard shows it in the guide. */
+function bindHeard(host: ListenHost, root: HTMLElement): void {
+  if (heardBound.has(root)) {
+    return;
+  }
+
+  heardBound.add(root);
+  root.addEventListener("click", (event) => {
+    const what = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-sg-heard]")?.dataset.sgHeard;
+    const patch = heardChange(shownHeard(), what);
+
+    if (patch) {
+      host.change(patch);
+    }
+  });
 }
 
 /** Draws LISTEN's state over the current view: the notes followed, or the chord meter. */
@@ -80,6 +109,8 @@ export function renderListen(host: ListenHost): void {
     return;
   }
 
+  bindHeard(host, root);
+  showHeard(root, listening ? shownHeard() : null, view.mode);
   const state = host.settings();
   // The guide's own Play lights the notes it sounds: hearing them too would mark each one all over the neck.
   const heard = listening && !chordMode && (state.listenEverywhere || !isScaleGuidePlaying()) ? [follower.current, ...follower.trail] : [];
@@ -125,6 +156,12 @@ export function onListenReading(host: ListenHost, payload: IncomingPayload): boo
     return true;
   }
 
+  const root = element<HTMLElement>("scale-guide");
+
+  if (root) {
+    showHeard(root, parseHeard(payload.heard), view.mode);
+  }
+
   if (view.mode !== "chord") {
     if (follower.push(payload.detected === true ? readingMidi(payload.noteName, payload.octave) : null)) {
       renderListen(host);
@@ -155,7 +192,6 @@ export function onListenReading(host: ListenHost, payload: IncomingPayload): boo
   }
 
   const signature = match ? `${Math.round(match.share * 100)}|${match.heard.join()}|${match.missing.join()}|${match.ok}` : "quiet";
-  const root = element<HTMLElement>("scale-guide");
 
   if (root && signature !== matchSignature && performance.now() > flashUntil) {
     matchSignature = signature;
@@ -200,4 +236,5 @@ export function resetListenForTests(): void {
   matchSignature = "";
   flashUntil = 0;
   resetRound();
+  resetHeardForTests();
 }

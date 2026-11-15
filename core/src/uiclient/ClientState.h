@@ -362,6 +362,8 @@ struct TunerState
     double levelDb = -120.0;
     bool hasChroma = false;
     std::array<float, 12> chroma{};
+    /// While the Scale Guide listens: what it heard, whatever it shows (the key, in Chords the chord).
+    scaleguide::Heard heard;
     std::uint64_t readings = 0;
 };
 

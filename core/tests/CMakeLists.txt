@@ -179,6 +179,7 @@ set(TEST_SOURCES
     ToneSharingLinkTests.cpp
     JamPracticeToolTests.cpp
     ScaleGuideTests.cpp
+    ScaleGuideListenTests.cpp
     ScaleGuideUiClientTests.cpp
     TransposeBenchmark.cpp
     TransposeEffectTests.cpp

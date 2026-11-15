@@ -15,9 +15,16 @@
 // It also answers the tuner's UI messages itself (RegisterMessageHandlers): turning
 // the mixer's tuner on and off, live-vs-muted monitoring and the reference pitch,
 // each set under the DSP lock and acknowledged to the UI.
+//
+// While the Scale Guide listens it also says what it hears (music/ListenAnalysis.h): each
+// tunerUpdate carries `heard`, the key of the recent notes (or chords) and in Chords the chord
+// a strum most likely is. HoldListen() keeps the guide's own playing out of it.
+
+#include "music/ListenAnalysis.h"
 
 #include <atomic>
 #include <array>
+#include <chrono>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -64,6 +71,10 @@ class TunerService
         mActive.store(active, std::memory_order_release);
     }
 
+    /// The Scale Guide is sounding for this long, from now: what LISTEN hears meanwhile is not the
+    /// player's. Replaces any hold before it, so a stop can shorten one.
+    void HoldListen(double seconds);
+
     [[nodiscard]] bool IsActive() const
     {
         return mActive.load(std::memory_order_acquire);
@@ -80,6 +91,12 @@ class TunerService
     std::atomic<bool> mActive{false};
     std::atomic<bool> mPending{false};
     Reading mReading;
+
+    // Message thread only: LISTEN's state (the listen request and OnIdle).
+    bool mListening = false;
+    bool mListenChroma = false;
+    music::ListenTracker mListen;
+    std::chrono::steady_clock::time_point mListenHeldUntil{};
     mutable std::mutex mMutex;
 };
 } // namespace guitarfx

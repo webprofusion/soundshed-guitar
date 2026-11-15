@@ -203,10 +203,44 @@ void TestUiClient()
 }
 } // namespace
 
+/// What LISTEN heard (`heard` in a tunerUpdate), read as heardView.ts reads it, and a tap on it.
+void TestUiClientHeard()
+{
+    namespace sg = guitarfx::uiclient::scaleguide;
+    const auto heard = sg::ParseHeard(nlohmann::json::parse(R"json({
+        "key": {"name": "C major", "tonic": 0, "minor": false, "confidence": 0.8, "scale": "major",
+                "scaleName": "C Major (Ionian)", "alternative": "A minor"},
+        "chord": {"name": "Am7", "root": 9, "id": "m7", "ringing": true},
+        "recent": ["C", "G"]})json"));
+    Expect(heard.hasKey && heard.key == "C major" && heard.scale == "major" && heard.alternative == "A minor",
+           "the native UIs read the key heard");
+    Expect(heard.hasChord && heard.chord == "Am7" && heard.chordRoot == 9 && heard.chordId == "m7" && heard.ringing &&
+               heard.recent == std::vector<std::string>{"C", "G"},
+           "and the chord, with the ones before it");
+    Expect(sg::HeardKeyText(heard) == "Key C major \xC2\xB7 C Major (Ionian) fits \xC2\xB7 or A minor",
+           "the key's line names its scale and the runner-up");
+
+    sg::Settings settings;
+    settings.mode = "chord";
+    settings.progression = "b:pop";
+    Expect(sg::ApplyHeard(heard, true, settings) && settings.mode == "chord" && settings.key == 9 &&
+               settings.chord == "m7" && settings.progression.empty(),
+           "a tap on the chord shows it on its own");
+    Expect(sg::ApplyHeard(heard, false, settings) && settings.mode == "scale" && settings.key == 0 &&
+               settings.scale == "major",
+           "a tap on the key shows its scale");
+
+    const auto empty = sg::ParseHeard(nlohmann::json::parse(R"({"key": null, "chord": null, "recent": []})"));
+    Expect(!empty.hasKey && !empty.hasChord && sg::HeardKeyText(empty).empty(), "nothing heard reads as nothing");
+    Expect(!sg::ApplyHeard(empty, true, settings) && !sg::ApplyHeard(empty, false, settings), "and a tap does nothing");
+    Expect(sg::ParseHeard(nlohmann::json()) == sg::Heard{}, "nor does a reading without it");
+}
+
 int main()
 {
     TestUiClient();
     TestUiClientArpeggio();
+    TestUiClientHeard();
 
     if (gFailures > 0)
     {

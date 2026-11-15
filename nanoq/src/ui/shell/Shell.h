@@ -680,6 +680,10 @@ class Shell
     void ScaleGuideStep(int index, std::vector<int> fromFrets = {});
     /// Every tick: LISTEN on while the guide shows (it has no switch), and the readings it brings.
     void SyncScaleGuideListen();
+    // What LISTEN heard whatever the guide shows (the engine's `heard`): the summary's Heard column,
+    // rebuilt only when what it holds appears or goes, else its texts updated in place.
+    void SyncScaleGuideHeard(const guitarfx::uiclient::scaleguide::Heard& reading, bool chordMode);
+    [[nodiscard]] Ptr ScaleGuideHeardColumn(bool chordMode);
     /// Every tick: Play followed on the neck and in the tab, a progression's chords shown as they come.
     void SyncScaleGuidePlayback();
     [[nodiscard]] std::vector<int> ScaleGuideHeard() const;
@@ -703,6 +707,8 @@ class Shell
     guitarfx::uiclient::scaleguide::NoteFollower mScaleGuideFollower;
     guitarfx::uiclient::scaleguide::StrumGate mScaleGuideStrums;
     int mScaleGuideRound = 1, mScaleGuideClean = 0;
+    guitarfx::uiclient::scaleguide::Heard mScaleGuideHeard; // as the Heard column shows it
+    std::weak_ptr<Text> mScaleGuideHeardChord, mScaleGuideHeardTrail, mScaleGuideHeardKey;
     // The YouTube player is a web page: it shows in a web view of its own (nanoq/src/WebView.h)
     // placed over an empty slot in the layout, or, where there is none, in the browser. It keeps
     // playing on other pages, with a bar over them to stop it.

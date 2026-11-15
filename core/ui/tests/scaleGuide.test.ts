@@ -528,6 +528,51 @@ describe("scale guide panel", () => {
     expect(card.querySelector("svg")?.getAttribute("aria-label")).toContain("F as tab: A open, E fret 1, C open, G fret 2");
   });
 
+  it("shows the chord heard whatever the guide expects, and the likely key; a click shows either", () => {
+    settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "chord", progression: "b:pop", position: 1 });
+    renderScaleGuidePanel();
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: progressionView(0) });
+    const section = document.getElementById("sg-heard") as HTMLElement;
+    expect(section.hidden).toBe(true);
+
+    // Nothing heard yet: still hidden.
+    onScaleGuideReading({ type: "tunerUpdate", levelDb: -60, chroma: new Array(12).fill(0), heard: { key: null, chord: null, recent: [] } });
+    expect(section.hidden).toBe(true);
+
+    // The progression wants C; the player strums Am7 after G and C.
+    const heard = {
+      key: { name: "C major", tonic: 0, minor: false, confidence: 0.81, scale: "major", scaleName: "C Major (Ionian)", alternative: "A minor" },
+      chord: { name: "Am7", root: 9, id: "m7", ringing: true },
+      recent: ["C", "G"],
+    };
+    onScaleGuideReading({ type: "tunerUpdate", levelDb: -20, chroma: [0, 0, 0, 0, 0.3, 0, 0, 0.2, 0, 0.3, 0, 0], heard });
+    expect(section.hidden).toBe(false);
+    const chord = section.querySelector<HTMLElement>(".sg-heard-chord");
+    expect(chord?.textContent).toBe("Am7");
+    expect(chord?.classList.contains("sg-heard-ringing")).toBe(true);
+    expect([...section.querySelectorAll(".sg-heard-before")].map((e) => e.textContent)).toEqual(["C", "G"]);
+    expect(section.textContent).toContain("C major");
+    expect(section.textContent).toContain("or A minor");
+
+    // Stopped ringing: still shown, no longer lit.
+    onScaleGuideReading({ type: "tunerUpdate", levelDb: -60, chroma: new Array(12).fill(0), heard: { ...heard, chord: { ...heard.chord, ringing: false } } });
+    expect(section.querySelector(".sg-heard-chord")?.classList.contains("sg-heard-ringing")).toBe(false);
+
+    // A click shows that chord on its own.
+    section.querySelector<HTMLElement>(".sg-heard-chord")?.click();
+    expect(lastViewRequest().request).toMatchObject({ mode: "chord", key: 9, chord: "m7" });
+    expect(lastViewRequest().request.progression).toBeUndefined();
+
+    // In Scales there is no chord, only the key, and a click shows its scale.
+    onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: ukuleleView({ mode: "scale", shapes: undefined }) });
+    const notes = { key: { name: "A minor", tonic: 9, minor: true, confidence: 0.77, scale: "minpent", scaleName: "A Minor Pentatonic" } };
+    onScaleGuideReading({ type: "tunerUpdate", detected: true, noteName: "A", octave: 3, levelDb: -20, heard: notes });
+    expect(section.querySelector(".sg-heard-chord")).toBeNull();
+    expect(section.textContent).toContain("A Minor Pentatonic fits");
+    section.querySelector<HTMLElement>(".sg-heard-key")?.click();
+    expect(lastViewRequest().request).toMatchObject({ mode: "scale", key: 9, scale: "minpent" });
+  });
+
   it("fills the pickers from the catalogue", () => {
     renderScaleGuidePanel();
     onScaleGuideCatalog({

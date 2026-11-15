@@ -842,6 +842,8 @@ set(GUITARFX_CORE_SOURCES
     src/music/Arpeggios.cpp
     src/music/ArpeggioProgression.h
     src/music/ArpeggioProgression.cpp
+    src/music/ListenAnalysis.h
+    src/music/ListenAnalysis.cpp
     src/music/ScalePlayback.h
     src/music/ScalePlayback.cpp
     src/music/ScaleGuideView.h

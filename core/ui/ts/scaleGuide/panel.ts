@@ -67,6 +67,7 @@ const listenHost: ListenHost = {
   view: () => view,
   step: () => step,
   goStep: (index) => goStep(index),
+  change: (patch) => change(patch),
 };
 
 /** A `tunerUpdate`: true when it was for the guide's LISTEN (listenController.ts). */

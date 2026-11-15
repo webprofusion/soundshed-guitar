@@ -367,6 +367,53 @@ web do no music theory.
 - Not measured: LISTEN's single-note following, electric guitars through a DI, and a player
   following a progression from start to finish in the app.
 
+## Heard (2026-11-15)
+
+LISTEN also says what it hears, whatever the guide shows: a tool for naming a chord or finding the
+key. It is worked out in the engine (`music/ListenAnalysis.h`), so the web UI (`heardView.ts`)
+and Nano Q (`uiclient::scaleguide::Heard`) only draw it. TunerService feeds a `ListenTracker`
+each reading while the guide listens and sends `heard` with each `tunerUpdate`.
+
+- **Chord, in Chords.** Every catalogue chord on every root is scored on the chroma: its tones'
+  share, less 0.06 for each tone past three, plus a small tie-break for a loud root (G C D is
+  Gsus4 when G is loudest, Csus2 when C is). It must hold 60 % of the chroma, its root 8 %, and
+  each tone 3 % (a plain 5th may be missing when the chord has a 3rd; a power chord's 5th needs
+  15 %, so a single note's leftover overtone is no chord). A chord shows once it reads the same
+  three readings running; the pending one keeps its place unless another beats it by 0.03, since a
+  strum's readings waver between near-equal names. It stays shown, unlit, after it stops ringing,
+  until another replaces it; the three before it trail beside it. A click shows it on its own.
+- **Key, everywhere.** Notes (steadied as `NoteFollower` does, each weighted by how long it is held,
+  up to a second) over the last 32, or chords' tones (root 1.5) over the last eight, are correlated
+  with Temperley's key profiles. A chord counts once when struck and once more for each second it
+  rings, up to eight more: counted once each, A D A E D A read as D major, since a short D still
+  weighed as much as a long A. The minor profile's ♭7 is raised to 2.5 and its 7th lowered to 3.5:
+  the classical one read minor pentatonic playing as the relative major. Beside the key: the
+  simplest common scale on its tonic that holds every note heard (a pentatonic, then blues, the
+  full scale, then a mode), and the runner-up when it fits within 0.05 (usually the relative key).
+  It needs six notes or two chords and four pitch classes, and ~20 s of silence forgets it. A
+  click shows the key's scale in Scales.
+- **The guide's own sound** is held out in the engine: a play holds LISTEN's analysis for the
+  sound's length plus 0.7 s (`TunerService::HoldListen`), and Stop shortens that to 0.7 s.
+
+Measured on GuitarSet, with `ScaleGuideListenTests --identify`, `--track` and `--keys` running the
+real code (scripts and numbers in soundshed-guitar-private
+`research/listen-heard-2026-11-15/`):
+
+- 3,889 well played strums, the chord showing at the end of each: exact 77.6 %, the same notes
+  under another name (Am7 for C6) 2.5 %, wrong 8.4 %, nothing 11.5 %. Most wrong ones are near
+  misses: a major chord with a faint 3rd read as a power chord, or an extra 7th or 9th.
+- The 180 solo takes' transcribed notes, against each take's labelled key, while a key shows:
+  exact 47 %, the relative key 17 %, named as the runner-up 5 %, wrong 25 % (Krumhansl-Kessler over
+  16 notes, the first try: exact 29 %, wrong 48 %). Funk and rock vamps are the worst: a solo over
+  a dominant vamp reads as the key a 4th up.
+- The comping takes' labelled chord sequences through the key estimate: exact 76 %, with the
+  relative key 94 %.
+- In the Standalone, with the demo clips through the input: the rock comp in A (A D A E D A) named
+  A, D and E, and its key A major on 90 % of the readings that showed a key (D major on most before
+  the ring-time weighting); the rock solo read A major 78 %, its 5th, E major, the rest. GuitarSet's
+  chords are near even in length (median 2.1 s), so the weighting leaves its 76 % unchanged.
+- Not measured: an electric guitar played live, and the chord readout during fast changes.
+
 ## Phases
 
 1. **Engine + golden tests.** Catalogue, spelling, boxes (both kinds), chord search with the

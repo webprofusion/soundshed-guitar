@@ -1122,8 +1122,24 @@ Ptr Shell::BuildScaleGuide(float width)
         identity = Over(area, identity);
     }
 
-    auto summary =
-        Row({Stretch(identity), HGap(18), Stretch(Col({Label(mTheme, middleLabel), VGap(6), Row(pills)}), 1.6)});
+    std::vector<Ptr> summaryColumns = {Stretch(identity), HGap(18),
+                                       Stretch(Col({Label(mTheme, middleLabel), VGap(6), Row(pills)}), 1.6)};
+    // What LISTEN heard, beside the rest on a wide page, under it on a narrow one.
+    const auto heard = ScaleGuideHeardColumn(chordMode);
+    const bool heardBeside = heard && width >= 900.0f;
+
+    if (heardBeside)
+    {
+        summaryColumns.push_back(HGap(18));
+        summaryColumns.push_back(Stretch(heard, 1.2));
+    }
+
+    Ptr summary = Row(summaryColumns);
+
+    if (heard && !heardBeside)
+    {
+        summary = Col({summary, VGap(12), heard});
+    }
 
     // The cards' faces only: a Rounded draws, it never takes a click from what is on it.
     const auto& card = face;
@@ -1243,6 +1259,117 @@ std::vector<int> Shell::ScaleGuideHeard() const
     return notes;
 }
 
+namespace
+{
+/// The chords heard before the one showing, newest first.
+std::string HeardTrail(const sg::Heard& heard)
+{
+    std::string trail;
+
+    for (const auto& name : heard.recent)
+    {
+        trail += (trail.empty() ? "" : "  ") + name;
+    }
+
+    return trail;
+}
+} // namespace
+
+Ptr Shell::ScaleGuideHeardColumn(bool chordMode)
+{
+    const auto& heard = mScaleGuideHeard;
+    mScaleGuideHeardChord.reset();
+    mScaleGuideHeardTrail.reset();
+    mScaleGuideHeardKey.reset();
+
+    if (!mScaleGuideListening || (!heard.hasKey && !(chordMode && heard.hasChord)))
+    {
+        return nullptr;
+    }
+
+    // A tap shows what was heard: the chord on its own in Chords, the key's scale in Scales.
+    const auto tapToShow = [this](bool chord, const std::string& name, Ptr content) {
+        auto area = std::make_shared<PlayArea>(mTheme, false);
+        area->AccessName(name);
+        area->onClick = [this, chord] {
+            const auto shown = mScaleGuideHeard;
+            ChangeScaleGuide([shown, chord](sg::Settings& s) { sg::ApplyHeard(shown, chord, s); });
+        };
+        return Over(area, Pad(8, 2, 8, 2, std::move(content)));
+    };
+    std::vector<Ptr> column = {Label(mTheme, "Heard"), VGap(6)};
+
+    if (chordMode && heard.hasChord)
+    {
+        auto chord = std::make_shared<Text>(mTheme, heard.chord, 22.0f, Weight::SemiBold);
+        chord->Colour(heard.ringing ? mTheme.Success() : mTheme.TextSecondary());
+        auto trail = std::make_shared<Text>(mTheme, HeardTrail(heard), 14.0f, Weight::SemiBold);
+        trail->Colour(mTheme.TextMuted());
+        mScaleGuideHeardChord = chord;
+        mScaleGuideHeardTrail = trail;
+        column.push_back(FixedHeight(36, Row({FixedWidth(120, tapToShow(true, "Show the chord heard", Middle(chord))),
+                                              HGap(10), Stretch(Middle(trail))})));
+        column.push_back(VGap(4));
+    }
+
+    if (heard.hasKey)
+    {
+        auto key = std::make_shared<Text>(mTheme, sg::HeardKeyText(heard), 13.0f, Weight::Medium);
+        key->Colour(mTheme.Text());
+        mScaleGuideHeardKey = key;
+        column.push_back(FixedHeight(24, tapToShow(false, "Show the scale of the key heard", Middle(key))));
+    }
+
+    return Col(column);
+}
+
+void Shell::SyncScaleGuideHeard(const sg::Heard& reading, bool chordMode)
+{
+    auto heard = reading;
+
+    // Only Chords names a chord; elsewhere the key is all.
+    if (!chordMode)
+    {
+        heard.hasChord = false;
+        heard.chord.clear();
+        heard.chordId.clear();
+        heard.ringing = false;
+        heard.recent.clear();
+    }
+
+    if (heard == mScaleGuideHeard)
+    {
+        return;
+    }
+
+    const bool reshaped = heard.hasKey != mScaleGuideHeard.hasKey || heard.hasChord != mScaleGuideHeard.hasChord;
+    mScaleGuideHeard = heard;
+
+    if (reshaped)
+    {
+        Mark(kPage);
+        return;
+    }
+
+    if (const auto chord = mScaleGuideHeardChord.lock())
+    {
+        chord->Set(heard.chord).Colour(heard.ringing ? mTheme.Success() : mTheme.TextSecondary());
+        mSession.Repaint(*chord);
+    }
+
+    if (const auto trail = mScaleGuideHeardTrail.lock())
+    {
+        trail->Set(HeardTrail(heard));
+        mSession.Repaint(*trail);
+    }
+
+    if (const auto key = mScaleGuideHeardKey.lock())
+    {
+        key->Set(sg::HeardKeyText(heard));
+        mSession.Repaint(*key);
+    }
+}
+
 void Shell::SyncScaleGuideListen()
 {
     const auto settings = sg::LoadSettings(mState.appSettings);
@@ -1262,6 +1389,7 @@ void Shell::SyncScaleGuideListen()
         mScaleGuideFollower.Reset();
         mScaleGuideStrums.Reset();
         mScaleGuideReadout.clear();
+        mScaleGuideHeard = {};
         Mark(kPage);
         return;
     }
@@ -1274,6 +1402,7 @@ void Shell::SyncScaleGuideListen()
     }
 
     mScaleGuideReadings = tuner.readings;
+    SyncScaleGuideHeard(tuner.heard, chroma);
     const auto setReadout = [this](std::string text) {
         if (text == mScaleGuideReadout)
         {

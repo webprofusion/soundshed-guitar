@@ -504,4 +504,101 @@ PlaybackMoment PlaybackAt(const Playback& playback, double elapsedMs)
 
     return moment;
 }
+
+Heard ParseHeard(const nlohmann::json& heard)
+{
+    Heard out;
+
+    if (!heard.is_object())
+    {
+        return out;
+    }
+
+    const auto text = [](const nlohmann::json& object, const char* key) {
+        const auto it = object.find(key);
+        return it != object.end() && it->is_string() ? it->get<std::string>() : std::string();
+    };
+    const auto number = [](const nlohmann::json& object, const char* key) {
+        const auto it = object.find(key);
+        return it != object.end() && it->is_number_integer() ? ((it->get<int>() % 12) + 12) % 12 : 0;
+    };
+
+    if (const auto key = heard.find("key"); key != heard.end() && key->is_object() && !text(*key, "name").empty())
+    {
+        out.hasKey = true;
+        out.key = text(*key, "name");
+        out.keyTonic = number(*key, "tonic");
+        out.keyMinor = key->value("minor", false);
+        out.scale = text(*key, "scale");
+        out.scaleName = text(*key, "scaleName");
+        out.alternative = text(*key, "alternative");
+    }
+
+    if (const auto chord = heard.find("chord");
+        chord != heard.end() && chord->is_object() && !text(*chord, "name").empty() && !text(*chord, "id").empty())
+    {
+        out.hasChord = true;
+        out.chord = text(*chord, "name");
+        out.chordRoot = number(*chord, "root");
+        out.chordId = text(*chord, "id");
+        out.ringing = chord->value("ringing", false);
+    }
+
+    if (const auto recent = heard.find("recent"); recent != heard.end() && recent->is_array())
+    {
+        for (const auto& name : *recent)
+        {
+            if (name.is_string())
+            {
+                out.recent.push_back(name.get<std::string>());
+            }
+        }
+    }
+
+    return out;
+}
+
+std::string HeardKeyText(const Heard& heard)
+{
+    if (!heard.hasKey)
+    {
+        return {};
+    }
+
+    std::string text = "Key " + heard.key;
+
+    if (!heard.scaleName.empty())
+    {
+        text += " \xC2\xB7 " + heard.scaleName + " fits";
+    }
+
+    if (!heard.alternative.empty())
+    {
+        text += " \xC2\xB7 or " + heard.alternative;
+    }
+
+    return text;
+}
+
+bool ApplyHeard(const Heard& heard, bool chord, Settings& settings)
+{
+    if (chord && heard.hasChord)
+    {
+        settings.mode = "chord";
+        settings.key = heard.chordRoot;
+        settings.chord = heard.chordId;
+        settings.progression.clear();
+        return true;
+    }
+
+    if (!chord && heard.hasKey)
+    {
+        settings.mode = "scale";
+        settings.key = heard.keyTonic;
+        settings.scale = !heard.scale.empty() ? heard.scale : heard.keyMinor ? "minor" : "major";
+        return true;
+    }
+
+    return false;
+}
 } // namespace guitarfx::uiclient::scaleguide

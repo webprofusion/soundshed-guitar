@@ -269,3 +269,87 @@
 .sg-round[hidden] {
   display: none;
 }
+
+/* ── Heard: the chord a strum most likely is, and the likely key (ts/scaleGuide/heardView.ts) ── */
+.sg-heard {
+  flex: 1 1 240px;
+}
+
+.sg-heard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sg-heard-chords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.sg-heard-chord {
+  min-width: 64px;
+  padding: 6px 16px;
+  border: 1px solid var(--sg-line-strong);
+  border-radius: 10px;
+  background: var(--sg-surface-raised);
+  color: var(--text-secondary);
+  font-size: 26px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.sg-heard-chord.sg-heard-ringing {
+  border-color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--sg-surface-raised));
+  color: var(--text-primary);
+}
+
+.sg-heard-chord:hover,
+.sg-heard-chord:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.sg-heard-before {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sg-heard-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sg-heard-key {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sg-heard-key b {
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.sg-heard-key:hover b,
+.sg-heard-key:focus-visible b {
+  color: var(--color-accent);
+}
+
+.sg-heard-or {
+  color: var(--text-muted);
+}

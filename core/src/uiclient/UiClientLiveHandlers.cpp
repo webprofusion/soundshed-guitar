@@ -186,6 +186,9 @@ void UiClient::RegisterLiveHandlers()
             tuner.chroma[i] = (*chroma)[i].is_number() ? (*chroma)[i].get<float>() : 0.0f;
         }
 
+        const auto heard = m.find("heard");
+        tuner.heard = heard != m.end() ? scaleguide::ParseHeard(*heard) : scaleguide::Heard{};
+
         ++tuner.readings;
         Notify(Topic::Tuner);
     });
