@@ -104,6 +104,11 @@ export function activateTab(tabId: string): void {
   updateUiViewState({ presetTab: tabId });
 }
 
+/** The standalone app menu's "Settings…" (⌘, on macOS). */
+export function onOpenSettings(): void {
+  switchMainPanel("settings");
+}
+
 export function switchMainPanel(panelId: string): void {
   const requestedSettingsTab = panelId === "library" ? "library" : null;
   const openPadsView = panelId === "performance";
