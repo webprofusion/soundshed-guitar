@@ -16,6 +16,11 @@ namespace
 // settings file beside JUCE's own "audioSetup" and "shouldMuteInput".
 constexpr auto kInputMuteKey = "soundshedInputMute";
 
+// True while "System default" is the output, beside JUCE's "audioSetup", which only
+// ever names a device.
+constexpr auto kOutputFollowsDefaultKey = "soundshedOutputFollowsDefault";
+constexpr int kDefaultOutputPollMs = 1000;
+
 // JUCE saves this one on desktop only (StandalonePluginHolder::saveAudioDeviceState).
 constexpr auto kJuceShouldMuteInputKey = "shouldMuteInput";
 
@@ -165,6 +170,14 @@ StandaloneAudioSettings::StandaloneAudioSettings(juce::StandalonePluginHolder& h
         });
     }
 
+    if (auto* settings = mHolder.settings.get())
+    {
+        setOutputFollowsDefault(settings->getBoolValue(kOutputFollowsDefaultKey, false));
+    }
+
+    // The setup the holder restored names the device that was the default last time.
+    followSystemDefaultOutput();
+
     // On a first run the device is not open yet: the holder waits for the record
     // permission before opening anything. The change message that open sends
     // lands in changeListenerCallback, which does this again.
@@ -197,6 +210,10 @@ void StandaloneAudioSettings::changeListenerCallback(juce::ChangeBroadcaster*)
             enableInput();
         }
     }
+
+    // A device that came or went may be the new default. Our own reopen lands here too,
+    // and then finds the default already open.
+    followSystemDefaultOutput();
 
     applyMonitoringPolicy();
     sendState();
@@ -242,7 +259,9 @@ void StandaloneAudioSettings::handleRequest(const std::string& requestJson)
     }
     else if (action == "setDevice")
     {
-        error = setDevice(stringArg(request, "kind"), stringArg(request, "name"));
+        error = boolArg(request, "systemDefault", false)
+                    ? setOutputFollowsSystemDefault()
+                    : setDevice(stringArg(request, "kind"), stringArg(request, "name"));
     }
     else if (action == "setInputChannels" || action == "setOutputChannels")
     {
@@ -352,6 +371,11 @@ nlohmann::json StandaloneAudioSettings::buildState(bool rescan)
     const auto setup = mDeviceManager.getAudioDeviceSetup();
     state["inputDevice"] = toStd(setup.inputDeviceName);
     state["outputDevice"] = toStd(setup.outputDeviceName);
+
+    // Empty when the driver has no default to follow, and then the UI offers none.
+    const auto defaultOutput = systemDefaultOutputName();
+    state["defaultOutputDevice"] = toStd(defaultOutput);
+    state["outputFollowsDefault"] = mOutputFollowsDefault && defaultOutput.isNotEmpty();
 
     auto* device = mDeviceManager.getCurrentAudioDevice();
     const bool open = device != nullptr && device->isOpen();
@@ -466,6 +490,12 @@ juce::String StandaloneAudioSettings::setDevice(const juce::String& kind, const 
         return "Unknown device kind: " + kind;
     }
 
+    // A device picked by name is that device, even if it is the default right now.
+    if (kind != "input")
+    {
+        setOutputFollowsDefault(false);
+    }
+
     const auto error = mDeviceManager.setAudioDeviceSetup(setup, true);
 
     if (error.isEmpty())
@@ -474,6 +504,93 @@ juce::String StandaloneAudioSettings::setDevice(const juce::String& kind, const 
     }
 
     return error;
+}
+
+juce::String StandaloneAudioSettings::setOutputFollowsSystemDefault()
+{
+    if (systemDefaultOutputName().isEmpty())
+    {
+        return "This driver has no system default output.";
+    }
+
+    setOutputFollowsDefault(true);
+    mFailedDefaultOutput = {};
+    const auto error = followSystemDefaultOutput();
+    saveDeviceSetup();
+    return error;
+}
+
+juce::String StandaloneAudioSettings::systemDefaultOutputName() const
+{
+    auto* type = mDeviceManager.getCurrentDeviceTypeObject();
+
+    if (type == nullptr || !type->hasSeparateInputsAndOutputs())
+    {
+        return {};
+    }
+
+    const auto names = type->getDeviceNames(false);
+    const auto index = type->getDefaultDeviceIndex(false);
+    return juce::isPositiveAndBelow(index, names.size()) ? names[index] : juce::String();
+}
+
+juce::String StandaloneAudioSettings::followSystemDefaultOutput()
+{
+    if (!mOutputFollowsDefault)
+    {
+        return {};
+    }
+
+    const auto name = systemDefaultOutputName();
+    auto setup = mDeviceManager.getAudioDeviceSetup();
+
+    if (name.isEmpty() || name == setup.outputDeviceName || name == mFailedDefaultOutput)
+    {
+        return {};
+    }
+
+    juce::Logger::writeToLog("[audio] following the system default output to " + name);
+
+    setup.outputDeviceName = name;
+    setup.useDefaultOutputChannels = true;
+    const auto error = mDeviceManager.setAudioDeviceSetup(setup, true);
+
+    mFailedDefaultOutput = error.isEmpty() ? juce::String() : name;
+
+    if (error.isEmpty())
+    {
+        mHolder.saveAudioDeviceState();
+    }
+    else
+    {
+        juce::Logger::writeToLog("[audio] couldn't open the system default output " + name + ": " + error);
+    }
+
+    return error;
+}
+
+void StandaloneAudioSettings::setOutputFollowsDefault(bool follow)
+{
+    mOutputFollowsDefault = follow;
+
+    if (!follow)
+    {
+        mFailedDefaultOutput = {};
+    }
+
+    if (auto* settings = mHolder.settings.get())
+    {
+        settings->setValue(kOutputFollowsDefaultKey, follow);
+    }
+
+    if (follow)
+    {
+        mDefaultOutputPoll.startTimer(kDefaultOutputPollMs);
+    }
+    else
+    {
+        mDefaultOutputPoll.stopTimer();
+    }
 }
 
 juce::String StandaloneAudioSettings::setChannelGroup(bool isInput, int group)
