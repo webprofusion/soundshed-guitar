@@ -105,6 +105,10 @@ const std::vector<ChordRow>& ChordRows()
         {"7sus4", "Dominant 7 sus 4", "7sus4", "1 4 5 b7"},
         {"add9", "Add 9", "add9", "1 3 5 9"},
         {"9", "Dominant 9", "9", "1 3 5 b7 9"},
+        {"7#9",
+         "Dominant 7\xE2\x99\xAF"
+         "9",
+         std::string("7") + kSharpSign + "9", "1 3 5 b7 #9"},
         {"maj9", "Major 9", "maj9", "1 3 5 7 9"},
         {"m9", "Minor 9", "m9", "1 b3 5 b7 9"}};
     return rows;

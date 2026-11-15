@@ -135,6 +135,12 @@ void TestSpelling()
            "a half-diminished chord's name");
     Expect(music::SpellChord(10, *music::FindChord("m7")).name == "B" + kFlat + "m7",
            "B-flat minor 7 reads better than A-sharp");
+
+    const auto c7s9 = music::SpellChord(0, *music::FindChord("7#9"));
+    Expect(c7s9.name == "C7" + kSharp + "9" && Names(c7s9.notes) == "C E G B" + kFlat + " D" + kSharp,
+           "C7-sharp-9 has both thirds, the upper one spelled as a sharp 9th");
+    Expect(music::SpellChord(4, *music::FindChord("7#9")).notes.notes.back().name == "G",
+           "E7-sharp-9's F double sharp is written G");
 }
 
 void TestRoman()
@@ -151,9 +157,11 @@ void TestRoman()
     Expect(music::ParseRoman("vii\xC2\xB0")->quality == "dim", "vii-diminished");
     Expect(music::ParseRoman("I5")->quality == "5", "I5 is a power chord");
     Expect(music::ParseRoman("IVmaj7")->quality == "maj7", "IVmaj7");
+    Expect(music::ParseRoman("V7#9")->quality == "7#9" && music::ParseRoman("I7" + kSharp + "9")->quality == "7#9",
+           "V7#9 is a dominant 7-sharp-9, with either sharp");
     Expect(!music::ParseRoman("Vi") && !music::ParseRoman("VIII") && !music::ParseRoman("I13"), "junk numerals fail");
 
-    for (const char* token : {"I", "ii7", "bVII", "V7", "iv", "bVI7", "Imaj7", "I5", "bII5"})
+    for (const char* token : {"I", "ii7", "bVII", "V7", "iv", "bVI7", "Imaj7", "I5", "bII5", "I7#9"})
     {
         const auto chord = music::ParseRoman(token);
         const std::string back = chord ? music::RomanNumeral(*chord) : "";
@@ -357,6 +365,10 @@ void TestGoldenShapes()
     const auto* aShape = FindShape(bb, {-1, 1, 3, 3, 3, 1});
     Expect(aShape != nullptr && aShape->barres.size() == 2,
            "B-flat's A shape: a barre and a small barre:" + ShapesText(bb));
+
+    const auto e7s9 = ShapesFor("std", 4, "7#9");
+    Expect(FindShape(e7s9, {-1, 7, 6, 7, 8, -1}) != nullptr,
+           "E7-sharp-9's grip at the 7th fret, 5th left out:" + ShapesText(e7s9));
 
     ExpectShape("uke", 0, "maj", {0, 0, 0, 3}, {0, 0, 0, 1});
     ExpectShape("uke", 7, "maj", {0, 2, 3, 2}, {0, 1, 3, 2});

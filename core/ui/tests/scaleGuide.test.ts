@@ -187,6 +187,7 @@ describe("scale guide progressions", () => {
     expect(romanToken(6, "dim")).toBe("bv°");
     expect(romanToken(0, "5")).toBe("I5");
     expect(romanToken(5, "mMaj7")).toBe("ivmaj7");
+    expect(romanToken(7, "7#9")).toBe("V7#9");
   });
 
   it("keeps only well-formed saved progressions", () => {

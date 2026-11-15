@@ -57,6 +57,9 @@ void TestIdentifyChord()
     Expect(Named(music::IdentifyChord(Chroma({{0, 0.35f}, {4, 0.3f}, {7, 0.3f}, {11, 0.03f}}))) == "C",
            "a faint 7th leaves the triad");
     Expect(Named(music::IdentifyChord(Chroma({{7, 0.3f}, {11, 0.25f}, {2, 0.25f}, {5, 0.18f}}))) == "G7", "G7");
+    Expect(Named(music::IdentifyChord(Chroma({{4, 0.3f}, {8, 0.25f}, {2, 0.2f}, {7, 0.25f}}))) == "E7\xE2\x99\xAF"
+                                                                                                  "9",
+           "E G-sharp D G, the 7th-fret grip, is E7-sharp-9 rather than E7 or Em7");
     Expect(Named(music::IdentifyChord(Chroma({{4, 0.55f}, {11, 0.4f}}))) == "E5", "a power chord");
     Expect(Named(music::IdentifyChord(Chroma({{0, 0.5f}, {4, 0.45f}}))) == "C", "a triad may lose its plain 5th");
     Expect(Named(music::IdentifyChord(Chroma({{6, 0.35f}, {9, 0.3f}, {1, 0.3f}}))) == "F\xE2\x99\xAFm",
@@ -90,22 +93,27 @@ void TestEstimateKey()
            "and its notes fit the minor pentatonic");
 
     const auto withBlueNote = music::EstimateKey(weights({{9, 3.0}, {0, 2.0}, {2, 1.5}, {3, 1.0}, {4, 2.0}, {7, 1.5}}));
-    Expect(withBlueNote && withBlueNote->scale != nullptr && withBlueNote->scale->id == "blues", "the flat 5 makes it blues");
+    Expect(withBlueNote && withBlueNote->scale != nullptr && withBlueNote->scale->id == "blues",
+           "the flat 5 makes it blues");
 
-    const auto cMajor = music::EstimateKey(weights({{0, 3.0}, {2, 1.0}, {4, 2.0}, {5, 1.0}, {7, 2.0}, {9, 1.0}, {11, 1.0}}));
+    const auto cMajor =
+        music::EstimateKey(weights({{0, 3.0}, {2, 1.0}, {4, 2.0}, {5, 1.0}, {7, 2.0}, {9, 1.0}, {11, 1.0}}));
     Expect(cMajor && cMajor->name == "C major" && !cMajor->minor, "a C major scale leaning on C is C major");
     Expect(cMajor && cMajor->scale != nullptr && cMajor->scale->id == "major", "with all seven notes, the major scale");
     Expect(cMajor && cMajor->confidence > 0.7, "and fits its profile well");
 
-    const auto eFlat = music::EstimateKey(weights({{3, 3.0}, {5, 1.0}, {7, 2.0}, {8, 1.0}, {10, 2.0}, {0, 1.0}, {2, 1.0}}));
+    const auto eFlat =
+        music::EstimateKey(weights({{3, 3.0}, {5, 1.0}, {7, 2.0}, {8, 1.0}, {10, 2.0}, {0, 1.0}, {2, 1.0}}));
     Expect(eFlat && eFlat->name == "E\xE2\x99\xAD major", "E flat major is spelled with a flat");
 
     Expect(!music::EstimateKey(weights({{9, 3.0}, {0, 2.0}, {4, 2.0}})), "three notes name no key");
     Expect(!music::EstimateKey(std::array<double, 12>{}), "nor does nothing");
 
     // C major's and A minor's notes with no note leaning: either, and the other named beside it.
-    const auto even = music::EstimateKey(weights({{0, 1.0}, {2, 1.0}, {4, 1.0}, {5, 1.0}, {7, 1.0}, {9, 1.0}, {11, 1.0}}));
-    Expect(even && (even->name == "C major" || even->name == "A minor"), "an even white-note scale is C major or A minor");
+    const auto even =
+        music::EstimateKey(weights({{0, 1.0}, {2, 1.0}, {4, 1.0}, {5, 1.0}, {7, 1.0}, {9, 1.0}, {11, 1.0}}));
+    Expect(even && (even->name == "C major" || even->name == "A minor"),
+           "an even white-note scale is C major or A minor");
 }
 
 /// A note held for `readings`, then a gap, as the tuner reads a picked note.
@@ -231,7 +239,8 @@ void TestTrackerChords()
 
     // A long silence forgets it all.
     Quiet(tracker, music::ListenTracker::kForgetReadings);
-    Expect(!tracker.Chord() && !tracker.Key() && tracker.RecentChords().empty(), "a long silence forgets the chord and key");
+    Expect(!tracker.Chord() && !tracker.Key() && tracker.RecentChords().empty(),
+           "a long silence forgets the chord and key");
 }
 } // namespace
 

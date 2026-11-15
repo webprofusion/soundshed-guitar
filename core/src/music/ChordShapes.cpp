@@ -39,6 +39,7 @@ struct Rules
     std::vector<int> required;
     int minStrings = 3;
     int maxStrings = 6;
+    int fullStrings = 6; ///< sounding strings past this add nothing to a shape's score
     bool allStrings = false;
     bool rootLowest = true;
 };
@@ -79,6 +80,9 @@ Rules RulesFor(const Neck& neck, const ChordSearch& search)
     }
 
     const bool power = search.intervals.size() == 2;
+    // A chord of five notes or more is voiced on four or five strings (x 7 6 7 8 x for E7#9): a
+    // sixth string, usually a full barre, is no fuller and would crowd those grips out.
+    rules.fullStrings = search.intervals.size() >= 5 ? 5 : 6;
 
     switch (neck.instrument)
     {
@@ -462,8 +466,8 @@ std::vector<ChordShape> ChordShapes(const Neck& neck, const ChordSearch& search)
 
             const int span = allOpen ? 0 : highestFret - lowestFret;
             // More strings ring fuller (six is plenty); a stretch hurts more the wider it gets.
-            shape.score = 3.0 * std::min(count, 6) - 0.6 * span * span - 0.3 * FingerCount(shape) - 2.0 * brokenBarre -
-                          1.5 * openUpNeck;
+            shape.score = 3.0 * std::min(count, rules.fullStrings) - 0.6 * span * span - 0.3 * FingerCount(shape) -
+                          2.0 * brokenBarre - 1.5 * openUpNeck;
 
             if (!windowBest || shape.score > windowBest->score)
             {

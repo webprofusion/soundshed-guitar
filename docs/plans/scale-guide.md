@@ -114,7 +114,7 @@ in core/tests.
   (Phrygian Dominant, Hungarian Minor, Double Harmonic, Neapolitan, Lydian Dominant, Altered,
   Bebop, Hirajoshi, Kumoi, Whole Tone, both diminished), arpeggios of every chord quality.
   Chord qualities: maj, m, 5, 6, m6, 7, maj7, m7, mMaj7, m7♭5, dim, dim7, aug, aug7, sus2, sus4,
-  add9, 9, maj9, m9, 7sus4.
+  add9, 9, maj9, m9, 7sus4, 7♯9 (added 2026-11-15; numeral suffix `7#9`, as in `V7#9`).
 - **Spelling.** Each degree gets the letter `root + degree - 1` and the accidental that makes the
   pitch; for a key with two spellings both are tried and the one with fewer accidentals wins.
   A progression picks its key spelling over every chord tone it contains; chord roots are spelled
@@ -227,7 +227,8 @@ those are new work here.
 
 ## Engine notes (phase 1)
 
-- Shape score: 3 per sounding string (up to six), minus 0.6 × stretch², 0.3 per finger, 2 per
+- Shape score: 3 per sounding string (up to six, or five for a chord of five notes or more, so
+  E7♯9's x 7 6 7 8 x is not crowded out by full barres), minus 0.6 × stretch², 0.3 per finger, 2 per
   open string inside a would-be barre when there are more than four fretted notes (F as
   1 0 3 2 1 1), and 1.5 per open string when the shape reaches fret 5 (C7 as x 3 5 3 5 0).
 - Fingers count up from the lowest fretted note (a lone fretted note is finger 1, so ukulele C

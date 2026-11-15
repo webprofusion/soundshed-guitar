@@ -42,11 +42,12 @@ const QUALITY_SUFFIXES: Readonly<Record<string, readonly [suffix: string, minor:
   "7sus4": ["7sus4", false],
   add9: ["add9", false],
   "9": ["9", false],
+  "7#9": ["7#9", false],
   maj9: ["maj9", false],
   m9: ["9", true],
 };
 
-const TOKEN = /^[b#]?(?:VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)[\w°ø+]{0,6}$/;
+const TOKEN = /^[b#]?(?:VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)[\w°ø+#]{0,6}$/;
 
 /** The numeral for a chord `offset` semitones above the key with quality `quality`. */
 export function romanToken(offset: number, quality: string): string {

@@ -107,9 +107,14 @@ std::string QualityFromSuffix(std::string_view suffix, bool upper)
     }
 
     if (suffix == "5" || suffix == "add9" || suffix == "sus2" || suffix == "sus4" || suffix == "7sus4" ||
-        suffix == "maj9")
+        suffix == "maj9" || suffix == "7#9")
     {
         return std::string(suffix);
+    }
+
+    if (suffix == std::string("7") + kSharpSign + "9")
+    {
+        return "7#9";
     }
 
     if (suffix == "7")
