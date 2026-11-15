@@ -12,6 +12,7 @@ import { escapeHtml, findResourceById } from "../utils.js";
 import { getPlaySvg } from "../iconAssets.js";
 import { DOUBLE_CLICK_SELECTS_ATTR, formatBytes, formatGearDescription, getResourceTags, normalizeNamArchitectureBadge, renderResourceMetaParts, splitTagValues } from "./helpers.js";
 import { libraryThumbnailAttr, libraryThumbnailImage } from "./libraryThumbnails.js";
+import { renderTone3000Card } from "./tone3000Card.js";
 import type { FolderListingFile, ResourceType } from "./types.js";
 
 /** What a row needs to know about the tab around it. */
@@ -22,6 +23,14 @@ export interface FolderRowState {
   selectedPath: string;
   expandedPath: string | null;
   isResourceFavorite(resourceId: string): boolean;
+  /**
+   * The Tone3000 side of the details panel, when the Tone3000 feature is on: whether the file can
+   * be looked up by its content hash, and what a lookup this session found for it.
+   */
+  tone3000?: {
+    canLookUp(file: FolderListingFile): boolean;
+    metadataFor(path: string): Record<string, string> | undefined;
+  };
 }
 
 /** Whether this file is already in the resource library, and under which id. */
@@ -83,9 +92,30 @@ export function renderFolderTagFilters(bar: HTMLElement | null, availableTags: s
   bar.classList.add("is-active");
 }
 
-export function renderFolderFileDetails(file: FolderListingFile): string {
+/**
+ * The Tone3000 details to show for a file: what a lookup found this session, or else its library
+ * entry's, when that came from Tone3000 or was matched there.
+ */
+function folderFileTone3000Details(file: FolderListingFile, state: FolderRowState): Record<string, string> | undefined {
+  const found = state.tone3000?.metadataFor(file.path);
+  if (found) {
+    return found;
+  }
+  const match = folderFileLibraryMatch(file);
+  const entry = match.id ? findResourceById(uiState.resourceLibrary[file.resourceType] ?? [], match.id) : undefined;
+  return entry?.metadata?.toneId ? entry.metadata : undefined;
+}
+
+export function renderFolderFileDetails(file: FolderListingFile, state?: FolderRowState): string {
   const metadata = file.metadata ?? {};
   const rows: string[] = [];
+  const tone3000 = state?.tone3000 ? folderFileTone3000Details(file, state) : undefined;
+  const lookup = state?.tone3000?.canLookUp(file) && !tone3000
+    ? `<button class="resource-browser-details-tone3000-lookup-btn" type="button" data-path="${escapeHtml(file.path)}"
+               title="Look for a Tone3000 model with the same ${file.resourceType === "ir" ? "samples" : "weights"}, whatever this file is called, and show its tone's details">
+         Find on Tone3000
+       </button>`
+    : "";
   rows.push(`<tr><td class="resource-browser-details-label">File Path</td><td class="resource-browser-details-value resource-browser-details-mono">${escapeHtml(file.path)}</td></tr>`);
   if (typeof file.sizeBytes === "number" && file.sizeBytes > 0) {
     rows.push(`<tr><td class="resource-browser-details-label">Size</td><td class="resource-browser-details-value">${escapeHtml(formatBytes(file.sizeBytes))}</td></tr>`);
@@ -97,6 +127,8 @@ export function renderFolderFileDetails(file: FolderListingFile): string {
   }
   return `
       <div class="resource-browser-item-details-panel">
+        ${renderTone3000Card(tone3000)}
+        ${lookup}
         <table class="resource-browser-details-table"><tbody>${rows.join("")}</tbody></table>
       </div>
     `;
@@ -158,7 +190,7 @@ export function renderFolderFileRow(file: FolderListingFile, state: FolderRowSta
             ${selectPreviewBtn}
           </div>
         </div>
-        ${isExpanded ? renderFolderFileDetails(file) : ""}
+        ${isExpanded ? renderFolderFileDetails(file, state) : ""}
       </div>
     `;
 }

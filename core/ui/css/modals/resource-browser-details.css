@@ -54,6 +54,50 @@
   opacity: 0.7;
 }
 
+/* A Tone3000 tone's card: its picture, title, creator, ids and links. The picture has a fixed
+   size so the folder tab's virtual list measures the row the same before and after it loads. */
+.resource-browser-tone3000-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--modal-text-secondary);
+}
+
+.resource-browser-tone3000-card-image {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: var(--bg-browser-hover);
+}
+
+.resource-browser-tone3000-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resource-browser-tone3000-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--modal-text);
+  overflow-wrap: anywhere;
+}
+
+.resource-browser-tone3000-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.resource-browser-tone3000-card-note {
+  color: var(--modal-text-muted);
+}
+
 .resource-browser-details-description {
   font-size: 11px;
   color: var(--modal-text-secondary);

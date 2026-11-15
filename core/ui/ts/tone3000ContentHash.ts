@@ -39,13 +39,20 @@ export function canLookUpOnTone3000(resource: LibraryResource | undefined): bool
  * none it shows. A row that already names a tone prefers a model in that tone.
  */
 export async function findTone3000ByContentHash(resource: LibraryResource): Promise<Tone3000ContentHashMatch | null> {
-  const contentHash = resource.metadata?.contentHash;
+  return findTone3000ByHash(resource.metadata?.contentHash, resource.metadata?.toneId);
+}
+
+/**
+ * The Tone3000 model with this content hash, and its tone, or null when Tone3000 has none it
+ * shows. A file not in the library (the Folder tab's) has a hash but no row to look it up by.
+ */
+export async function findTone3000ByHash(contentHash: string | undefined, preferredToneId?: string): Promise<Tone3000ContentHashMatch | null> {
   if (!isContentHash(contentHash)) {
     return null;
   }
   const models = await lookupTone3000ModelsByContentHash(contentHash);
   // Try each model in preference order until one's tone can be read (a repost's tone may be private).
-  const first = chooseContentHashMatch(models, resource.metadata?.toneId);
+  const first = chooseContentHashMatch(models, preferredToneId);
   const ordered = first ? [first, ...models.filter((model) => model !== first)] : [];
   for (const model of ordered) {
     if (model.tone_id == null) {

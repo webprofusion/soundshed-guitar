@@ -20,6 +20,8 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
+#include <mutex>
 #include <random>
 #include <sstream>
 #include <string>
@@ -28,8 +30,10 @@
 
 #include <nlohmann/json.hpp>
 
+#include "MessageHandlerRegistry.h"
 #include "MessageThreadTestHost.h"
 #include "PluginController.h"
+#include "controller/ResourceFolderScanner.h"
 #include "controller/internal/NamResourceMetadata.h"
 #include "controller/internal/RemoteResourceRefs.h"
 #include "models/ContentHash.h"
@@ -408,6 +412,59 @@ bool TestLibraryKeepsContentHash()
     return ok;
 }
 
+/// The Folder tab hashes a file it lists only when asked ("hashResourceFile"), on a worker, to look
+/// it up on Tone3000; the answer names the file it is for, so the UI can match it to its row.
+bool TestFolderFileHashOnRequest()
+{
+    std::mutex mutex;
+    std::vector<nlohmann::json> replies;
+
+    ResourceLibrary library;
+    MessageHandlerRegistry registry;
+    {
+        ResourceFolderScanner scanner(
+            [&](const std::string& text) {
+                const std::lock_guard<std::mutex> lock(mutex);
+                replies.push_back(nlohmann::json::parse(text));
+            },
+            library);
+        scanner.RegisterMessageHandlers(registry);
+
+        const std::string capture = util::PathToUtf8(Assets() / "amps/Guitar/A2/Boosted-6505+-A2-Chugs-FullRig.nam");
+        const std::string ir = util::PathToUtf8(Assets() / "ir/421 1960.wav");
+        registry.Dispatch("hashResourceFile", {{"path", capture}, {"resourceType", "nam"}});
+        registry.Dispatch("hashResourceFile", {{"path", ir}, {"resourceType", "ir"}});
+        registry.Dispatch("hashResourceFile", {{"path", capture}, {"resourceType", "plugin"}});
+        registry.Dispatch("hashResourceFile",
+                          {{"path", util::PathToUtf8(Assets() / "missing.nam")}, {"resourceType", "nam"}});
+        // Shutdown waits for the workers, so every reply is in once it returns.
+        scanner.Shutdown();
+    }
+
+    std::map<std::string, nlohmann::json> byKey;
+
+    for (const auto& reply : replies)
+    {
+        const auto name = util::PathToUtf8(util::PathFromUtf8(reply.value("path", "")).filename());
+        byKey[reply.value("resourceType", "") + ":" + name] = reply;
+    }
+
+    bool ok = Expect(replies.size() == 4, "expected four replies, got " + std::to_string(replies.size()));
+    ok &= Expect(replies.empty() || replies[0].value("type", "") == "resourceFileContentHash", "wrong reply type");
+    ok &=
+        ExpectEq(byKey["nam:Boosted-6505+-A2-Chugs-FullRig.nam"].value("contentHash", ""),
+                 "nam-content-v1:8bde975150a3ed6bf4208a555090a7237d87dd40643fd051e3c09bac7b633c14", "a listed capture");
+    ok &= ExpectEq(byKey["ir:421 1960.wav"].value("contentHash", ""),
+                   "ir-content-v1:f7f40423cd886ff9813b3101af50783d5cd4ebbf0d0212c047a48701e630f7b5", "a listed IR");
+    ok &= Expect(byKey["plugin:Boosted-6505+-A2-Chugs-FullRig.nam"].value("contentHash", "x").empty() &&
+                     byKey["plugin:Boosted-6505+-A2-Chugs-FullRig.nam"].contains("error"),
+                 "a plugin type was hashed");
+    ok &=
+        Expect(byKey["nam:missing.nam"].value("contentHash", "x").empty() && byKey["nam:missing.nam"].contains("error"),
+               "a missing file was hashed");
+    return ok;
+}
+
 bool TestArchiveReferenceFindsTheSameModel()
 {
     const std::string hash = "nam-content-v1:8bde975150a3ed6bf4208a555090a7237d87dd40643fd051e3c09bac7b633c14";
@@ -455,6 +512,7 @@ int main()
     run("An IR's hash is its data chunk's", TestIrChunks());
     run("The library keeps a content hash on NAM and IR rows", TestLibraryKeepsContentHash());
     run("An archive's reference finds the same model by content hash", TestArchiveReferenceFindsTheSameModel());
+    run("A folder file is hashed on request", TestFolderFileHashOnRequest());
 
     std::cout << "\nContent hash tests: " << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;

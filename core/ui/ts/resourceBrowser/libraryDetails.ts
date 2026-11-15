@@ -2,7 +2,8 @@
  * The Library tab's details panel (the row's ℹ): a resource's id, file, tags and metadata,
  * and, for a model that came from Tone3000, a way back to its tone on the Tone3000 tab, where
  * the rest of the pack can be auditioned and imported. A model from anywhere else can be looked
- * up on Tone3000 by its content hash (tone3000ContentHash.ts).
+ * up on Tone3000 by its content hash (tone3000ContentHash.ts). A model with a Tone3000 tone, by
+ * import or by that lookup, opens with the tone's card: picture, title, creator, ids and links.
  */
 
 import type { LibraryResource } from "../types.js";
@@ -10,6 +11,7 @@ import { showNotification } from "../notifications.js";
 import { showPrompt } from "../dialogs.js";
 import { copyTextToClipboard, escapeHtml, findResourceById } from "../utils.js";
 import { getResourceTags } from "./helpers.js";
+import { hasTone3000Card, renderTone3000Card, TONE3000_CARD_KEYS } from "./tone3000Card.js";
 
 const METADATA_LABELS: Record<string, string> = {
   provider: "Provider",
@@ -83,8 +85,9 @@ export function renderLibraryItemDetailsPanel(res: LibraryResource, options: Lib
     `);
   }
 
+  const showCard = hasTone3000Card(metadata);
   for (const [key, value] of Object.entries(metadata)) {
-    if (!value) continue;
+    if (!value || (showCard && TONE3000_CARD_KEYS.has(key))) continue;
     const label = METADATA_LABELS[key] ?? key.replace(/_/g, " ").replace(/([A-Z])/g, " $1").trim();
     let displayValue: string;
     if (key === "sourceUrl" && value.startsWith("http")) {
@@ -120,6 +123,7 @@ export function renderLibraryItemDetailsPanel(res: LibraryResource, options: Lib
 
   return `
     <div class="resource-browser-item-details-panel">
+      ${showCard ? renderTone3000Card(metadata) : ""}
       ${tone3000Action}
       ${tone3000Lookup}
       ${description ? `<p class="resource-browser-details-description">${escapeHtml(description)}</p>` : ""}

@@ -12,12 +12,14 @@
 
 import { postMessage } from "../bridge.js";
 import { showConfirm } from "../dialogs.js";
+import { Features, isFeatureEnabled } from "../featureFlags.js";
 import { showNotification } from "../notifications.js";
 import { escapeHtml } from "../utils.js";
 import { isDoubleClickExempt } from "./helpers.js";
 import { getActiveRoot, getActiveRootId, getFolderLastLocations, getFolderRoots, normalizeFolderPath, rememberFolderLocation, resolveFolderStartLocation, setActiveRootId, setFolderLastLocations, setFolderRoots } from "./folderRoots.js";
 import type { FolderRowState } from "./folderRows.js";
 import { folderFileLibraryMatch, getFolderFileTags, renderFolderTagFilters } from "./folderRows.js";
+import { canLookUpFolderFile, folderFileTone3000Metadata, lookUpFolderFileOnTone3000 } from "./folderTone3000.js";
 import { FolderVirtualList } from "./folderVirtualList.js";
 import { DEFAULT_RESOURCE_CONTEXT_KEY } from "./settings.js";
 import type { FolderListing, FolderListingFile, FolderVirtualEntry, ResourceBrowserOptions, ResourceNavigationState, ResourceType } from "./types.js";
@@ -82,6 +84,9 @@ export class FolderTab {
       selectedPath: this.selectedFolderPath,
       expandedPath: this.expandedFolderItemPath,
       isResourceFavorite: (resourceId) => this.host.isResourceFavorite(resourceId),
+      tone3000: isFeatureEnabled(Features.Tone3000)
+        ? { canLookUp: canLookUpFolderFile, metadataFor: folderFileTone3000Metadata }
+        : undefined,
     };
   }
 
@@ -557,6 +562,18 @@ export class FolderTab {
       return;
     }
 
+    const lookupBtn = target.closest(".resource-browser-details-tone3000-lookup-btn") as HTMLButtonElement | null;
+    if (lookupBtn) {
+      const file = this.folderListing?.files.find((entry) => entry.path === lookupBtn.dataset.path);
+      if (file) {
+        void lookUpFolderFileOnTone3000(lookupBtn, file, () => {
+          this.host.renderLibraryList();
+          this.renderFolderList();
+        });
+      }
+      return;
+    }
+
     const detailsBtn = target.closest(".resource-browser-item-details-btn") as HTMLButtonElement | null;
     if (detailsBtn) {
       const path = detailsBtn.dataset.path ?? "";
@@ -648,6 +665,8 @@ export class FolderTab {
       description: "",
       filePath: path,
       metadata: {
+        // What a Tone3000 lookup found for the file goes with it, so its entry keeps the tone.
+        ...folderFileTone3000Metadata(path),
         sourceFolder: getActiveRoot()?.path ?? listing?.path ?? "",
         sourceFileName: fileName,
         origin: "folder-browser",

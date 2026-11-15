@@ -24,6 +24,11 @@
 // metadataPending set, then "resourceFolderMetadata" streams the parsed
 // metadata back in batches. Failures at any point become
 // "resourceFolderListingFailed".
+//
+// "hashResourceFile" works out one listed file's content hash (models/ContentHash.h)
+// on a worker of its own, so the details panel can look the file up on Tone3000
+// without the listing paying to hash every file. It never supersedes a scan, but
+// Shutdown() waits for it like one.
 
 #include <atomic>
 #include <condition_variable>
@@ -52,7 +57,7 @@ class ResourceFolderScanner
     ResourceFolderScanner(const ResourceFolderScanner&) = delete;
     ResourceFolderScanner& operator=(const ResourceFolderScanner&) = delete;
 
-    /// Registers "listResourceFolder" with the dispatcher.
+    /// Registers "listResourceFolder" and "hashResourceFile" with the dispatcher.
     void RegisterMessageHandlers(MessageHandlerRegistry& registry);
 
     /**
@@ -72,6 +77,9 @@ class ResourceFolderScanner
     /// bailing out at each step if a newer request has superseded this generation.
     void ScanWorker(std::string requestPath, std::vector<std::pair<std::string, std::string>> libraryPaths,
                     std::uint64_t generation);
+
+    /// Message thread: spawns a worker that answers "resourceFileContentHash" for one file.
+    void HandleHashResourceFileRequest(const nlohmann::json& payload);
 
     /// Drops one worker from the active count and wakes anyone waiting in Shutdown().
     void ReleaseWorker();

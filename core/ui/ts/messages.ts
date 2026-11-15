@@ -23,6 +23,7 @@ import { onNavigateToToneSharingDeepLink } from "./messages/mixerHandlers.js";
 import { onPresetLevelMeasureFailed, onPresetLevelMeasured } from "./messages/presetLevelHandlers.js";
 import { onEffectPresets, onPresetArchiveSessionEnded, onPresetArchiveSessionFailed, onPresetArchiveSessionStarted, onPresetData, onPresetDirtyChanged, onPresetExportFailed, onPresetExportSaved, onPresetFavorites, onPresetFolders, onPresetImported, onPresetList, onPresetLoaded, onPresetRatings, onPresetRecents, onPresetSaved, onSetlistCursorChanged, onSetlists } from "./messages/presetHandlers.js";
 import { onBlendExportFailed, onBlendExportSaved, onHostedPluginResourceLoadCompleted, onHostedPluginResourceLoadFailed, onIrLoaded, onLibraryExportFailed, onLibraryExportSaved, onModelLoaded, onNodeResourceBrowseCancelled, onResourceCleanupResult, onResourceData, onResourceDataFailed, onResourceDeleteFailed, onResourceFolderListing, onResourceFolderListingFailed, onResourceFolderMetadata, onResourceFolderPicked, onResourceImported, onResourceImportFailed, onResourceRemoved, onResourceUsageInfo, onToneSharingPackDeleteFailed } from "./messages/resourceHandlers.js";
+import { onResourceFileContentHash } from "./resourceBrowser/folderTone3000.js";
 import { onResourceThumbnails } from "./resourceBrowser/libraryThumbnails.js";
 import { onSharedSyncState, onSharedSyncUpdated } from "./messages/sharedSync.js";
 import { onInputLevelling, onInputLevellingSaved, onInputLevellingTraining } from "./settings/inputCalibration.js";
@@ -89,6 +90,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "resourceFolderPicked": onResourceFolderPicked,
   "resourceFolderListing": onResourceFolderListing,
   "resourceFolderMetadata": onResourceFolderMetadata,
+  "resourceFileContentHash": onResourceFileContentHash,
   "resourceFolderListingFailed": onResourceFolderListingFailed,
   "resourceThumbnails": onResourceThumbnails,
   "hostedPluginResourceLoadFailed": onHostedPluginResourceLoadFailed,

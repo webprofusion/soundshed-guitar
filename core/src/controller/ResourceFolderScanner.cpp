@@ -11,6 +11,7 @@
 
 #include "MessageHandlerRegistry.h"
 #include "controller/internal/NamResourceMetadata.h"
+#include "models/ContentHash.h"
 #include "resources/ResourceLibrary.h"
 #include "util/PathEncoding.h"
 #include "util/Wav.h"
@@ -52,6 +53,8 @@ void ResourceFolderScanner::RegisterMessageHandlers(MessageHandlerRegistry& regi
 {
     registry.Register("listResourceFolder",
                       [this](const nlohmann::json& payload) { HandleListResourceFolderRequest(payload); });
+    registry.Register("hashResourceFile",
+                      [this](const nlohmann::json& payload) { HandleHashResourceFileRequest(payload); });
 }
 
 void ResourceFolderScanner::Shutdown()
@@ -133,6 +136,63 @@ void ResourceFolderScanner::HandleListResourceFolderRequest(const nlohmann::json
         mSendMessage(nlohmann::json{
             {"type", "resourceFolderListingFailed"}, {"path", rawPath}, {"message", "Unable to start folder scan"}}
                          .dump());
+    }
+}
+
+void ResourceFolderScanner::HandleHashResourceFileRequest(const nlohmann::json& payload)
+{
+    const std::string path = payload.value("path", "");
+    const std::string resourceType = payload.value("resourceType", "");
+
+    // A hash says nothing about a scan, so it never bumps the generation; it only counts as a
+    // worker, so Shutdown() still waits for it. Hashing one file is bounded (one read and, for a
+    // .nam, one parse), so it needs no way to be cut short.
+    const auto reply = [this, path, resourceType](const std::string& contentHash, const std::string& error) {
+        nlohmann::json message{{"type", "resourceFileContentHash"},
+                               {"path", path},
+                               {"resourceType", resourceType},
+                               {"contentHash", contentHash}};
+
+        if (!error.empty())
+        {
+            message["error"] = error;
+        }
+
+        mSendMessage(DumpForUi(message));
+    };
+
+    if (path.empty() || (resourceType != "nam" && resourceType != "ir"))
+    {
+        reply("", "Missing file path or resource type");
+        return;
+    }
+
+    mActiveScans.fetch_add(1, std::memory_order_relaxed);
+
+    try
+    {
+        std::thread worker([this, path, resourceType, reply]() {
+            try
+            {
+                const auto hash = ContentHashOfFile(resourceType, util::PathFromUtf8(path));
+                reply(hash.value_or(std::string{}), hash ? std::string{} : std::string{"The file could not be hashed"});
+            }
+            catch (const std::exception& exception)
+            {
+                reply("", exception.what());
+            }
+            catch (...)
+            {
+                reply("", "The file could not be hashed");
+            }
+            ReleaseWorker();
+        });
+        worker.detach();
+    }
+    catch (const std::exception&)
+    {
+        ReleaseWorker();
+        reply("", "Unable to start hashing the file");
     }
 }
 
