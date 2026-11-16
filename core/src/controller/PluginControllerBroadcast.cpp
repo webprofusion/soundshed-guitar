@@ -246,6 +246,8 @@ void PluginController::BroadcastState(StateScope scope)
 #endif
 #if defined(__x86_64__) || defined(_M_X64)
             {"cpu", "x64"},
+#elif defined(__i386__) || defined(_M_IX86)
+            {"cpu", "x86"},
 #elif defined(__aarch64__) || defined(_M_ARM64)
             {"cpu", "arm64"},
 #else

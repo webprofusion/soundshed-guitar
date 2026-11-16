@@ -1,0 +1,26 @@
+diff --git a/src/detail/vst3/plugview.cpp b/src/detail/vst3/plugview.cpp
+index 61f9ebf..73d7aa6 100644
+--- a/src/detail/vst3/plugview.cpp
++++ b/src/detail/vst3/plugview.cpp
+@@ -270,7 +270,7 @@ bool WrappedView::request_resize(uint32_t width, uint32_t height)
+   }
+   return true;
+ }
+-tresult WrappedView::setContentScaleFactor(IPlugViewContentScaleSupport::ScaleFactor factor)
++tresult PLUGIN_API WrappedView::setContentScaleFactor(IPlugViewContentScaleSupport::ScaleFactor factor)
+ {
+   ensure_ui();
+   if (_extgui->set_scale(_plugin, factor))
+diff --git a/src/detail/vst3/plugview.h b/src/detail/vst3/plugview.h
+index ecfeb1e..1eb90ba 100644
+--- a/src/detail/vst3/plugview.h
++++ b/src/detail/vst3/plugview.h
+@@ -81,7 +81,7 @@ class WrappedView : public Steinberg::IPlugView,
+ 	 *	adjust the rect to the allowed size. */
+   tresult PLUGIN_API checkSizeConstraint(ViewRect *rect) override;
+ 
+-  tresult setContentScaleFactor(ScaleFactor factor) override;
++  tresult PLUGIN_API setContentScaleFactor(ScaleFactor factor) override;
+ 
+   //---Interface------
+   OBJ_METHODS(WrappedView, FObject)

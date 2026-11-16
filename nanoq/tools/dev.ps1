@@ -1,7 +1,7 @@
 # Stop any running Nano Q, build, report compiler and linker errors only, and optionally run
 # the standalone on a throwaway profile and capture its window.
 #
-#   powershell -File nanoq/tools/dev.ps1 -Profile <dir> [-Shot out.png] [-Resize 1100x720] [-Wait 8] [-NoRun] [-Target <t>]
+#   powershell -File nanoq/tools/dev.ps1 -Profile <dir> [-Shot out.png] [-Resize 1100x720] [-Wait 8] [-NoRun] [-Target <t>] [-Variant x86-sse3]
 #
 # Builds only the standalone by default, which is all this runs: -Target "" builds every target
 # (CLAP, VST3, tests, and Q's unused q_io).
@@ -12,7 +12,9 @@ param(
     [int]$Wait = 8,
     [switch]$NoRun,
     [string]$Config = "Release",
-    [string]$Target = "nanoq_standalone"
+    [string]$Target = "nanoq_standalone",
+    # A nanoq/build.cmd variant: x64-avx2 (the default), x64-avx, x64-sse2, x86-sse3, arm64.
+    [string]$Variant = "x64-avx2"
 )
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -20,7 +22,7 @@ Get-Process -Name "Soundshed Nano Q" -ErrorAction SilentlyContinue | Stop-Proces
 Start-Sleep -Milliseconds 700
 
 Push-Location $root
-$out = cmd.exe /c "nanoq\build.cmd $Config $Target" 2>&1 | Out-String
+$out = cmd.exe /c "nanoq\build.cmd $Config $Target --variant $Variant" 2>&1 | Out-String
 Pop-Location
 
 $lines = $out -split "`r?`n"
@@ -32,7 +34,7 @@ if ($errors) {
 "build ok"
 
 if (-not $NoRun) {
-    $params = @{ Profile = $Profile; Wait = $Wait; Config = $Config }
+    $params = @{ Profile = $Profile; Wait = $Wait; Config = $Config; Variant = $Variant }
     if ($Shot -ne "") { $params.Shot = $Shot }
     if ($Resize -ne "") { $params.Resize = $Resize }
     & (Join-Path $PSScriptRoot "run-isolated.ps1") @params

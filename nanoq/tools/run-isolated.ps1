@@ -2,17 +2,21 @@
 # run never touches the real Soundshed profile, waits for it to come up, and optionally captures
 # its window. Any earlier Nano Q instance is stopped first.
 #
-#   powershell -File nanoq/tools/run-isolated.ps1 -Profile <dir> [-Shot out.png] [-Resize 1100x720] [-Wait 8]
+#   powershell -File nanoq/tools/run-isolated.ps1 -Profile <dir> [-Shot out.png] [-Resize 1100x720] [-Wait 8] [-Variant x86-sse3]
 param(
     [Parameter(Mandatory = $true)][string]$Profile,
     [string]$Shot = "",
     [string]$Resize = "",
     [int]$Wait = 8,
-    [string]$Config = "Release"
+    [string]$Config = "Release",
+    # The nanoq/build.cmd variant whose build to run. x64-avx2 builds in nanoq\build\<config>,
+    # every other variant in nanoq\build\<variant>\<config>.
+    [string]$Variant = "x64-avx2"
 )
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$exe = Join-Path $root "nanoq\build\$Config\products\Standalone-nanoq_standalone\Soundshed Nano Q.exe"
+$tree = if ($Variant -eq "x64-avx2") { "nanoq\build\$Config" } else { "nanoq\build\$Variant\$Config" }
+$exe = Join-Path $root "$tree\products\Standalone-nanoq_standalone\Soundshed Nano Q.exe"
 if (-not (Test-Path $exe)) { Write-Error "Not built: $exe"; exit 1 }
 
 Get-Process -Name "Soundshed Nano Q" -ErrorAction SilentlyContinue | Stop-Process -Force

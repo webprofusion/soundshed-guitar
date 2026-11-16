@@ -792,6 +792,8 @@ void PluginController::HandleGetAppInfoRequest()
 
 #if defined(__x86_64__) || defined(_M_X64)
     msg["cpu"] = "x64";
+#elif defined(__i386__) || defined(_M_IX86)
+    msg["cpu"] = "x86";
 #elif defined(__aarch64__) || defined(_M_ARM64)
     msg["cpu"] = "arm64";
 #else

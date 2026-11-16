@@ -81,10 +81,9 @@ endfunction()
 
 function(guitarfx_get_wasmtime_bundle out_platform out_archive_ext out_static_lib)
     if(WIN32)
-        set(_guitarfx_wasmtime_arch "${CMAKE_GENERATOR_PLATFORM}")
-        if(NOT _guitarfx_wasmtime_arch)
-            set(_guitarfx_wasmtime_arch "${CMAKE_SYSTEM_PROCESSOR}")
-        endif()
+        # The generator platform, else the compiler's target. Not CMAKE_SYSTEM_PROCESSOR: under
+        # Ninja that is the host's (AMD64) even in a 32-bit MSVC environment.
+        guitarfx_detect_windows_arch(_guitarfx_wasmtime_arch)
     elseif(APPLE)
         set(_guitarfx_wasmtime_arch "${CMAKE_OSX_ARCHITECTURES}")
         if(NOT _guitarfx_wasmtime_arch)

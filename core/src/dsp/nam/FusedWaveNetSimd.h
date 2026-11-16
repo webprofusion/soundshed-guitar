@@ -17,7 +17,8 @@
 #if defined(__AVX2__) && (defined(__FMA__) || (defined(_MSC_VER) && !defined(__clang__)))
     #define GUITARFX_FWN_AVX2 1
     #include <immintrin.h>
-#elif defined(_M_X64) || defined(__x86_64__)
+#elif defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+    // 32-bit x86 too, where the compiler has SSE2 (MSVC's default /arch:SSE2, _M_IX86_FP 2).
     #define GUITARFX_FWN_SSE 1
     #include <emmintrin.h>
 #elif defined(__aarch64__) || defined(_M_ARM64)

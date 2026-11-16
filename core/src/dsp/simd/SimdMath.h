@@ -37,7 +37,10 @@
     #define GUITARFX_HAS_SSE4 1
 #endif
 
-#if defined(GUITARFX_ARCH_X86) && (defined(__SSE2__) || (defined(_MSC_VER) && defined(_M_X64)))
+// MSVC never defines __SSE2__: x64 always has SSE2, and 32-bit x86 has it under /arch:SSE2 (the
+// default) and above, which _M_IX86_FP reports as 2.
+#if defined(GUITARFX_ARCH_X86) && \
+    (defined(__SSE2__) || (defined(_MSC_VER) && (defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2))))
     #define GUITARFX_HAS_SSE2 1
 #endif
 

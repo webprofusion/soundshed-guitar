@@ -143,6 +143,35 @@ both, an edit to one UI file rebuilds the standalone in ~10 s here (was ~57 s), 
 `Shell.h` in ~40 s. Building every target also builds Q's `q_io`, which the plugins and the
 standalone do not link; its libremidi fails here for want of a generated WinMIDI projection.
 
+### Windows build variants
+
+`--variant` picks the CPU architecture and SIMD baseline. `build.cmd` loads the matching MSVC
+environment (`vcvarsall` host_target) and passes `GUITARFX_CORE_SIMD_LEVEL`
+(`core/cmake/GuitarfxSimdLevel.cmake`):
+
+| Variant | Arch | Code generation | Runs on | Tree |
+| ------- | ---- | --------------- | ------- | ---- |
+| `x64-avx2` (default) | x64 | `/arch:AVX2` (FMA too) | Intel Haswell 2013+, AMD Excavator 2015+ | `nanoq\build\<config>` |
+| `x64-avx` | x64 | `/arch:AVX` | Intel Sandy Bridge / AMD Bulldozer 2011+ | `nanoq\build\x64-avx\<config>` |
+| `x64-sse2` | x64 | no `/arch:` flag (SSE2) | any x86-64, including the AVX-less Celerons | `nanoq\build\x64-sse2\<config>` |
+| `x86-sse3` | 32-bit x86 | MSVC's default `/arch:SSE2`, no AVX | MMX + SSE3 CPUs: Pentium 4 Prescott 2004+, Athlon 64 rev E+ | `nanoq\build\x86-sse3\<config>` |
+| `arm64` | ARM64 | `/arch:armv8.2` where the compiler has it | Windows on ARM | `nanoq\build\arm64\<config>` |
+
+```powershell
+nanoq\build.cmd Release nanoq_standalone --variant x86-sse3
+powershell -File nanoq/tools/dev.ps1 -Profile D:\t\nq -Variant x86-sse3   # dev.ps1 and run-isolated.ps1 take -Variant too
+```
+
+MSVC has no `/arch:SSE3`. The 32-bit variant generates SSE2 code and gets SSE3 from the
+core's intrinsics (`SimdFFT.h`'s complex multiply: `_mm_addsub_ps`, `_mm_moveldup_ps`,
+`_mm_movehdup_ps`), so it needs an SSE3 CPU. Its SSE
+paths are the x64 ones: `SimdMath.h` reads MSVC's `_M_IX86_FP` for SSE2, and the fused
+WaveNet runs its SSE kernel. The variant also takes Wasmtime's i686 bundle and WebView2's x86
+loader. CMake chooses both by the compiler's target, not `CMAKE_SYSTEM_PROCESSOR`, which under
+Ninja is the host's `AMD64`. A tree configured from the wrong MSVC environment stops at
+configure: `NANOQ_BUILD_VARIANT` is checked against `MSVC_CXX_ARCHITECTURE_ID`. A 32-bit
+plugin loads only in a 32-bit host, and hosts only 32-bit plugins.
+
 On macOS, with Xcode's command-line tools and Ninja:
 
 ```bash

@@ -50,6 +50,22 @@ endif()
 
 include(FetchContent)
 
+# The build variant nanoq/build.cmd configured this tree for (x64-avx2, x64-avx, x64-sse2,
+# x86-sse3, arm64): it sets the compiler environment and GUITARFX_CORE_SIMD_LEVEL. Checked here
+# against the compiler CMake found, so a tree configured from the wrong MSVC environment (a
+# 64-bit prompt for x86-sse3, say) stops now instead of building the wrong thing.
+set(NANOQ_BUILD_VARIANT "" CACHE STRING "Nano Q build variant (set by nanoq/build.cmd)")
+if(MSVC AND NANOQ_BUILD_VARIANT)
+    string(TOLOWER "${MSVC_CXX_ARCHITECTURE_ID}" _nanoq_msvc_arch)
+    string(REGEX REPLACE "-.*$" "" _nanoq_variant_arch "${NANOQ_BUILD_VARIANT}")
+    if(NOT _nanoq_msvc_arch STREQUAL _nanoq_variant_arch)
+        message(FATAL_ERROR "Nano Q variant ${NANOQ_BUILD_VARIANT} wants an ${_nanoq_variant_arch} compiler, "
+                            "but this one targets ${_nanoq_msvc_arch}. Build it with nanoq/build.cmd --variant "
+                            "${NANOQ_BUILD_VARIANT}, which loads the matching MSVC environment.")
+    endif()
+    message(STATUS "Nano Q build variant: ${NANOQ_BUILD_VARIANT}")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(NANOQ_IOS ON)
 else()
@@ -204,12 +220,18 @@ endif()
 # takes patches/clap-wrapper-x11-standalone.patch: as published its loop never reads its timers, so
 # it spins on a whole core, its window ignores resizes, and it opens ALSA with four periods. The
 # patch also gives the standalone the whole screen when SOUNDSHED_KIOSK is set (tools/linux-kiosk).
+# Every build takes patches/clap-wrapper-vst3-plugin-api.patch: the VST3 view's
+# setContentScaleFactor lacked PLUGIN_API, which is __stdcall on 32-bit Windows (x86-sse3
+# variant), so the override did not compile there. Elsewhere PLUGIN_API is empty.
 FetchContent_Declare(clap_wrapper
     GIT_REPOSITORY https://github.com/cycfi/clap-wrapper.git
     GIT_TAG af23b0fa058b96430354d23b023db9d143467852 # Q v1.5.4's pin
     SOURCE_SUBDIR do-not-add
     PATCH_COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/clap-wrapper-x11-standalone.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
+    COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/clap-wrapper-vst3-plugin-api.patch
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 
 # ── The engine ──────────────────────────────────────────────────────────────────
@@ -312,8 +334,13 @@ if(WIN32)
             file(ARCHIVE_EXTRACT INPUT "${_nanoq_wv2_pkg}" DESTINATION "${_nanoq_wv2}")
         endif()
     endif()
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$" OR CMAKE_GENERATOR_PLATFORM MATCHES "^(ARM64|arm64)$")
+    # The compiler's target, not CMAKE_SYSTEM_PROCESSOR: under Ninja that is the host's (AMD64)
+    # even in a 32-bit MSVC environment.
+    guitarfx_detect_windows_arch(_nanoq_target_arch)
+    if(_nanoq_target_arch MATCHES "^(arm64|arm64ec|aarch64)$")
         set(_nanoq_wv2_arch arm64)
+    elseif(_nanoq_target_arch MATCHES "^(x86|win32|i386|i686)$")
+        set(_nanoq_wv2_arch x86)
     else()
         set(_nanoq_wv2_arch x64)
     endif()
