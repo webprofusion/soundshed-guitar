@@ -48,6 +48,7 @@ set(TEST_SOURCES
     GlobalChainEditorTests.cpp
     GlobalChainEngineTests.cpp
     GuitarToMidiEffectTests.cpp
+    GuitarToMidiPolyphonicTests.cpp
     HarmonizerEffectTests.cpp
     ParamGlideTests.cpp
     SplitterRoutingTests.cpp
@@ -112,6 +113,7 @@ set(TEST_SOURCES
     NonAsciiPathWorkflowTests.cpp
     NotePlayerTests.cpp
     NoteTrackerTests.cpp
+    PolyNoteDetectorTests.cpp
     OctaveEngineTests.cpp
     PassiveToneStackTests.cpp
     PickupMatchEffectTests.cpp

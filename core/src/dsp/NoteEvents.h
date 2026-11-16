@@ -13,7 +13,7 @@ namespace guitarfx
  * the nodes downstream of it that play them (a hosted instrument).
  *
  * A source fills a NoteBlock every block it runs: the events it decided on, in time order, and
- * the note it is holding once the block is over. The executor hands a player the blocks of every
+ * the note (or the chord) it is holding once the block is over. The executor hands a player the blocks of every
  * source upstream of it that ran this block (SignalGraphExecutor, "Note routing"), and the
  * player's NotePlayer turns them into the MIDI its instrument receives.
  *
@@ -45,7 +45,7 @@ struct NoteEvent
 /// What a note source made in one block. See the file comment.
 struct NoteBlock
 {
-    static constexpr int kMaxEvents = 32;
+    static constexpr int kMaxEvents = 64;
     static constexpr std::int16_t kMinBend = -8192;
     static constexpr std::int16_t kMaxBend = 8191;
 
@@ -59,9 +59,69 @@ struct NoteBlock
     std::uint8_t channel = 0;
     std::int16_t bend = 0;
 
+    /// A source that holds several notes at once (a chord) lists them here and leaves heldNote at
+    /// -1; a player takes the two together. Each has its own channel, the block's channel unless
+    /// the source spreads its notes over channels (MPE).
+    static constexpr int kMaxChord = 12;
+    std::array<std::uint8_t, kMaxChord> chordNotes{};
+    std::array<std::uint8_t, kMaxChord> chordVelocities{};
+    std::array<std::uint8_t, kMaxChord> chordChannels{}; ///< see ChordChannel()
+    int chordCount = 0;
+
+    /// A source that bends channels other than its own (MPE: a channel per note) holds each one's
+    /// bend here, with its bit set in channelBendMask; like `bend`, it stays where it was last sent.
+    std::array<std::int16_t, 16> channelBends{};
+    std::uint16_t channelBendMask = 0;
+
+    /// MPE: a source playing an MPE lower zone (manager channel 1, as channel 0 here) sets how
+    /// many member channels follow it, 1 to 15, and their pitch bend range in semitones; 0 for
+    /// none. A player tells its instrument so (MIDI's MPE Configuration Message and each member
+    /// channel's pitch bend sensitivity).
+    std::uint8_t mpeMemberChannels = 0;
+    std::uint8_t mpeBendRange = 0;
+
     void Clear()
     {
         count = 0;
+    }
+
+    void ClearChord()
+    {
+        chordCount = 0;
+        channelBendMask = 0;
+    }
+
+    /// Adds a held chord note unless the list is full; on `channel`, or the block's channel.
+    bool HoldChordNote(int note, int velocity, int noteChannel = -1)
+    {
+        if (chordCount >= kMaxChord || note < 0 || note > 127)
+        {
+            return false;
+        }
+
+        chordNotes[static_cast<std::size_t>(chordCount)] = static_cast<std::uint8_t>(note);
+        chordVelocities[static_cast<std::size_t>(chordCount)] = static_cast<std::uint8_t>(std::clamp(velocity, 1, 127));
+        chordChannels[static_cast<std::size_t>(chordCount)] =
+            noteChannel >= 0 ? static_cast<std::uint8_t>(noteChannel & 0x0F) : kBlockChannel;
+        ++chordCount;
+        return true;
+    }
+
+    /// A chord note's channel: its own, or the block's as it stands.
+    [[nodiscard]] int ChordChannel(int index) const
+    {
+        const std::uint8_t c = chordChannels[static_cast<std::size_t>(index)];
+        return c == kBlockChannel ? (channel & 0x0F) : (c & 0x0F);
+    }
+
+    static constexpr std::uint8_t kBlockChannel = 0xFF;
+
+    /// Holds `value` as the bend on `bendChannel` (MPE).
+    void HoldChannelBend(int bendChannel, std::int16_t value)
+    {
+        const int c = bendChannel & 0x0F;
+        channelBends[static_cast<std::size_t>(c)] = value;
+        channelBendMask = static_cast<std::uint16_t>(channelBendMask | (1u << c));
     }
 
     /// Appends `event` unless the block is full. The held note is not touched: a caller updates it
@@ -120,6 +180,7 @@ class NotePlayer
         mDropped = 0;
         mPendingSounding = mSounding;
         mPendingBend = mBend;
+        mPendingMpe = mMpe;
         const int last = std::max(0, numSamples - 1);
 
         if (mReleaseAll)
@@ -128,6 +189,7 @@ class NotePlayer
         }
 
         const auto sourceCount = std::min<std::size_t>(sources.size(), kMaxSources);
+        ConfigureMpe(sources.first(sourceCount));
         MergeEvents(sources.first(sourceCount), last);
         Reconcile(sources.first(sourceCount), last);
         return {mMessages.data(), static_cast<std::size_t>(mCount)};
@@ -138,14 +200,21 @@ class NotePlayer
     {
         mSounding = mPendingSounding;
         mBend = mPendingBend;
+        mMpe = mPendingMpe;
         mReleaseAll = false;
     }
 
     /// The next Build() starts by turning off every note sent and centring every bend: for an
-    /// instrument that has been reset, which may or may not have stopped its voices.
+    /// instrument that has been reset, which may or may not have stopped its voices. An MPE zone
+    /// is set up again too, in case the reset forgot it.
     void ReleaseAllNext()
     {
         mReleaseAll = true;
+
+        if (mMpe != 0)
+        {
+            mMpe = kMpeUnknown;
+        }
     }
 
     /// The instrument has nothing sounding: a new instance. Nothing is sent to turn anything off,
@@ -154,7 +223,15 @@ class NotePlayer
     {
         mSounding = {};
         mBend = {};
+        mMpe = 0;
         mReleaseAll = false;
+    }
+
+    /// The MPE zone the instrument was last told of: member channels in the high byte, bend range
+    /// in the low; 0 for none.
+    [[nodiscard]] std::uint16_t MpeZone() const
+    {
+        return mMpe;
     }
 
     [[nodiscard]] bool IsSounding(int channel, int note) const
@@ -176,6 +253,7 @@ class NotePlayer
   private:
     static constexpr int kChannels = 16;
     static constexpr int kNotes = 128;
+    static constexpr std::uint16_t kMpeUnknown = 0xFFFF;
     static constexpr int kWords = kChannels * kNotes / 64;
     using NoteSet = std::array<std::uint64_t, kWords>;
 
@@ -253,6 +331,76 @@ class NotePlayer
         {
             current = bend;
         }
+    }
+
+    void Control(int channel, int controller, int value)
+    {
+        Push(static_cast<std::uint8_t>(0xB0 | (channel & 0x0F)), static_cast<std::uint8_t>(controller & 0x7F),
+             static_cast<std::uint8_t>(value & 0x7F), 0);
+    }
+
+    /// Registered parameter `number` (MSB, LSB) on `channel` set to `value` (and `fine`, when not
+    /// negative).
+    void Rpn(int channel, int msb, int lsb, int value, int fine)
+    {
+        Control(channel, 101, msb);
+        Control(channel, 100, lsb);
+        Control(channel, 6, value);
+
+        if (fine >= 0)
+        {
+            Control(channel, 38, fine);
+        }
+    }
+
+    void NullRpn(int channel)
+    {
+        Control(channel, 101, 127);
+        Control(channel, 100, 127);
+    }
+
+    /// Tells the instrument of the MPE zone the sources ask for, if it differs from what it was
+    /// told last: the MPE Configuration Message (RPN 6 on the manager channel) and then, as MPE
+    /// asks, each member channel's pitch bend sensitivity (RPN 0). All of it or, short of room,
+    /// none of it until the next block.
+    void ConfigureMpe(std::span<const NoteBlock* const> sources)
+    {
+        std::uint16_t wanted = 0;
+
+        for (const NoteBlock* block : sources)
+        {
+            if (block && block->mpeMemberChannels > 0)
+            {
+                const int members = std::min<int>(block->mpeMemberChannels, kChannels - 1);
+                wanted = static_cast<std::uint16_t>(members << 8 | std::min<int>(block->mpeBendRange, 127));
+                break;
+            }
+        }
+
+        if (wanted == mPendingMpe)
+        {
+            return;
+        }
+
+        const int members = wanted >> 8;
+        const int needed = 5 + 6 * members;
+
+        if (mCount + needed > kMaxMessages)
+        {
+            mDropped += needed;
+            return;
+        }
+
+        Rpn(0, 0, 6, members, -1);
+        NullRpn(0);
+
+        for (int channel = 1; channel <= members; ++channel)
+        {
+            Rpn(channel, 0, 0, wanted & 0xFF, 0);
+            NullRpn(channel);
+        }
+
+        mPendingMpe = wanted;
     }
 
     void ReleaseAll(int offset)
@@ -343,10 +491,27 @@ class NotePlayer
             const int channel = block->channel & 0x0F;
             bend[static_cast<std::size_t>(channel)] = block->bend;
 
+            for (int c = 0; c < kChannels; ++c)
+            {
+                if ((block->channelBendMask >> c) & 1u)
+                {
+                    bend[static_cast<std::size_t>(c)] = block->channelBends[static_cast<std::size_t>(c)];
+                }
+            }
+
             if (block->heldNote >= 0 && block->heldNote < kNotes)
             {
                 Assign(held, channel, block->heldNote, true);
                 velocity[static_cast<std::size_t>(channel * kNotes + block->heldNote)] = block->heldVelocity;
+            }
+
+            for (int i = 0; i < std::min(block->chordCount, NoteBlock::kMaxChord); ++i)
+            {
+                const int note = block->chordNotes[static_cast<std::size_t>(i)] & 0x7F;
+                const int noteChannel = block->ChordChannel(i);
+                Assign(held, noteChannel, note, true);
+                velocity[static_cast<std::size_t>(noteChannel * kNotes + note)] =
+                    block->chordVelocities[static_cast<std::size_t>(i)];
             }
         }
 
@@ -388,6 +553,8 @@ class NotePlayer
     NoteSet mPendingSounding{};
     std::array<std::int16_t, kChannels> mBend{};
     std::array<std::int16_t, kChannels> mPendingBend{};
+    std::uint16_t mMpe = 0;
+    std::uint16_t mPendingMpe = 0;
     std::array<NoteMidiMessage, kMaxMessages> mMessages{};
     int mCount = 0;
     int mDropped = 0;

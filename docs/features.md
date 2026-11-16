@@ -129,7 +129,7 @@ All types share `decay`, `mix`, and `preDelay`. Each has tuned internals for its
 | Type ID | Description |
 |---------|-------------|
 | `synth_saw` | Sawtooth synth layer |
-| `guitar_to_midi` | Turns single notes into MIDI notes, velocity and optional pitch bend for a virtual instrument in a Plugin Host downstream in the chain. See *Guitar to MIDI* in `docs/fx-library.md` |
+| `guitar_to_midi` | Turns single notes into MIDI notes, velocity and optional pitch bend, or in Polyphonic mode chords into their notes (with Polyphonic + Bend, each on its own MPE channel with its own pitch bend), for a virtual instrument in a Plugin Host downstream in the chain. See *Guitar to MIDI* in `docs/fx-library.md` |
 
 ### 2.10 Utility
 

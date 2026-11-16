@@ -262,6 +262,17 @@ that to mean the source holds nothing and lets its notes go. A source that did n
 block before is `Reset()` before it runs again, so it starts afresh rather than replaying a
 note it was holding when it was bypassed.
 
+A source's block carries its events and what it holds once the block is over: one note, or, from
+Guitar to MIDI's Polyphonic mode, a chord of up to twelve (`NoteBlock::HoldChordNote()`). The
+player reconciles against all of them, so a chord is let go, or brought back after a dropped
+block, a note at a time.
+
+In Guitar to MIDI's Polyphonic + Bend mode a chord note is held on a channel of its own
+(`HoldChordNote(note, velocity, channel)`), each channel's bend is held with it
+(`HoldChannelBend()`), and the block asks for an MPE zone (`mpeMemberChannels`, `mpeBendRange`).
+The player sends the zone before anything else, again after the instrument is reset, and a zone of
+none when no source asks for one.
+
 ### Implicit I/O Nodes
 If edges reference `__input__` or `__output__` but those nodes are missing, the executor inserts implicit input/output nodes during `SetGraph()`.
 

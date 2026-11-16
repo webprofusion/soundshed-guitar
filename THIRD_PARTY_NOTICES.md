@@ -116,6 +116,20 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 The full licence text is in `ios/compat/libcxx-filesystem/LICENSE.TXT`.
 
+## GuitarSet and Guitar-TECHS (training data)
+
+The note model behind Guitar to MIDI's Polyphonic mode (`core/src/dsp/PolyNoteModelData.inc`, see
+*Guitar to MIDI* in `docs/fx-library.md`) was trained on two sets of annotated guitar recordings.
+No recording is shipped: only the trained weights.
+
+- GuitarSet: Q. Xi, R. Bittner, J. Pauwels, X. Ye and J. P. Bello, "GuitarSet: A Dataset for
+  Guitar Transcription", ISMIR 2018. https://zenodo.org/records/3371780. Creative Commons
+  Attribution 4.0 International.
+- Guitar-TECHS: H. Pedroza, T. Taheri, W. Abreu, R. Corey and I. R. Roman, "Guitar-TECHS: An Electric Guitar
+  Dataset Covering Techniques, Musical Excerpts, Chords and Scales Using a Diverse Array of
+  Hardware", ICASSP 2025. https://zenodo.org/records/14963133. Creative Commons Attribution 4.0
+  International.
+
 ## alphaTab
 
 Renders tablature and notation in the Practice Tool's tab view (`core/ui`, loaded

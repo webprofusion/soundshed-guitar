@@ -2669,13 +2669,13 @@ flags), and 4.9 µs on white noise (1.2), where it is always searching. The reco
 | Tuner (`TunerEngine`) | Runs the tracker on the audio thread (about 2.4 µs per 64-sample block) and averages its detections over each reading, 2048 samples at 48 kHz (43 ms at any rate). A worker thread names the note against the reference pitch and reports it, as before. A new note restarts the average. Averaged, the 5 ms detections read a held note with a third to a tenth of the scatter of the single 85 ms window the tuner used to analyse. So the tuner needs no longer window of its own, and the UI still averages six readings. With white noise 20 dB below an A2, readings scatter by 0.3 cents, where they scattered by 2.6 and sat 1.7 cents sharp. On the DI demo's held notes, 99% of readings are within 10 cents of full-rate YIN, against 75% before, and none is more than 50 cents out, against 24% before. Notes above about 1.1 kHz no longer read an octave low, and 176.4 and 192 kHz work. The worker no longer spends 2.3 ms on YIN every 43 ms. The tuner takes the tracker's range down to 16 Hz (`kBassLowestHz`, a semitone under an extended-range bass's low C#), where the effects stop at 45 Hz. It sets it before `Prepare()`, which sizes the buffers for it; a tracker prepared at the default keeps the guitar's buffers and goes no lower, so the effects' buffers, window, cost and output are exactly as they were. A note under 45 Hz showed nothing in 1.6.0. The old detector stopped at 50 Hz and fell back to its best lag, which read a low E or B as its octave on a minority of readings, and only when the fundamental was much weaker than the second harmonic; otherwise nothing. The longer window (two of the longest period, 125 ms against 44) reads held notes the same, from C0 up and through a 20 Hz interface roll-off, with the first reading about 40 ms later on the lowest notes; it costs 7–9 µs per block instead of 1.7 while the tuner is on. It follows fast playing worse (on the first demo riff, 32 of 46 readings right against all 46 with the 45 Hz window), which a tuner does not need; the effects keep the 45 Hz window for that. |
 
 ### Guitar to MIDI (`guitar_to_midi`)
-Turns single notes into MIDI for a virtual instrument in a Plugin Host downstream of it in the
-same chain. It makes no sound of its own: Guitar Thru passes the guitar on or mutes it. Nano Q
+Turns single notes, or in Polyphonic mode chords, into MIDI for a virtual instrument in a Plugin
+Host downstream of it in the same chain. It makes no sound of its own: Guitar Thru passes the guitar on or mutes it. Nano Q
 does not offer it, since it cannot add the Plugin Host it needs.
 
 | Parameter | Range | Default | Unit |
 |-----------|-------|---------|------|
-| `mode` | Notes / Notes + Bend | Notes + Bend | enum |
+| `mode` | Notes / Notes + Bend / Polyphonic / Polyphonic + Bend | Notes + Bend | enum |
 | `bendRange` | 2 / 12 / 24 / 48 semitones | 2 | enum |
 | `channel` | 1..16 | 1 | — |
 | `transpose` | -24..+24 | 0 | st |
@@ -2684,8 +2684,8 @@ does not offer it, since it cannot add the Plugin Host it needs.
 | `lowestNote` | E2 / D2 / B1 / F#1 | D2 | enum |
 | `thru` (Guitar Thru) | 0/1 toggle | 1 | — |
 
-**Notes** come from `dsp/NoteTracker.h`, which sits on the shared pitch tracker and decides
-where notes start, move and stop:
+In the two single-note modes, **notes** come from `dsp/NoteTracker.h`, which sits on the shared
+pitch tracker and decides where notes start, move and stop (Polyphonic mode is further down):
 
 - A pick is found by the power above 4 kHz jumping 6 dB over its 50 ms average, which catches
   a re-pick of a note that is still ringing. The note starts at the first pitch the tracker has
@@ -2703,8 +2703,9 @@ In **Notes** mode pitches are rounded, and a bend has to pass the next note by 0
 before it moves there, legato. In **Notes + Bend** mode the note holds and pitch bend follows the
 guitar, its tuning included; a bend that runs 0.3 semitones past Bend Range moves to the nearest
 note and bends on from there. Bend Range must match the instrument's (most default to 2), or the
-pitch comes out wrong. Changing channel, transpose, mode or bend range mid-note ends the note and
-starts it again under the new setting.
+pitch comes out wrong. In Polyphonic + Bend it is each note's channel's range instead (below).
+Changing channel, transpose, mode or bend range mid-note ends the note and starts it again under
+the new setting.
 
 **Lowest Note** narrows the pitch tracker's range (`PitchTracker::SetLowestFrequency`, which the
 other trackers leave at 45 Hz), and with it the window: 13 ms at E2 against 22 ms at the full
@@ -2742,9 +2743,157 @@ note each source holds at the end of every block, so nothing hangs when a source
 removed, a block is dropped while the plugin is busy, or the plugin is reset or replaced; a
 source brought back from bypass starts afresh rather than replaying the note it had.
 
-It is monophonic: a chord comes out as one of its notes, not always the same one, and often late
-or not at all (above). MIDI goes only to hosted plugins: it is not sent out of the app or to a
-DAW.
+Notes and Notes + Bend are monophonic: a chord comes out as one of its notes, not always the same
+one, and often late or not at all (above). MIDI goes only to hosted plugins: it is not sent out of
+the app or to a DAW.
+
+#### Polyphonic
+
+In **Polyphonic** mode a chord, a double stop or an arpeggio left ringing comes out as its notes,
+each a MIDI note of its own. The pitch tracker is not used: no single period exists to track.
+`dsp/PolyNoteDetector.h` judges every note from B1 to E6 on its own, 187 times a second:
+
+- **A spectrum through four windows at once** (`dsp/PolySpectrum.h`). The input comes down to
+  about 12 kHz and is read over its last 85, 43, 21 and 11 ms on a grid of a third of a semitone.
+  Telling the notes of a low chord apart takes the long window; seeing a new note within
+  milliseconds takes a short one. Each transform bin's energy is put at the frequency its phase
+  gives rather than at the bin's centre (reassignment), so a partial lands on its own third of a
+  semitone even through a window far too short to resolve it: a lone low E through the 21 ms
+  window covers three grid bins where the plain spectrum smears it over 55.
+- **One small network, the same for every note** (`dsp/PolyNoteModel.h`; about 55,000 weights,
+  in the generated `PolyNoteModelData.inc`). For a note it reads the grid at that note's
+  partials, and at the places a lower note that could be mistaken for it would have partials of
+  its own, in each window, now and 16 and 43 ms ago. It is then told a summary of the same
+  reading for the notes an octave, a twelfth, a fifth and a few semitones either side, which is
+  what lets it call a note an overtone of the string below. It answers two things: is this note
+  sounding, and did it start in the last 50 ms.
+- **Starts and stops.** A note starts when "started" crosses 0.9, or when "sounding" has held 0.8
+  for 21 ms with no start seen (a hammer-on, a swell, a start it was not sure of). It starts
+  again, as a re-pick, when "started" crosses a second time. It stops when "sounding" has stayed
+  under 0.3 for 21 ms, and everything stops when the input falls 12 dB under Threshold, where the
+  detector also stops working.
+
+Pitches are whole notes and no pitch bend is sent: a bent note stays where it was fretted until
+the bend reaches the next note, which then starts (Polyphonic + Bend, below, bends each note on a
+channel of its own). Lowest Note rules out notes below the lowest
+string, where a low string's undertone could otherwise be taken for one. Velocity is the input's
+peak when the note starts, mapped as for single notes, so the notes of one strum share it.
+Changing channel or transpose mid-chord ends the chord and starts it again under the new setting;
+changing Mode lets everything go. Levels are read against the loudest partial of the last second,
+so the input's gain does not matter above Threshold.
+
+The network is trained, not designed. It learned from annotated recordings: four players of
+GuitarSet (acoustic guitar through a hex pickup's mix; each take also at two other pitches and
+through random EQ, so it is not one guitar's tone) and two players of Guitar-TECHS (electric
+guitar DI: chords, scales and single notes). The recordings are not shipped; see
+`THIRD_PARTY_NOTICES.md`. A fifth GuitarSet player was used to choose the thresholds above, and
+what follows is measured on players it never saw.
+
+**Scored on annotated playing (2026-11-16)**, through the effect itself and the note player, as a
+Plugin Host would receive it. A detected note counts when the annotation has that MIDI note
+starting from 30 ms before to 100 ms after it; "right" is the share of detected notes that count,
+"found" the share of annotated notes detected. Delay is from the annotated onset, which trails
+the audible pick by about 10 ms.
+
+| Held-out playing | Found | Right | Delay, median / 90% | Of the time a note is reported, it is sounding |
+|---|---|---|---|---|
+| GuitarSet player 5, comping (6,536 notes; strummed chords of 3 to 5 notes mostly) | 84% | 87% | 16 / 42 ms | 84% |
+| GuitarSet player 5, solos (2,179 notes) | 94% | 89% | 6 / 22 ms | 79% |
+| Guitar-TECHS player 3, electric DI, musical excerpts (1,948 notes) | 69% | 87% | within 36 ms | 92% |
+| the same, leaving out annotated notes under 100 ms | 85% | 78% | | 92% |
+
+In comping, 86–87% of the notes of three- and four-note chords are found, 74–75% of five- and
+six-note ones, and about 84% in every register. What is detected and does not count, as a share of
+all detected notes: a sounding note started a second time 4.8% (6.4% on the electric excerpts), a
+note an octave from one that is sounding 3.6% (3.3%), anything else 4.3% (3.0%), most of that a
+fifth or a semitone away. The electric set's annotation came from a hex-pickup MIDI converter and a
+quarter of its notes are under 100 ms, which no player meant; both ways of counting are given.
+Guitar-TECHS's technique takes, also not trained on: vibrato 94–98% (the balance of found and
+right), palm mutes 82–86%, bends 55–70% (the annotation keeps the fretted note through a bend, and
+so does the mode until the next note is reached), natural and pinch harmonics 38–77%.
+
+On synthetic strings, which the network never met (`PolyNoteDetectorTests`): every note of
+eleven chords from a double stop to six-string open chords (44 of 44), most within 20–40 ms and
+the low strings of a six-string strum within 90 ms, with a stray octave or twelfth on a low power
+chord.
+
+What it gets wrong, in order: it re-starts a ringing note when another string is picked hard
+beside it; it adds the octave or twelfth of a loud low string; in a full six-string strum it
+finds the low strings late or misses one; it cannot follow a bend between two notes (Polyphonic +
+Bend can). Electric
+guitars it has heard are two; a very different pickup or a heavily driven signal ahead of this
+node is untested, so put it first in the chain.
+
+**Cost.** 3.0–3.6% of one core at 44.1–48 kHz (Release, AVX2), the same at any block size: 0.6%
+is the spectrum and the rest the network. The work comes once a frame, so at 64-sample blocks
+three blocks in four cost under a microsecond and the fourth about 0.2 ms. Unoptimised it would
+take about as long as the audio lasts, so its sources build optimised in Debug too, in a target of
+their own (`core/cmake/PolyNotes`), as the NAM kernels do. With nothing playing it costs only
+the spectrum.
+
+#### Polyphonic + Bend
+
+**Polyphonic + Bend** plays the same notes as Polyphonic, each on a MIDI channel of its own with
+its own pitch bend, so a bend, vibrato or a string a little out of tune is heard on that note and
+no other. This is MPE (MIDI Polyphonic Expression): the instrument has to support it and have it
+turned on.
+
+- **The zone.** Before the first note, and again whenever the instrument is reset, the note player
+  sends an MPE lower zone of 15 member channels (RPN 6 on channel 1), then Bend Range as each
+  member channel's pitch bend range (RPN 0 on channels 2 to 16). An instrument that ignores those
+  needs its MPE bend range set to Bend Range by hand. Set Bend Range to 48 semitones, MPE's
+  default, unless the instrument says otherwise. Channel is not used: the notes go out on 2 to 16.
+  Leaving the mode sends a zone of none.
+- **Channels.** A new note takes the member channel with the fewest notes on it, and of those the
+  one free longest, so the last note's release is left alone as long as possible. Its bend goes
+  out before its note-on. After 15 notes at once, notes share channels, and their bends.
+- **Pitch** (`dsp/PolyPitch.h`) is measured every frame from the note's own partials, the first
+  six. Each partial's frequency comes from where the phase put its energy, to a fraction of a grid
+  bin, and the partials are averaged by energy. The 43 ms window is used in a chord and the 21 ms
+  one for a note alone, to follow a bend sooner. Each partial is looked for no more than half a
+  semitone from where it was in the last frame, and less where another note's partial is nearer.
+  A reading is taken only when the partials agree to within a tenth of a semitone, the note is
+  within 10 dB of its own peak (a peak that falls 20 dB a second, as a string does), and the
+  network still has the note sounding at even odds or better. Otherwise the last pitch holds. A
+  bend goes out when the pitch moves a cent or more: at most 187 a second for each note.
+- **Starts and stops.** A note starts at its whole note. In the frame it starts, the windows have
+  only just taken it in, and a reading there was no nearer than the whole note. It settles within
+  a few frames: 5 cents off at the median 21 ms in. When a note stops, its bend goes back to where
+  it was 21 ms earlier, since a note's last frames are its least sure, and that is the pitch its
+  release keeps.
+- **Notes are those of Polyphonic**, start for start and stop for stop. A bend past the next
+  note's place starts that note as well, as in Polyphonic, while the bent note carries on until
+  its own place empties. So a whole-step bend can sound as two notes for a moment. Holding the bent
+  note in the other's place instead was tried: on GuitarSet player 4 it lost a sixth of the solo
+  notes (slides and hammer-ons read as bends), and the measured pitch was no better.
+
+**Scored (2026-11-16)** on GuitarSet's per-string pitch contours, for the notes found (as in the
+table above). The figures are cents off the string's pitch, every 5 ms, from 30 ms after the note
+starts to 30 ms before it stops, median / 90%:
+
+| | Polyphonic (whole notes) | Polyphonic + Bend |
+|---|---|---|
+| Player 5 (held out), every note | 6.6 / 21 | 3.6 / 19 |
+| Player 5, while the string is bent 30 cents or more | 39 / 83 | 25 / 75 |
+| Player 4 (tuned on), every note | 11.3 / 25 | 4.0 / 19 |
+| Player 4, while bent | 37 / 69 | 16 / 60 |
+| Player 5, at the note-off, against the string 30–80 ms before its annotated end | 11.7 / 44 | 12.0 / 48 |
+
+The notes found, and when they start and stop, are the same in both modes on GuitarSet players 4
+and 5 and on Guitar-TECHS player 3's musical excerpts (1,549 notes).
+
+What it gets wrong:
+- **Note ends.** At a note's end, the pitch can be pulled toward a note ringing beside it: 9% of
+  note-offs are more than 50 cents out, against 7% for whole notes. Stricter gates froze real
+  bends with it, since the network is less sure of a note that is bent.
+- **Partials of two strings very close together** pull each other. An E3 under a B3 tuned 20
+  cents sharp reads up to 11 cents sharp, its third partial against the B's second.
+- **Fast or wide bends** lag the string by a frame or two, and a bend past a semitone starts the
+  next note as well (above).
+
+Synthetic chords and bends are in `GuitarToMidiPolyphonicTests` and `PolyNoteDetectorTests`.
+Following pitch costs nothing measurable over Polyphonic: 3.3% of one core against 3.5% on
+GuitarSet player 4 (Release, AVX2, run alone).
 
 ### Pitch Shift (`pitch_shift`)
 Pitch shift, free or snapped to whole semitones, within a range an expression pedal sweeps, on one of two engines.

@@ -7,6 +7,8 @@
 #include "dsp/FiniteCheck.h"
 #include "dsp/NoteEvents.h"
 #include "dsp/NoteTracker.h"
+#include "dsp/PolyNoteDetector.h"
+#include "dsp/effects/GuitarToMidiPolyVoices.h"
 
 #include <algorithm>
 #include <array>
@@ -21,11 +23,24 @@ namespace guitarfx
 {
 namespace guitar_to_midi
 {
-inline constexpr const char* kModeLabels[] = {"Notes", "Notes + Bend"};
+inline constexpr const char* kModeLabels[] = {"Notes", "Notes + Bend", "Polyphonic", "Polyphonic + Bend"};
+
+enum Mode : int
+{
+    kModeNotes,
+    kModeNotesAndBend,
+    kModePolyphonic,
+    kModePolyphonicAndBend
+};
+
 inline constexpr const char* kBendRangeLabels[] = {"2 semitones", "12 semitones", "24 semitones", "48 semitones"};
 inline constexpr double kBendRanges[] = {2.0, 12.0, 24.0, 48.0};
 /// Shared with the other note-following effects (dsp/PitchTracker.h).
 using pitch_tracker::kLowestNoteLabels;
+/// The open low string of each Lowest Note choice, as a MIDI note: Polyphonic mode starts nothing
+/// below it.
+inline constexpr int kLowestNoteMidi[] = {40, 38, 35, 30};
+static_assert(std::size(kLowestNoteMidi) == std::size(kLowestNoteLabels));
 
 enum Param : std::size_t
 {
@@ -42,7 +57,7 @@ enum Param : std::size_t
 
 /// The one place parameter ranges live: registration and SetParam's clamping both read it.
 inline constexpr std::array<EffectParamSpec, kParamCount> kParams = {{
-    {"mode", "Mode", 1.0, 0.0, 1.0, "enum", "Notes", false, 1.0, kModeLabels},
+    {"mode", "Mode", 1.0, 0.0, 3.0, "enum", "Notes", false, 1.0, kModeLabels},
     {"bendRange", "Bend Range", 0.0, 0.0, 3.0, "enum", "Notes", false, 1.0, kBendRangeLabels},
     {"channel", "MIDI Channel", 1.0, 1.0, 16.0, "", "Notes", false, 1.0},
     {"transpose", "Transpose", 0.0, -24.0, 24.0, "st", "Notes", false, 1.0},
@@ -64,8 +79,6 @@ constexpr double kNoteHysteresisSemitones = 0.2;
 /// nearest note; short of that, the bend holds at the end of the range. So a whole-step bend that
 /// goes a little sharp, at the usual range of 2 semitones, still bends rather than restarting.
 constexpr double kBendOvershootSemitones = 0.3;
-/// Bends closer than this to the last one sent are not sent: finer than anyone hears.
-constexpr double kBendDeadbandCents = 1.0;
 /// Velocity when Dynamics is at zero.
 constexpr int kFixedVelocity = 100;
 constexpr double kThruRampSeconds = 0.005;
@@ -77,8 +90,9 @@ constexpr double kThruRampSeconds = 0.005;
 } // namespace guitar_to_midi
 
 /**
- * Guitar to MIDI: single notes played into it come out as MIDI notes, for a virtual instrument
- * in a Plugin Host downstream of it in the same chain.
+ * Guitar to MIDI: notes played into it come out as MIDI notes, for a virtual instrument in a
+ * Plugin Host downstream of it in the same chain. Two modes follow one note at a time, with or
+ * without pitch bend; Polyphonic follows chords.
  *
  * The notes come from the shared note tracker (dsp/NoteTracker.h): a pick starts a note at its
  * pitch, with a velocity from how hard it was picked; a hammer-on, pull-off or slide moves it
@@ -86,6 +100,18 @@ constexpr double kThruRampSeconds = 0.005;
  * note stops when the string is muted or dies away under the threshold. It is monophonic: a chord
  * gives one of its notes at best, often late, and a power chord often nothing at all.
  *
+ * - Polyphonic: every note of a chord, a double stop or an arpeggio left ringing comes out as its
+ *   own MIDI note, from the polyphonic detector (dsp/PolyNoteDetector.h) in place of the tracker.
+ *   Pitches are whole notes, with no pitch bend: a bent note stays where it was fretted until the
+ *   bend reaches the next note, which then starts. Lowest Note rules out anything below the
+ *   lowest string. All the notes of one strum take their velocity from the strum.
+ * - Polyphonic + Bend: the same notes as MPE. Each note has a MIDI channel of its own (2 to 16;
+ *   channel 1 manages the zone, and MIDI Channel is not used), and pitch bend on it follows that
+ *   note alone: bends, vibrato, slides and the string's own tuning, one string bending in a chord
+ *   while the rest ring. A bend past the next note starts that note too, as in Polyphonic. The
+ *   instrument needs MPE on; the zone and Bend Range are sent to it, and an instrument that does
+ *   not take them needs its member channels' bend range set to Bend Range by hand. The notes'
+ *   channels and bends are kept in dsp/effects/GuitarToMidiPolyVoices.h.
  * - Notes: pitches are rounded to the nearest note, and a bend that passes the next note by a
  *   little moves to it, legato.
  * - Notes + Bend: the note is held and pitch bend follows the guitar, bends and vibrato and the
@@ -139,6 +165,9 @@ class GuitarToMidiEffect : public EffectProcessor
         mTracker.SetThresholdDb(mAppliedThresholdDb);
         mTracker.Prepare(sampleRate);
         mTracker.SetLowestFrequency(LowestNoteHz());
+        mPoly.Prepare(sampleRate, poly_note_model::Model());
+        mPoly.SetThresholdDb(mAppliedThresholdDb);
+        mPoly.SetLowestNote(LowestNoteMidi());
         mPrepared = true;
         Reset();
     }
@@ -146,7 +175,10 @@ class GuitarToMidiEffect : public EffectProcessor
     void Reset() override
     {
         mTracker.Reset();
+        mPoly.Reset();
+        mVoices.Reset();
         mNotes.Clear();
+        mNotes.ClearChord();
         mActiveNote = -1;
         mVelocity = 0;
         mBendSent = 0;
@@ -254,10 +286,16 @@ class GuitarToMidiEffect : public EffectProcessor
             return mValues[index];
         }
 
-        // Read-only state, for tests and any future note display.
+        // Read-only state, for tests and any future note display. In Polyphonic mode the current
+        // note is the lowest one sounding.
         if (key == "currentNote")
         {
-            return mActiveNote;
+            return mPolyMode ? mVoices.Lowest(VoiceSettings()) : mActiveNote;
+        }
+
+        if (key == "soundingNotes")
+        {
+            return mPolyMode ? mVoices.Count() : (mActiveNote >= 0 ? 1 : 0);
         }
 
         if (key == "currentBend")
@@ -289,15 +327,35 @@ class GuitarToMidiEffect : public EffectProcessor
         return pitch_tracker::LowestNoteHz(Choice(guitar_to_midi::kLowestNote));
     }
 
+    [[nodiscard]] int LowestNoteMidi() const
+    {
+        return guitar_to_midi::kLowestNoteMidi[static_cast<std::size_t>(std::clamp(
+            Choice(guitar_to_midi::kLowestNote), 0, static_cast<int>(std::size(guitar_to_midi::kLowestNoteMidi)) - 1))];
+    }
+
     [[nodiscard]] float ThruTarget() const
     {
         return mValues[guitar_to_midi::kThru] >= 0.5 ? 1.0f : 0.0f;
     }
 
+    [[nodiscard]] guitar_to_midi::PolyVoices::Settings VoiceSettings() const
+    {
+        return {mChannel, mTranspose, mMpeMode, mBendRange};
+    }
+
+    [[nodiscard]] static bool IsPolyMode(int mode)
+    {
+        return mode == guitar_to_midi::kModePolyphonic || mode == guitar_to_midi::kModePolyphonicAndBend;
+    }
+
     /// Takes up the settings that decide which MIDI a pitch becomes.
     void ApplyNoteSettings()
     {
-        mBendMode = Choice(guitar_to_midi::kMode) == 1;
+        mMode = Choice(guitar_to_midi::kMode);
+        mBendMode = mMode == guitar_to_midi::kModeNotesAndBend;
+        mPolyMode = IsPolyMode(mMode);
+        mMpeMode = mMode == guitar_to_midi::kModePolyphonicAndBend;
+        mPoly.SetFollowPitch(mMpeMode);
         mBendRange = guitar_to_midi::kBendRanges[static_cast<std::size_t>(std::clamp(
             Choice(guitar_to_midi::kBendRange), 0, static_cast<int>(std::size(guitar_to_midi::kBendRanges)) - 1))];
         mChannel = std::clamp(Choice(guitar_to_midi::kChannel), 1, 16) - 1;
@@ -309,10 +367,9 @@ class GuitarToMidiEffect : public EffectProcessor
 
     [[nodiscard]] bool NoteSettingsChanged() const
     {
-        const bool bendMode = Choice(guitar_to_midi::kMode) == 1;
         const double bendRange = guitar_to_midi::kBendRanges[static_cast<std::size_t>(std::clamp(
             Choice(guitar_to_midi::kBendRange), 0, static_cast<int>(std::size(guitar_to_midi::kBendRanges)) - 1))];
-        return bendMode != mBendMode || bendRange != mBendRange ||
+        return Choice(guitar_to_midi::kMode) != mMode || bendRange != mBendRange ||
                std::clamp(Choice(guitar_to_midi::kChannel), 1, 16) - 1 != mChannel ||
                Choice(guitar_to_midi::kTranspose) != mTranspose;
     }
@@ -331,6 +388,7 @@ class GuitarToMidiEffect : public EffectProcessor
         {
             mAppliedThresholdDb = mValues[guitar_to_midi::kThreshold];
             mTracker.SetThresholdDb(mAppliedThresholdDb);
+            mPoly.SetThresholdDb(mAppliedThresholdDb);
         }
 
         if (mTracker.LowestFrequencyHz() != LowestNoteHz())
@@ -338,11 +396,16 @@ class GuitarToMidiEffect : public EffectProcessor
             // A new range starts the tracker again, so whatever it was holding is gone.
             StopNote(0);
             mTracker.SetLowestFrequency(LowestNoteHz());
+            mPoly.SetLowestNote(LowestNoteMidi());
         }
 
         if (NoteSettingsChanged())
         {
+            const int wasMode = mMode;
             StopNote(0);
+            // The chord's notes go off under the old channel and transpose; what was sounding is
+            // kept, to start again under the new ones.
+            mVoices.SendOffs(mNotes, VoiceSettings(), 0);
 
             if (mBendSent != 0)
             {
@@ -351,7 +414,20 @@ class GuitarToMidiEffect : public EffectProcessor
 
             ApplyNoteSettings();
 
-            if (mTracker.IsSounding())
+            if (mMode != wasMode && (IsPolyMode(mMode) || IsPolyMode(wasMode)))
+            {
+                // Only the mode in use is fed, so the one coming in knows nothing of what is
+                // sounding now: it starts clean and picks the next note up. Between the two
+                // polyphonic modes too: one follows pitch and the other does not.
+                mVoices.Reset();
+                mPoly.Reset();
+                mTracker.Reset();
+            }
+            else if (mPolyMode)
+            {
+                mVoices.SendOns(mNotes, VoiceSettings(), mPoly, 0);
+            }
+            else if (mTracker.IsSounding())
             {
                 StartNote(mTracker.Pitch(), mTracker.Velocity(), 0);
             }
@@ -362,7 +438,9 @@ class GuitarToMidiEffect : public EffectProcessor
     {
         mNotes.heldNote = mActiveNote;
         mNotes.heldVelocity = static_cast<std::uint8_t>(mActiveNote >= 0 ? mVelocity : 0);
-        mNotes.channel = static_cast<std::uint8_t>(mChannel);
+        mVoices.Hold(mNotes, VoiceSettings());
+        // MPE's manager channel carries nothing of its own here.
+        mNotes.channel = static_cast<std::uint8_t>(mMpeMode ? 0 : mChannel);
         mNotes.bend = static_cast<std::int16_t>(mBendSent);
     }
 
@@ -370,6 +448,31 @@ class GuitarToMidiEffect : public EffectProcessor
     {
         if (!mPrepared)
         {
+            return;
+        }
+
+        if (mPolyMode)
+        {
+            mPoly.Process(mono, count, [this, blockOffset](const PolyNoteDetector::Event& event) {
+                const int offset = blockOffset + event.sampleOffset;
+                const int index = event.note - PolyNoteDetector::kLowestNote;
+
+                switch (event.type)
+                {
+                case PolyNoteDetector::Event::Type::Start:
+                    mVoices.Start(mNotes, VoiceSettings(), index, VelocityFrom(PolyStrength(event.velocity)),
+                                  event.pitch, offset);
+                    break;
+
+                case PolyNoteDetector::Event::Type::Stop:
+                    mVoices.Stop(mNotes, VoiceSettings(), index, offset, event.pitch);
+                    break;
+
+                case PolyNoteDetector::Event::Type::Bend:
+                    mVoices.Bend(mNotes, VoiceSettings(), index, event.pitch, offset);
+                    break;
+                }
+            });
             return;
         }
 
@@ -426,16 +529,14 @@ class GuitarToMidiEffect : public EffectProcessor
 
     [[nodiscard]] int BendFor(double semitones) const
     {
-        const double value = std::round(8192.0 * semitones / mBendRange);
-        return static_cast<int>(
-            std::clamp(value, static_cast<double>(NoteBlock::kMinBend), static_cast<double>(NoteBlock::kMaxBend)));
+        return guitar_to_midi::BendValue(semitones, mBendRange);
     }
 
-    void Push(NoteEvent::Type type, int note, int velocity, int bend, int offset)
+    void Push(NoteEvent::Type type, int note, int velocity, int bend, int offset, int channel = -1)
     {
         NoteEvent event;
         event.type = type;
-        event.channel = static_cast<std::uint8_t>(mChannel);
+        event.channel = static_cast<std::uint8_t>(channel >= 0 ? channel : mChannel);
         event.note = static_cast<std::uint8_t>(std::clamp(note, 0, 127));
         event.velocity = static_cast<std::uint8_t>(std::clamp(velocity, 0, 127));
         event.bend = static_cast<std::int16_t>(bend);
@@ -465,11 +566,7 @@ class GuitarToMidiEffect : public EffectProcessor
     /// A bend unless it is within the deadband of the last one sent.
     void SendBendIfMoved(int bend, int offset)
     {
-        const double unitsPerCent = 8192.0 / (100.0 * mBendRange);
-        const int deadband =
-            std::max(1, static_cast<int>(std::lround(guitar_to_midi::kBendDeadbandCents * unitsPerCent)));
-
-        if (std::abs(bend - mBendSent) >= deadband)
+        if (std::abs(bend - mBendSent) >= guitar_to_midi::BendDeadband(mBendRange))
         {
             SendBend(bend, offset);
         }
@@ -512,6 +609,20 @@ class GuitarToMidiEffect : public EffectProcessor
             SendOff(mActiveNote, offset);
             mActiveNote = -1;
         }
+    }
+
+    /// How hard a note was struck, 0 to 1, from the input's peak: Threshold is 0 and -6 dBFS is 1,
+    /// as for a single note (NoteTracker).
+    [[nodiscard]] float PolyStrength(float peak) const
+    {
+        if (!(peak > 0.0f))
+        {
+            return 0.0f;
+        }
+
+        const double dB = 20.0 * std::log10(static_cast<double>(peak));
+        const double span = -6.0 - mAppliedThresholdDb;
+        return static_cast<float>(std::clamp(span > 0.0 ? (dB - mAppliedThresholdDb) / span : 1.0, 0.0, 1.0));
     }
 
     /// The new note starts before the old one stops, which a mono synth plays legato.
@@ -568,12 +679,17 @@ class GuitarToMidiEffect : public EffectProcessor
 
     std::array<double, guitar_to_midi::kParamCount> mValues{};
     NoteTracker mTracker;
+    PolyNoteDetector mPoly;
+    guitar_to_midi::PolyVoices mVoices;
     NoteBlock mNotes;
     std::vector<float> mMono;
     bool mPrepared = false;
     double mAppliedThresholdDb = NoteTracker::kDefaultThresholdDb;
 
+    int mMode = guitar_to_midi::kModeNotesAndBend;
     bool mBendMode = true;
+    bool mPolyMode = false;
+    bool mMpeMode = false;
     double mBendRange = 2.0;
     int mChannel = 0;
     int mTranspose = 0;
@@ -593,8 +709,8 @@ inline void RegisterGuitarToMidiEffect()
     info.aliases = {"guitar_to_midi"};
     info.displayName = "Guitar to MIDI";
     info.category = "synth";
-    info.description = "Plays single notes into a virtual instrument. Put a Plugin Host with an instrument after "
-                       "it in the chain";
+    info.description = "Plays single notes or chords into a virtual instrument. Put a Plugin Host with an "
+                       "instrument after it in the chain";
     info.requiresResource = false;
     info.parameters = BuildParameterDefs(guitar_to_midi::kParams);
 

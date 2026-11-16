@@ -9,6 +9,10 @@
  *     note with nothing to turn off
  *   - pitch bend goes out at 14 bits and is centred when its source goes
  *   - a block with more than it has room for drops the rest, and the next brings it back
+ *   - a source holding a chord has every note of it reconciled: started when an event was missed,
+ *     turned off one by one as the chord thins, and all let go when the source stops running
+ *   - an MPE source has its zone and member bend ranges sent before any note, again after a reset,
+ *     and ended when it stops; each chord note plays on its own channel, after that channel's bend
  */
 
 #include <algorithm>
@@ -181,12 +185,182 @@ void TestNotePlayer()
 
     Check(allOn, "and the next block brings every held note back");
 }
+
+void TestChords()
+{
+    std::cout << "\nChords" << std::endl;
+    NotePlayer player;
+    NoteBlock chord;
+    chord.channel = 2;
+    chord.HoldChordNote(52, 80);
+    chord.HoldChordNote(59, 70);
+    chord.HoldChordNote(64, 60);
+    const NoteBlock* sources[1] = {&chord};
+
+    // No events at all, as after a dropped block: the held chord alone starts every note.
+    const auto first = player.Build(sources, 64);
+    int ons = 0;
+    bool velocities = true;
+
+    for (const auto& m : first)
+    {
+        if ((m.status & 0xF0) == 0x90 && (m.status & 0x0F) == 2)
+        {
+            ++ons;
+            velocities = velocities && m.data2 == (m.data1 == 52 ? 80 : m.data1 == 59 ? 70 : 60);
+        }
+    }
+
+    player.Commit();
+    Check(ons == 3 && first.size() == 3 && velocities, "a held chord starts each of its notes, at its own velocity",
+          std::to_string(ons) + " note-ons of " + std::to_string(first.size()) + " messages");
+    Check(player.IsSounding(2, 52) && player.IsSounding(2, 59) && player.IsSounding(2, 64),
+          "and all three are sounding");
+
+    const auto steady = player.Build(sources, 64);
+    player.Commit();
+    Check(steady.empty(), "a chord that is still held sends nothing more");
+
+    // One string muted: that note alone goes off.
+    chord.ClearChord();
+    chord.HoldChordNote(52, 80);
+    chord.HoldChordNote(64, 60);
+    const auto thinned = player.Build(sources, 64);
+    player.Commit();
+    Check(thinned.size() == 1 && thinned[0].status == (0x80 | 2) && thinned[0].data1 == 59,
+          "a note dropped from the chord is turned off, and only that one");
+
+    // A single held note beside the chord is one more note of the set.
+    chord.heldNote = 40;
+    chord.heldVelocity = 100;
+    const auto withBass = player.Build(sources, 64);
+    player.Commit();
+    Check(withBass.size() == 1 && withBass[0].status == (0x90 | 2) && withBass[0].data1 == 40 &&
+              player.IsSounding(2, 40) && player.IsSounding(2, 52),
+          "the single held note and the chord are taken together");
+
+    Check(!chord.HoldChordNote(128, 90) && !chord.HoldChordNote(-1, 90) && chord.chordCount == 2,
+          "a note outside 0 to 127 is not held");
+
+    for (int extra = 0; extra < NoteBlock::kMaxChord + 4; ++extra)
+    {
+        chord.HoldChordNote(70 + extra, 90);
+    }
+
+    Check(chord.chordCount == NoteBlock::kMaxChord, "and the chord holds no more than it has room for");
+
+    // The source stops running: everything it held is let go.
+    const auto gone = player.Build({}, 64);
+    player.Commit();
+    int offs = 0;
+
+    for (const auto& m : gone)
+    {
+        offs += (m.status & 0xF0) == 0x80 ? 1 : 0;
+    }
+
+    Check(offs == 3 && !player.IsSounding(2, 40) && !player.IsSounding(2, 52) && !player.IsSounding(2, 64),
+          "a chord's source that stops running has every note turned off", std::to_string(offs) + " note-offs");
+}
+
+/// The value sent for RPN `msb`/`lsb` on `channel` in `messages`, or -1.
+template <typename Messages> int RpnValue(const Messages& messages, int channel, int msb, int lsb)
+{
+    int selectedMsb = 127;
+    int selectedLsb = 127;
+    int value = -1;
+
+    for (const auto& m : messages)
+    {
+        if (m.status != (0xB0 | channel))
+        {
+            continue;
+        }
+
+        selectedMsb = m.data1 == 101 ? m.data2 : selectedMsb;
+        selectedLsb = m.data1 == 100 ? m.data2 : selectedLsb;
+        value = (m.data1 == 6 && selectedMsb == msb && selectedLsb == lsb) ? m.data2 : value;
+    }
+
+    return value;
+}
+
+void TestMpe()
+{
+    std::cout << "\nMPE" << std::endl;
+    NotePlayer player;
+    NoteBlock block;
+    block.mpeMemberChannels = 15;
+    block.mpeBendRange = 48;
+    block.HoldChordNote(52, 80, 1);
+    block.HoldChordNote(59, 70, 2);
+    block.HoldChannelBend(1, 1000);
+    const NoteBlock* sources[1] = {&block};
+
+    // No events, as after a dropped block: the zone, then each channel's bend, then its note.
+    const auto first = player.Build(sources, 64);
+    player.Commit();
+    std::size_t firstNote = first.size();
+    std::size_t bendAt = first.size();
+    int ons = 0;
+
+    for (std::size_t i = 0; i < first.size(); ++i)
+    {
+        const auto& m = first[i];
+        bendAt = m.status == 0xE1 && bendAt == first.size() ? i : bendAt;
+
+        if ((m.status & 0xF0) == 0x90)
+        {
+            firstNote = std::min(firstNote, i);
+            ++ons;
+        }
+    }
+
+    const std::vector<guitarfx::NoteMidiMessage> zone(first.begin(),
+                                                      first.begin() + static_cast<std::ptrdiff_t>(firstNote));
+    bool ranges = RpnValue(zone, 0, 0, 6) == 15;
+
+    for (int channel = 1; channel <= 15; ++channel)
+    {
+        ranges = ranges && RpnValue(zone, channel, 0, 0) == 48;
+    }
+
+    Check(ranges && player.MpeZone() == (15 << 8 | 48),
+          "the MPE zone and every member channel's bend range are sent before any note");
+    Check(ons == 2 && player.IsSounding(1, 52) && player.IsSounding(2, 59),
+          "each chord note starts on the channel it was held on");
+    Check(bendAt < firstNote && first[bendAt].data1 + (first[bendAt].data2 << 7) - 8192 == 1000 &&
+              player.Bend(1) == 1000,
+          "and a channel's bend is sent before its note");
+
+    const auto steady = player.Build(sources, 64);
+    player.Commit();
+    Check(steady.empty(), "nothing more while nothing changes, the zone included");
+
+    player.ReleaseAllNext();
+    const auto again = player.Build(sources, 64);
+    player.Commit();
+    Check(RpnValue(again, 0, 0, 6) == 15 && RpnValue(again, 15, 0, 0) == 48 && player.IsSounding(1, 52),
+          "an instrument that was reset is told the zone again");
+
+    block.ClearChord();
+    block.mpeMemberChannels = 0;
+    block.HoldChordNote(52, 80);
+    const auto plain = player.Build(sources, 64);
+    player.Commit();
+    Check(RpnValue(plain, 0, 0, 6) == 0 && player.MpeZone() == 0 && player.IsSounding(0, 52) &&
+              !player.IsSounding(1, 52) && player.Bend(1) == 0,
+          "a source that stops using MPE ends the zone, and a chord note held without a channel is on the block's",
+          std::to_string(plain.size()) + " messages");
+}
 } // namespace
 
 int main()
 {
     std::cout << "Note player tests" << std::endl;
     TestNotePlayer();
+    TestChords();
+    TestMpe();
     std::cout << "\n" << (gChecks - gFailures) << "/" << gChecks << " checks passed" << std::endl;
     return gFailures == 0 ? 0 : 1;
 }

@@ -1051,6 +1051,12 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FusedWaveNet"
                  "${CMAKE_CURRENT_BINARY_DIR}/FusedWaveNet")
 target_link_libraries(SoundshedGuitarCore PUBLIC SoundshedGuitarFusedWaveNet)
 
+# The polyphonic note detector behind Guitar to MIDI's Polyphonic mode; its own scope for the same
+# reason.
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/cmake/PolyNotes"
+                 "${CMAKE_CURRENT_BINARY_DIR}/PolyNotes")
+target_link_libraries(SoundshedGuitarCore PUBLIC SoundshedGuitarPolyNotes)
+
 if(DEFINED nam_oversampler_audio_dsp_tools_SOURCE_DIR)
     # A generated copy of its resampler with local fixes, not the checkout itself; see the module.
     include("${CMAKE_CURRENT_LIST_DIR}/cmake/GuitarfxAudioDSPTools.cmake")

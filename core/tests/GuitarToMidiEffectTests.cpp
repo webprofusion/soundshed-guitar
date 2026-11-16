@@ -9,6 +9,8 @@
  *   - transpose and channel reach the notes; changing either mid-note ends the note and starts it
  *     again under the new setting; Reset lets the note go
  *   - Guitar Thru passes or mutes the guitar; the mono and stereo paths make the same notes
+ *
+ * Polyphonic mode is in GuitarToMidiPolyphonicTests.cpp.
  *   - in a graph, a player hears the note sources upstream of it and no others; a bypassed source
  *     lets its note go, and one brought back starts afresh rather than replaying a stale note
  */
@@ -23,6 +25,7 @@
 #include <vector>
 
 #include "GuitarPhraseSynth.h"
+#include "GuitarToMidiTestSupport.h"
 #include "dsp/EffectGuids.h"
 #include "dsp/EffectRegistry.h"
 #include "dsp/NoteEvents.h"
@@ -38,9 +41,14 @@ using guitarfx::NotePlayer;
 using guitarfx::test::NoteHz;
 using guitarfx::test::PhraseNote;
 using guitarfx::test::RenderPhrase;
-
-constexpr double kRate = 48000.0;
-constexpr int kBlock = 128;
+using guitarfx::test::g2m::AnythingSounding;
+using guitarfx::test::g2m::kBlock;
+using guitarfx::test::g2m::kRate;
+using guitarfx::test::g2m::Midi;
+using guitarfx::test::g2m::Note;
+using guitarfx::test::g2m::NoteOns;
+using guitarfx::test::g2m::Notes;
+using guitarfx::test::g2m::Play;
 
 int gFailures = 0;
 int gChecks = 0;
@@ -57,130 +65,6 @@ void Check(bool condition, const std::string& what, const std::string& detail = 
     }
 
     std::cout << std::endl;
-}
-
-struct Midi
-{
-    int status = 0;
-    int data1 = 0;
-    int data2 = 0;
-    std::size_t sample = 0;
-
-    [[nodiscard]] int Type() const
-    {
-        return status & 0xF0;
-    }
-
-    [[nodiscard]] int Channel() const
-    {
-        return status & 0x0F;
-    }
-
-    [[nodiscard]] int Bend() const
-    {
-        return (data1 | (data2 << 7)) - 8192;
-    }
-};
-
-std::string Notes(const std::vector<Midi>& midi)
-{
-    std::string text;
-
-    for (const auto& m : midi)
-    {
-        if (m.Type() == 0x90)
-        {
-            text += (text.empty() ? "" : " ") + std::to_string(m.data1);
-        }
-    }
-
-    return text;
-}
-
-std::vector<int> NoteOns(const std::vector<Midi>& midi)
-{
-    std::vector<int> notes;
-
-    for (const auto& m : midi)
-    {
-        if (m.Type() == 0x90)
-        {
-            notes.push_back(m.data1);
-        }
-    }
-
-    return notes;
-}
-
-/// Plays `audio` through `fx` and a note player, the way a Plugin Host downstream would hear it.
-/// `between` runs before each block, for changing settings mid-phrase.
-template <typename Between>
-std::vector<Midi> Play(GuitarToMidiEffect& fx, NotePlayer& player, const std::vector<float>& audio, Between&& between,
-                       bool stereo = false)
-{
-    std::vector<Midi> midi;
-    std::vector<float> outL(kBlock), outR(kBlock);
-
-    for (std::size_t start = 0; start + kBlock <= audio.size(); start += kBlock)
-    {
-        between(start);
-        std::vector<float> block(audio.begin() + static_cast<std::ptrdiff_t>(start),
-                                 audio.begin() + static_cast<std::ptrdiff_t>(start + kBlock));
-
-        if (stereo)
-        {
-            float* in[2] = {block.data(), block.data()};
-            float* out[2] = {outL.data(), outR.data()};
-            fx.Process(in, out, kBlock);
-        }
-        else
-        {
-            fx.ProcessMono(block.data(), outL.data(), kBlock);
-        }
-
-        const NoteBlock* sources[1] = {fx.GetNoteOutput()};
-
-        for (const auto& m : player.Build(sources, kBlock))
-        {
-            midi.push_back({m.status, m.data1, m.data2, start + static_cast<std::size_t>(m.sampleOffset)});
-        }
-
-        player.Commit();
-    }
-
-    return midi;
-}
-
-std::vector<Midi> Play(GuitarToMidiEffect& fx, NotePlayer& player, const std::vector<float>& audio, bool stereo = false)
-{
-    return Play(fx, player, audio, [](std::size_t) {}, stereo);
-}
-
-bool AnythingSounding(const NotePlayer& player)
-{
-    for (int channel = 0; channel < 16; ++channel)
-    {
-        for (int note = 0; note < 128; ++note)
-        {
-            if (player.IsSounding(channel, note))
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-PhraseNote Note(double start, double length, int midi, bool muted = true)
-{
-    PhraseNote n;
-    n.start = start;
-    n.length = length;
-    n.hz = NoteHz(midi);
-    n.peak = 0.25;
-    n.muted = muted;
-    return n;
 }
 
 /// E3 G3 A3 A3 C4, picked over each other's ringing, a hammer-on to D4, then a muted E4.
