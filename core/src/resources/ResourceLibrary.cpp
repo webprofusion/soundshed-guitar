@@ -68,9 +68,9 @@ nlohmann::json ResourceToJson(const LibraryResource& resource, const std::filesy
 }
 
 /// Inverse of ResourceToJson. `relativeBases` are tried in order when the
-/// stored path is relative; the last one is used even if nothing exists, so
-/// a resource whose file is temporarily missing still resolves to a sensible
-/// path for the error message.
+/// stored path is relative, the current convention first, since each miss is a
+/// stat; the first is used even if nothing exists, so a resource whose file is
+/// temporarily missing still resolves to a sensible path for the error message.
 std::optional<LibraryResource> ResourceFromJson(const nlohmann::json& item,
                                                 const std::vector<std::filesystem::path>& relativeBases)
 {
@@ -103,7 +103,7 @@ std::optional<LibraryResource> ResourceFromJson(const nlohmann::json& item,
 
         if (resolvedPath.is_relative() && !relativeBases.empty())
         {
-            std::filesystem::path candidate = relativeBases.back() / resolvedPath;
+            std::filesystem::path candidate = relativeBases.front() / resolvedPath;
 
             for (const auto& base : relativeBases)
             {
@@ -479,8 +479,9 @@ std::optional<LibraryResource> ResourceLibrary::FindResourceBySource(
     // The same model under any name, from anywhere: a folder, another provider, a repost.
     if (IsContentHash(contentHash))
     {
-        return find(
-            [&](const LibraryResource& resource) { return text(resource.metadata, kContentHashMetadataKey) == contentHash; });
+        return find([&](const LibraryResource& resource) {
+            return text(resource.metadata, kContentHashMetadataKey) == contentHash;
+        });
     }
 
     return std::nullopt;
@@ -516,8 +517,10 @@ void ResourceLibrary::LoadFromStore(storage::JsonStore& store, const std::filesy
     // older builds wrote paths relative to resources/indexes/ rather than to
     // resources/. Both bases are tried here for the same reason LoadFromFile
     // tries both — dropping the older one silently unresolves those resources
-    // the first time an old profile is upgraded.
-    const std::vector<std::filesystem::path> relativeBases{resourcesRoot / "indexes", resourcesRoot};
+    // the first time an old profile is upgraded. resources/ first: it is what
+    // ResourceToJson writes, and trying the old base first cost a failed stat
+    // for nearly every resource on every load.
+    const std::vector<std::filesystem::path> relativeBases{resourcesRoot, resourcesRoot / "indexes"};
 
     for (const auto& item : store.List(storage::ItemType::kResource))
     {
@@ -606,8 +609,8 @@ void ResourceLibrary::LoadFromFile(const std::filesystem::path& path)
         }
 
         // Historically some indexes stored paths relative to the index directory
-        // rather than the resources root, so both are tried.
-        const std::vector<std::filesystem::path> relativeBases{path.parent_path(), path.parent_path().parent_path()};
+        // rather than the resources root, so both are tried, the resources root first.
+        const std::vector<std::filesystem::path> relativeBases{path.parent_path().parent_path(), path.parent_path()};
 
         for (const auto& item : json)
         {

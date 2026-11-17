@@ -293,7 +293,9 @@ bool TestMigratedResourcePathsResolveForBothLegacyConventions()
     {"type":"nam","id":"old-convention","name":"Old","category":"amp",
      "filePath":"content/old-style.nam","tags":[]},
     {"type":"nam","id":"new-convention","name":"New","category":"amp",
-     "filePath":"content/new-style.nam","tags":[]}
+     "filePath":"content/new-style.nam","tags":[]},
+    {"type":"nam","id":"missing","name":"Missing","category":"amp",
+     "filePath":"content/missing.nam","tags":[]}
   ])");
 
     JsonStore store;
@@ -302,7 +304,7 @@ bool TestMigratedResourcePathsResolveForBothLegacyConventions()
 
     const auto report = MigrateLegacyJsonTree(store, root, root / "presets" / "user", base / "composite-presets");
     ok &= Expect(report.succeeded, "migration completes");
-    ok &= Expect(store.Count(ItemType::kResource) == 2, "both resources imported");
+    ok &= Expect(store.Count(ItemType::kResource) == 3, "all three resources imported");
 
     guitarfx::ResourceLibrary library;
     library.LoadFromStore(store, resourcesRoot);
@@ -326,6 +328,12 @@ bool TestMigratedResourcePathsResolveForBothLegacyConventions()
         ok &= Expect(fs::exists(newStyle->filePath, existsEc),
                      "resources-relative path resolves to a real file, got: " + newStyle->filePath.string());
     }
+
+    // A file that is missing still names a path under resources/, the current convention, for
+    // the error message and the re-download prompt.
+    const auto missing = library.LookupResource("nam", "missing");
+    ok &= Expect(missing && missing->filePath == resourcesRoot / "content" / "missing.nam",
+                 "a missing file resolves under resources/");
 
     store.Close();
     std::error_code ec;
