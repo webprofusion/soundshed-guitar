@@ -467,6 +467,10 @@ void PluginController::RestoreHostState(const std::string& json)
     // a state that brings no preset or slots of its own, which plays on what was there.
     std::optional<Preset> deferredStartupPreset = std::exchange(mDeferredStartupPreset, std::nullopt);
 
+    // The slot the state's own preset was built into below, if it was: the mixer section can
+    // keep it rather than build it again.
+    std::string restoredPresetSlot;
+
     try
     {
         auto state = nlohmann::json::parse(json);
@@ -590,6 +594,11 @@ void PluginController::RestoreHostState(const std::string& json)
                 mActivePreset = *presetOpt;
                 mActivePresetJson = PresetStorage::SerializeToJson(*presetOpt);
                 ApplyPreset(*presetOpt);
+
+                if (mActivePreset)
+                {
+                    restoredPresetSlot = mActivePreset->id.empty() ? "p1" : mActivePreset->id;
+                }
             }
         }
 
@@ -628,16 +637,6 @@ void PluginController::RestoreHostState(const std::string& json)
                 mPresetMixer.SetMixGainDb(mixer["mixGainDb"].get<double>());
             }
 
-            // Reset active presets before restoring mixer state
-            {
-                std::lock_guard<std::mutex> lock(mDSPMutex);
-
-                for (const auto& id : mPresetMixer.GetActivePresetIds())
-                {
-                    mPresetMixer.RemoveActivePreset(id);
-                }
-            }
-
             std::vector<std::string> activeIds;
 
             if (mixer.contains("activePresetIds") && mixer["activePresetIds"].is_array())
@@ -666,6 +665,40 @@ void PluginController::RestoreHostState(const std::string& json)
                 }
             }
 
+            // The slot the state's preset was just built into is the one the loop below would
+            // build first, from the same working copy: kept, it is not built twice, its models,
+            // IRs and hosted plugins included. Only when it leads the list, so the slots keep
+            // their order, and already carries the name the list gives it.
+            std::string keptSlot;
+
+            if (!restoredPresetSlot.empty() && !activeIds.empty() && activeIds.front() == restoredPresetSlot &&
+                mActivePreset && (restoredPresetSlot == "p1" || restoredPresetSlot == mActivePresetId))
+            {
+                const auto entry = presets.is_object() && presets.contains(restoredPresetSlot)
+                                       ? presets[restoredPresetSlot]
+                                       : nlohmann::json::object();
+                std::lock_guard<std::mutex> lock(mDSPMutex);
+                const auto config = mPresetMixer.GetPresetConfig(restoredPresetSlot);
+
+                if (config && config->name == entry.value("name", restoredPresetSlot))
+                {
+                    keptSlot = restoredPresetSlot;
+                }
+            }
+
+            // Reset active presets before restoring mixer state
+            {
+                std::lock_guard<std::mutex> lock(mDSPMutex);
+
+                for (const auto& id : mPresetMixer.GetActivePresetIds())
+                {
+                    if (id != keptSlot)
+                    {
+                        mPresetMixer.RemoveActivePreset(id);
+                    }
+                }
+            }
+
             for (const auto& id : activeIds)
             {
                 const auto presetEntry =
@@ -674,9 +707,23 @@ void PluginController::RestoreHostState(const std::string& json)
 
                 bool added = false;
 
+                // As a slot built afresh: the controls at their defaults, then the state's below.
+                // A preset applied over a slot keeps the controls it had.
+                if (!keptSlot.empty() && id == keptSlot)
+                {
+                    const PresetInstanceConfig defaults;
+                    SetActivePresetMix(id, defaults.mix);
+                    SetActivePresetPan(id, defaults.pan);
+                    SetActivePresetMute(id, defaults.mute);
+                    SetActivePresetSolo(id, defaults.solo);
+                    UpdateHostLatency();
+                    added = true;
+                    keptSlot.clear(); // a repeat of the id in the list is refused, as before
+                }
+
                 // Through the controller's AddActivePreset, which builds each slot off the DSP
                 // lock and installs it under it, and attaches the runtime callbacks.
-                if (mActivePreset && (id == "p1" || id == mActivePresetId))
+                if (!added && mActivePreset && (id == "p1" || id == mActivePresetId))
                 {
                     added = AddActivePreset(*mActivePreset, id, name);
                 }

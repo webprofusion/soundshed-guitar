@@ -14,6 +14,13 @@
  *  - A state saved before the build, and an instance destroyed before it, both come out right.
  *  - Prepare() on the message thread builds it at once.
  *  - A restore that brings no preset or slots plays the start-up preset.
+ *
+ * And a restore builds the preset it brings once. It used to build it as the working copy, then
+ * remove that slot and build it again from the same preset for the state's slot list.
+ *  - Once, with the slot's controls as the state gives them, or at their defaults where it gives
+ *    none, whatever the slot had before.
+ *  - Beside another slot, in the state's order.
+ *  - A slot the state names differently is still built afresh, under that name.
  */
 
 #include <atomic>
@@ -21,6 +28,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -190,6 +198,61 @@ void TestEmptyRestorePlaysIt(const fs::path& root)
     host.Pump();
     Check(gBuilt == 1, "built once");
 }
+
+void TestRestoreBuildsOnce(const fs::path& root)
+{
+    Host host(root);
+    PluginController controller(host);
+    controller.Initialize();
+    host.Pump();
+    auto saved = State(controller.SerializeState());
+    auto& mixer = controller.GetMixer();
+
+    const auto restore = [&](const nlohmann::json& state) {
+        gBuilt = 0;
+        controller.DeserializeState(state.dump());
+        host.Pump();
+        return gBuilt.load();
+    };
+
+    controller.SetActivePresetMix(kStartupId, 0.3);
+    Check(restore(saved) == 1, "a project restore builds its preset once");
+    auto config = mixer.GetPresetConfig(kStartupId);
+    Check(mixer.GetPresetCount() == 1 && config && config->mix == 1.0 && config->name == kStartupId,
+          "with the slot's controls as the state gives them");
+
+    auto noControls = saved;
+    noControls["mixer"]["presets"][kStartupId] = {{"name", kStartupId}};
+    controller.SetActivePresetMix(kStartupId, 0.3);
+    controller.SetActivePresetPan(kStartupId, 0.5);
+    controller.SetActivePresetMute(kStartupId, true);
+    Check(restore(noControls) == 1, "a state naming no controls builds once too");
+    config = mixer.GetPresetConfig(kStartupId);
+    Check(config && config->mix == 1.0 && config->pan == 0.0 && !config->mute && !config->solo,
+          "and leaves them at a new slot's defaults, not where they were");
+
+    auto withMix = saved;
+    withMix["mixer"]["presets"][kStartupId]["mix"] = 0.5;
+    withMix["mixer"]["presets"][kStartupId]["solo"] = true;
+    (void)restore(withMix);
+    config = mixer.GetPresetConfig(kStartupId);
+    Check(config && config->mix == 0.5 && config->solo, "a slot's own controls are restored");
+
+    auto twoSlots = saved;
+    twoSlots["mixer"]["activePresetIds"] = nlohmann::json::array({kStartupId, "other-preset"});
+    twoSlots["mixer"]["presets"]["other-preset"] = {{"name", "other-preset"}};
+    twoSlots["mixer"]["presetData"]["other-preset"] =
+        State(PresetStorage::SerializeToJson(MakePreset("other-preset", "passthrough")));
+    Check(restore(twoSlots) == 1, "beside another slot, it is still built once");
+    Check(mixer.GetActivePresetIds() == std::vector<std::string>{kStartupId, "other-preset"},
+          "and the slots keep the state's order");
+
+    auto renamed = saved;
+    renamed["mixer"]["presets"][kStartupId]["name"] = "Renamed in the project";
+    Check(restore(renamed) == 2, "a slot the state names differently is built afresh");
+    config = mixer.GetPresetConfig(kStartupId);
+    Check(config && config->name == "Renamed in the project", "under the state's name");
+}
 } // namespace
 
 int main()
@@ -246,6 +309,7 @@ int main()
     TestSavedBeforeBuild(root);
     TestPrepareBuilds(root);
     TestEmptyRestorePlaysIt(root);
+    TestRestoreBuildsOnce(root);
 
     EffectRegistry::Instance().Unregister(kCounterType);
     fs::remove_all(root, ec);
