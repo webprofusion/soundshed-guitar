@@ -618,6 +618,15 @@ void PluginController::OnIdle()
 
 void PluginController::DrainControlSurfaceRequests()
 {
+    // A retired chain holding a hosted plugin is freed only on this thread. OnIdle frees it while
+    // the editor is open; this frees it while it is closed, when a host's automation or program
+    // changes switch presets, and until then it can hold a sampler's hundreds of MB. One atomic
+    // load when there is nothing to free.
+    if (mPresetMixer.HasRetiredMainThreadWork())
+    {
+        mPresetMixer.CollectRetiredMainThread();
+    }
+
     // A rebuild the audio thread asked for, with the editor closed as much as open: a parameter
     // that needs one moved by automation, or a right-hand NAM model for a chain that was built
     // while its stereo input was folded to mono and has just turned stereo. One atomic load when

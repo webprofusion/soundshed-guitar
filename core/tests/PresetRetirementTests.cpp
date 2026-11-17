@@ -139,11 +139,13 @@ void TestMainThreadRetirement(bool composite, bool drain)
         mixer.CommitPresetSwap();
         std::async(std::launch::async, [&] { Pump(mixer); }).get();
         Check(mixer.GetRetiringPresetCount() == 0, "completed fade leaves the audio graph");
+        Check(mixer.HasRetiredMainThreadWork(), "a poller can see the hosted chain waiting to be freed");
 
         if (drain)
         {
             mixer.CollectRetiredMainThread();
             Check(state->destroyed == 1, "message-thread collection destroys hosted state");
+            Check(!mixer.HasRetiredMainThreadWork(), "and then sees nothing waiting");
         }
 
         // Without a drain, shutdown must collect it on this thread without a reaper/UI join cycle.

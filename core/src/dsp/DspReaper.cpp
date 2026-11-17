@@ -58,6 +58,7 @@ void DspReaper::CollectMainThread()
     std::vector<std::unique_ptr<SignalGraphExecutor>> executors;
     {
         std::lock_guard<std::mutex> lock(mMutex);
+        mMainThreadPending.store(false, std::memory_order_relaxed);
         instances.reserve(mMainThreadInstances.size());
 
         for (auto& inst : mMainThreadInstances)
@@ -134,8 +135,13 @@ void DspReaper::Retire(std::unique_ptr<PresetInstance> inst)
     Start();
     {
         std::lock_guard<std::mutex> lock(mMutex);
-        auto& queue = inst->executor.AnyNodeRequiresMainThreadLoad() ? mMainThreadInstances : mInstances;
-        queue.push_back(std::move(inst));
+        const bool mainThread = inst->executor.AnyNodeRequiresMainThreadLoad();
+        (mainThread ? mMainThreadInstances : mInstances).push_back(std::move(inst));
+
+        if (mainThread)
+        {
+            mMainThreadPending.store(true, std::memory_order_release);
+        }
     }
     mCv.notify_one();
 }
@@ -155,7 +161,8 @@ bool DspReaper::TryRetireRealtime(std::unique_ptr<PresetInstance>& inst)
 
     // Re-evaluate after live graph/config edits too. This query only walks processors;
     // it allocates nothing, and composites propagate their inner thread affinity.
-    auto& queue = inst->executor.AnyNodeRequiresMainThreadLoad() ? mMainThreadInstances : mInstances;
+    const bool mainThread = inst->executor.AnyNodeRequiresMainThreadLoad();
+    auto& queue = mainThread ? mMainThreadInstances : mInstances;
 
     if (queue.size() >= queue.capacity())
     {
@@ -163,6 +170,12 @@ bool DspReaper::TryRetireRealtime(std::unique_ptr<PresetInstance>& inst)
     }
 
     queue.push_back(std::move(inst));
+
+    if (mainThread)
+    {
+        mMainThreadPending.store(true, std::memory_order_release);
+    }
+
     return true;
 }
 
@@ -175,8 +188,13 @@ void DspReaper::RetireExecutor(std::unique_ptr<SignalGraphExecutor> executor)
 
     {
         std::lock_guard<std::mutex> lock(mMutex);
-        auto& queue = executor->AnyNodeRequiresMainThreadLoad() ? mMainThreadExecutors : mExecutors;
-        queue.push_back(std::move(executor));
+        const bool mainThread = executor->AnyNodeRequiresMainThreadLoad();
+        (mainThread ? mMainThreadExecutors : mExecutors).push_back(std::move(executor));
+
+        if (mainThread)
+        {
+            mMainThreadPending.store(true, std::memory_order_release);
+        }
     }
     mCv.notify_one();
 }

@@ -108,6 +108,13 @@ class MultiPresetMixer
     // must be destroyed here rather than on a reaper that may wait for their editor UI.
     void CollectRetiredMainThread();
 
+    /// Whether CollectRetiredMainThread() has a retired hosted chain to free. Any thread, one
+    /// atomic load, for a caller polling at a timer's rate.
+    [[nodiscard]] bool HasRetiredMainThreadWork() const noexcept
+    {
+        return mReaper.HasMainThreadWork();
+    }
+
     // Message thread only, without the DSP lock, straight after a commit that replaced a running
     // slot: the hosted plugins of the chain just installed take over the instances their nodes
     // had in the chain it replaced (SignalGraphExecutor::SetHandOverSource). Until then those
@@ -526,15 +533,14 @@ class MultiPresetMixer
     /// Enables or bypasses the node with this id, if it is of the type. Returns its shared id,
     /// or null when there is no such node.
     const std::shared_ptr<const std::string>* SetAutomatedNodeEnabledById(const std::string& canonicalType,
-                                                                         const std::string& nodeId,
-                                                                         const std::string& presetId, bool enabled);
+                                                                          const std::string& nodeId,
+                                                                          const std::string& presetId, bool enabled);
 
     /// Whether the node automation would switch is enabled: with a `nodeId` that node, without
     /// one the first node of the type in the first instance that has one. Nothing when there is
     /// no such node. Allocates nothing.
     [[nodiscard]] std::optional<bool> IsAutomatedNodeEnabled(const std::string& canonicalType,
-                                                             const std::string& nodeId,
-                                                             const std::string& presetId);
+                                                             const std::string& nodeId, const std::string& presetId);
 
     /// A node's identity plus a snapshot of some of its parameters.
     struct NodeReadout

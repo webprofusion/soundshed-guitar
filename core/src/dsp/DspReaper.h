@@ -3,6 +3,7 @@
 #include "dsp/PresetInstance.h"
 #include "dsp/SignalGraphExecutor.h"
 
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <memory>
@@ -62,6 +63,13 @@ class DspReaper
     /// editor UI.
     void CollectMainThread();
 
+    /// Whether the message-thread queue holds anything, so a caller polling at a timer's rate
+    /// collects only when there is something to collect. Any thread.
+    [[nodiscard]] bool HasMainThreadWork() const noexcept
+    {
+        return mMainThreadPending.load(std::memory_order_acquire);
+    }
+
     /// Capacity the queues are reserved to, and so how many retirements the audio thread
     /// can make between two passes of the reaper thread.
     static constexpr std::size_t kQueueCapacity = 16;
@@ -77,5 +85,6 @@ class DspReaper
     std::condition_variable mCv;
     std::thread mThread;
     bool mQuit = false;
+    std::atomic<bool> mMainThreadPending{false};
 };
 } // namespace guitarfx
