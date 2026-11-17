@@ -175,6 +175,28 @@ void TestClassification()
     Check(!ClassifyGraphForSleep({EffectGuids::kDelayDigital}).keepsAwake, "a delay does not keep it awake");
 }
 
+void TestBypassedDelaysAndReverbsDoNotRingOut()
+{
+    SignalGraphExecutor executor;
+    executor.SetGraph(MakeLinearPreset("rev", {EffectGuids::kReverbRoom}).graph);
+    Check(executor.GetSleepTraits().canRingOut && !executor.AllRingOutNodesBypassed(), "a reverb that is on rings out");
+    executor.SetNodeEnabled("n0", false);
+    Check(executor.AllRingOutNodesBypassed(), "a reverb switched off rings nothing out");
+    executor.SetNodeEnabled("n0", true);
+    Check(!executor.AllRingOutNodesBypassed(), "switched back on, it rings out again");
+
+    SignalGraphExecutor plain;
+    plain.SetGraph(MakeLinearPreset("pass", {}).graph);
+    Check(!plain.AllRingOutNodesBypassed(), "a graph with nothing to ring out is not 'all bypassed'");
+
+    // The default global post-chain's Doubler, a delay, is off, so a plain chain sleeps after
+    // the short hold, not the ring-out one.
+    Rig rig(MakeLinearPreset("pass", {}));
+    rig.Fill(0.0f);
+    rig.Run(SilenceSleepGate::kHoldSeconds + 0.5);
+    Check(rig.mixer.IsSleepingOnSilence(), "with the global Doubler off, the short hold applies");
+}
+
 void TestMixerSleepsAndWakesCleanly()
 {
     // The same chain twice, one never sleeping: after a sleep, playing must come out exactly
@@ -188,7 +210,7 @@ void TestMixerSleepsAndWakesCleanly()
     rig.Run(0.5);
     awake.Run(0.5);
     Check(!rig.mixer.IsSleepingOnSilence(), "mixer awake after half a second of silence");
-    // The default global post-chain has a Doubler, a delay, so the long hold applies.
+    // The long hold covers either hold.
     rig.Run(SilenceSleepGate::kRingOutHoldSeconds);
     awake.Run(SilenceSleepGate::kRingOutHoldSeconds);
     Check(rig.mixer.IsSleepingOnSilence(), "mixer asleep after the hold of silence");
@@ -269,6 +291,7 @@ int main()
     RegisterAllEffects();
     TestGateOnItsOwn();
     TestClassification();
+    TestBypassedDelaysAndReverbsDoNotRingOut();
     TestMixerSleepsAndWakesCleanly();
     TestMixerGateOff();
     TestMixerHeldAwake();

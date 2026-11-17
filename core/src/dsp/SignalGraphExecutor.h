@@ -307,7 +307,7 @@ class SignalGraphExecutor
     /// SetNodeEnabled on the node with this id, if it is of the type. Returns the node's shared
     /// id (see AutomationTarget::id), or null when there is no such node.
     const std::shared_ptr<const std::string>* SetAutomatedNodeEnabledById(const std::string& canonicalType,
-                                                                         const std::string& nodeId, bool enabled);
+                                                                          const std::string& nodeId, bool enabled);
 
     /// Whether automation would find the node enabled: the node with `nodeId`, or with no id the
     /// first node of the type in execution order, enabled or not. Nothing when there is no such
@@ -339,6 +339,13 @@ class SignalGraphExecutor
     {
         return {mCanRingOut.load(std::memory_order_acquire), mKeepsAwake.load(std::memory_order_acquire)};
     }
+
+    /// True when the graph has nodes that can ring out (GetSleepTraits) and every one of them is
+    /// bypassed, so cutting its input leaves nothing to hear: a preset with its reverb switched
+    /// off fades on a switch instead of running on for the tail. Bypass is not in the traits
+    /// because it changes without a rebuild. Read on the audio thread or under the DSP lock,
+    /// as Process() reads the nodes.
+    [[nodiscard]] bool AllRingOutNodesBypassed() const noexcept;
 
     /// The mixer skipped this graph for a block of silence (SilenceSleepGate): its load is
     /// nothing, rather than whatever the last block it ran took.
@@ -757,6 +764,17 @@ class SignalGraphExecutor
     std::atomic<bool> mParallelLevelsEnabled{true};
     std::atomic<bool> mCanRingOut{false};
     std::atomic<bool> mKeepsAwake{false};
+
+    /// The top-level nodes that make mCanRingOut true, gathered by SetGraph(). `inner` is a
+    /// composite's graph when what rings out is inside it, so its own bypasses count too.
+    struct RingOutNode
+    {
+        const EffectProcessor* processor = nullptr;
+        const SignalGraphExecutor* inner = nullptr;
+    };
+
+    std::vector<RingOutNode> mRingOutNodes;
+    void CollectRingOutNodes();
 
     // Parallel node processing within one graph level. Prepare() starts the workers, sized to
     // the widest level, and only for a graph with a level worth fanning out.

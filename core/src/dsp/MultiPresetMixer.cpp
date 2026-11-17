@@ -1335,12 +1335,15 @@ void MultiPresetMixer::ProcessStereoBlock(float** inputs, float** outputs, int n
     bool sleepAllowed = mSleepOnSilenceEnabled.load(std::memory_order_acquire) &&
                         !mHoldAwake.load(std::memory_order_acquire) && !mTuner->IsEnabled() && !preTraits.keepsAwake &&
                         !postTraits.keepsAwake && !mLooper.WantsChainsAwake();
-    bool sleepCanRingOut = preTraits.canRingOut || postTraits.canRingOut;
+    // A delay or reverb that is bypassed rings nothing out: the global Doubler, off by default,
+    // would otherwise hold every session awake for the long hold instead of the short one.
+    bool sleepCanRingOut = (preTraits.canRingOut && !mGlobalChain.Pre().AllRingOutNodesBypassed()) ||
+                           (postTraits.canRingOut && !mGlobalChain.Post().AllRingOutNodesBypassed());
 
     for (const auto& inst : mVoices.Instances())
     {
         const auto traits = inst->executor.GetSleepTraits();
-        sleepCanRingOut = sleepCanRingOut || traits.canRingOut;
+        sleepCanRingOut = sleepCanRingOut || (traits.canRingOut && !inst->executor.AllRingOutNodesBypassed());
 
         // A crossfade or ring-out only advances on blocks that run, and a graph that keeps
         // the gate awake means it.

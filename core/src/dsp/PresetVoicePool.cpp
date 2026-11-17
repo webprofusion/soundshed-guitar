@@ -278,7 +278,8 @@ void PresetVoicePool::RetireSuperseded(PresetInstance& inst, const SwapTiming& t
 
     const int holdSamples = TailHoldSamples();
 
-    if (holdSamples > 0 && inst.canRingOut)
+    // A graph whose delays and reverbs are all bypassed has nothing to ring out with.
+    if (holdSamples > 0 && inst.canRingOut && !inst.executor.AllRingOutNodesBypassed())
     {
         // The hold counts from when the input starts to ramp away.
         inst.BeginTail(timing.fadeSamples, holdSamples, timing.warmupSamples);

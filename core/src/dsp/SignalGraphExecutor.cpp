@@ -222,6 +222,49 @@ void SignalGraphExecutor::SetGraph(const SignalGraph& graph)
     const auto traits = ClassifyGraphForSleep(GetNodeTypesDeep());
     mCanRingOut.store(traits.canRingOut, std::memory_order_release);
     mKeepsAwake.store(traits.keepsAwake, std::memory_order_release);
+    CollectRingOutNodes();
+}
+
+void SignalGraphExecutor::CollectRingOutNodes()
+{
+    mRingOutNodes.clear();
+
+    for (const auto& [id, state] : mNodeStates)
+    {
+        if (!state.processor)
+        {
+            continue;
+        }
+
+        const auto* composite = dynamic_cast<const CompositeEffectProcessor*>(state.processor.get());
+
+        if (ClassifyGraphForSleep({state.type}).canRingOut)
+        {
+            mRingOutNodes.push_back({state.processor.get(), nullptr});
+        }
+        else if (composite && composite->GetInnerExecutor().GetSleepTraits().canRingOut)
+        {
+            mRingOutNodes.push_back({state.processor.get(), &composite->GetInnerExecutor()});
+        }
+    }
+}
+
+bool SignalGraphExecutor::AllRingOutNodesBypassed() const noexcept
+{
+    if (mRingOutNodes.empty())
+    {
+        return false;
+    }
+
+    for (const auto& node : mRingOutNodes)
+    {
+        if (node.processor->IsEnabled() && (node.inner == nullptr || !node.inner->AllRingOutNodesBypassed()))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 GraphSleepTraits ClassifyGraphForSleep(const std::vector<std::string>& nodeTypes)
