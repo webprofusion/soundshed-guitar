@@ -10,10 +10,11 @@ No Custom Effect modules are known to be in use (Chris, 2026-10-29), so v2 repla
 no compatibility layer; a v1 module is refused with a message that points at the migration guide
 below.
 
-**Status (2026-10-30):** phase 1 (params) is committed (5e9795b8). Phase 2 (resources) is built
-and tested, uncommitted. The UI still parses the cached `key=value` entries itself until phase 3.
-`docs/wasm-module-authoring.md`, the phaser sample and `tools/wasm-module-generator` still
-describe ABI 1 until phase 4.
+**Status (2026-11-17):** phases 1 (params, 5e9795b8) and 2 (resources, 355696ae) are committed.
+D1 is taken: phase 5, block processing, is built and tested, uncommitted. The host now calls the
+guest through Wasmtime's unchecked API, with every export's signature checked at load. The UI
+still parses the cached `key=value` entries itself until phase 3. `docs/wasm-module-authoring.md`,
+the phaser sample and `tools/wasm-module-generator` still describe ABI 1 until phase 4.
 
 ## What is wrong with v1
 
@@ -63,12 +64,24 @@ param's position.
 | `audiofx_abi_version` | `() -> i32` | Required. Returns `2`. |
 | `memory` | memory | Required (the descriptor and handle lookups read it). |
 | `audiofx_descriptor_ptr` / `_len` | `() -> i32` | Required. A module must declare what it reads. |
-| `audiofx_prepare` | `(sampleRate: f32, maxBlockSize: i32) -> i32` | 0 on success. `resourceSlotCount` is gone. |
+| `audiofx_prepare` | `(sampleRate: f32, maxBlockSize: i32) -> i32` | 0 on success. `resourceSlotCount` is gone. Size the I/O buffer for `maxBlockSize` here. |
+| `audiofx_buffer_ptr` | `() -> i32` | Required. The I/O buffer's address in `memory`, asked once after each prepare: `maxBlockSize` f32 left samples, then `maxBlockSize` f32 right ones. 4-byte aligned. |
 | `audiofx_reset` | `()` | |
-| `audiofx_process` | `(inL: f32, inR: f32) -> (f32, f32)` | Unchanged unless D1 is taken. |
+| `audiofx_process` | `(frames: i32) -> ()` | Processes `frames` (1..`maxBlockSize`) in place in the I/O buffer: the host writes the input there, calls, and reads the output from the same place. |
 | `audiofx_get_latency_samples` | `() -> i32` | Optional. |
 
 The `guitarfx_*` aliases go.
+
+Every export must have exactly the signature above. The host checks each one when the module
+loads, because every call it makes into the guest is unchecked (D1), and a module with the wrong
+shape is refused with a message giving both signatures. The per-sample `(f32, f32) -> (f32, f32)`
+process that ABI 2 had before D1 is refused this way, with a pointer to `audiofx_buffer_ptr`.
+
+The buffer is checked once, after prepare: it must be aligned and lie inside `memory`, or the
+module is refused with the address it returned. Memory never shrinks, so it stays inside. The host
+looks the memory's base up again for every block, because `memory.grow` can move it. A host block
+longer than `maxBlockSize` goes through in pieces. A non-finite output sample is replaced with the
+input sample the guest was given.
 
 ### Imports (module `host`)
 
@@ -189,16 +202,22 @@ A UI test covers `getNodeEffectInfo` from the parsed form, guest params listed b
 4. **Docs and samples.** Rewrite `docs/wasm-module-authoring.md`: the ABI, all four language
    examples, the AI prompt template, and the migration guide below. Port
    `tools/wasm-samples/audiofx-phaser-module/ai_phaser.wat`. A changelog line.
-5. **Block processing**, if D1 is taken.
+5. **Block processing** (D1, taken 2026-11-17). `audiofx_buffer_ptr`, `audiofx_process(frames)`,
+   unchecked calls and imports, export signatures checked at load. Tests: a long in-place host
+   block, the per-sample process and bad buffer addresses refused. The private Emissary module is
+   ported and renders bit for bit as before.
 
 ## Decisions
 
-- **D1. Block processing in the same break?** Today the host calls into the guest once per
-  sample, and a host call per param per sample on top. Breaking the ABI once is cheaper than
-  twice. `audiofx_process(frames)` over guest-owned buffers (the guest returns their address from
-  prepare; the host copies in and out per block) would remove both. Measure first: time a trivial
-  gain module and a phaser through the standalone effect harness at 48 kHz / 64. Take it only if
-  the gain on the phaser is 10% or more.
+- **D1. Block processing in the same break? Taken (Chris, 2026-11-17).** The host called into the
+  guest once per sample, and a module made a host call per param per sample on top. Breaking the
+  ABI once is cheaper than twice, and ABI 2 has not shipped (1.7.1 predates it).
+  `audiofx_process(frames)` over a guest-owned buffer removes both costs.
+  - The buffer's address comes from `audiofx_buffer_ptr`, not from prepare, which keeps its status
+    return.
+  - Measured on 2026-11-17 (research `wasm-runtimes-2026-11-17` in the private repo): Wasmtime's
+    checked `wasmtime_func_call` costs about 130–200 ns per call. That is 20–25% of an amp
+    module's per-sample time and about five times all of a gain module's.
 - **D2. Opaque handles** (a per-load base) as above, or dense `0..N-1`, which is easier to read
   in a debugger but lets hard-coded numbers keep working by accident. Recommendation: opaque.
 - **D3. Limits**: 64 params and 16 resources.

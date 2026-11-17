@@ -2,7 +2,7 @@
 
 // WasmModuleWriter.h - Writes WebAssembly binaries by hand for the WASM host's tests: LEB128 and
 // float encodings, sections, a few opcodes, a whole module from its types, imports, globals,
-// functions and data, and a Custom Effect descriptor blob. WasmTestGuests.h builds the test
+// functions (with locals) and data, and a Custom Effect descriptor blob. WasmTestGuests.h builds the test
 // guests with it; WasmEffectHostTests.cpp runs them.
 
 #include <cstdint>
@@ -45,6 +45,8 @@ struct DefinedFuncDef
 {
     uint32_t typeIndex = 0;
     ByteVector ops;
+    // Locals after the params, one entry per local.
+    std::vector<WasmValueType> locals;
 };
 
 struct DataSegmentDef
@@ -124,6 +126,13 @@ inline ByteVector MakeSection(uint8_t sectionId, const ByteVector& payload)
 inline ByteVector LocalGet(uint32_t index)
 {
     ByteVector ops{0x20};
+    AppendU32Leb(ops, index);
+    return ops;
+}
+
+inline ByteVector LocalSet(uint32_t index)
+{
+    ByteVector ops{0x21};
     AppendU32Leb(ops, index);
     return ops;
 }
@@ -285,7 +294,14 @@ inline ByteVector MakeModule(const std::vector<FuncTypeDef>& types, const std::v
     for (const auto& function : definedFunctions)
     {
         ByteVector body;
-        AppendU32Leb(body, 0);
+        AppendU32Leb(body, static_cast<uint32_t>(function.locals.size()));
+
+        for (const auto local : function.locals)
+        {
+            AppendU32Leb(body, 1);
+            AppendU8(body, static_cast<uint8_t>(local));
+        }
+
         AppendBytes(body, function.ops);
         AppendU8(body, 0x0b);
         AppendU32Leb(codePayload, static_cast<uint32_t>(body.size()));

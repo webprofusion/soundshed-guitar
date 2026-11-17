@@ -866,6 +866,108 @@ bool TestResetStatefulModule(const TempDir& tempDir)
     return true;
 }
 
+// A host block longer than the guest was prepared for goes through in guest-sized pieces, and the
+// host may hand the same buffers in as input and output: every sample must still come back from
+// its own place, on its own channel.
+bool TestLongInPlaceBlock(const TempDir& tempDir)
+{
+    auto effect = LoadPrepared(tempDir, "gain_long_block.wasm", MakeGainModule());
+
+    if (!effect)
+    {
+        return false;
+    }
+
+    constexpr int kFrames = kBlockSize * 2 + 5;
+    std::array<float, kFrames> left{};
+    std::array<float, kFrames> right{};
+
+    for (int i = 0; i < kFrames; ++i)
+    {
+        left[i] = 0.01f * static_cast<float>(i + 1);
+        right[i] = -0.02f * static_cast<float>(i + 1);
+    }
+
+    float* buffers[] = {left.data(), right.data()};
+    effect->Process(buffers, buffers, kFrames);
+
+    // The gain module's default gain is 0.5.
+    for (int i = 0; i < kFrames; ++i)
+    {
+        if (!NearlyEqual(left[i], 0.005f * static_cast<float>(i + 1)) ||
+            !NearlyEqual(right[i], -0.01f * static_cast<float>(i + 1)))
+        {
+            std::cerr << "A long in-place block came back wrong at frame " << i << ": " << left[i] << ", " << right[i]
+                      << "\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// The per-sample audiofx_process ABI 2 first had, and buffers that don't fit the module's memory,
+// are refused before audio runs through them, with a message that says what is wrong.
+bool TestBadProcessShapesAreRefused(const TempDir& tempDir)
+{
+    GuestSpec perSample;
+    perSample.perSampleProcess = true;
+    const auto perSamplePath = tempDir.root / "per_sample_process.wasm";
+
+    if (!WriteBytes(perSamplePath, MakeGuestModule(perSample)))
+    {
+        std::cerr << "Failed to write the per-sample module.\n";
+        return false;
+    }
+
+    bool loaded = false;
+    auto perSampleEffect = LoadModuleFile(perSamplePath, loaded);
+    const std::string perSampleError = perSampleEffect ? perSampleEffect->GetConfig("lastError") : std::string{};
+
+    if (loaded || perSampleError.find("must take (i32)") == std::string::npos ||
+        perSampleError.find("audiofx_buffer_ptr") == std::string::npos)
+    {
+        std::cerr << "A per-sample audiofx_process was not refused by its signature: " << perSampleError << "\n";
+        return false;
+    }
+
+    // One page of memory: 65536 bytes, and an 8-frame block needs 64 of them.
+    for (const int32_t pointer : {-4, 2, 65536 - 32, 65536})
+    {
+        GuestSpec spec;
+        spec.bufferPtr = pointer;
+        const std::string fileName = "bad_buffer_" + std::to_string(pointer + 4) + ".wasm";
+        const auto modulePath = tempDir.root / fileName;
+
+        if (!WriteBytes(modulePath, MakeGuestModule(spec)))
+        {
+            std::cerr << "Failed to write " << fileName << ".\n";
+            return false;
+        }
+
+        auto effect = LoadModuleFile(modulePath, loaded);
+
+        if (!effect)
+        {
+            return false;
+        }
+
+        effect->Prepare(kSampleRate, kBlockSize);
+        const std::string error = effect->GetConfig("lastError");
+        const auto [left, right] = ProcessBlock(*effect, 0.25f, -0.5f);
+
+        if (error.find("audiofx_buffer_ptr returned " + std::to_string(pointer)) == std::string::npos ||
+            !NearlyEqual(left, 0.25f) || !NearlyEqual(right, -0.5f))
+        {
+            std::cerr << "A buffer at " << pointer << " was not refused, or the node did not pass dry: " << error
+                      << "\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // Modules that misbehave on purpose. A module is code from whoever shared it, so each of these
 // must end in a trap or a refused load, never a hang or a crash.
 enum class HostileKind
@@ -1158,6 +1260,8 @@ int main()
     allPassed = guitarfx::TestResourceReadEdges(tempDir) && allPassed;
     allPassed = guitarfx::TestHardCodedResourceHandleTraps(tempDir) && allPassed;
     allPassed = guitarfx::TestResetStatefulModule(tempDir) && allPassed;
+    allPassed = guitarfx::TestLongInPlaceBlock(tempDir) && allPassed;
+    allPassed = guitarfx::TestBadProcessShapesAreRefused(tempDir) && allPassed;
     allPassed =
         guitarfx::TestHostileProcessIsStopped(tempDir, guitarfx::HostileKind::LoopingProcess, "looping_process") &&
         allPassed;

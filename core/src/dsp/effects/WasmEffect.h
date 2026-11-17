@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -49,7 +50,10 @@ class WasmSharedRuntime;
 // Wasmtime with a few read-only host imports and no WASI, so it cannot reach files or the network.
 // The interface is Custom Effect ABI 2 (docs/wasm-module-authoring.md): the module looks its params
 // and resources up by id (param_handle, resource_handle) and reads them through the handles it is
-// given; ABI 1 modules are refused.
+// given, and processes a block per call in a buffer of its own memory (audiofx_buffer_ptr); ABI 1
+// modules are refused.
+// Every call either way skips Wasmtime's per-call type checks (the unchecked API): each export's
+// signature is checked once when the module loads, and the linker checks the module's imports.
 // What is left is bounded here: every call into the guest has an epoch deadline (a guest that
 // loops traps and the node bypasses), the store caps memory and tables, the wasm stack is capped
 // below the smallest audio-thread stack, and modules load only while Custom Effects are enabled.
@@ -164,11 +168,21 @@ class WasmEffect final : public EffectProcessor
     bool BuildRuntimeOnly();
     bool CheckModuleImports();
     bool CheckAbiVersion();
-    bool LoadFunctionExport(const char* exportName, wasmtime_func_t& outFunction, bool required, bool& found);
+    // Finds an exported function and checks it has exactly the given signature, which is what
+    // makes calling it unchecked safe.
+    bool LoadFunctionExport(const char* exportName, wasmtime_func_t& outFunction, bool required, bool& found,
+                            std::initializer_list<wasm_valkind_t> params,
+                            std::initializer_list<wasm_valkind_t> results);
     std::optional<std::int32_t> CallGuestI32(wasmtime_func_t& function, const char* functionName);
+    // One unchecked call; false, with lastError set, if it failed or trapped.
+    bool CallGuest(wasmtime_func_t& function, wasmtime_val_raw_t* argsAndResults, std::size_t count, const char* what);
     void ArmGuestDeadline(double budgetSeconds);
     bool InvokePrepare();
-    bool InvokeProcess(float inputLeft, float inputRight, float& outputLeft, float& outputRight);
+    bool BindGuestBuffer();
+    // Runs one block of at most mGuestBlockFrames through the guest, in place in its buffer. The
+    // pointers are the buffer's two channels, valid until the guest next runs.
+    bool InvokeProcessBlock(const float* left, const float* right, int frames, float inputGain, float*& wetLeft,
+                            float*& wetRight);
     int QueryLatencySamples();
     void ResetGuestDescriptor();
     void ApplyGuestDescriptor(const WasmModuleDescriptor& descriptor);
@@ -213,7 +227,17 @@ class WasmEffect final : public EffectProcessor
     wasmtime_func_t mResetFunction{};
     wasmtime_func_t mProcessFunction{};
     wasmtime_func_t mLatencyFunction{};
+    wasmtime_func_t mBufferFunction{};
+    wasmtime_memory_t mGuestMemory{};
+    // The guest's I/O buffer: mGuestBlockFrames left samples at mGuestBufferOffset in its memory,
+    // then as many right. Checked to fit when bound; memory never shrinks, so it keeps fitting.
+    std::size_t mGuestBufferOffset = 0;
+    int mGuestBlockFrames = 0;
+    // The dry input of the block in progress: the host's input and output may be one buffer.
+    std::vector<float> mDryLeft;
+    std::vector<float> mDryRight;
     bool mHasInstance = false;
+    bool mHasGuestMemory = false;
     bool mHasPrepareFunction = false;
     bool mHasResetFunction = false;
     bool mHasProcessFunction = false;

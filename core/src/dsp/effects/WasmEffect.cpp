@@ -160,22 +160,6 @@ FunctionTypePtr MakeResourceReadType()
     return MakeFunctionType(wasm_functype_new(&params, &results));
 }
 
-wasmtime_val_t MakeI32Value(int32_t value)
-{
-    wasmtime_val_t result{};
-    result.kind = WASMTIME_I32;
-    result.of.i32 = value;
-    return result;
-}
-
-wasmtime_val_t MakeF32Value(float value)
-{
-    wasmtime_val_t result{};
-    result.kind = WASMTIME_F32;
-    result.of.f32 = value;
-    return result;
-}
-
 struct GuestMemoryView
 {
     std::uint8_t* data = nullptr;
@@ -245,142 +229,119 @@ wasm_trap_t* BadHandleTrap(const char* import, const char* lookup, int32_t handl
     return wasmtime_trap_new(message.data(), message.size());
 }
 
-// param_handle(idPtr, idLen) -> handle, or -1 for an id the descriptor doesn't declare.
-extern "C" wasm_trap_t* HostParamHandleRaw(void* env, wasmtime_caller_t* caller, const wasmtime_val_t* args,
-                                           size_t nargs, wasmtime_val_t* results, size_t nresults)
-{
-    if (nresults > 0)
-    {
-        results[0] = MakeI32Value(-1);
-    }
+// The host imports are linked unchecked: the linker has already checked the module's import types
+// against these signatures, so `values` holds exactly the arguments, and the results go back over
+// them from index 0. Read every argument before writing a result.
 
-    if (!env || nargs < 2 || nresults < 1)
+// param_handle(idPtr, idLen) -> handle, or -1 for an id the descriptor doesn't declare.
+extern "C" wasm_trap_t* HostParamHandleRaw(void* env, wasmtime_caller_t* caller, wasmtime_val_raw_t* values,
+                                           size_t count)
+{
+    if (count < 2)
     {
         return nullptr;
     }
 
-    if (const auto id = ReadGuestString(caller, args[0].of.i32, args[1].of.i32, WasmEffect::kMaxGuestIdLength))
-    {
-        results[0] = MakeI32Value(static_cast<WasmEffect*>(env)->GuestParamHandle(*id));
-    }
-
+    const int32_t pointer = values[0].i32;
+    const int32_t length = values[1].i32;
+    const auto id = ReadGuestString(caller, pointer, length, WasmEffect::kMaxGuestIdLength);
+    values[0].i32 = env && id ? static_cast<WasmEffect*>(env)->GuestParamHandle(*id) : -1;
     return nullptr;
 }
 
 // param_value(handle) -> value. A handle param_handle never gave traps: reading the wrong knob
 // quietly is what ABI 1 did, so a bad handle stops the module instead.
-extern "C" wasm_trap_t* HostParamValueRaw(void* env, wasmtime_caller_t* caller, const wasmtime_val_t* args,
-                                          size_t nargs, wasmtime_val_t* results, size_t nresults)
+extern "C" wasm_trap_t* HostParamValueRaw(void* env, wasmtime_caller_t* caller, wasmtime_val_raw_t* values,
+                                          size_t count)
 {
     (void)caller;
 
-    if (nresults > 0)
-    {
-        results[0] = MakeF32Value(0.0f);
-    }
-
-    if (!env || nargs < 1 || nresults < 1)
+    if (!env || count < 1)
     {
         return nullptr;
     }
 
+    const int32_t handle = values[0].i32;
     float value = 0.0f;
 
-    if (!static_cast<WasmEffect*>(env)->ReadGuestParamHandle(args[0].of.i32, value))
+    if (!static_cast<WasmEffect*>(env)->ReadGuestParamHandle(handle, value))
     {
-        return BadHandleTrap("param_value", "param_handle", args[0].of.i32);
+        return BadHandleTrap("param_value", "param_handle", handle);
     }
 
-    results[0] = MakeF32Value(value);
+    values[0].f32 = value;
     return nullptr;
 }
 
-extern "C" wasm_trap_t* HostTempoBpmRaw(void* env, wasmtime_caller_t* caller, const wasmtime_val_t* args, size_t nargs,
-                                        wasmtime_val_t* results, size_t nresults)
+extern "C" wasm_trap_t* HostTempoBpmRaw(void* env, wasmtime_caller_t* caller, wasmtime_val_raw_t* values, size_t count)
 {
     (void)caller;
-    (void)args;
-    (void)nargs;
 
-    if (nresults < 1)
+    if (count < 1)
     {
         return nullptr;
     }
 
-    results[0] = MakeF32Value(env ? static_cast<WasmEffect*>(env)->GuestTempoBpm() : 120.0f);
+    values[0].f32 = env ? static_cast<WasmEffect*>(env)->GuestTempoBpm() : 120.0f;
     return nullptr;
 }
 
 // resource_handle(idPtr, idLen) -> handle, or -1 for an id the descriptor doesn't declare.
-extern "C" wasm_trap_t* HostResourceHandleRaw(void* env, wasmtime_caller_t* caller, const wasmtime_val_t* args,
-                                              size_t nargs, wasmtime_val_t* results, size_t nresults)
+extern "C" wasm_trap_t* HostResourceHandleRaw(void* env, wasmtime_caller_t* caller, wasmtime_val_raw_t* values,
+                                              size_t count)
 {
-    if (nresults > 0)
-    {
-        results[0] = MakeI32Value(-1);
-    }
-
-    if (!env || nargs < 2 || nresults < 1)
+    if (count < 2)
     {
         return nullptr;
     }
 
-    if (const auto id = ReadGuestString(caller, args[0].of.i32, args[1].of.i32, WasmEffect::kMaxGuestIdLength))
-    {
-        results[0] = MakeI32Value(static_cast<WasmEffect*>(env)->GuestResourceHandle(*id));
-    }
-
+    const int32_t pointer = values[0].i32;
+    const int32_t length = values[1].i32;
+    const auto id = ReadGuestString(caller, pointer, length, WasmEffect::kMaxGuestIdLength);
+    values[0].i32 = env && id ? static_cast<WasmEffect*>(env)->GuestResourceHandle(*id) : -1;
     return nullptr;
 }
 
 // resource_size(handle) -> bytes, 0 when no file is chosen. A bad handle traps, as in param_value.
-extern "C" wasm_trap_t* HostResourceSizeRaw(void* env, wasmtime_caller_t* caller, const wasmtime_val_t* args,
-                                            size_t nargs, wasmtime_val_t* results, size_t nresults)
+extern "C" wasm_trap_t* HostResourceSizeRaw(void* env, wasmtime_caller_t* caller, wasmtime_val_raw_t* values,
+                                            size_t count)
 {
     (void)caller;
 
-    if (nresults > 0)
-    {
-        results[0] = MakeI32Value(0);
-    }
-
-    if (!env || nargs < 1 || nresults < 1)
+    if (!env || count < 1)
     {
         return nullptr;
     }
 
-    const auto* bytes = static_cast<WasmEffect*>(env)->GuestResourceBytes(args[0].of.i32);
+    const int32_t handle = values[0].i32;
+    const auto* bytes = static_cast<WasmEffect*>(env)->GuestResourceBytes(handle);
 
     if (!bytes)
     {
-        return BadHandleTrap("resource_size", "resource_handle", args[0].of.i32);
+        return BadHandleTrap("resource_size", "resource_handle", handle);
     }
 
     // LoadResources refuses a file larger than guest memory can hold, so this fits an i32.
-    results[0] = MakeI32Value(static_cast<int32_t>(bytes->size()));
+    values[0].i32 = static_cast<int32_t>(bytes->size());
     return nullptr;
 }
 
 // resource_read(handle, offset, dstPtr, len) -> bytes copied: the resource's bytes from offset, as
 // many as len, the rest of the resource and guest memory from dstPtr allow. 0 for a negative
 // argument or an offset past the end. A bad handle traps.
-extern "C" wasm_trap_t* HostResourceReadRaw(void* env, wasmtime_caller_t* caller, const wasmtime_val_t* args,
-                                            size_t nargs, wasmtime_val_t* results, size_t nresults)
+extern "C" wasm_trap_t* HostResourceReadRaw(void* env, wasmtime_caller_t* caller, wasmtime_val_raw_t* values,
+                                            size_t count)
 {
-    if (nresults > 0)
-    {
-        results[0] = MakeI32Value(0);
-    }
-
-    if (!env || nargs < 4 || nresults < 1)
+    if (!env || count < 4)
     {
         return nullptr;
     }
 
-    const int32_t handle = args[0].of.i32;
-    const int32_t offset = args[1].of.i32;
-    const int32_t destination = args[2].of.i32;
-    const int32_t length = args[3].of.i32;
+    const int32_t handle = values[0].i32;
+    const int32_t offset = values[1].i32;
+    const int32_t destination = values[2].i32;
+    const int32_t length = values[3].i32;
+    values[0].i32 = 0;
     const auto* bytes = static_cast<WasmEffect*>(env)->GuestResourceBytes(handle);
 
     if (!bytes)
@@ -396,12 +357,73 @@ extern "C" wasm_trap_t* HostResourceReadRaw(void* env, wasmtime_caller_t* caller
         return nullptr;
     }
 
-    const std::size_t count =
+    const std::size_t copied =
         std::min({static_cast<std::size_t>(length), bytes->size() - static_cast<std::size_t>(offset),
                   memory->size - static_cast<std::size_t>(destination)});
-    std::memcpy(memory->data + destination, bytes->data() + offset, count);
-    results[0] = MakeI32Value(static_cast<int32_t>(count));
+    std::memcpy(memory->data + destination, bytes->data() + offset, copied);
+    values[0].i32 = static_cast<int32_t>(copied);
     return nullptr;
+}
+
+const char* ValueKindName(wasm_valkind_t kind)
+{
+    switch (kind)
+    {
+    case WASM_I32:
+        return "i32";
+    case WASM_I64:
+        return "i64";
+    case WASM_F32:
+        return "f32";
+    case WASM_F64:
+        return "f64";
+    default:
+        return "ref";
+    }
+}
+
+std::string ValueKindList(const wasm_valtype_vec_t& types)
+{
+    std::string text = "(";
+
+    for (std::size_t i = 0; i < types.size; ++i)
+    {
+        text += (i > 0 ? ", " : "") + std::string(ValueKindName(wasm_valtype_kind(types.data[i])));
+    }
+
+    return text + ")";
+}
+
+std::string ValueKindList(std::initializer_list<wasm_valkind_t> kinds)
+{
+    std::string text = "(";
+
+    for (const auto kind : kinds)
+    {
+        text += (text.size() > 1 ? ", " : "") + std::string(ValueKindName(kind));
+    }
+
+    return text + ")";
+}
+
+bool SameValueKinds(const wasm_valtype_vec_t& types, std::initializer_list<wasm_valkind_t> kinds)
+{
+    if (types.size != kinds.size())
+    {
+        return false;
+    }
+
+    std::size_t index = 0;
+
+    for (const auto kind : kinds)
+    {
+        if (wasm_valtype_kind(types.data[index++]) != kind)
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 } // namespace
 
@@ -847,6 +869,8 @@ void WasmEffect::Prepare(double sampleRate, int maxBlockSize)
     mSampleRate = sampleRate;
     mMaxBlockSize = maxBlockSize;
     mLatencySamples = 0;
+    mDryLeft.assign(static_cast<std::size_t>(maxBlockSize), 0.0f);
+    mDryRight.assign(static_cast<std::size_t>(maxBlockSize), 0.0f);
 
     if (!mModuleBytes.empty())
     {
@@ -861,21 +885,12 @@ void WasmEffect::Reset()
         return;
     }
 
-    wasm_trap_t* trap = nullptr;
-
     // Reset can come from the audio thread, so it gets a block's budget, not setup's.
     ArmGuestDeadline(kProcessMinBudgetSeconds);
+    wasmtime_val_raw_t unused{};
 
-    if (wasmtime_error_t* error = wasmtime_func_call(mContext, &mResetFunction, nullptr, 0, nullptr, 0, &trap))
+    if (!CallGuest(mResetFunction, &unused, 0, "reset"))
     {
-        SetError(std::string("WASM reset failed: ") + TakeErrorMessage(error));
-        mRuntimeReady = false;
-        return;
-    }
-
-    if (trap)
-    {
-        SetError(std::string("WASM reset trapped: ") + TakeTrapMessage(trap));
         mRuntimeReady = false;
     }
 }
@@ -905,47 +920,74 @@ void WasmEffect::Process(float** inputs, float** outputs, int numSamples)
     if (mRuntimeReady)
     {
         // One deadline for the whole block: a guest that hangs traps, and the rest of the block
-        // and every block after it pass dry (InvokeProcess clears mRuntimeReady).
+        // and every block after it pass dry (InvokeProcessBlock clears mRuntimeReady).
         const double blockSeconds = mSampleRate > 0.0 ? static_cast<double>(numSamples) / mSampleRate : 0.0;
         ArmGuestDeadline(std::max(kProcessMinBudgetSeconds, blockSeconds * kProcessBudgetBlockMultiple));
     }
 
-    for (int sample = 0; sample < numSamples; ++sample)
+    // The guest takes at most the block size it was prepared for; a longer host block goes through
+    // in pieces.
+    const int chunkFrames = std::min(mGuestBlockFrames, static_cast<int>(mDryLeft.size()));
+
+    for (int start = 0; start < numSamples;)
     {
-        // Treat a single live input channel as dual-mono so stereo guest modules
-        // behave sensibly on mono sources.
-        const float dryLeft = inputLeft ? inputLeft[sample] : (inputRight ? inputRight[sample] : 0.0f);
-        const float dryRight = inputRight ? inputRight[sample] : dryLeft;
+        const int frames = chunkFrames > 0 ? std::min(chunkFrames, numSamples - start) : numSamples - start;
+        float* wetLeft = nullptr;
+        float* wetRight = nullptr;
 
-        float wetLeft = dryLeft * inputGain;
-        float wetRight = dryRight * inputGain;
-
-        if (mRuntimeReady)
+        if (mRuntimeReady && chunkFrames > 0)
         {
-            if (!InvokeProcess(wetLeft, wetRight, wetLeft, wetRight))
+            // Treat a single live input channel as dual-mono so stereo guest modules behave
+            // sensibly on mono sources. Copied first: the output may be the input.
+            for (int i = 0; i < frames; ++i)
             {
-                wetLeft = dryLeft;
-                wetRight = dryRight;
+                const int sample = start + i;
+                mDryLeft[i] = inputLeft ? inputLeft[sample] : (inputRight ? inputRight[sample] : 0.0f);
+                mDryRight[i] = inputRight ? inputRight[sample] : mDryLeft[i];
+            }
+
+            if (!InvokeProcessBlock(mDryLeft.data(), mDryRight.data(), frames, inputGain, wetLeft, wetRight))
+            {
+                wetLeft = nullptr;
+                wetRight = nullptr;
             }
         }
-        else
+
+        for (int i = 0; i < frames; ++i)
         {
-            wetLeft = dryLeft;
-            wetRight = dryRight;
+            const int sample = start + i;
+            float dryLeft = 0.0f;
+            float dryRight = 0.0f;
+
+            if (wetLeft)
+            {
+                dryLeft = mDryLeft[i];
+                dryRight = mDryRight[i];
+            }
+            else
+            {
+                dryLeft = inputLeft ? inputLeft[sample] : (inputRight ? inputRight[sample] : 0.0f);
+                dryRight = inputRight ? inputRight[sample] : dryLeft;
+            }
+
+            // A sample the guest left non-finite is taken as the input it was given.
+            const float guestLeft = wetLeft ? ClampFinite(wetLeft[i], dryLeft * inputGain) : dryLeft;
+            const float guestRight = wetRight ? ClampFinite(wetRight[i], dryRight * inputGain) : dryRight;
+            const float mixedLeft = (dryLeft * dryMix) + (guestLeft * wetMix);
+            const float mixedRight = (dryRight * dryMix) + (guestRight * wetMix);
+
+            if (outputLeft)
+            {
+                outputLeft[sample] = mixedLeft * outputGain;
+            }
+
+            if (outputRight)
+            {
+                outputRight[sample] = mixedRight * outputGain;
+            }
         }
 
-        const float mixedLeft = (dryLeft * dryMix) + (wetLeft * wetMix);
-        const float mixedRight = (dryRight * dryMix) + (wetRight * wetMix);
-
-        if (outputLeft)
-        {
-            outputLeft[sample] = mixedLeft * outputGain;
-        }
-
-        if (outputRight)
-        {
-            outputRight[sample] = mixedRight * outputGain;
-        }
+        start += frames;
     }
 }
 
@@ -1364,7 +1406,7 @@ bool WasmEffect::BuildRuntimeOnly()
     }
 
     const auto defineHostImport = [&](const char* fieldName, FunctionTypePtr&& type,
-                                      wasmtime_func_callback_t callback) -> bool {
+                                      wasmtime_func_unchecked_callback_t callback) -> bool {
         if (!type)
         {
             SetError(std::string("Failed to allocate Wasmtime signature for host import '") + fieldName + "'.");
@@ -1372,8 +1414,8 @@ bool WasmEffect::BuildRuntimeOnly()
         }
 
         if (wasmtime_error_t* error =
-                wasmtime_linker_define_func(mLinker, "host", std::strlen("host"), fieldName, std::strlen(fieldName),
-                                            type.get(), callback, this, nullptr))
+                wasmtime_linker_define_func_unchecked(mLinker, "host", std::strlen("host"), fieldName,
+                                                      std::strlen(fieldName), type.get(), callback, this, nullptr))
         {
             SetError(std::string("Failed to link host import '") + fieldName + "': " + TakeErrorMessage(error));
             return false;
@@ -1425,11 +1467,38 @@ bool WasmEffect::BuildRuntimeOnly()
 
     mHasInstance = true;
 
-    if (!CheckAbiVersion() || !LoadFunctionExport("audiofx_prepare", mPrepareFunction, true, mHasPrepareFunction) ||
-        !LoadFunctionExport("audiofx_reset", mResetFunction, true, mHasResetFunction) ||
-        !LoadFunctionExport("audiofx_process", mProcessFunction, true, mHasProcessFunction) ||
-        !LoadFunctionExport("audiofx_get_latency_samples", mLatencyFunction, false, mHasLatencyFunction))
+    bool hasBufferFunction = false;
+
+    if (!CheckAbiVersion() ||
+        !LoadFunctionExport("audiofx_prepare", mPrepareFunction, true, mHasPrepareFunction, {WASM_F32, WASM_I32},
+                            {WASM_I32}) ||
+        !LoadFunctionExport("audiofx_reset", mResetFunction, true, mHasResetFunction, {}, {}) ||
+        !LoadFunctionExport("audiofx_process", mProcessFunction, true, mHasProcessFunction, {WASM_I32}, {}) ||
+        !LoadFunctionExport("audiofx_buffer_ptr", mBufferFunction, true, hasBufferFunction, {}, {WASM_I32}) ||
+        !LoadFunctionExport("audiofx_get_latency_samples", mLatencyFunction, false, mHasLatencyFunction, {},
+                            {WASM_I32}))
     {
+        TeardownRuntime();
+        return false;
+    }
+
+    wasmtime_extern_t memoryItem{};
+
+    if (wasmtime_instance_export_get(mContext, &mInstance, "memory", std::strlen("memory"), &memoryItem))
+    {
+        if (memoryItem.kind == WASMTIME_EXTERN_MEMORY)
+        {
+            mGuestMemory = memoryItem.of.memory;
+            mHasGuestMemory = true;
+        }
+
+        wasmtime_extern_delete(&memoryItem);
+    }
+
+    if (!mHasGuestMemory)
+    {
+        SetError("WASM module does not export its memory as 'memory'; a Custom Effect's audio and descriptor "
+                 "are passed through it.");
         TeardownRuntime();
         return false;
     }
@@ -1487,7 +1556,7 @@ bool WasmEffect::CheckAbiVersion()
     wasmtime_func_t abiFunction{};
     bool hasAbiFunction = false;
 
-    if (!LoadFunctionExport("audiofx_abi_version", abiFunction, false, hasAbiFunction))
+    if (!LoadFunctionExport("audiofx_abi_version", abiFunction, false, hasAbiFunction, {}, {WASM_I32}))
     {
         return false;
     }
@@ -1517,35 +1586,43 @@ bool WasmEffect::CheckAbiVersion()
     return true;
 }
 
-std::optional<std::int32_t> WasmEffect::CallGuestI32(wasmtime_func_t& function, const char* functionName)
+bool WasmEffect::CallGuest(wasmtime_func_t& function, wasmtime_val_raw_t* argsAndResults, std::size_t count,
+                           const char* what)
 {
-    std::array<wasmtime_val_t, 1> results{};
     wasm_trap_t* trap = nullptr;
-    ArmGuestDeadline(kSetupBudgetSeconds);
 
-    if (wasmtime_error_t* error =
-            wasmtime_func_call(mContext, &function, nullptr, 0, results.data(), results.size(), &trap))
+    if (wasmtime_error_t* error = wasmtime_func_call_unchecked(mContext, &function, argsAndResults, count, &trap))
     {
-        SetError(std::string("WASM call to '") + functionName + "' failed: " + TakeErrorMessage(error));
-        return std::nullopt;
+        SetError(std::string("WASM ") + what + " failed: " + TakeErrorMessage(error));
+        return false;
     }
 
     if (trap)
     {
-        SetError(std::string("WASM call to '") + functionName + "' trapped: " + TakeTrapMessage(trap));
-        return std::nullopt;
+        SetError(std::string("WASM ") + what + " trapped: " + TakeTrapMessage(trap));
+        return false;
     }
 
-    if (results[0].kind != WASMTIME_I32)
-    {
-        SetError(std::string("WASM function '") + functionName + "' returned a non-i32 result.");
-        return std::nullopt;
-    }
-
-    return results[0].of.i32;
+    return true;
 }
 
-bool WasmEffect::LoadFunctionExport(const char* exportName, wasmtime_func_t& outFunction, bool required, bool& found)
+// Only for a function LoadFunctionExport checked as () -> i32.
+std::optional<std::int32_t> WasmEffect::CallGuestI32(wasmtime_func_t& function, const char* functionName)
+{
+    ArmGuestDeadline(kSetupBudgetSeconds);
+    wasmtime_val_raw_t result{};
+
+    if (!CallGuest(function, &result, 1, (std::string("call to '") + functionName + "'").c_str()))
+    {
+        return std::nullopt;
+    }
+
+    return result.i32;
+}
+
+bool WasmEffect::LoadFunctionExport(const char* exportName, wasmtime_func_t& outFunction, bool required, bool& found,
+                                    std::initializer_list<wasm_valkind_t> params,
+                                    std::initializer_list<wasm_valkind_t> results)
 {
     outFunction = {};
     found = false;
@@ -1576,6 +1653,42 @@ bool WasmEffect::LoadFunctionExport(const char* exportName, wasmtime_func_t& out
         return false;
     }
 
+    // Every call into the guest is unchecked, so this check is what keeps a call's arguments and
+    // results the shape the guest expects.
+    wasm_functype_t* type = wasmtime_func_type(mContext, &item.of.func);
+    const bool matches = type && SameValueKinds(*wasm_functype_params(type), params) &&
+                         SameValueKinds(*wasm_functype_results(type), results);
+
+    if (!matches)
+    {
+        std::string message = std::string("WASM export '") + exportName + "' must take " + ValueKindList(params) +
+                              " and return " + ValueKindList(results);
+
+        if (type)
+        {
+            message += ", but takes " + ValueKindList(*wasm_functype_params(type)) + " and returns " +
+                       ValueKindList(*wasm_functype_results(type));
+        }
+
+        message += ".";
+
+        // ABI 2 as first committed processed one sample per call.
+        if (std::strcmp(exportName, "audiofx_process") == 0)
+        {
+            message += " audiofx_process runs a block of samples in the buffer audiofx_buffer_ptr returns.";
+        }
+
+        if (type)
+        {
+            wasm_functype_delete(type);
+        }
+
+        wasmtime_extern_delete(&item);
+        SetError(message);
+        return false;
+    }
+
+    wasm_functype_delete(type);
     outFunction = item.of.func;
     found = true;
     wasmtime_extern_delete(&item);
@@ -1589,35 +1702,17 @@ bool WasmEffect::InvokePrepare()
         return false;
     }
 
-    std::array<wasmtime_val_t, 2> args{
-        MakeF32Value(static_cast<float>(mSampleRate)),
-        MakeI32Value(static_cast<int32_t>(mMaxBlockSize)),
-    };
-    std::array<wasmtime_val_t, 1> results{};
-
-    wasm_trap_t* trap = nullptr;
+    std::array<wasmtime_val_raw_t, 2> values{};
+    values[0].f32 = static_cast<float>(mSampleRate);
+    values[1].i32 = static_cast<int32_t>(mMaxBlockSize);
     ArmGuestDeadline(kSetupBudgetSeconds);
 
-    if (wasmtime_error_t* error = wasmtime_func_call(mContext, &mPrepareFunction, args.data(), args.size(),
-                                                     results.data(), results.size(), &trap))
+    if (!CallGuest(mPrepareFunction, values.data(), values.size(), "prepare"))
     {
-        SetError(std::string("WASM prepare failed: ") + TakeErrorMessage(error));
         return false;
     }
 
-    if (trap)
-    {
-        SetError(std::string("WASM prepare trapped: ") + TakeTrapMessage(trap));
-        return false;
-    }
-
-    if (results[0].kind != WASMTIME_I32)
-    {
-        SetError("WASM prepare returned an unexpected result type.");
-        return false;
-    }
-
-    const int32_t status = results[0].of.i32;
+    const int32_t status = values[0].i32;
 
     if (status != 0)
     {
@@ -1627,51 +1722,69 @@ bool WasmEffect::InvokePrepare()
         return false;
     }
 
+    return BindGuestBuffer();
+}
+
+// After prepare, which is where a module sizes its buffer for the block size it was given.
+bool WasmEffect::BindGuestBuffer()
+{
+    mGuestBlockFrames = 0;
+    const auto pointer = CallGuestI32(mBufferFunction, "audiofx_buffer_ptr");
+
+    if (!pointer)
+    {
+        return false;
+    }
+
+    const std::size_t memorySize = mHasGuestMemory ? wasmtime_memory_data_size(mContext, &mGuestMemory) : 0;
+    const auto frames = static_cast<std::size_t>(std::max(mMaxBlockSize, 0));
+    const std::size_t bytes = 2u * frames * sizeof(float);
+
+    if (*pointer < 0 || (*pointer % static_cast<int32_t>(alignof(float))) != 0 ||
+        static_cast<std::size_t>(*pointer) > memorySize || bytes > memorySize - static_cast<std::size_t>(*pointer))
+    {
+        SetError("WASM audiofx_buffer_ptr returned " + std::to_string(*pointer) + ", which is not a 4-byte aligned " +
+                 "address with room for 2 x " + std::to_string(frames) + " f32 samples in the module's " +
+                 std::to_string(memorySize) + "-byte memory.");
+        return false;
+    }
+
+    mGuestBufferOffset = static_cast<std::size_t>(*pointer);
+    mGuestBlockFrames = static_cast<int>(frames);
     return true;
 }
 
-bool WasmEffect::InvokeProcess(float inputLeft, float inputRight, float& outputLeft, float& outputRight)
+bool WasmEffect::InvokeProcessBlock(const float* left, const float* right, int frames, float inputGain, float*& wetLeft,
+                                    float*& wetRight)
 {
-    if (!mHasProcessFunction || !mContext)
+    if (!mHasProcessFunction || !mContext || frames <= 0 || frames > mGuestBlockFrames)
     {
         return false;
     }
 
-    std::array<wasmtime_val_t, 2> args{
-        MakeF32Value(inputLeft),
-        MakeF32Value(inputRight),
-    };
-    std::array<wasmtime_val_t, 2> results{};
+    // Looked up per block: memory.grow can move the guest's memory, never shrink it.
+    auto* buffer = reinterpret_cast<float*>(wasmtime_memory_data(mContext, &mGuestMemory) + mGuestBufferOffset);
+    float* guestLeft = buffer;
+    float* guestRight = buffer + mGuestBlockFrames;
 
-    wasm_trap_t* trap = nullptr;
-
-    if (wasmtime_error_t* error = wasmtime_func_call(mContext, &mProcessFunction, args.data(), args.size(),
-                                                     results.data(), results.size(), &trap))
+    for (int i = 0; i < frames; ++i)
     {
-        SetError(std::string("WASM process failed: ") + TakeErrorMessage(error));
+        guestLeft[i] = left[i] * inputGain;
+        guestRight[i] = right[i] * inputGain;
+    }
+
+    wasmtime_val_raw_t value{};
+    value.i32 = frames;
+
+    if (!CallGuest(mProcessFunction, &value, 1, "process"))
+    {
         mRuntimeReady = false;
         return false;
     }
 
-    if (trap)
-    {
-        SetError(std::string("WASM process trapped: ") + TakeTrapMessage(trap));
-        mRuntimeReady = false;
-        return false;
-    }
-
-    if (results[0].kind != WASMTIME_F32 || results[1].kind != WASMTIME_F32)
-    {
-        SetError("WASM process returned unexpected result types.");
-        mRuntimeReady = false;
-        return false;
-    }
-
-    outputLeft = results[0].of.f32;
-    outputRight = results[1].of.f32;
-
-    outputLeft = ClampFinite(outputLeft, inputLeft);
-    outputRight = ClampFinite(outputRight, inputRight);
+    buffer = reinterpret_cast<float*>(wasmtime_memory_data(mContext, &mGuestMemory) + mGuestBufferOffset);
+    wetLeft = buffer;
+    wetRight = buffer + mGuestBlockFrames;
     return true;
 }
 
@@ -1682,33 +1795,8 @@ int WasmEffect::QueryLatencySamples()
         return 0;
     }
 
-    std::array<wasmtime_val_t, 1> results{};
-
-    wasm_trap_t* trap = nullptr;
-    ArmGuestDeadline(kSetupBudgetSeconds);
-
-    if (wasmtime_error_t* error =
-            wasmtime_func_call(mContext, &mLatencyFunction, nullptr, 0, results.data(), results.size(), &trap))
-    {
-        SetError(std::string("WASM latency query failed: ") + TakeErrorMessage(error));
-        return 0;
-    }
-
-    if (trap)
-    {
-        SetError(std::string("WASM latency query trapped: ") + TakeTrapMessage(trap));
-        return 0;
-    }
-
-    if (results[0].kind != WASMTIME_I32)
-    {
-        SetError("WASM latency query returned an unexpected result type.");
-        return 0;
-    }
-
-    const int32_t latencySamples = results[0].of.i32;
-
-    return std::max(latencySamples, 0);
+    const auto latencySamples = CallGuestI32(mLatencyFunction, "audiofx_get_latency_samples");
+    return latencySamples ? std::max(*latencySamples, 0) : 0;
 }
 
 bool WasmEffect::LoadGuestDescriptor()
@@ -1721,8 +1809,8 @@ bool WasmEffect::LoadGuestDescriptor()
     bool hasDescriptorPtr = false;
     bool hasDescriptorLen = false;
 
-    if (!LoadFunctionExport("audiofx_descriptor_ptr", descriptorPtrFunction, true, hasDescriptorPtr) ||
-        !LoadFunctionExport("audiofx_descriptor_len", descriptorLenFunction, true, hasDescriptorLen))
+    if (!LoadFunctionExport("audiofx_descriptor_ptr", descriptorPtrFunction, true, hasDescriptorPtr, {}, {WASM_I32}) ||
+        !LoadFunctionExport("audiofx_descriptor_len", descriptorLenFunction, true, hasDescriptorLen, {}, {WASM_I32}))
     {
         return false;
     }
@@ -1853,7 +1941,12 @@ void WasmEffect::TeardownRuntime()
     mResetFunction = {};
     mProcessFunction = {};
     mLatencyFunction = {};
+    mBufferFunction = {};
+    mGuestMemory = {};
+    mGuestBufferOffset = 0;
+    mGuestBlockFrames = 0;
     mHasInstance = false;
+    mHasGuestMemory = false;
     mHasPrepareFunction = false;
     mHasResetFunction = false;
     mHasProcessFunction = false;

@@ -4,6 +4,10 @@
 // average, params and resources looked up by id (in either order), tempo, hard-coded and unknown
 // handles that must trap or find nothing, resource reads at the edges, a stateful module for
 // Reset, and a bare descriptor. Written with WasmModuleWriter.h.
+//
+// Each fixture's processing is written per sample, as `(inL, inR) -> (outL, outR)` over locals 0
+// and 1; MakeGuestModule wraps it in the block-processing audiofx_process the ABI asks for, which
+// runs it over every frame of the buffer at kBufferOffset.
 
 #include "WasmModuleWriter.h"
 #include "dsp/effects/WasmEffect.h"
@@ -17,9 +21,12 @@
 namespace guitarfx::wasm_test
 {
 // Every fixture is a Custom Effect ABI 2 module laid out the same way: its imports, then prepare,
-// reset, process, latency, the descriptor's pointer and length, audiofx_abi_version and an
-// optional start function. The descriptor sits at offset 0 of memory, the id strings at kIdOffset.
+// reset, the per-sample kernel, latency, the descriptor's pointer and length, audiofx_abi_version,
+// the block audiofx_process, audiofx_buffer_ptr and an optional start function. The descriptor
+// sits at offset 0 of memory, the id strings at kIdOffset, the I/O buffer at kBufferOffset: room
+// for 2 x 4096 frames in the one page of memory.
 inline constexpr uint32_t kIdOffset = 4096;
+inline constexpr int32_t kBufferOffset = 32768;
 
 struct GuestSpec
 {
@@ -34,7 +41,66 @@ struct GuestSpec
     ByteVector startOps;
     std::optional<int32_t> abiVersion = WasmEffect::kAbiVersion;
     uint32_t memoryMinPages = 1;
+    // What audiofx_buffer_ptr returns; the wrapper itself always uses kBufferOffset.
+    int32_t bufferPtr = kBufferOffset;
+    // Exports the kernel itself as audiofx_process, the per-sample shape ABI 2 first had.
+    bool perSampleProcess = false;
 };
+
+// audiofx_process(frames): for i in 0..frames, (L[i], R[i]) = kernel(L[i], R[i]), with L at
+// kBufferOffset and R maxBlockSize frames after it. maxBlockSize is in global `maxBlockGlobal`.
+// Locals: 0 frames, 1 i, 2 and 3 the kernel's two results.
+inline ByteVector BlockProcessOps(uint32_t kernelFunction, uint32_t maxBlockGlobal)
+{
+    const auto address = [&](bool right) {
+        ByteVector ops = I32Const(kBufferOffset);
+
+        if (right)
+        {
+            AppendOp(ops, GlobalGet(maxBlockGlobal));
+            AppendOp(ops, LocalGet(1));
+            AppendU8(ops, 0x6a); // i32.add
+        }
+        else
+        {
+            AppendOp(ops, LocalGet(1));
+        }
+
+        AppendOp(ops, I32Const(4));
+        AppendU8(ops, 0x6c); // i32.mul
+        AppendU8(ops, 0x6a); // i32.add
+        return ops;
+    };
+
+    ByteVector ops = {0x02, 0x40, 0x03, 0x40}; // block, loop
+    AppendOp(ops, LocalGet(1));
+    AppendOp(ops, LocalGet(0));
+    AppendOp(ops, {0x4e, 0x0d, 0x01}); // i32.ge_s, br_if 1
+
+    for (const bool right : {false, true})
+    {
+        AppendOp(ops, address(right));
+        AppendOp(ops, {0x2a, 0x02, 0x00}); // f32.load
+    }
+
+    AppendOp(ops, Call(kernelFunction));
+    AppendOp(ops, LocalSet(3));
+    AppendOp(ops, LocalSet(2));
+
+    for (const bool right : {false, true})
+    {
+        AppendOp(ops, address(right));
+        AppendOp(ops, LocalGet(right ? 3 : 2));
+        AppendOp(ops, {0x38, 0x02, 0x00}); // f32.store
+    }
+
+    AppendOp(ops, LocalGet(1));
+    AppendOp(ops, I32Const(1));
+    AppendU8(ops, 0x6a);
+    AppendOp(ops, LocalSet(1));
+    AppendOp(ops, {0x0c, 0x00, 0x0b, 0x0b}); // br 0, end loop, end block
+    return ops;
+}
 
 inline ByteVector MakeGuestModule(const GuestSpec& spec)
 {
@@ -44,6 +110,7 @@ inline ByteVector MakeGuestModule(const GuestSpec& spec)
     types.push_back({{}, {}});
     types.push_back({{WasmValueType::F32, WasmValueType::F32}, {WasmValueType::F32, WasmValueType::F32}});
     types.push_back({{}, {WasmValueType::I32}});
+    types.push_back({{WasmValueType::I32}, {}});
 
     ByteVector processOps = spec.processOps;
 
@@ -53,21 +120,34 @@ inline ByteVector MakeGuestModule(const GuestSpec& spec)
         AppendOp(processOps, LocalGet(1));
     }
 
+    // Prepare keeps the block size it is given, which is where the right channel starts.
+    std::vector<GlobalDef> globals = spec.globals;
+    const auto maxBlockGlobal = static_cast<uint32_t>(globals.size());
+    globals.push_back({WasmValueType::I32, true, I32Const(0)});
+    ByteVector prepareOps = LocalGet(1);
+    AppendOp(prepareOps, GlobalSet(maxBlockGlobal));
+    AppendOp(prepareOps, spec.prepareOps);
+
+    const auto first = static_cast<uint32_t>(spec.imports.size());
     std::vector<DefinedFuncDef> functions = {
-        {firstType, spec.prepareOps},
+        {firstType, prepareOps},
         {firstType + 1, spec.resetOps},
         {firstType + 2, processOps},
         {firstType + 3, I32Const(0)},
         {firstType + 3, I32Const(0)},
         {firstType + 3, I32Const(static_cast<int32_t>(spec.descriptor.size()))},
         {firstType + 3, I32Const(spec.abiVersion.value_or(0))},
+        {firstType + 4,
+         BlockProcessOps(first + 2, maxBlockGlobal),
+         {WasmValueType::I32, WasmValueType::F32, WasmValueType::F32}},
+        {firstType + 3, I32Const(spec.bufferPtr)},
     };
 
-    const auto first = static_cast<uint32_t>(spec.imports.size());
     std::vector<std::pair<std::string, uint32_t>> exports = {
         {"audiofx_prepare", first},
         {"audiofx_reset", first + 1},
-        {"audiofx_process", first + 2},
+        {"audiofx_process", spec.perSampleProcess ? first + 2 : first + 7},
+        {"audiofx_buffer_ptr", first + 8},
         {"audiofx_get_latency_samples", first + 3},
         {"audiofx_descriptor_ptr", first + 4},
         {"audiofx_descriptor_len", first + 5},
@@ -83,7 +163,7 @@ inline ByteVector MakeGuestModule(const GuestSpec& spec)
     if (!spec.startOps.empty())
     {
         functions.push_back({firstType + 1, spec.startOps});
-        startFunction = first + 7;
+        startFunction = first + 9;
     }
 
     std::vector<DataSegmentDef> data;
@@ -105,8 +185,7 @@ inline ByteVector MakeGuestModule(const GuestSpec& spec)
         data.push_back({kIdOffset, idBytes});
     }
 
-    return MakeModule(types, spec.imports, spec.globals, functions, exports, true, data, spec.memoryMinPages,
-                      startFunction);
+    return MakeModule(types, spec.imports, globals, functions, exports, true, data, spec.memoryMinPages, startFunction);
 }
 
 inline constexpr uint32_t kParamHandleImport = 0;
