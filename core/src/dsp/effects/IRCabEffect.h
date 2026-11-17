@@ -21,6 +21,7 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <utility>
@@ -46,6 +47,13 @@ class IRCabEffect : public EffectProcessor
     void SetDualMono(bool dualMono) override
     {
         mDualMono.store(dualMono, std::memory_order_relaxed);
+    }
+
+    /// A mono input holds the same samples on both sides (the executor makes it so), which lets a
+    /// mono IR convolve once for both (ProcessSlotPair).
+    void SetInputLayout(ChannelLayout layout) override
+    {
+        mInputMono.store(layout == ChannelLayout::Mono, std::memory_order_relaxed);
     }
 
     void Prepare(double sampleRate, int maxBlockSize) override
@@ -121,6 +129,11 @@ class IRCabEffect : public EffectProcessor
         mResourceTransitionSamplesRemaining = 0;
         mPrevHasSlotA = false;
         mPrevHasSlotB = false;
+        // Both sides are cleared alike.
+        mRightStaleA = false;
+        mRightStaleB = false;
+        mSameInputA = kSidesAlike;
+        mSameInputB = kSidesAlike;
     }
 
     void Process(float** inputs, float** outputs, int numSamples) override
@@ -255,6 +268,10 @@ class IRCabEffect : public EffectProcessor
 
         if (useLRSplit)
         {
+            // The right convolvers sit idle here, so their history no longer follows the left's.
+            mSameInputA = 0;
+            mSameInputB = 0;
+
             // Run slot A (left) and slot B (right) in parallel
             bool ran = false;
 
@@ -273,40 +290,22 @@ class IRCabEffect : public EffectProcessor
         }
         else
         {
+            // A mono input through a mono IR: both sides would convolve the same samples with the
+            // same impulse, so the right takes the left's result, bit for bit, at half the cost.
+            const bool monoInput = mInputMono.load(std::memory_order_relaxed);
+
             if (hasA)
             {
-                bool ranParallel = false;
-
-                if (allowParallel)
-                {
-                    ranParallel = rtparallel::DualLaneExecutor::Instance().Run(
-                        [&]() { mConvolverR.Process(inAR, mOutputBufferR.data(), numSamples); },
-                        [&]() { mConvolverL.Process(inAL, mOutputBufferL.data(), numSamples); });
-                }
-
-                if (!ranParallel)
-                {
-                    mConvolverL.Process(inAL, mOutputBufferL.data(), numSamples);
-                    mConvolverR.Process(inAR, mOutputBufferR.data(), numSamples);
-                }
+                ProcessSlotPair(mConvolverL, mConvolverR, mRightStaleA, mSameInputA,
+                                monoInput && IsMonoImpulse(mIsStereo, mImpulseR), inAL, inAR, mOutputBufferL.data(),
+                                mOutputBufferR.data(), numSamples, allowParallel);
             }
 
             if (hasB)
             {
-                bool ranBParallel = false;
-
-                if (allowParallel)
-                {
-                    ranBParallel = rtparallel::DualLaneExecutor::Instance().Run(
-                        [&]() { mConvolverBR.Process(inBR, mOutputBufferBR.data(), numSamples); },
-                        [&]() { mConvolverBL.Process(inBL, mOutputBufferBL.data(), numSamples); });
-                }
-
-                if (!ranBParallel)
-                {
-                    mConvolverBL.Process(inBL, mOutputBufferBL.data(), numSamples);
-                    mConvolverBR.Process(inBR, mOutputBufferBR.data(), numSamples);
-                }
+                ProcessSlotPair(mConvolverBL, mConvolverBR, mRightStaleB, mSameInputB,
+                                monoInput && IsMonoImpulse(mIsStereoB, mImpulseBR), inBL, inBR, mOutputBufferBL.data(),
+                                mOutputBufferBR.data(), numSamples, allowParallel);
             }
         }
 
@@ -793,6 +792,7 @@ class IRCabEffect : public EffectProcessor
         // What is playing becomes the outgoing side of the crossfade as it stands, history and
         // all, and the rebuilt convolvers go live. Swaps rather than assignments, so the outgoing
         // convolvers they displace end up in the work and are freed off the lock.
+        SyncRightConvolvers();
         mPrevHasSlotA = false;
         mPrevHasSlotB = false;
 
@@ -1821,6 +1821,7 @@ class IRCabEffect : public EffectProcessor
     /// ~10 ms on every IR change while playing.
     void CapturePreviousConvolvers()
     {
+        SyncRightConvolvers();
         mPrevHasSlotA = SlotAReady();
         mPrevHasSlotB = SlotBReady();
         MoveToOutgoing(mConvolverL, mPrevConvolverL);
@@ -1842,6 +1843,83 @@ class IRCabEffect : public EffectProcessor
         mBuiltB = BuiltImpulse();
     }
 
+    /// Whether a slot's two convolvers were built from the same impulse: BuildConvolverPair builds
+    /// both sides from the left one unless it has a stereo file with a right channel.
+    static bool IsMonoImpulse(bool isStereo, const std::vector<float>& impulseRight) noexcept
+    {
+        return !isStereo || impulseRight.empty();
+    }
+
+    /// One slot's pair of convolvers for a block. With `mayShare` (a mono input and a mono impulse)
+    /// the right sits out and copies the left's output, while the two inputs are the same bit for
+    /// bit (Speaker Drive and the slot alignment keep a side's own history, which a stereo input
+    /// before can leave apart for a while) and have been for as long as the convolvers' history
+    /// reaches back, so no tail of an earlier stereo input is still ringing on the right.
+    /// `rightStale` says the right has missed blocks; the first block that needs it again brings it
+    /// level with the left first. Either way the output is what running both would give.
+    static void ProcessSlotPair(RealtimeConvolver& left, RealtimeConvolver& right, bool& rightStale,
+                                size_t& sameInputSamples, bool mayShare, const float* inL, const float* inR,
+                                float* outL, float* outR, int numSamples, bool allowParallel)
+    {
+        const bool sameInput = mayShare && std::memcmp(inL, inR, static_cast<size_t>(numSamples) * sizeof(float)) == 0;
+        // Counted before this block: while the histories converge, both still run it.
+        const bool shareLeft = sameInput && sameInputSamples >= left.HistorySpan();
+
+        if (!sameInput)
+        {
+            sameInputSamples = 0;
+        }
+        else if (sameInputSamples < kSidesAlike)
+        {
+            sameInputSamples += static_cast<size_t>(numSamples);
+        }
+
+        if (shareLeft)
+        {
+            left.Process(inL, outL, numSamples);
+            std::copy_n(outL, numSamples, outR);
+            rightStale = true;
+            return;
+        }
+
+        if (rightStale)
+        {
+            right.CopyStateFrom(left);
+            rightStale = false;
+        }
+
+        bool ranParallel = false;
+
+        if (allowParallel)
+        {
+            ranParallel = rtparallel::DualLaneExecutor::Instance().Run([&]() { right.Process(inR, outR, numSamples); },
+                                                                       [&]() { left.Process(inL, outL, numSamples); });
+        }
+
+        if (!ranParallel)
+        {
+            left.Process(inL, outL, numSamples);
+            right.Process(inR, outR, numSamples);
+        }
+    }
+
+    /// Brings a right convolver that sat out level with its left, before the pair is moved to the
+    /// outgoing side of a crossfade, which always runs both. Allocation-free.
+    void SyncRightConvolvers() noexcept
+    {
+        if (mRightStaleA)
+        {
+            mConvolverR.CopyStateFrom(mConvolverL);
+            mRightStaleA = false;
+        }
+
+        if (mRightStaleB)
+        {
+            mConvolverBR.CopyStateFrom(mConvolverBL);
+            mRightStaleB = false;
+        }
+    }
+
     /// A moved-from convolver keeps its flags but not its buffers, so `live` is replaced with an
     /// empty one rather than left as moved.
     static void MoveToOutgoing(RealtimeConvolver& live, RealtimeConvolver& outgoing)
@@ -1852,12 +1930,16 @@ class IRCabEffect : public EffectProcessor
 
     bool InitializeConvolverA()
     {
+        mRightStaleA = false; // both sides start from the same nothing
+        mSameInputA = kSidesAlike;
         return InitializeConvolverFromImpulse(mImpulseL, mImpulseR, mIsStereo, mIRSampleRate, mConvolverL, mConvolverR,
                                               &mBuiltA);
     }
 
     bool InitializeConvolverB()
     {
+        mRightStaleB = false;
+        mSameInputB = kSidesAlike;
         return InitializeConvolverFromImpulse(mImpulseBL, mImpulseBR, mIsStereoB, mIRSampleRateB, mConvolverBL,
                                               mConvolverBR, &mBuiltB);
     }
@@ -2304,6 +2386,16 @@ class IRCabEffect : public EffectProcessor
     double mSlotAGain = 1.0;
     double mSlotBGain = 1.0;
     std::atomic<bool> mDualMono{false};
+    std::atomic<bool> mInputMono{false}; // SetInputLayout
+    // A slot's right convolver sat out the last block (ProcessSlotPair) and has to catch up on the
+    // left's history before it runs again. Audio thread, or under the DSP lock.
+    bool mRightStaleA = false;
+    bool mRightStaleB = false;
+    // How long both sides of a slot have heard the same input, in samples, up to kSidesAlike, which
+    // also stands for a pair that has been alike since it was built or reset.
+    static constexpr size_t kSidesAlike = static_cast<size_t>(1) << 40;
+    size_t mSameInputA = kSidesAlike;
+    size_t mSameInputB = kSidesAlike;
     double mSlotAPan = 0.0; // -1.0 = full left, 0.0 = centre, 1.0 = full right
     double mSlotBPan = 0.0;
     bool mLRSplitEnabled = false; // when true, stereo input is split: L→IR A, R→IR B

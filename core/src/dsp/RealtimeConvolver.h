@@ -73,6 +73,21 @@ class RealtimeConvolver
         return mInitialized;
     }
 
+    /**
+     * Takes over `source`'s history, so this convolver carries on exactly as if it had processed
+     * everything `source` did. For two convolvers built from the same impulse with the same
+     * settings, as a mono IR's left and right are: the right can sit out while both would hear the
+     * same input, and catch up here before it is needed again. Copies into storage already
+     * allocated, so it is safe on the audio thread. False, with nothing changed, if the two are
+     * not laid out alike.
+     */
+    bool CopyStateFrom(const RealtimeConvolver& source) noexcept;
+
+    /// How many of the most recent input samples the history depends on, at most: two convolvers
+    /// with the same impulse that have been fed the same input for this long hold the same
+    /// history, bit for bit. 0 before an impulse is set.
+    [[nodiscard]] size_t HistorySpan() const noexcept;
+
     [[nodiscard]] size_t GetNumPartitions() const noexcept
     {
         return mNumPartitions;
@@ -80,6 +95,9 @@ class RealtimeConvolver
 
   private:
     void ProcessBlock();
+
+    [[nodiscard]] bool LayoutMatches(const RealtimeConvolver& other) const noexcept;
+    void CopyStateUnchecked(const RealtimeConvolver& source) noexcept;
 
     // Direct-form FIR over `count` coefficients: the whole IR when it is short enough, or the
     // zero-latency engine's head. ProcessFir writes (not adds) its output.

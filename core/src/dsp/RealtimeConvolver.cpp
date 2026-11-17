@@ -657,4 +657,127 @@ void RealtimeConvolver::Reset()
         ResetSpread();
     }
 }
+
+bool RealtimeConvolver::CopyStateFrom(const RealtimeConvolver& source) noexcept
+{
+    if (&source == this || !LayoutMatches(source))
+    {
+        return false;
+    }
+
+    CopyStateUnchecked(source);
+    return true;
+}
+
+size_t RealtimeConvolver::HistorySpan() const noexcept
+{
+    if (!mInitialized)
+    {
+        return 0;
+    }
+
+    // The FIR keeps its last taps of input, plus a chunk being gathered.
+    size_t span = mFirHistory.size();
+
+    if (mIsNonUniform)
+    {
+        // Every stage hears the whole input; the history is as old as the oldest any of them keeps.
+        for (const auto& stage : mNonUniformStages)
+        {
+            if (stage)
+            {
+                span = std::max(span, stage->HistorySpan());
+            }
+        }
+
+        return span;
+    }
+
+    if (mUseDirectConvolution)
+    {
+        return span;
+    }
+
+    // A uniform engine: one frame of input per partition in the delay line, each two partitions
+    // wide, plus the block filling and, for the spread engine, the block in flight.
+    return std::max(span, (mNumPartitions + 4) * mPartitionSize);
+}
+
+bool RealtimeConvolver::LayoutMatches(const RealtimeConvolver& other) const noexcept
+{
+    if (mInitialized != other.mInitialized || mUseDirectConvolution != other.mUseDirectConvolution ||
+        mIsNonUniform != other.mIsNonUniform || mSpread != other.mSpread || mPartitionSize != other.mPartitionSize ||
+        mNumPartitions != other.mNumPartitions || mFirHistory.size() != other.mFirHistory.size() ||
+        mInputFFTDelayLine.size() != other.mInputFFTDelayLine.size() ||
+        mInputBuffer.size() != other.mInputBuffer.size() || mOutputBuffer.size() != other.mOutputBuffer.size() ||
+        mPreviousInputBlock.size() != other.mPreviousInputBlock.size() ||
+        mAccumulator.size() != other.mAccumulator.size() ||
+        mSpreadCurrentBlock.size() != other.mSpreadCurrentBlock.size() ||
+        mSpreadOutput.size() != other.mSpreadOutput.size() || mNuRestScratch.size() != other.mNuRestScratch.size() ||
+        mNuStageScratch.size() != other.mNuStageScratch.size() ||
+        mNonUniformStages.size() != other.mNonUniformStages.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < mInputFFTDelayLine.size(); ++i)
+    {
+        if (mInputFFTDelayLine[i].size() != other.mInputFFTDelayLine[i].size())
+        {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < mNonUniformStages.size(); ++i)
+    {
+        const auto& mine = mNonUniformStages[i];
+        const auto& theirs = other.mNonUniformStages[i];
+
+        if (static_cast<bool>(mine) != static_cast<bool>(theirs) || (mine && !mine->LayoutMatches(*theirs)))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void RealtimeConvolver::CopyStateUnchecked(const RealtimeConvolver& source) noexcept
+{
+    // Every member Process() changes; the impulse and the layout are the same on both sides.
+    std::copy(source.mFirHistory.begin(), source.mFirHistory.end(), mFirHistory.begin());
+
+    for (size_t i = 0; i < mInputFFTDelayLine.size(); ++i)
+    {
+        std::copy(source.mInputFFTDelayLine[i].begin(), source.mInputFFTDelayLine[i].end(),
+                  mInputFFTDelayLine[i].begin());
+    }
+
+    mDelayLineIndex = source.mDelayLineIndex;
+    std::copy(source.mInputBuffer.begin(), source.mInputBuffer.end(), mInputBuffer.begin());
+    std::copy(source.mOutputBuffer.begin(), source.mOutputBuffer.end(), mOutputBuffer.begin());
+    std::copy(source.mPreviousInputBlock.begin(), source.mPreviousInputBlock.end(), mPreviousInputBlock.begin());
+    mInputBufferPos = source.mInputBufferPos;
+    mOutputBufferReadPos = source.mOutputBufferReadPos;
+    std::copy(source.mAccumulator.begin(), source.mAccumulator.end(), mAccumulator.begin());
+    mPreAccumAnchor = source.mPreAccumAnchor;
+    mPreAccumPartition = source.mPreAccumPartition;
+    std::copy(source.mSpreadCurrentBlock.begin(), source.mSpreadCurrentBlock.end(), mSpreadCurrentBlock.begin());
+    std::copy(source.mSpreadOutput.begin(), source.mSpreadOutput.end(), mSpreadOutput.begin());
+    mJobSlot = source.mJobSlot;
+    mJobPhase = source.mJobPhase;
+    mJobPos = source.mJobPos;
+    mJobDone = source.mJobDone;
+    mJobCost = source.mJobCost;
+    std::copy(source.mNuRestScratch.begin(), source.mNuRestScratch.end(), mNuRestScratch.begin());
+    std::copy(source.mNuStageScratch.begin(), source.mNuStageScratch.end(), mNuStageScratch.begin());
+
+    for (size_t i = 0; i < mNonUniformStages.size(); ++i)
+    {
+        if (mNonUniformStages[i])
+        {
+            mNonUniformStages[i]->CopyStateUnchecked(*source.mNonUniformStages[i]);
+        }
+    }
+}
 } // namespace guitarfx

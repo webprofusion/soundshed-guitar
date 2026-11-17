@@ -63,6 +63,7 @@ set(TEST_SOURCES
     IRCabAutomationRealtimeTests.cpp
     IRCabBlendCompTests.cpp
     IRCabLoneSlotTests.cpp
+    IRCabMonoInputTests.cpp
     IRCabReloadTests.cpp
     IrAlignmentTests.cpp
     IrZeroLatencyTests.cpp
