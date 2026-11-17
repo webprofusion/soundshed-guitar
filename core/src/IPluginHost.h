@@ -81,6 +81,14 @@ class IPluginHost
         return true;
     }
 
+    /// False when nothing will ever run what RunOnMainThread() is given: a plugin wrapper
+    /// running with no message loop drops it. The controller then does that work itself where
+    /// it can rather than wait for it (see PluginController::Prepare).
+    [[nodiscard]] virtual bool RunsPostedTasks() const
+    {
+        return true;
+    }
+
     // ── Platform paths ─────────────────────────────────────────────
     /// Root directory for user data (~/.guitarfx/ or platform equivalent).
     [[nodiscard]] virtual std::filesystem::path GetUserDataPath() const = 0;

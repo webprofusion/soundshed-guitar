@@ -12,7 +12,8 @@
  *    its state changed (it hasn't).
  *  - A project restored straight away replaces it unbuilt.
  *  - A state saved before the build, and an instance destroyed before it, both come out right.
- *  - Prepare() on the message thread builds it at once.
+ *  - Prepare() leaves it to the posted task, since REAPER prepares a plugin before restoring a
+ *    project into it; only a host that never runs posted tasks gets it built there.
  *  - A restore that brings no preset or slots plays the start-up preset.
  *
  * And a restore builds the preset it brings once. It used to build it as the working copy, then
@@ -83,7 +84,13 @@ class Host final : public test::PumpedTestHost
         ++stateChanges;
     }
 
+    [[nodiscard]] bool RunsPostedTasks() const override
+    {
+        return postedTasksRun;
+    }
+
     int stateChanges = 0;
+    bool postedTasksRun = true;
 };
 
 Preset MakePreset(const std::string& id, const std::string& effectType)
@@ -174,16 +181,40 @@ void TestSavedBeforeBuild(const fs::path& root)
                                        " against " + std::to_string(gBuilt.load()) + ")");
 }
 
-void TestPrepareBuilds(const fs::path& root)
+void TestPrepare(const fs::path& root, const std::string& otherState)
 {
-    Host host(root);
-    PluginController controller(host);
-    gBuilt = 0;
-    controller.Initialize();
-    controller.Prepare(kSampleRate, kBlock);
-    Check(gBuilt == 1 && controller.GetMixer().GetPresetCount() == 1, "Prepare on the message thread builds it");
-    host.Pump();
-    Check(gBuilt == 1, "and the posted task then has nothing to do");
+    {
+        // REAPER opening a project: the plugin is prepared, then given the project's state.
+        Host host(root);
+        PluginController controller(host);
+        gBuilt = 0;
+        controller.Initialize();
+        controller.Prepare(kSampleRate, kBlock);
+        controller.DeserializeState(otherState);
+        host.Pump();
+        Check(gBuilt == 0 && State(controller.SerializeState()).value("presetId", "") == "other-preset",
+              "prepared before a project restore, the start-up preset is still never built");
+    }
+    {
+        Host host(root);
+        PluginController controller(host);
+        gBuilt = 0;
+        controller.Initialize();
+        controller.Prepare(kSampleRate, kBlock);
+        Check(gBuilt == 0, "Prepare leaves the build to the posted task");
+        host.Pump();
+        Check(gBuilt == 1 && controller.GetMixer().GetPresetCount() == 1, "which builds it once");
+    }
+    {
+        Host host(root);
+        host.postedTasksRun = false;
+        PluginController controller(host);
+        gBuilt = 0;
+        controller.Initialize();
+        controller.Prepare(kSampleRate, kBlock);
+        Check(gBuilt == 1 && controller.GetMixer().GetPresetCount() == 1,
+              "a host that never runs posted tasks gets it built in Prepare");
+    }
 }
 
 void TestEmptyRestorePlaysIt(const fs::path& root)
@@ -307,7 +338,7 @@ int main()
     TestLeftAlone(root);
     TestRestoredStraightAway(root, otherState);
     TestSavedBeforeBuild(root);
-    TestPrepareBuilds(root);
+    TestPrepare(root, otherState);
     TestEmptyRestorePlaysIt(root);
     TestRestoreBuildsOnce(root);
 

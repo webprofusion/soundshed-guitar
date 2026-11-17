@@ -1335,6 +1335,12 @@ bool PluginProcessorAdapter::IsMessageThread() const
     return messageManager == nullptr || messageManager->isThisTheMessageThread();
 }
 
+bool PluginProcessorAdapter::RunsPostedTasks() const
+{
+    // callAsync drops what it is given when there is no message manager.
+    return juce::MessageManager::getInstanceWithoutCreating() != nullptr;
+}
+
 std::filesystem::path PluginProcessorAdapter::GetUserDataPath() const
 {
     // The shared profile, whichever product this is (ProfileFolder.h).

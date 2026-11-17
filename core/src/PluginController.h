@@ -1296,8 +1296,9 @@ class PluginController
      * hosted plugins) was work thrown away; plugin scanners never play it at all. While
      * mDeferStartupBuild is set (in Initialize() only) ApplyPreset() makes the preset the
      * working copy and parks it here, and BuildDeferredStartupPreset() builds it: from a task
-     * Initialize() posts, from Prepare() on the message thread, or at the end of a restore that
-     * left nothing playing. A restore that brings its own preset or slots supersedes it. Until
+     * Initialize() posts, from Prepare() for a host that never runs that task, or at the end of
+     * a restore that left nothing playing. Not from Prepare() otherwise: REAPER prepares a
+     * plugin before restoring the project into it. A restore that brings its own preset or slots supersedes it. Until
      * then the mixer has no slot, and SnapshotActivePresetConfigs() reports the one it will
      * have, so a state saved in between restores the same. Message thread only.
      */

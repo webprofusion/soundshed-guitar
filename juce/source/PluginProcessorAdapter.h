@@ -107,6 +107,7 @@ class PluginProcessorAdapter : public juce::AudioProcessor,
                        std::function<void(const guitarfx::BrowseFileResult&)> callback) override;
     void RunOnMainThread(std::function<void()> fn) override;
     [[nodiscard]] bool IsMessageThread() const override;
+    [[nodiscard]] bool RunsPostedTasks() const override;
     [[nodiscard]] std::filesystem::path GetUserDataPath() const override;
     [[nodiscard]] std::filesystem::path GetBundledAssetsPath() const override;
     [[nodiscard]] double GetSampleRate() const override;

@@ -288,9 +288,10 @@ void PluginController::Initialize()
 
 void PluginController::Prepare(double sampleRate, int blockSize)
 {
-    // A host that prepares before its message loop has run the build task, or one with no loop
-    // to run it, gets the start-up preset now rather than an empty chain.
-    if (mDeferredStartupPreset && mHost.IsMessageThread())
+    // A host with no loop to run the build task gets the start-up preset now rather than an empty
+    // chain. One with a loop waits for the task: REAPER prepares a plugin it is opening a project
+    // into before it hands over the project's state, so building here was the work thrown away.
+    if (mDeferredStartupPreset && !mHost.RunsPostedTasks() && mHost.IsMessageThread())
     {
         BuildDeferredStartupPreset();
     }
