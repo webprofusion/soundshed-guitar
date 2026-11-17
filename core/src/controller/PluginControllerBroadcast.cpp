@@ -625,8 +625,25 @@ void PluginController::SendPresetListToUI()
         scanDir(factoryPath, "factory");
     }
 
-    // User presets come from the store; only factory presets still ship as files.
-    for (const auto& preset : LoadAllUserPresets())
+    // User presets come from the store; only factory presets still ship as files. The list needs
+    // a few fields of each, which the summary cache reads without building any graph, and reads
+    // again only for presets written since the last list (see PresetSummaryCache). An archive
+    // session lists its sandbox folder instead.
+    std::vector<PresetListEntry> userPresets;
+
+    if (archiveSessionActive)
+    {
+        for (const auto& preset : LoadAllUserPresets())
+        {
+            userPresets.push_back({preset.id, preset.name, preset.category, preset.description, preset.tags});
+        }
+    }
+    else
+    {
+        userPresets = mPresetSummaryCache.Load(Store());
+    }
+
+    for (const auto& preset : userPresets)
     {
         if (!factoryArchiveLoadingEnabled && mTrackedFactoryArchivePresetIds.contains(preset.id))
         {

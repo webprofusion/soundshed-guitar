@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -122,6 +123,9 @@ class JsonStore
 
     [[nodiscard]] std::vector<StoreItem> List(std::string_view type) const;
     [[nodiscard]] std::vector<std::string> ListIds(std::string_view type) const;
+    /// Each item's id and updated_at, by id, without reading the documents: enough to tell
+    /// which have been written since a previous look.
+    [[nodiscard]] std::vector<std::pair<std::string, std::int64_t>> ListUpdatedAt(std::string_view type) const;
     [[nodiscard]] std::int64_t Count(std::string_view type) const;
 
     /// Newest updated_at across the given type, or the whole table when `type`

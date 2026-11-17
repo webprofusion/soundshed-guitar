@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <unordered_set>
 
 namespace guitarfx
 {
@@ -896,6 +897,125 @@ std::vector<Preset> PresetStorage::LoadAllFromStore(const storage::JsonStore& st
     }
 
     return presets;
+}
+
+std::optional<PresetListEntry> PresetStorage::SummarizeJson(const std::string& jsonStr)
+{
+    // Only these top-level keys are kept while parsing: the graph and scenes, nearly all of a
+    // preset's size, are skipped rather than built.
+    static const std::unordered_set<std::string> kKeep = {"id",         "name",     "version",     "formatVersion",
+                                                          "author",     "category", "description", "createdAt",
+                                                          "modifiedAt", "tags"};
+
+    try
+    {
+        const auto json =
+            nlohmann::json::parse(jsonStr, [](int depth, nlohmann::json::parse_event_t event, nlohmann::json& parsed) {
+                return depth != 1 || event != nlohmann::json::parse_event_t::key ||
+                       kKeep.contains(parsed.get<std::string>());
+            });
+
+        if (!json.is_object())
+        {
+            return std::nullopt;
+        }
+
+        // The same reads DeserializeFromJson makes of these, so a preset it would refuse over one
+        // of them (a name that is not a string, say) is refused here too.
+        PresetListEntry summary;
+        summary.id = json.value("id", "");
+        summary.name = json.value("name", "");
+
+        if (json.contains("version") && json["version"].is_string())
+        {
+            (void)std::stoi(json["version"].get<std::string>());
+        }
+
+        (void)json.value("author", "");
+        summary.category = json.value("category", "");
+        summary.description = json.value("description", "");
+        (void)json.value("createdAt", "");
+        (void)json.value("modifiedAt", "");
+
+        if (json.contains("tags") && json["tags"].is_array())
+        {
+            for (const auto& tag : json["tags"])
+            {
+                summary.tags.push_back(tag.get<std::string>());
+            }
+        }
+
+        return summary;
+    }
+    catch (const std::exception&)
+    {
+        return std::nullopt;
+    }
+}
+
+std::vector<PresetListEntry> PresetSummaryCache::Load(const storage::JsonStore& store)
+{
+    const std::lock_guard<std::mutex> lock(mMutex);
+    std::unordered_map<std::string, Entry> next;
+    std::vector<PresetListEntry> summaries;
+
+    // A first look reads every row in one query; after that only the rows written since.
+    if (mEntries.empty())
+    {
+        const auto items = store.List(storage::ItemType::kPreset);
+        next.reserve(items.size());
+        summaries.reserve(items.size());
+
+        for (const auto& item : items)
+        {
+            Entry entry{item.updatedAt, PresetStorage::SummarizeJson(item.json)};
+
+            if (entry.summary)
+            {
+                summaries.push_back(*entry.summary);
+            }
+
+            next.emplace(item.id, std::move(entry));
+        }
+    }
+    else
+    {
+        const auto stamps = store.ListUpdatedAt(storage::ItemType::kPreset);
+        next.reserve(stamps.size());
+        summaries.reserve(stamps.size());
+
+        for (const auto& [id, updatedAt] : stamps)
+        {
+            Entry entry;
+            const auto known = mEntries.find(id);
+
+            if (known != mEntries.end() && known->second.updatedAt == updatedAt)
+            {
+                entry = std::move(known->second);
+            }
+            else
+            {
+                // Written after the stamps were read, this keeps the older stamp, and is read
+                // again next time: never the other way round.
+                entry.updatedAt = updatedAt;
+
+                if (const auto raw = store.GetRaw(storage::ItemType::kPreset, id))
+                {
+                    entry.summary = PresetStorage::SummarizeJson(*raw);
+                }
+            }
+
+            if (entry.summary)
+            {
+                summaries.push_back(*entry.summary);
+            }
+
+            next.emplace(id, std::move(entry));
+        }
+    }
+
+    mEntries = std::move(next);
+    return summaries;
 }
 
 bool PresetStorage::RemoveFromStore(storage::JsonStore& store, const std::string& id)

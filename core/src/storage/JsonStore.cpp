@@ -5,6 +5,8 @@
 
 #include <sqlite3.h>
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <string>
 
@@ -12,10 +14,24 @@ namespace guitarfx::storage
 {
 namespace
 {
+/// Milliseconds since the epoch, strictly increasing within the process: two writes in one
+/// millisecond still get different stamps, so a reader that kept what it saw at one stamp
+/// (PresetSummaryCache) sees the second as new.
 std::int64_t NowMillis()
 {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-        .count();
+    static std::atomic<std::int64_t> last{0};
+    const std::int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
+    std::int64_t previous = last.load(std::memory_order_relaxed);
+    std::int64_t next = 0;
+
+    do
+    {
+        next = std::max(now, previous + 1);
+    } while (!last.compare_exchange_weak(previous, next, std::memory_order_relaxed));
+
+    return next;
 }
 
 /// RAII for a prepared statement so every early return finalizes it.
@@ -586,6 +602,34 @@ std::vector<std::string> JsonStore::ListIds(std::string_view type) const
     while (stmt.Step() == SQLITE_ROW)
     {
         result.push_back(stmt.ColumnText(0));
+    }
+
+    return result;
+}
+
+std::vector<std::pair<std::string, std::int64_t>> JsonStore::ListUpdatedAt(std::string_view type) const
+{
+    std::vector<std::pair<std::string, std::int64_t>> result;
+
+    std::lock_guard<std::recursive_mutex> lock(mMutex);
+
+    if (mDb == nullptr)
+    {
+        return result;
+    }
+
+    Stmt stmt(mDb, "SELECT id, updated_at FROM items WHERE type = ?1 ORDER BY id;");
+
+    if (!stmt.Ok())
+    {
+        return result;
+    }
+
+    stmt.BindText(1, type);
+
+    while (stmt.Step() == SQLITE_ROW)
+    {
+        result.emplace_back(stmt.ColumnText(0), stmt.ColumnInt64(1));
     }
 
     return result;

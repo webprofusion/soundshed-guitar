@@ -1305,6 +1305,9 @@ class PluginController
     bool mDeferStartupBuild = false;
     bool mBuildingDeferredStartupPreset = false; // the build tells the host nothing: the state was already the preset
 
+    /// The user presets' list fields, read again only for presets written since the last list.
+    PresetSummaryCache mPresetSummaryCache;
+
     /**
      * The user's NAM quality tier, owned by *this* plugin instance.
      *

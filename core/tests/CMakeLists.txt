@@ -135,6 +135,7 @@ set(TEST_SOURCES
     UiClientTests.cpp
     UiClientLayoutTests.cpp
     PresetStorageTests.cpp
+    PresetSummaryCacheTests.cpp
     PresetVoicePoolTests.cpp
     JsonStoreConcurrencyTests.cpp
     JsonStoreTests.cpp
