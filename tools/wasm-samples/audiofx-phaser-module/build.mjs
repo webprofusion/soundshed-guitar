@@ -44,15 +44,14 @@ function decodeWatString(encoded) {
   return decoded;
 }
 
-function readDescriptorByteLength(source) {
-  const dataMatch = source.match(/\(data\s+\(i32\.const\s+0\)([\s\S]*?)\)\s*\(global/);
+function readDescriptorText(source) {
+  const dataMatch = source.match(/\(data\s+\(i32\.const\s+0\)((?:\s*"(?:\.|[^"])*")+)\s*\)/);
 
   if (!dataMatch) {
-    throw new Error("Could not locate the descriptor data segment.");
+    throw new Error("Could not locate the descriptor data segment at address 0.");
   }
 
-  const strings = [...dataMatch[1].matchAll(/"((?:\\.|[^"])*)"/g)].map((match) => decodeWatString(match[1]));
-  return Buffer.byteLength(strings.join(""), "utf8");
+  return [...dataMatch[1].matchAll(/"((?:\.|[^"])*)"/g)].map((match) => decodeWatString(match[1])).join("");
 }
 
 function readDeclaredDescriptorLength(source) {
@@ -65,9 +64,110 @@ function readDeclaredDescriptorLength(source) {
   return Number(lengthMatch[1]);
 }
 
+// The param ids the descriptor declares, in declaration order, with their defaults.
+function readDeclaredParams(descriptorText) {
+  const params = new Map();
+
+  for (const line of descriptorText.split("\n")) {
+    const match = line.match(/^param\.([^.=]+)\.([^=]+)=(.*)$/);
+
+    if (!match) {
+      continue;
+    }
+
+    if (!params.has(match[1])) {
+      params.set(match[1], 0);
+    }
+
+    if (match[2] === "default") {
+      params.set(match[1], Number(match[3]));
+    }
+  }
+
+  return params;
+}
+
+// Runs the module the way the host does (Custom Effect ABI 2): prepare, look the buffer up, process
+// blocks of a sine in place. Handles come from an arbitrary base, as the host's do, so a module
+// that hard-codes them fails here too.
+async function smokeTest(compiledModule, params) {
+  const handleBase = 7000;
+  const ids = [...params.keys()];
+  let memory;
+  const readId = (pointer, length) => new TextDecoder().decode(new Uint8Array(memory.buffer, pointer, length));
+  const instance = await WebAssembly.instantiate(compiledModule, {
+    host: {
+      param_handle: (pointer, length) => {
+        const index = ids.indexOf(readId(pointer, length));
+        return index < 0 ? -1 : handleBase + index;
+      },
+      param_value: (handle) => {
+        const id = ids[handle - handleBase];
+
+        if (id === undefined) {
+          throw new Error(`param_value was given handle ${handle}, which param_handle did not return.`);
+        }
+
+        return params.get(id);
+      },
+      tempo_bpm: () => 120,
+      resource_handle: () => -1,
+      resource_size: () => 0,
+      resource_read: () => 0,
+    },
+  });
+  const guest = instance.exports;
+  memory = guest.memory;
+
+  if (guest.audiofx_abi_version() !== 2) {
+    throw new Error(`audiofx_abi_version returned ${guest.audiofx_abi_version()}, not 2.`);
+  }
+
+  const maxBlock = 512;
+  const status = guest.audiofx_prepare(48000, maxBlock);
+
+  if (status !== 0) {
+    throw new Error(`audiofx_prepare returned ${status}.`);
+  }
+
+  const bufferPointer = guest.audiofx_buffer_ptr();
+
+  if (bufferPointer % 4 !== 0 || bufferPointer + maxBlock * 8 > memory.buffer.byteLength) {
+    throw new Error(`audiofx_buffer_ptr returned ${bufferPointer}, which is unaligned or doesn't fit in memory.`);
+  }
+
+  let peak = 0;
+
+  for (let start = 0; start < 48000; start += 300) {
+    const io = new Float32Array(memory.buffer, bufferPointer, maxBlock * 2);
+
+    for (let i = 0; i < 300; i += 1) {
+      const sample = 0.5 * Math.sin((2 * Math.PI * 440 * (start + i)) / 48000);
+      io[i] = sample;
+      io[maxBlock + i] = sample;
+    }
+
+    guest.audiofx_process(300);
+    const out = new Float32Array(memory.buffer, bufferPointer, maxBlock * 2);
+
+    for (let i = 0; i < 300; i += 1) {
+      for (const value of [out[i], out[maxBlock + i]]) {
+        if (!Number.isFinite(value)) {
+          throw new Error(`Output sample ${start + i} is not finite.`);
+        }
+
+        peak = Math.max(peak, Math.abs(value));
+      }
+    }
+  }
+
+  return peak;
+}
+
 const wabt = await wabtFactory();
 const source = await readFile(sourcePath, "utf8");
-const descriptorByteLength = readDescriptorByteLength(source);
+const descriptorText = readDescriptorText(source);
+const descriptorByteLength = Buffer.byteLength(descriptorText, "utf8");
 const declaredDescriptorLength = readDeclaredDescriptorLength(source);
 
 if (descriptorByteLength !== declaredDescriptorLength) {
@@ -76,9 +176,7 @@ if (descriptorByteLength !== declaredDescriptorLength) {
   );
 }
 
-const moduleHandle = wabt.parseWat(path.basename(sourcePath), source, {
-  multi_value: true,
-});
+const moduleHandle = wabt.parseWat(path.basename(sourcePath), source);
 const { buffer } = moduleHandle.toBinary({
   log: false,
   write_debug_names: true,
@@ -91,16 +189,24 @@ const compiledModule = await WebAssembly.compile(buffer);
 const exportsList = WebAssembly.Module.exports(compiledModule).map(({ kind, name }) => `${kind}:${name}`);
 const exportNames = new Set(exportsList.map((entry) => entry.split(":")[1]));
 
-for (const requiredExport of ["audiofx_prepare", "audiofx_reset", "audiofx_process"]) {
+for (const requiredExport of [
+  "memory",
+  "audiofx_abi_version",
+  "audiofx_descriptor_ptr",
+  "audiofx_descriptor_len",
+  "audiofx_prepare",
+  "audiofx_buffer_ptr",
+  "audiofx_process",
+  "audiofx_reset",
+]) {
   if (!exportNames.has(requiredExport)) {
     throw new Error(`Missing required export: ${requiredExport}`);
   }
 }
 
-if ((exportNames.has("audiofx_descriptor_ptr") || exportNames.has("audiofx_descriptor_len")) && !exportNames.has("memory")) {
-  throw new Error("Descriptor exports require an exported memory.");
-}
+const peak = await smokeTest(compiledModule, readDeclaredParams(descriptorText));
 
 console.log(`Built ${path.relative(rootDir, outputPath)}`);
 console.log(`Descriptor bytes: ${descriptorByteLength}`);
 console.log(`Exports: ${exportsList.join(", ")}`);
+console.log(`Smoke test: one second of a 440 Hz sine at the defaults, peak ${peak.toFixed(3)}, all finite.`);

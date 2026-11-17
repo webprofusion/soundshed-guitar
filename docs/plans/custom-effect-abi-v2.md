@@ -10,11 +10,10 @@ No Custom Effect modules are known to be in use (Chris, 2026-10-29), so v2 repla
 no compatibility layer; a v1 module is refused with a message that points at the migration guide
 below.
 
-**Status (2026-11-17):** phases 1 (params, 5e9795b8) and 2 (resources, 355696ae) are committed.
-D1 is taken: phase 5, block processing, is built and tested, uncommitted. The host now calls the
+**Status (2026-11-17):** phases 1 (params, 5e9795b8), 2 (resources, 355696ae) and 5 (block
+processing, 3cc997b4) are committed, and phase 4 (docs and samples) is done. The host calls the
 guest through Wasmtime's unchecked API, with every export's signature checked at load. The UI
-still parses the cached `key=value` entries itself until phase 3. `docs/wasm-module-authoring.md`,
-the phaser sample and `tools/wasm-module-generator` still describe ABI 1 until phase 4.
+still parses the cached `key=value` entries itself until phase 3.
 
 ## What is wrong with v1
 
@@ -199,9 +198,15 @@ A UI test covers `getNodeEffectInfo` from the parsed form, guest params listed b
 2. **Resources.** `resource_handle` / `resource_size` / `resource_read`, resources by id in
    presets and the reconcile.
 3. **UI.** The parsed descriptor cache, the TS parser deleted.
-4. **Docs and samples.** Rewrite `docs/wasm-module-authoring.md`: the ABI, all four language
-   examples, the AI prompt template, and the migration guide below. Port
-   `tools/wasm-samples/audiofx-phaser-module/ai_phaser.wat`. A changelog line.
+4. **Docs and samples** (done 2026-11-17). `docs/wasm-module-authoring.md` is rewritten for the
+   block ABI: the interface, how a block runs, the descriptor, the gain example in WAT, Rust,
+   TinyGo and C, the AI prompt template and the migration guide. The WAT and C examples were
+   built (wabt, clang) and run in the host; Rust and TinyGo were not, as neither toolchain was to
+   hand. The phaser sample is ported (its `mix` param, a host id, is now `blend`) and renders bit
+   for bit as before; `build.mjs` runs it like the host does. `tools/wasm-module-generator` and
+   the private Designer's `module-generation.ts` wrap each per-sample kernel in a block loop that
+   reads params once per block. `WasmEffectHostTests --check <module> [resources...]` runs any
+   module through the real host, and a test loads the committed phaser.
 5. **Block processing** (D1, taken 2026-11-17). `audiofx_buffer_ptr`, `audiofx_process(frames)`,
    unchecked calls and imports, export signatures checked at load. Tests: a long in-place host
    block, the per-sample process and bad buffer addresses refused. The private Emissary module is

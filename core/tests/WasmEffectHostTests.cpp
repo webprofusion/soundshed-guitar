@@ -1232,14 +1232,194 @@ bool TestHostileDescriptorIsSanitised(const TempDir& tempDir)
 
     return true;
 }
+
+// The output level of a module run through the host.
+struct ModuleRunReport
+{
+    float peak = 0.0f;
+    float rms = 0.0f;
+};
+
+// Runs a module file the way a Custom Effect node does: loaded with the given resource files (in
+// the order the descriptor declares the resources), prepared at 48 kHz for 512-frame blocks, then
+// two seconds of a 440 Hz sine at half scale in host blocks of 1, 64, 480 and 512 frames. Prints
+// the descriptor when `verbose`. False, with the reason on stderr, if the module fails to load or
+// run, or produces a non-finite sample.
+bool RunModuleFile(const std::filesystem::path& modulePath, const std::vector<std::filesystem::path>& resourcePaths,
+                   bool verbose, ModuleRunReport& report)
+{
+    std::string error;
+    const auto descriptor = WasmEffect::InspectModuleFile(modulePath, &error);
+
+    if (!descriptor)
+    {
+        std::cerr << modulePath.string() << ": " << error << "\n";
+        return false;
+    }
+
+    if (verbose)
+    {
+        std::cout << modulePath.filename().string() << ": " << descriptor->displayName << " (" << descriptor->category
+                  << ")\n";
+
+        for (const auto& param : descriptor->parameters)
+        {
+            const auto& definition = param.definition;
+            std::cout << "  param " << definition.id << ": default " << definition.defaultValue << ", "
+                      << definition.minValue << " to " << definition.maxValue << "\n";
+        }
+
+        for (const auto& resource : descriptor->exposedResources)
+        {
+            std::cout << "  resource " << resource.resourceId << " (" << resource.resourceType << ")\n";
+        }
+    }
+
+    std::vector<ResourceRef> refs{FileRef(modulePath, "wasm", 0)};
+    std::vector<std::filesystem::path> paths{modulePath};
+
+    for (std::size_t i = 0; i < resourcePaths.size(); ++i)
+    {
+        const char* type =
+            i < descriptor->exposedResources.size() ? descriptor->exposedResources[i].resourceType.c_str() : "blob";
+        refs.push_back(FileRef(resourcePaths[i], type, i + 1));
+        paths.push_back(resourcePaths[i]);
+    }
+
+    auto effect = CreateWasmHost();
+
+    if (!effect->LoadResources(refs, paths))
+    {
+        std::cerr << modulePath.string() << ": " << effect->GetConfig("lastError") << "\n";
+        return false;
+    }
+
+    constexpr int kMaxBlock = 512;
+    effect->Prepare(kSampleRate, kMaxBlock);
+
+    if (const auto lastError = effect->GetConfig("lastError"); !lastError.empty())
+    {
+        std::cerr << modulePath.string() << ": " << lastError << "\n";
+        return false;
+    }
+
+    std::vector<float> leftIn(kMaxBlock);
+    std::vector<float> rightIn(kMaxBlock);
+    std::vector<float> leftOut(kMaxBlock);
+    std::vector<float> rightOut(kMaxBlock);
+    constexpr std::array<int, 4> kHostBlocks{1, 64, 480, kMaxBlock};
+    const int totalFrames = static_cast<int>(kSampleRate) * 2;
+    double sumSquares = 0.0;
+    int frame = 0;
+
+    for (std::size_t blockIndex = 0; frame < totalFrames; ++blockIndex)
+    {
+        const int frames = std::min(kHostBlocks[blockIndex % kHostBlocks.size()], totalFrames - frame);
+
+        for (int i = 0; i < frames; ++i)
+        {
+            const float sample =
+                0.5f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * 440.0 * (frame + i) / kSampleRate));
+            leftIn[static_cast<std::size_t>(i)] = sample;
+            rightIn[static_cast<std::size_t>(i)] = sample;
+        }
+
+        float* inputs[] = {leftIn.data(), rightIn.data()};
+        float* outputs[] = {leftOut.data(), rightOut.data()};
+        effect->Process(inputs, outputs, frames);
+
+        if (const auto lastError = effect->GetConfig("lastError"); !lastError.empty())
+        {
+            std::cerr << modulePath.string() << ": stopped at frame " << frame << ": " << lastError << "\n";
+            return false;
+        }
+
+        for (int i = 0; i < frames; ++i)
+        {
+            for (const float value : {leftOut[static_cast<std::size_t>(i)], rightOut[static_cast<std::size_t>(i)]})
+            {
+                if (!std::isfinite(value))
+                {
+                    std::cerr << modulePath.string() << ": output at frame " << frame + i << " is not finite.\n";
+                    return false;
+                }
+
+                report.peak = std::max(report.peak, std::fabs(value));
+                sumSquares += static_cast<double>(value) * value;
+            }
+        }
+
+        frame += frames;
+    }
+
+    report.rms = static_cast<float>(std::sqrt(sumSquares / (2.0 * totalFrames)));
+
+    if (verbose)
+    {
+        std::cout << "  ran " << totalFrames << " frames: peak " << report.peak << ", RMS " << report.rms << "\n";
+    }
+
+    return true;
+}
+
+// The committed phaser sample (tools/wasm-samples) still loads and runs. At its defaults a phaser
+// passes most of a sine through.
+bool TestCommittedPhaserSample()
+{
+    const auto modulePath =
+        std::filesystem::path(GUITARFX_WASM_SAMPLES_DIR) / "audiofx-phaser-module" / "dist" / "ai_phaser.wasm";
+    ModuleRunReport report;
+
+    if (!RunModuleFile(modulePath, {}, false, report))
+    {
+        std::cerr << "The committed phaser sample failed to run.\n";
+        return false;
+    }
+
+    if (report.rms < 0.05f || report.peak > 2.0f)
+    {
+        std::cerr << "The committed phaser sample's output is implausible: peak " << report.peak << ", RMS "
+                  << report.rms << ".\n";
+        return false;
+    }
+
+    return true;
+}
 } // namespace
 } // namespace guitarfx
 
-int main()
+// WasmEffectHostTests --check <module.wasm> [resource files...] runs one module through the host
+// and reports what it declares and how it ran, for checking a module by hand.
+static int RunCheck(int argc, char** argv)
 {
+    if (argc < 3)
+    {
+        std::cerr << "usage: WasmEffectHostTests --check <module.wasm> [resource files...]\n";
+        return 2;
+    }
+
+    std::vector<std::filesystem::path> resources;
+
+    for (int i = 3; i < argc; ++i)
+    {
+        resources.emplace_back(argv[i]);
+    }
+
+    guitarfx::ModuleRunReport report;
+    return guitarfx::RunModuleFile(argv[2], resources, true, report) ? 0 : 1;
+}
+
+int main(int argc, char** argv)
+{
+    guitarfx::RegisterAllEffects();
     guitarfx::RegisterAllEffects();
     // The app sets this from the Custom Effects feature setting.
     guitarfx::WasmEffect::SetHostingEnabled(true);
+
+    if (argc >= 2 && std::string(argv[1]) == "--check")
+    {
+        return RunCheck(argc, argv);
+    }
 
     guitarfx::TempDir tempDir;
     bool allPassed = true;
@@ -1273,6 +1453,7 @@ int main()
     allPassed = guitarfx::TestNetworkPathsAreRefused(tempDir) && allPassed;
     allPassed = guitarfx::TestHostingGate(tempDir) && allPassed;
     allPassed = guitarfx::TestHostileDescriptorIsSanitised(tempDir) && allPassed;
+    allPassed = guitarfx::TestCommittedPhaserSample() && allPassed;
 
     if (!allPassed)
     {

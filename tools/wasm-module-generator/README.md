@@ -1,6 +1,6 @@
 # Soundshed WASM Module Generator
 
-Standalone CLI for generating a small set of simple WebAssembly guest modules that match the Soundshed generic WASM host ABI.
+Standalone CLI for generating a small set of simple WebAssembly guest modules for Custom Effects (Custom Effect ABI 2).
 
 For an AI-oriented authoring guide with the same basic example shown in multiple source languages, see [docs/wasm-module-authoring.md](../../docs/wasm-module-authoring.md).
 
@@ -48,8 +48,8 @@ The manifest includes:
 
 - the host ABI summary
 - a list of generated modules
-- parameter metadata including id, title, default, range, unit, group, advanced flag, step, labels, and guest slot
-- optional resource slot metadata
+- parameter metadata including id, title, default, range, unit, group, advanced flag, step and labels
+- optional resource metadata
 - an `exampleGraphNode` object for each module showing how to wire it into the `wasm_host` effect
 
 ## Included Modules
@@ -60,50 +60,44 @@ The manifest includes:
 - `stereo_average`: averages left/right to mono and writes the same signal to both channels, scaled by a self-described `gain` parameter
 - `channel_swap`: swaps the left and right channels
 - `hard_clip`: clips both channels to `+/- threshold` with a minimum threshold floor
-- `bpm_ducker`: scales level by `120 / bpm` using the guest tempo slot
+- `bpm_ducker`: scales level by `120 / bpm`, reading the host tempo with `tempo_bpm`
 - `stateful_bias`: adds a tiny cumulative bias each sample to demonstrate state and reset behavior
-- `resource_size_gain`: scales both channels from the byte size of an external resource blob in slot `1`
-- `resource_scaler`: scales both channels from the first byte of an external resource blob in slot `1`
+- `resource_size_gain`: scales both channels from the byte size of its `payload` resource
+- `resource_scaler`: scales both channels from the first byte of its `scale` resource
 
 ## Host ABI
 
-Expected guest exports:
+The modules use Custom Effect ABI 2. [docs/wasm-module-authoring.md](../../docs/wasm-module-authoring.md) is the reference; in short:
 
-- `audiofx_prepare(sampleRate: f32, maxBlockSize: i32, resourceSlotCount: i32) -> i32`
+Guest exports:
+
+- `audiofx_abi_version() -> i32`, returning `2`
+- `audiofx_prepare(sampleRate: f32, maxBlockSize: i32) -> i32`, `0` on success
+- `audiofx_buffer_ptr() -> i32`: the in-place I/O buffer in `memory`, `maxBlockSize` left samples then as many right
+- `audiofx_process(frames: i32) -> void`: processes `frames` samples in place in the I/O buffer
 - `audiofx_reset() -> void`
-- `audiofx_process(inLeft: f32, inRight: f32) -> (f32, f32)`
 - `audiofx_get_latency_samples() -> i32`
-- `memory` (optional, required when exporting a descriptor blob)
-- `audiofx_descriptor_ptr() -> i32` (optional descriptor blob offset)
-- `audiofx_descriptor_len() -> i32` (optional descriptor blob byte length)
+- `memory`, `audiofx_descriptor_ptr() -> i32` and `audiofx_descriptor_len() -> i32`
 
-The current host still accepts legacy `guitarfx_*` export names for backward compatibility.
+Host imports, from module `host`:
 
-Supported host imports:
+- `param_handle(idPtr: i32, idLen: i32) -> i32` and `param_value(handle: i32) -> f32`
+- `tempo_bpm() -> f32`
+- `resource_handle(idPtr: i32, idLen: i32) -> i32`, `resource_size(handle: i32) -> i32` and `resource_read(handle: i32, offset: i32, dstPtr: i32, len: i32) -> i32`
 
-- `host.read_param(index: i32) -> f32`
-- `host.read_resource_size(slot: i32) -> i32`
-- `host.read_resource_byte(slot: i32, offset: i32) -> i32`
+The descriptor keys params and resources by id: `param.<id>.<field>`, `resource.<id>.<field>`. Ids are a letter followed by up to 31 letters, digits or underscores, and a param may not take one of the host's own ids (`mix`, `inputGainDb`, `outputGainDb`, `bpm`). The generator checks both.
 
-Mono input behavior:
+## How the Generated Modules Work
 
-- if the host only has one live input channel for a WASM node, it mirrors that signal to both guest inputs before calling `audiofx_process`
-- this lets stereo guest modules such as `stereo_spatial` behave sensibly on mono sources
+Every module is the same wrapper around a small per-sample kernel, `(inLeft, inRight) -> (outLeft, outRight)`:
 
-Parameter index mapping:
+- All six host imports are imported, in a fixed order, so function indices never move.
+- `audiofx_prepare` refuses a `maxBlockSize` below 1 or above 2^20 (status 2), grows memory to hold the I/O buffer (status 3 if it can't), and looks up the handle for every param and resource id (status 1 for an id the descriptor doesn't declare). A module's own prepare code, such as reading a resource, runs after that.
+- `audiofx_process` reads every param once, and the tempo, at the start of each block, then runs the kernel over each frame of the buffer in place.
 
-- `0..7` => `param1..param8`
-- `8` => `bpm`
+Guest memory: param handles at 0, the param values read for this block at 256, the tempo at 512, `maxBlockSize` at 516, a 16-byte resource scratch area at 528, resource handles at 544, the id strings at 1024, the descriptor at 4096, and the I/O buffer on the first page boundary after the descriptor.
 
-Descriptor blob format:
-
-- UTF-8 text stored in guest memory
-- one `key=value` entry per line
-- extensible by convention; unknown keys are ignored by the current host
-- current keys include:
-	- `effect.name`, `effect.title`, `effect.version`, `effect.category`, `effect.description`, `effect.thumbnailBase64`, `effect.thumbnailMimeType`
-	- `param.N.id`, `param.N.title`, `param.N.slot`, `param.N.default`, `param.N.min`, `param.N.max`, `param.N.unit`, `param.N.group`, `param.N.advanced`, `param.N.step`, `param.N.labels`
-	- `resource.N.id`, `resource.N.title`, `resource.N.slot`, `resource.N.type`, `resource.N.allowBrowseFile`, `resource.N.parameterId`, `resource.N.parameterValue`
+Mono input: if the host has only one live input channel for a node, it mirrors that signal to both channels of the buffer, so stereo modules such as `stereo_spatial` behave sensibly on mono sources.
 
 For the generated `stereo_spatial` module:
 
@@ -118,9 +112,6 @@ For the generated `stereo_spatial_random` module:
 - `amount`: controls how far the motion can move away from the base depth and pan
 - the motion is continuous and slewed; it does not jump directly between random targets
 
-Resource slot mapping:
+## Resources
 
-- slot `0` => the `.wasm` module itself
-- slot `1..N` => optional binary resource blobs
-
-For optional resources, the manifest's `exampleGraphNode.resources[*].metadata.resourceSlotIndex` field matches what the current host expects.
+`node.resources[0]` is the module itself. Each further node resource is one of the module's declared resources, and the node's `wasmResourceIds` config (a JSON array, `""` for the module) says which, so a file stays with its resource if a later version of the module declares them in another order. Without it, the files are taken in declaration order. The manifest's `exampleGraphNode` shows both for the resource examples.

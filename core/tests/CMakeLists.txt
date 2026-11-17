@@ -318,6 +318,12 @@ foreach(test_source IN LISTS TEST_SOURCES)
     endif()
 endforeach()
 
+# The committed Custom Effect samples, so the host test catches a sample that no longer loads.
+if(TARGET WasmEffectHostTests)
+    target_compile_definitions(WasmEffectHostTests PRIVATE
+        GUITARFX_WASM_SAMPLES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../tools/wasm-samples")
+endif()
+
 # Shared harness for the riff/audio-lock regression without growing the main test past its size budget.
 target_sources(MixerInstanceLockTests PRIVATE MixerInstanceLockSupport.cpp MixerInstanceLockSupport.h)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,12 +25,60 @@ F32_ABS = bytes([0x8B])
 F32_GT = bytes([0x5E])
 
 I32_ADD = bytes([0x6A])
+I32_SUB = bytes([0x6B])
 I32_MUL = bytes([0x6C])
 I32_AND = bytes([0x71])
+I32_SHL = bytes([0x74])
+I32_SHR_U = bytes([0x76])
+I32_EQ = bytes([0x46])
+I32_LT_S = bytes([0x48])
+I32_GT_S = bytes([0x4A])
+I32_GE_S = bytes([0x4E])
+F32_CONVERT_I32_S = bytes([0xB2])
 
 IF_VOID = bytes([0x04, 0x40])
+BLOCK_VOID = bytes([0x02, 0x40])
+LOOP_VOID = bytes([0x03, 0x40])
 ELSE = bytes([0x05])
 END = bytes([0x0B])
+RETURN = bytes([0x0F])
+DROP = bytes([0x1A])
+MEMORY_SIZE = bytes([0x3F, 0x00])
+MEMORY_GROW = bytes([0x40, 0x00])
+
+PAGE_BYTES = 65536
+
+# Custom Effect ABI 2 (docs/wasm-module-authoring.md). The host imports, all six of them, are
+# always imported in this order, so their function indices are fixed.
+ABI_VERSION = 2
+FN_PARAM_HANDLE = 0
+FN_PARAM_VALUE = 1
+FN_TEMPO_BPM = 2
+FN_RESOURCE_HANDLE = 3
+FN_RESOURCE_SIZE = 4
+FN_RESOURCE_READ = 5
+IMPORT_COUNT = 6
+
+# The defined functions follow the imports. A module supplies the kernel: a per-sample function
+# (inLeft, inRight) -> (outLeft, outRight) that the standard audiofx_process runs over each frame.
+FN_PREPARE = IMPORT_COUNT
+FN_RESET = IMPORT_COUNT + 1
+FN_KERNEL = IMPORT_COUNT + 2
+
+# Guest memory layout. Everything a kernel reads from memory has address 0 and the field's place as
+# the load's static offset, so the kernels need no address arithmetic.
+MEM_PARAM_HANDLES = 0  # i32 per param, from param_handle in prepare
+MEM_PARAM_VALUES = 256  # f32 per param, read once per block before the kernel runs
+MEM_TEMPO = 512  # f32, tempo_bpm, once per block
+MEM_MAX_BLOCK = 516  # i32, maxBlockSize from prepare
+MEM_RESOURCE_SCRATCH = 528  # 16 bytes a module may fill from its resources in prepare
+MEM_RESOURCE_HANDLES = 544  # i32 per resource, from resource_handle in prepare
+MEM_IDS = 1024  # the param and resource id strings param_handle and resource_handle are given
+MEM_DESCRIPTOR = 4096  # the descriptor text; the I/O buffer starts at the next page after it
+MAX_PARAMS = 64
+MAX_RESOURCES = 16
+# prepare refuses a larger maxBlockSize (status 2) rather than overflow the buffer arithmetic.
+MAX_BLOCK_FRAMES = 1 << 20
 
 
 @dataclass(frozen=True)
@@ -56,6 +105,7 @@ class GlobalDef:
 class DefinedFuncDef:
     type_index: int
     ops: bytes
+    locals_: Sequence[int] = ()
 
 
 @dataclass(frozen=True)
@@ -77,14 +127,12 @@ class ParamDoc:
     advanced: bool = False
     step: float = 0.0
     labels: Sequence[str] = field(default_factory=tuple)
-    slot: int = 0
 
 
 @dataclass(frozen=True)
 class ResourceDoc:
     identifier: str
     title: str
-    slot: int
     file_name: str
     description: str
     resource_type: str = "blob"
@@ -194,11 +242,71 @@ def f32_const(value: float) -> bytes:
     return bytes(out)
 
 
+def local_set(index: int) -> bytes:
+    out = bytearray([0x21])
+    append_u32_leb(out, index)
+    return bytes(out)
+
+
+def memory_op(opcode: int, align_log2: int, offset: int) -> bytes:
+    out = bytearray([opcode])
+    append_u32_leb(out, align_log2)
+    append_u32_leb(out, offset)
+    return bytes(out)
+
+
+def i32_load(offset: int = 0) -> bytes:
+    return memory_op(0x28, 2, offset)
+
+
+def f32_load(offset: int = 0) -> bytes:
+    return memory_op(0x2A, 2, offset)
+
+
+def i32_load8_u(offset: int = 0) -> bytes:
+    return memory_op(0x2D, 0, offset)
+
+
+def i32_store(offset: int = 0) -> bytes:
+    return memory_op(0x36, 2, offset)
+
+
+def f32_store(offset: int = 0) -> bytes:
+    return memory_op(0x38, 2, offset)
+
+
+def br(depth: int) -> bytes:
+    out = bytearray([0x0C])
+    append_u32_leb(out, depth)
+    return bytes(out)
+
+
+def br_if(depth: int) -> bytes:
+    out = bytearray([0x0D])
+    append_u32_leb(out, depth)
+    return bytes(out)
+
+
 def combine_ops(*ops: bytes) -> bytes:
     out = bytearray()
     for op in ops:
         out.extend(op)
     return bytes(out)
+
+
+def param_ops(index: int) -> bytes:
+    """A param's value as audiofx_process read it at the start of this block."""
+    return combine_ops(i32_const(0), f32_load(MEM_PARAM_VALUES + 4 * index))
+
+
+def tempo_ops() -> bytes:
+    """The host tempo in BPM as audiofx_process read it at the start of this block."""
+    return combine_ops(i32_const(0), f32_load(MEM_TEMPO))
+
+
+def resource_handle_ops(index: int) -> bytes:
+    """The handle prepare got from resource_handle for the module's index-th resource."""
+    return combine_ops(i32_const(0), i32_load(MEM_RESOURCE_HANDLES + 4 * index))
 
 
 def make_module(
@@ -210,6 +318,7 @@ def make_module(
     *,
     export_memory: bool = False,
     data_segments: Sequence[DataSegmentDef] = (),
+    memory_min_pages: int = 1,
 ) -> bytes:
     module = bytearray([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00])
 
@@ -244,7 +353,7 @@ def make_module(
         memory_payload = bytearray()
         append_u32_leb(memory_payload, 1)
         memory_payload.append(0x00)
-        append_u32_leb(memory_payload, 1)
+        append_u32_leb(memory_payload, memory_min_pages)
         module.extend(make_section(5, bytes(memory_payload)))
 
     if globals_:
@@ -273,7 +382,10 @@ def make_module(
     append_u32_leb(code_payload, len(defined_functions))
     for defined in defined_functions:
         body = bytearray()
-        append_u32_leb(body, 0)
+        append_u32_leb(body, len(defined.locals_))
+        for local_type in defined.locals_:
+            append_u32_leb(body, 1)
+            body.append(local_type)
         body.extend(defined.ops)
         body.append(0x0B)
         append_u32_leb(code_payload, len(body))
@@ -304,6 +416,19 @@ def build_descriptor_blob(entries: Sequence[tuple[str, str]]) -> bytes:
     return "".join(f"{key}={value}\n" for key, value in entries).encode("utf-8")
 
 
+HOST_PARAM_IDS = ("mix", "inputGainDb", "outputGainDb", "bpm")
+GUEST_ID_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}")
+
+
+def check_guest_id(kind: str, identifier: str) -> None:
+    if not GUEST_ID_PATTERN.fullmatch(identifier):
+        raise ValueError(f"{kind} id '{identifier}' must be a letter followed by up to 31 letters, digits or underscores.")
+    if kind == "param" and identifier in HOST_PARAM_IDS:
+        raise ValueError(f"param id '{identifier}' is one of the host's own params; pick another.")
+    if kind == "resource" and identifier == "module":
+        raise ValueError("resource id 'module' is the module's own resource; pick another.")
+
+
 def descriptor_entries_for_spec(spec: ModuleSpec) -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = [
         ("effect.name", spec.title or title_from_identifier(spec.identifier)),
@@ -314,13 +439,12 @@ def descriptor_entries_for_spec(spec: ModuleSpec) -> list[tuple[str, str]]:
         entries.append(("effect.thumbnailBase64", spec.thumbnail_base64))
         if spec.thumbnail_mime_type:
             entries.append(("effect.thumbnailMimeType", spec.thumbnail_mime_type))
-    for index, param in enumerate(spec.params):
-        prefix = f"param.{index}"
+    for param in spec.params:
+        check_guest_id("param", param.identifier)
+        prefix = f"param.{param.identifier}"
         entries.extend(
             [
-                (f"{prefix}.id", param.identifier),
                 (f"{prefix}.title", param.title),
-                (f"{prefix}.slot", str(param.slot)),
                 (f"{prefix}.default", str(param.default)),
                 (f"{prefix}.min", str(param.min_value)),
                 (f"{prefix}.max", str(param.max_value)),
@@ -336,13 +460,12 @@ def descriptor_entries_for_spec(spec: ModuleSpec) -> list[tuple[str, str]]:
             entries.append((f"{prefix}.step", str(param.step)))
         if param.labels:
             entries.append((f"{prefix}.labels", "|".join(param.labels)))
-    for index, resource in enumerate(spec.resources):
-        prefix = f"resource.{index}"
+    for resource in spec.resources:
+        check_guest_id("resource", resource.identifier)
+        prefix = f"resource.{resource.identifier}"
         entries.extend(
             [
-                (f"{prefix}.id", resource.identifier),
                 (f"{prefix}.title", resource.title),
-                (f"{prefix}.slot", str(resource.slot)),
                 (f"{prefix}.type", resource.resource_type),
             ]
         )
@@ -355,75 +478,247 @@ def descriptor_entries_for_spec(spec: ModuleSpec) -> list[tuple[str, str]]:
     return entries
 
 
+# Every generated module has the same types and imports; see FN_* for the function indices.
+STANDARD_TYPES = [
+    FuncTypeDef([I32, I32], [I32]),  # 0: param_handle, resource_handle
+    FuncTypeDef([I32], [F32]),  # 1: param_value
+    FuncTypeDef([], [F32]),  # 2: tempo_bpm
+    FuncTypeDef([I32], [I32]),  # 3: resource_size
+    FuncTypeDef([I32, I32, I32, I32], [I32]),  # 4: resource_read
+    FuncTypeDef([F32, I32], [I32]),  # 5: audiofx_prepare
+    FuncTypeDef([], []),  # 6: audiofx_reset
+    FuncTypeDef([F32, F32], [F32, F32]),  # 7: the per-sample kernel (internal)
+    FuncTypeDef([], [I32]),  # 8: latency, descriptor, abi version, buffer pointer
+    FuncTypeDef([I32], []),  # 9: audiofx_process
+]
+
+STANDARD_IMPORTS = [
+    ImportFuncDef("host", "param_handle", 0),
+    ImportFuncDef("host", "param_value", 1),
+    ImportFuncDef("host", "tempo_bpm", 2),
+    ImportFuncDef("host", "resource_handle", 0),
+    ImportFuncDef("host", "resource_size", 3),
+    ImportFuncDef("host", "resource_read", 4),
+]
+
+
+def lay_out_ids(identifiers: Sequence[str], base: int) -> tuple[bytes, list[tuple[int, int]]]:
+    blob = bytearray()
+    spans: list[tuple[int, int]] = []
+    for identifier in identifiers:
+        encoded = identifier.encode("utf-8")
+        spans.append((base + len(blob), len(encoded)))
+        blob.extend(encoded)
+    return bytes(blob), spans
+
+
+def lookup_handles_ops(spans: Sequence[tuple[int, int]], lookup_function: int, handle_base: int) -> bytes:
+    """Asks the host for each id's handle and keeps it; prepare fails (status 1) on an unknown id."""
+    ops = bytearray()
+    for index, (address, length) in enumerate(spans):
+        handle_address = handle_base + 4 * index
+        ops.extend(
+            combine_ops(
+                i32_const(0),
+                i32_const(address),
+                i32_const(length),
+                call(lookup_function),
+                i32_store(handle_address),
+                i32_const(0),
+                i32_load(handle_address),
+                i32_const(0),
+                I32_LT_S,
+                IF_VOID,
+                i32_const(1),
+                RETURN,
+                END,
+            )
+        )
+    return bytes(ops)
+
+
 def make_standard_module(
+    spec: ModuleSpec,
     *,
-    types: Sequence[FuncTypeDef],
-    imports: Sequence[ImportFuncDef],
     globals_: Sequence[GlobalDef],
-    prepare_type_index: int,
-    reset_type_index: int,
-    process_type_index: int,
-    latency_type_index: int,
-    prepare_ops: bytes,
-    reset_ops: bytes,
-    process_ops: bytes,
-    latency_ops: bytes,
-    descriptor_entries: Sequence[tuple[str, str]] = (),
+    kernel_ops: bytes,
+    prepare_ops: bytes = b"",
+    reset_ops: bytes = b"",
+    latency_samples: int = 0,
 ) -> bytes:
-    descriptor_blob = build_descriptor_blob(descriptor_entries)
+    """Wraps a per-sample kernel in Custom Effect ABI 2.
+
+    The kernel takes (inLeft, inRight) as locals 0 and 1 and leaves (outLeft, outRight) on the
+    stack. It reads params with param_ops(i) (in declaration order) and the tempo with tempo_ops().
+    audiofx_process reads every param once per block, then runs the kernel over each frame of the
+    in-place I/O buffer. prepare_ops run at the end of audiofx_prepare, with the sample rate in
+    local 0, maxBlockSize in local 1 and every handle already looked up; they must leave the stack
+    as they found it. Module globals keep the indices the kernel gives them.
+    """
+    if len(spec.params) > MAX_PARAMS or len(spec.resources) > MAX_RESOURCES:
+        raise ValueError(f"{spec.identifier}: at most {MAX_PARAMS} params and {MAX_RESOURCES} resources.")
+
+    descriptor_blob = build_descriptor_blob(descriptor_entries_for_spec(spec))
+    id_blob, id_spans = lay_out_ids(
+        [param.identifier for param in spec.params] + [resource.identifier for resource in spec.resources], MEM_IDS
+    )
+    if MEM_IDS + len(id_blob) > MEM_DESCRIPTOR:
+        raise ValueError(f"{spec.identifier}: the param and resource ids don't fit below the descriptor.")
+    param_spans = id_spans[: len(spec.params)]
+    resource_spans = id_spans[len(spec.params) :]
+
+    # The I/O buffer starts on the page after the descriptor; prepare grows memory to fit
+    # maxBlockSize left samples then as many right ones.
+    buffer_offset = -(-(MEM_DESCRIPTOR + len(descriptor_blob)) // PAGE_BYTES) * PAGE_BYTES
+
+    prepare = combine_ops(
+        local_get(1),
+        i32_const(1),
+        I32_LT_S,
+        IF_VOID,
+        i32_const(2),
+        RETURN,
+        END,
+        local_get(1),
+        i32_const(MAX_BLOCK_FRAMES),
+        I32_GT_S,
+        IF_VOID,
+        i32_const(2),
+        RETURN,
+        END,
+        # Pages the buffer needs beyond what memory has: (offset + 8 * frames + PAGE - 1) / PAGE - size.
+        local_get(1),
+        i32_const(3),
+        I32_SHL,
+        i32_const(buffer_offset + PAGE_BYTES - 1),
+        I32_ADD,
+        i32_const(16),
+        I32_SHR_U,
+        MEMORY_SIZE,
+        I32_SUB,
+        local_set(2),
+        local_get(2),
+        i32_const(0),
+        I32_GT_S,
+        IF_VOID,
+        local_get(2),
+        MEMORY_GROW,
+        i32_const(-1),
+        I32_EQ,
+        IF_VOID,
+        i32_const(3),
+        RETURN,
+        END,
+        END,
+        i32_const(0),
+        local_get(1),
+        i32_store(MEM_MAX_BLOCK),
+        lookup_handles_ops(param_spans, FN_PARAM_HANDLE, MEM_PARAM_HANDLES),
+        lookup_handles_ops(resource_spans, FN_RESOURCE_HANDLE, MEM_RESOURCE_HANDLES),
+        prepare_ops,
+        i32_const(0),
+    )
+
+    # Locals: 0 frames, 1 frame index, 2 right channel's distance from the left in bytes,
+    # 3 this frame's left address, 4 and 5 the kernel's left and right output.
+    read_params = bytearray()
+    for index in range(len(spec.params)):
+        read_params.extend(
+            combine_ops(
+                i32_const(0),
+                i32_const(0),
+                i32_load(MEM_PARAM_HANDLES + 4 * index),
+                call(FN_PARAM_VALUE),
+                f32_store(MEM_PARAM_VALUES + 4 * index),
+            )
+        )
+    process = combine_ops(
+        bytes(read_params),
+        i32_const(0),
+        call(FN_TEMPO_BPM),
+        f32_store(MEM_TEMPO),
+        i32_const(0),
+        i32_load(MEM_MAX_BLOCK),
+        i32_const(2),
+        I32_SHL,
+        local_set(2),
+        BLOCK_VOID,
+        LOOP_VOID,
+        local_get(1),
+        local_get(0),
+        I32_GE_S,
+        br_if(1),
+        local_get(1),
+        i32_const(2),
+        I32_SHL,
+        i32_const(buffer_offset),
+        I32_ADD,
+        local_set(3),
+        local_get(3),
+        f32_load(),
+        local_get(3),
+        local_get(2),
+        I32_ADD,
+        f32_load(),
+        call(FN_KERNEL),
+        local_set(5),
+        local_set(4),
+        local_get(3),
+        local_get(4),
+        f32_store(),
+        local_get(3),
+        local_get(2),
+        I32_ADD,
+        local_get(5),
+        f32_store(),
+        local_get(1),
+        i32_const(1),
+        I32_ADD,
+        local_set(1),
+        br(0),
+        END,
+        END,
+    )
+
     defined_functions = [
-        DefinedFuncDef(prepare_type_index, prepare_ops),
-        DefinedFuncDef(reset_type_index, reset_ops),
-        DefinedFuncDef(process_type_index, process_ops),
-        DefinedFuncDef(latency_type_index, latency_ops),
+        DefinedFuncDef(5, prepare, (I32,)),  # FN_PREPARE
+        DefinedFuncDef(6, reset_ops),  # FN_RESET
+        DefinedFuncDef(7, kernel_ops),  # FN_KERNEL
+        DefinedFuncDef(8, i32_const(latency_samples)),
+        DefinedFuncDef(8, i32_const(MEM_DESCRIPTOR)),
+        DefinedFuncDef(8, i32_const(len(descriptor_blob))),
+        DefinedFuncDef(8, i32_const(ABI_VERSION)),
+        DefinedFuncDef(9, process, (I32, I32, I32, F32, F32)),
+        DefinedFuncDef(8, i32_const(buffer_offset)),
     ]
-    import_count = len(imports)
     exports = [
-        ("audiofx_prepare", import_count),
-        ("audiofx_reset", import_count + 1),
-        ("audiofx_process", import_count + 2),
-        ("audiofx_get_latency_samples", import_count + 3),
+        ("audiofx_prepare", FN_PREPARE),
+        ("audiofx_reset", FN_RESET),
+        ("audiofx_get_latency_samples", IMPORT_COUNT + 3),
+        ("audiofx_descriptor_ptr", IMPORT_COUNT + 4),
+        ("audiofx_descriptor_len", IMPORT_COUNT + 5),
+        ("audiofx_abi_version", IMPORT_COUNT + 6),
+        ("audiofx_process", IMPORT_COUNT + 7),
+        ("audiofx_buffer_ptr", IMPORT_COUNT + 8),
     ]
-    export_memory = False
-    data_segments: list[DataSegmentDef] = []
-    if descriptor_blob:
-        defined_functions.extend(
-            [
-                DefinedFuncDef(latency_type_index, i32_const(0)),
-                DefinedFuncDef(latency_type_index, i32_const(len(descriptor_blob))),
-            ]
-        )
-        exports.extend(
-            [
-                ("audiofx_descriptor_ptr", import_count + 4),
-                ("audiofx_descriptor_len", import_count + 5),
-            ]
-        )
-        export_memory = True
-        data_segments.append(DataSegmentDef(0, descriptor_blob))
+    data_segments = [DataSegmentDef(MEM_DESCRIPTOR, descriptor_blob)]
+    if id_blob:
+        data_segments.insert(0, DataSegmentDef(MEM_IDS, id_blob))
     return make_module(
-        types,
-        imports,
+        STANDARD_TYPES,
+        STANDARD_IMPORTS,
         globals_,
         defined_functions,
         exports,
-        export_memory=export_memory,
+        export_memory=True,
         data_segments=data_segments,
+        memory_min_pages=buffer_offset // PAGE_BYTES,
     )
-
-
-def standard_prepare_ops() -> bytes:
-    return i32_const(0)
-
-
-def standard_latency_ops() -> bytes:
-    return i32_const(0)
 
 
 def clamped_param_ops(index: int) -> bytes:
     return combine_ops(
-        i32_const(index),
-        call(0),
+        param_ops(index),
         f32_const(1.0),
         F32_MIN,
         f32_const(-1.0),
@@ -433,8 +728,7 @@ def clamped_param_ops(index: int) -> bytes:
 
 def clamped_unipolar_param_ops(index: int) -> bytes:
     return combine_ops(
-        i32_const(index),
-        call(0),
+        param_ops(index),
         f32_const(1.0),
         F32_MIN,
         f32_const(0.0),
@@ -484,49 +778,18 @@ def random_slew_ops(speed_global: int, sample_rate_global: int) -> bytes:
 
 
 def gain_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [F32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_param", 0)]
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         local_get(0),
-        i32_const(0),
-        call(0),
+        param_ops(0),
         F32_MUL,
         local_get(1),
-        i32_const(0),
-        call(0),
+        param_ops(0),
         F32_MUL,
     )
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=[],
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops)
 
 
 def stereo_spatial_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [F32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_param", 0)]
     globals_ = [
         GlobalDef(F32, True, f32_const(0.0)),
         GlobalDef(F32, True, f32_const(0.0)),
@@ -537,7 +800,7 @@ def stereo_spatial_module(spec: ModuleSpec) -> bytes:
         GlobalDef(F32, True, f32_const(0.0)),
     ]
 
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         clamped_param_ops(0),
         global_set(0),
         clamped_param_ops(1),
@@ -599,32 +862,10 @@ def stereo_spatial_module(spec: ModuleSpec) -> bytes:
         global_get(5),
         F32_MUL,
     )
-
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=globals_,
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    return make_standard_module(spec, globals_=globals_, kernel_ops=kernel_ops)
 
 
 def stereo_spatial_random_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [F32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_param", 0)]
     globals_ = [
         GlobalDef(F32, True, f32_const(0.0)),
         GlobalDef(F32, True, f32_const(0.0)),
@@ -644,7 +885,7 @@ def stereo_spatial_random_module(spec: ModuleSpec) -> bytes:
         GlobalDef(F32, True, f32_const(0.0)),
     ]
 
-    prepare_ops = combine_ops(local_get(0), global_set(10), i32_const(0))
+    prepare_ops = combine_ops(local_get(0), global_set(10))
     reset_ops = combine_ops(
         f32_const(0.0),
         global_set(2),
@@ -658,7 +899,7 @@ def stereo_spatial_random_module(spec: ModuleSpec) -> bytes:
         global_set(9),
     )
 
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         clamped_param_ops(0),
         global_set(0),
         clamped_param_ops(1),
@@ -775,105 +1016,43 @@ def stereo_spatial_random_module(spec: ModuleSpec) -> bytes:
         global_get(14),
         F32_MUL,
     )
-
     return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=globals_,
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=prepare_ops,
-        reset_ops=reset_ops,
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
+        spec, globals_=globals_, kernel_ops=kernel_ops, prepare_ops=prepare_ops, reset_ops=reset_ops
     )
 
 
 def stereo_average_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [F32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_param", 0)]
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         local_get(0),
         local_get(1),
         F32_ADD,
         f32_const(0.5),
         F32_MUL,
-        i32_const(0),
-        call(0),
+        param_ops(0),
         F32_MUL,
         local_get(1),
         local_get(0),
         F32_ADD,
         f32_const(0.5),
         F32_MUL,
-        i32_const(0),
-        call(0),
+        param_ops(0),
         F32_MUL,
     )
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=[],
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops)
 
 
 def channel_swap_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    process_ops = combine_ops(local_get(1), local_get(0))
-    return make_standard_module(
-        types=types,
-        imports=[],
-        globals_=[],
-        prepare_type_index=0,
-        reset_type_index=1,
-        process_type_index=2,
-        latency_type_index=3,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    kernel_ops = combine_ops(local_get(1), local_get(0))
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops)
 
 
 def hard_clip_threshold_ops() -> bytes:
-    return combine_ops(i32_const(0), call(0), f32_const(0.05), F32_MAX)
+    return combine_ops(param_ops(0), f32_const(0.05), F32_MAX)
 
 
 def hard_clip_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [F32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_param", 0)]
     threshold = hard_clip_threshold_ops()
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         local_get(0),
         threshold,
         F32_MIN,
@@ -887,71 +1066,29 @@ def hard_clip_module(spec: ModuleSpec) -> bytes:
         F32_NEG,
         F32_MAX,
     )
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=[],
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops)
 
 
 def bpm_ducker_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [F32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_param", 0)]
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         local_get(0),
         f32_const(120.0),
-        i32_const(8),
-        call(0),
+        tempo_ops(),
         F32_DIV,
         F32_MUL,
         local_get(1),
         f32_const(120.0),
-        i32_const(8),
-        call(0),
+        tempo_ops(),
         F32_DIV,
         F32_MUL,
     )
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=[],
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops)
 
 
 def stateful_bias_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
     globals_ = [GlobalDef(F32, True, f32_const(0.0))]
     reset_ops = combine_ops(f32_const(0.0), global_set(0))
-    process_ops = combine_ops(
+    kernel_ops = combine_ops(
         global_get(0),
         f32_const(0.01),
         F32_ADD,
@@ -963,104 +1100,50 @@ def stateful_bias_module(spec: ModuleSpec) -> bytes:
         global_get(0),
         F32_ADD,
     )
-    return make_standard_module(
-        types=types,
-        imports=[],
-        globals_=globals_,
-        prepare_type_index=0,
-        reset_type_index=1,
-        process_type_index=2,
-        latency_type_index=3,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=reset_ops,
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    return make_standard_module(spec, globals_=globals_, kernel_ops=kernel_ops, reset_ops=reset_ops)
 
 
 def resource_scaler_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32, I32], [I32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_resource_byte", 0)]
-    process_ops = combine_ops(
-        local_get(0),
-        i32_const(1),
+    # Copies the resource's first byte into scratch once, in prepare; 0 when no file is chosen.
+    prepare_ops = combine_ops(
         i32_const(0),
-        call(0),
-        bytes([0xB2]),
+        i32_const(0),
+        i32_store(MEM_RESOURCE_SCRATCH),
+        resource_handle_ops(0),
+        i32_const(0),
+        i32_const(MEM_RESOURCE_SCRATCH),
+        i32_const(1),
+        call(FN_RESOURCE_READ),
+        DROP,
+    )
+    scale = combine_ops(
+        i32_const(0),
+        i32_load8_u(MEM_RESOURCE_SCRATCH),
+        F32_CONVERT_I32_S,
         f32_const(64.0),
         F32_DIV,
-        F32_MUL,
-        local_get(1),
-        i32_const(1),
-        i32_const(0),
-        call(0),
-        bytes([0xB2]),
-        f32_const(64.0),
-        F32_DIV,
-        F32_MUL,
     )
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=[],
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    kernel_ops = combine_ops(local_get(0), scale, F32_MUL, local_get(1), scale, F32_MUL)
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops, prepare_ops=prepare_ops)
 
 
 def resource_size_gain_module(spec: ModuleSpec) -> bytes:
-    types = [
-        FuncTypeDef([I32], [I32]),
-        FuncTypeDef([F32, I32, I32], [I32]),
-        FuncTypeDef([], []),
-        FuncTypeDef([F32, F32], [F32, F32]),
-        FuncTypeDef([], [I32]),
-    ]
-    imports = [ImportFuncDef("host", "read_resource_size", 0)]
-    process_ops = combine_ops(
-        local_get(0),
-        i32_const(1),
-        call(0),
-        bytes([0xB2]),
+    # Keeps the resource's size in scratch, asked once in prepare; 0 when no file is chosen.
+    prepare_ops = combine_ops(
+        i32_const(0),
+        resource_handle_ops(0),
+        call(FN_RESOURCE_SIZE),
+        i32_store(MEM_RESOURCE_SCRATCH),
+    )
+    scale = combine_ops(
+        i32_const(0),
+        i32_load(MEM_RESOURCE_SCRATCH),
+        F32_CONVERT_I32_S,
         f32_const(64.0),
         F32_DIV,
-        F32_MUL,
-        local_get(1),
-        i32_const(1),
-        call(0),
-        bytes([0xB2]),
-        f32_const(64.0),
-        F32_DIV,
-        F32_MUL,
     )
-    return make_standard_module(
-        types=types,
-        imports=imports,
-        globals_=[],
-        prepare_type_index=1,
-        reset_type_index=2,
-        process_type_index=3,
-        latency_type_index=4,
-        prepare_ops=standard_prepare_ops(),
-        reset_ops=b"",
-        process_ops=process_ops,
-        latency_ops=standard_latency_ops(),
-        descriptor_entries=descriptor_entries_for_spec(spec),
-    )
+    kernel_ops = combine_ops(local_get(0), scale, F32_MUL, local_get(1), scale, F32_MUL)
+    return make_standard_module(spec, globals_=[], kernel_ops=kernel_ops, prepare_ops=prepare_ops)
 
 
 def module_specs() -> list[ModuleSpec]:
@@ -1070,7 +1153,7 @@ def module_specs() -> list[ModuleSpec]:
             file_name="gain.wasm",
             description="Stereo gain controlled by a self-described guest parameter named gain.",
             category="utility",
-            host_imports=("read_param",),
+            host_imports=("param_handle", "param_value"),
             params=(
                 ParamDoc(
                     identifier="gain",
@@ -1081,7 +1164,6 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=2.0,
                     unit="amount",
                     step=0.01,
-                    slot=0,
                 ),
             ),
             notes=("Good first smoke test for param import wiring.",),
@@ -1092,7 +1174,7 @@ def module_specs() -> list[ModuleSpec]:
             file_name="stereo_spatial.wasm",
             description="Stereo spatial utility with self-described depth and pan parameters.",
             category="spatial",
-            host_imports=("read_param",),
+            host_imports=("param_handle", "param_value"),
             params=(
                 ParamDoc(
                     identifier="depth",
@@ -1103,7 +1185,6 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=1.0,
                     unit="amount",
                     step=0.01,
-                    slot=0,
                 ),
                 ParamDoc(
                     identifier="pan",
@@ -1114,7 +1195,6 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=1.0,
                     unit="pan",
                     step=0.01,
-                    slot=1,
                 ),
             ),
             notes=(
@@ -1128,7 +1208,7 @@ def module_specs() -> list[ModuleSpec]:
             file_name="stereo_spatial_random.wasm",
             description="Stereo spatial utility with base depth and pan controls plus smooth random wandering.",
             category="spatial",
-            host_imports=("read_param",),
+            host_imports=("param_handle", "param_value"),
             params=(
                 ParamDoc(
                     identifier="depth",
@@ -1139,7 +1219,6 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=1.0,
                     unit="amount",
                     step=0.01,
-                    slot=0,
                 ),
                 ParamDoc(
                     identifier="pan",
@@ -1150,7 +1229,6 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=1.0,
                     unit="pan",
                     step=0.01,
-                    slot=1,
                 ),
                 ParamDoc(
                     identifier="randomMode",
@@ -1163,7 +1241,6 @@ def module_specs() -> list[ModuleSpec]:
                     group="random",
                     step=1.0,
                     labels=("Off", "On"),
-                    slot=2,
                 ),
                 ParamDoc(
                     identifier="speed",
@@ -1175,7 +1252,6 @@ def module_specs() -> list[ModuleSpec]:
                     unit="amount",
                     group="random",
                     step=0.01,
-                    slot=3,
                 ),
                 ParamDoc(
                     identifier="amount",
@@ -1187,7 +1263,6 @@ def module_specs() -> list[ModuleSpec]:
                     unit="amount",
                     group="random",
                     step=0.01,
-                    slot=4,
                 ),
             ),
             notes=(
@@ -1201,7 +1276,7 @@ def module_specs() -> list[ModuleSpec]:
             file_name="stereo_average.wasm",
             description="Averages left/right input to mono and writes the same signal to both outputs.",
             category="utility",
-            host_imports=("read_param",),
+            host_imports=("param_handle", "param_value"),
             params=(
                 ParamDoc(
                     identifier="gain",
@@ -1212,10 +1287,9 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=2.0,
                     unit="amount",
                     step=0.01,
-                    slot=0,
                 ),
             ),
-            notes=("Useful for checking multivalue output ordering and utility-style processing.",),
+            notes=("Useful for checking left/right output ordering and utility-style processing.",),
             build_module=stereo_average_module,
         ),
         ModuleSpec(
@@ -1232,7 +1306,7 @@ def module_specs() -> list[ModuleSpec]:
             file_name="hard_clip.wasm",
             description="Hard clips both channels to +/- a self-described threshold parameter.",
             category="drive",
-            host_imports=("read_param",),
+            host_imports=("param_handle", "param_value"),
             params=(
                 ParamDoc(
                     identifier="threshold",
@@ -1243,7 +1317,6 @@ def module_specs() -> list[ModuleSpec]:
                     max_value=1.0,
                     unit="amount",
                     step=0.01,
-                    slot=0,
                 ),
             ),
             notes=("Demonstrates a simple effect rather than a utility process.",),
@@ -1252,10 +1325,10 @@ def module_specs() -> list[ModuleSpec]:
         ModuleSpec(
             identifier="bpm_ducker",
             file_name="bpm_ducker.wasm",
-            description="Scales signal level by 120 / bpm using the guest tempo slot.",
+            description="Scales signal level by 120 / bpm using the host tempo.",
             category="modulation",
-            host_imports=("read_param",),
-            notes=("Demonstrates use of host param index 8 for BPM.", "Assumes BPM stays above zero."),
+            host_imports=("tempo_bpm",),
+            notes=("Demonstrates the tempo_bpm import.", "Assumes BPM stays above zero."),
             build_module=bpm_ducker_module,
         ),
         ModuleSpec(
@@ -1270,14 +1343,13 @@ def module_specs() -> list[ModuleSpec]:
         ModuleSpec(
             identifier="resource_size_gain",
             file_name="resource_size_gain.wasm",
-            description="Scales both channels from the byte size of an external resource blob in slot 1.",
+            description="Scales both channels from the byte size of an external resource blob.",
             category="utility",
-            host_imports=("read_resource_size",),
+            host_imports=("resource_handle", "resource_size"),
             resources=(
                 ResourceDoc(
                     identifier="payload",
                     title="Payload",
-                    slot=1,
                     file_name="resource_size_gain_payload.bin",
                     description="Binary payload whose byte length is divided by 64 to produce a gain scalar. Default example length: 32 bytes.",
                 ),
@@ -1295,19 +1367,18 @@ def module_specs() -> list[ModuleSpec]:
         ModuleSpec(
             identifier="resource_scaler",
             file_name="resource_scaler.wasm",
-            description="Scales both channels from the first byte of an external resource blob in slot 1.",
+            description="Scales both channels from the first byte of an external resource blob.",
             category="utility",
-            host_imports=("read_resource_byte",),
+            host_imports=("resource_handle", "resource_read"),
             resources=(
                 ResourceDoc(
                     identifier="scale",
                     title="Scale Data",
-                    slot=1,
                     file_name="resource_scaler_scale.bin",
                     description="First byte is interpreted as a gain numerator and divided by 64. Default example byte: 32.",
                 ),
             ),
-            notes=("Useful for validating optional resource loading and resourceSlotIndex metadata.",),
+            notes=("Useful for validating resource_read and resources bound by id.",),
             generated_resources=(
                 GeneratedResource(
                     file_name="resource_scaler_scale.bin",
@@ -1332,42 +1403,49 @@ def example_graph_node(spec: ModuleSpec) -> dict[str, object]:
             {
                 "resourceType": resource.resource_type,
                 "filePath": f"resources/{resource.file_name}",
-                "metadata": {"resourceSlotIndex": str(resource.slot)},
             }
         )
 
-    return {
+    node: dict[str, object] = {
         "type": "wasm_host",
         "category": spec.category,
         "label": spec.identifier,
         "params": {param.identifier: param.default for param in spec.params},
         "resources": resources,
     }
+    if spec.resources:
+        # Which resource id each node resource holds, "" for the module itself; without it the
+        # files are taken in the order the descriptor declares the resources.
+        resource_ids = [""] + [resource.identifier for resource in spec.resources]
+        node["config"] = {"wasmResourceIds": json.dumps(resource_ids, separators=(",", ":"))}
+    return node
 
 
 def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
     host_abi = {
+        "abiVersion": ABI_VERSION,
         "exports": [
-            "audiofx_prepare(sampleRate: f32, maxBlockSize: i32, resourceSlotCount: i32) -> i32",
+            "audiofx_abi_version() -> i32 (returns 2)",
+            "audiofx_prepare(sampleRate: f32, maxBlockSize: i32) -> i32 (0 on success)",
+            "audiofx_buffer_ptr() -> i32 (the in-place I/O buffer: maxBlockSize left samples, then as many right)",
+            "audiofx_process(frames: i32) -> void (processes frames in place in the I/O buffer)",
             "audiofx_reset() -> void",
-            "audiofx_process(inLeft: f32, inRight: f32) -> (f32, f32)",
             "audiofx_get_latency_samples() -> i32",
-            "memory (optional, required when exporting a descriptor blob)",
-            "audiofx_descriptor_ptr() -> i32 (optional descriptor blob offset)",
-            "audiofx_descriptor_len() -> i32 (optional descriptor blob byte length)",
+            "memory",
+            "audiofx_descriptor_ptr() -> i32",
+            "audiofx_descriptor_len() -> i32",
         ],
         "imports": [
-            "host.read_param(index: i32) -> f32",
-            "host.read_resource_size(slot: i32) -> i32",
-            "host.read_resource_byte(slot: i32, offset: i32) -> i32",
+            "host.param_handle(idPtr: i32, idLen: i32) -> i32",
+            "host.param_value(handle: i32) -> f32",
+            "host.tempo_bpm() -> f32",
+            "host.resource_handle(idPtr: i32, idLen: i32) -> i32",
+            "host.resource_size(handle: i32) -> i32",
+            "host.resource_read(handle: i32, offset: i32, dstPtr: i32, len: i32) -> i32",
         ],
-        "descriptorBlobFormat": "UTF-8 newline-delimited key=value entries stored in guest memory.",
-        "monoInputBehavior": "If only one input channel is present, the host mirrors it to both guest inputs before calling the WASM process function.",
-        "paramIndices": {**{f"param{index}": index - 1 for index in range(1, 9)}, "bpm": 8},
-        "resourceSlots": {
-            "0": "WASM module bytes",
-            "1..N": "Optional binary resource blobs",
-        },
+        "descriptorBlobFormat": "UTF-8 newline-delimited key=value entries stored in guest memory, keyed by id: param.<id>.<field>, resource.<id>.<field>.",
+        "monoInputBehavior": "If only one input channel is present, the host mirrors it to both channels of the I/O buffer.",
+        "generatedLayout": "Each module runs a per-sample kernel over the block, reading every param once per block. All six host imports are imported.",
     }
 
     modules: list[dict[str, object]] = []
@@ -1392,7 +1470,6 @@ def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
                         "advanced": param.advanced,
                         "step": param.step,
                         "labels": list(param.labels),
-                        "slot": param.slot,
                     }
                     for param in spec.params
                 ],
@@ -1400,7 +1477,6 @@ def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
                     {
                         "id": resource.identifier,
                         "title": resource.title,
-                        "slot": resource.slot,
                         "resourceType": resource.resource_type,
                         "file": f"resources/{resource.file_name}",
                         "description": resource.description,
@@ -1419,7 +1495,7 @@ def manifest_for(specs: Sequence[ModuleSpec]) -> dict[str, object]:
     return {
         "tool": {
             "name": "soundshed-wasm-module-generator",
-            "description": "Raw WASM guest-module generator for the Soundshed generic WASM host.",
+            "description": "Raw WASM guest-module generator for Custom Effect ABI 2.",
         },
         "hostAbi": host_abi,
         "modules": modules,
