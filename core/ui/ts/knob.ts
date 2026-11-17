@@ -449,6 +449,11 @@ export class GenericKnob {
     return this.currentValue;
   }
 
+  /** True while a pointer or touch drag holds the knob. */
+  public isBeingDragged(): boolean {
+    return this.isDragging;
+  }
+
   /**
    * Moves the knob's ends, for a range that follows another setting. A full
    * sweep keeps the same drag distance, and the value is clamped into the new range.

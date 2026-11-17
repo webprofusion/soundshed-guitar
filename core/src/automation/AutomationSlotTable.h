@@ -119,13 +119,45 @@ class AutomationSlotTable
     /// parameters with the session and sets them back on load (QPlug does) would otherwise put
     /// the trims there. Stepped and trigger slots (the setlist) are left alone: setting them
     /// back on a load would switch presets. Message thread, after a trim changes.
-    void SyncGlobalSlotValues();
+    /// `changedByPlugin`: the trim was moved in the plugin, so a slot whose value moved is
+    /// reported to the host (TakeDawParametersChangedByPlugin).
+    void SyncGlobalSlotValues(bool changedByPlugin = false);
 
     /// Stores `sceneIndex` as the value of every slot on the Scene parameter (kSceneSelectAddress),
     /// without applying it. A plugin wrapper drops a host value equal to the parameter's own, so a
     /// lane's value for a different scene than the one now playing still gets through on a jump.
     /// Under the DSP lock, after the active scene changes.
     void StoreSceneSelectValue(int sceneIndex);
+
+    /// Message thread, under the DSP lock: a node parameter edited in the plugin's own UI. Every
+    /// DAW parameter whose slot drives that parameter of that node takes the edited value, and is
+    /// reported to the host, so its lane can record the move (Touch, Latch, Write) and a value
+    /// equal to the edit is not sent back over it. `nativeValue` is in the parameter's own units.
+    void ReflectNodeParamEditLocked(const std::string& presetId, const std::string& nodeId,
+                                    const std::string& canonicalType, const std::string& paramId, double nativeValue);
+
+    /// ReflectNodeParamEditLocked for a node switched on or off in the plugin's UI.
+    void ReflectNodeBypassEditLocked(const std::string& presetId, const std::string& nodeId,
+                                     const std::string& canonicalType, bool enabled);
+
+    /// Any thread, without a lock: calls `onParameter(index)` for each DAW parameter whose value
+    /// the plugin itself changed (its UI, MIDI, a scene picked, a trim moved) since the last call,
+    /// and clears them. A host's own changes are never reported back to it.
+    template <typename OnParameter> void TakeDawParametersChangedByPlugin(OnParameter&& onParameter)
+    {
+        if (!mDawChangedByPlugin || !mAnyDawChangedByPlugin.exchange(false, std::memory_order_acq_rel))
+        {
+            return;
+        }
+
+        for (std::size_t i = 0; i < mDawValueCount; ++i)
+        {
+            if (mDawChangedByPlugin[i].exchange(false, std::memory_order_acq_rel))
+            {
+                onParameter(static_cast<int>(i));
+            }
+        }
+    }
 
     /// Find a slot by ID. Returns nullptr if not found.
     AutomationSlot* FindSlot(const std::string& slotId);
@@ -346,6 +378,14 @@ class AutomationSlotTable
     /// A slot on its way out: its DAW parameter, if it has one, reads 0 from now on.
     static void DetachDawValue(AutomationSlot& slot);
 
+    /// Any thread, lock-free: the slot's DAW parameter, if it has one, is to be reported to the
+    /// host as changed by the plugin (TakeDawParametersChangedByPlugin).
+    void MarkChangedByPlugin(const AutomationSlot& slot);
+
+    /// Stores `normalized` in a DAW-bound slot set from the plugin's UI and marks it for the host,
+    /// unless it already holds that value.
+    void StoreEditFromPlugin(AutomationSlot& slot, float normalized);
+
     ParamRegistry mRegistry;
     std::vector<AutomationSlot> mSlots;
 
@@ -353,6 +393,9 @@ class AutomationSlotTable
     /// host thread can read one while the message thread replaces the slots.
     std::unique_ptr<std::atomic<float>[]> mDawValues;
     std::size_t mDawValueCount = 0;
+    /// One flag per DAW parameter, beside mDawValues: changed by the plugin, not yet reported.
+    std::unique_ptr<std::atomic<bool>[]> mDawChangedByPlugin;
+    std::atomic<bool> mAnyDawChangedByPlugin{false};
     std::unordered_map<std::string, std::atomic<float>*> mDawValueBySlotId; ///< message thread
     MultiPresetMixer* mMixer = nullptr;
     const EffectRegistry* mEffectRegistry = nullptr;

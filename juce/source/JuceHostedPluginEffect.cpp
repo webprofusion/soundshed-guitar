@@ -1226,8 +1226,10 @@ void JuceHostedPluginEffect::TakeInstanceFrom(JuceHostedPluginEffect& previous)
     // The predecessor lets go of the instance first: listeners off it, any capture it had
     // queued cancelled (this node runs one instead), and the instance taken under its process
     // lock, so its Process() is passing through by the time the instance is anywhere else.
-    const bool captureWasPending = previous.isUpdatePending();
+    const bool captureWasPending = previous.isUpdatePending() || previous.isTimerRunning() ||
+                                   previous.mThrottledCapturePending.exchange(false, std::memory_order_acq_rel);
     previous.cancelPendingUpdate();
+    previous.stopTimer();
     previous.DetachHostedPluginParameterListeners();
 
     if (previous.mHostedPluginListenerAttached && previous.mPlugin)
@@ -1310,6 +1312,7 @@ void JuceHostedPluginEffect::TakeInstanceFrom(JuceHostedPluginEffect& previous)
 
     if (captureWasPending)
     {
+        mImmediateCapturePending.store(true, std::memory_order_release);
         triggerAsyncUpdate();
     }
 }
@@ -2073,7 +2076,13 @@ void JuceHostedPluginEffect::AttachHostedPluginParameterListeners()
 
     for (auto* parameter : parameters)
     {
-        if (parameter == nullptr)
+        // Read-only parameters (meters, gain reduction, a tuner's note) are outputs: they move
+        // every block while audio plays and never hold anything a state capture should keep. A
+        // VST3 marks them by leaving out kCanAutomate. Listening to them made a capture, a
+        // re-serialised preset and a host dirty notice for every block of playback. A change
+        // the plugin's own editor makes to a non-automatable setting is still caught when the
+        // editor closes and when the preset is saved.
+        if (parameter == nullptr || !parameter->isAutomatable())
         {
             continue;
         }
@@ -2081,6 +2090,19 @@ void JuceHostedPluginEffect::AttachHostedPluginParameterListeners()
         parameter->addListener(this);
         mHostedParametersWithListeners.push_back(parameter);
     }
+}
+
+bool JuceHostedPluginEffect::IsAutomatableHostedParameter(int parameterIndex) const
+{
+    if (!mPlugin)
+    {
+        return false;
+    }
+
+    const auto& parameters = mPlugin->getParameters();
+    auto* parameter =
+        juce::isPositiveAndBelow(parameterIndex, parameters.size()) ? parameters[parameterIndex] : nullptr;
+    return parameter != nullptr && parameter->isAutomatable();
 }
 
 void JuceHostedPluginEffect::DetachHostedPluginParameterListeners()
@@ -2100,7 +2122,10 @@ void JuceHostedPluginEffect::ReleaseHostedPlugin()
 {
     ClosePluginEditor();
     cancelPendingUpdate();
+    stopTimer();
     mForceAutoCaptureNotification.store(false, std::memory_order_release);
+    mImmediateCapturePending.store(false, std::memory_order_release);
+    mThrottledCapturePending.store(false, std::memory_order_release);
     mAutoCaptureSuppressionDepth.store(0, std::memory_order_release);
     // A plugin torn down mid-drag never delivers its gesture-end notification.
     mActiveGestureDepth.store(0, std::memory_order_release);
@@ -2168,6 +2193,29 @@ void JuceHostedPluginEffect::ScheduleAutoCapture(bool forceNotify)
         return;
     }
 
+    mImmediateCapturePending.store(true, std::memory_order_release);
+    triggerAsyncUpdate();
+}
+
+void JuceHostedPluginEffect::ScheduleThrottledAutoCapture()
+{
+    // Any thread, the audio thread included: two atomic stores and an AsyncUpdater post, which
+    // is a flag plus a message the first time only.
+    if (!mPlugin)
+    {
+        return;
+    }
+
+    // On the message thread with no capture for a while (a single change from the plugin's own
+    // editor or a preset browser), there is nothing to coalesce: capture now.
+    if (juce::MessageManager::getInstance()->isThisTheMessageThread() && !isTimerRunning() &&
+        juce::Time::getMillisecondCounterHiRes() - mLastCaptureMs >= kThrottledCaptureIntervalMs)
+    {
+        CaptureAndPublishPluginState(mForceAutoCaptureNotification.exchange(false, std::memory_order_acq_rel));
+        return;
+    }
+
+    mThrottledCapturePending.store(true, std::memory_order_release);
     triggerAsyncUpdate();
 }
 
@@ -2178,6 +2226,10 @@ void JuceHostedPluginEffect::CaptureAndPublishPluginState(bool forceNotify)
         return;
     }
 
+    // Whatever this one covers, a throttled capture waiting behind it has nothing left to do.
+    stopTimer();
+    mThrottledCapturePending.store(false, std::memory_order_release);
+    mLastCaptureMs = juce::Time::getMillisecondCounterHiRes();
     PublishCapturedPluginState(CapturePluginStateBase64(), forceNotify);
 }
 
@@ -2371,7 +2423,8 @@ void JuceHostedPluginEffect::parameterValueChanged(int, float)
         return;
     }
 
-    ScheduleAutoCapture(false);
+    // Often the audio thread, once a block, while something modulates the parameter.
+    ScheduleThrottledAutoCapture();
 }
 
 void JuceHostedPluginEffect::parameterGestureChanged(int, bool gestureIsStarting)
@@ -2399,19 +2452,20 @@ void JuceHostedPluginEffect::parameterGestureChanged(int, bool gestureIsStarting
     ScheduleAutoCapture(false);
 }
 
-void JuceHostedPluginEffect::audioProcessorParameterChanged(juce::AudioProcessor* processor, int, float)
+void JuceHostedPluginEffect::audioProcessorParameterChanged(juce::AudioProcessor* processor, int parameterIndex, float)
 {
     if (processor != mPlugin.get() || mAutoCaptureSuppressionDepth.load(std::memory_order_acquire) > 0)
     {
         return;
     }
 
-    if (mActiveGestureDepth.load(std::memory_order_acquire) > 0)
+    // Read-only outputs come through here too (see AttachHostedPluginParameterListeners).
+    if (mActiveGestureDepth.load(std::memory_order_acquire) > 0 || !IsAutomatableHostedParameter(parameterIndex))
     {
         return;
     }
 
-    ScheduleAutoCapture(false);
+    ScheduleThrottledAutoCapture();
 }
 
 void JuceHostedPluginEffect::audioProcessorChanged(juce::AudioProcessor* processor,
@@ -2427,15 +2481,53 @@ void JuceHostedPluginEffect::audioProcessorChanged(juce::AudioProcessor* process
         AttachHostedPluginParameterListeners();
     }
 
-    if (details.programChanged || details.nonParameterStateChanged || details.parameterInfoChanged)
+    if (details.programChanged || details.parameterInfoChanged)
     {
         ScheduleAutoCapture(details.parameterInfoChanged);
+    }
+    else if (details.nonParameterStateChanged)
+    {
+        // Some plugins report this from their audio thread as playback moves them along.
+        ScheduleThrottledAutoCapture();
     }
 }
 
 void JuceHostedPluginEffect::handleAsyncUpdate()
 {
-    CaptureAndPublishPluginState(mForceAutoCaptureNotification.exchange(false, std::memory_order_acq_rel));
+    const bool forceNotify = mForceAutoCaptureNotification.exchange(false, std::memory_order_acq_rel);
+
+    if (mImmediateCapturePending.exchange(false, std::memory_order_acq_rel) || forceNotify)
+    {
+        CaptureAndPublishPluginState(forceNotify);
+        return;
+    }
+
+    // A throttled request: run it now if the last capture was long enough ago, or else once the
+    // interval is up. Requests arriving meanwhile only keep the flag set.
+    if (!mThrottledCapturePending.load(std::memory_order_acquire) || isTimerRunning())
+    {
+        return;
+    }
+
+    const double sinceLastMs = juce::Time::getMillisecondCounterHiRes() - mLastCaptureMs;
+
+    if (sinceLastMs >= kThrottledCaptureIntervalMs)
+    {
+        CaptureAndPublishPluginState(false);
+        return;
+    }
+
+    startTimer(juce::jmax(1, kThrottledCaptureIntervalMs - static_cast<int>(sinceLastMs)));
+}
+
+void JuceHostedPluginEffect::timerCallback()
+{
+    stopTimer();
+
+    if (mThrottledCapturePending.load(std::memory_order_acquire))
+    {
+        CaptureAndPublishPluginState(false);
+    }
 }
 
 void RegisterJuceHostedPluginEffect()

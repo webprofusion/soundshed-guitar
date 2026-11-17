@@ -355,6 +355,12 @@ export function showEngineParamChange(node: GraphNode, key: string, value: numbe
     return false;
   }
 
+  // The hand on the knob wins: its drag sends its own values, and the engine's echo of an
+  // automation lane would only make the knob jump between the two under the pointer.
+  if (knob.isBeingDragged()) {
+    return true;
+  }
+
   knob.setValue(value);
   refreshNodeParamVisibility(node);
   refreshNodeVisualizations(node);

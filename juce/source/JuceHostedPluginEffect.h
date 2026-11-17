@@ -19,7 +19,8 @@ namespace guitarfx
 class JuceHostedPluginEffect final : public EffectProcessor,
                                      private juce::AudioProcessorListener,
                                      private juce::AudioProcessorParameter::Listener,
-                                     private juce::AsyncUpdater
+                                     private juce::AsyncUpdater,
+                                     private juce::Timer
 {
   public:
     JuceHostedPluginEffect();
@@ -158,6 +159,8 @@ class JuceHostedPluginEffect final : public EffectProcessor,
     void ReleaseHostedPlugin();
     void ClearLoadedPluginMetadata();
     void ScheduleAutoCapture(bool forceNotify = false);
+    void ScheduleThrottledAutoCapture();
+    [[nodiscard]] bool IsAutomatableHostedParameter(int parameterIndex) const;
     void CaptureAndPublishPluginState(bool forceNotify = false);
     void PublishCapturedPluginState(const std::string& capturedState, bool forceNotify = false);
     void EnsurePluginStateBaseline();
@@ -170,6 +173,7 @@ class JuceHostedPluginEffect final : public EffectProcessor,
     void audioProcessorChanged(juce::AudioProcessor* processor,
                                const juce::AudioProcessorListener::ChangeDetails& details) override;
     void handleAsyncUpdate() override;
+    void timerCallback() override;
 
     // The plugin formats every Plugin Host in the process scans and instantiates with.
     // Setting them up is not cheap: JUCE's LV2 format loads every installed LV2 bundle and
@@ -253,6 +257,17 @@ class JuceHostedPluginEffect final : public EffectProcessor,
     // gesture-end notification performs the single capture that covers the whole drag.
     std::atomic<int> mActiveGestureDepth{0};
     std::atomic<bool> mForceAutoCaptureNotification{false};
+    // A capture asked for from another thread that should run at once (gesture end, editor
+    // closed, program change), as opposed to a throttled one.
+    std::atomic<bool> mImmediateCapturePending{false};
+    // A capture asked for by a parameter that moved outside a gesture: the plugin's own LFO or
+    // sequencer, host automation of it, a preset browser. These can arrive every block while
+    // audio plays, and each capture is a full getStateInformation(), a base64 encode and a
+    // re-serialised preset on the message thread, so they are run at most every
+    // kThrottledCaptureIntervalMs (timerCallback).
+    std::atomic<bool> mThrottledCapturePending{false};
+    double mLastCaptureMs = 0.0; // message thread
+    static constexpr int kThrottledCaptureIntervalMs = 500;
     bool mPrepared = false;
     bool mHostedPluginListenerAttached = false;
 };

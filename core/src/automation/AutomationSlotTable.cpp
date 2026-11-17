@@ -8,6 +8,7 @@
 #include "dsp/EffectProcessor.h"
 #include "dsp/MultiPresetMixer.h"
 #include "dsp/EffectRegistry.h"
+#include "dsp/ParamTaper.h"
 #include "dsp/SignalGraphExecutor.h"
 #include "presets/PresetTypes.h"
 
@@ -53,6 +54,10 @@ double DenormalizeNodeParam(const ParamRange& range, bool isEnum, double normali
 
 /// Whether a mapping listens to this MIDI control. A NoteOn mapping also hears its key's
 /// release, which arrives as NoteOff.
+/// How far a value the plugin stores must move from a slot's own to be news to the host: a
+/// host's value that comes back through a native unit and out again lands within rounding of it.
+constexpr float kPluginEditTolerance = 1.0e-5f;
+
 bool ListensTo(const MidiControlMap& map, MidiControlMap::EventType eventType, int channel, int controller)
 {
     const bool typeMatches = map.eventType == eventType || (map.eventType == MidiControlMap::EventType::NoteOn &&
@@ -444,6 +449,13 @@ void AutomationSlotTable::StoreSceneSelectValue(int sceneIndex)
     {
         if (slot.address == kSceneSelectAddress)
         {
+            // A scene the host's own lane asked for already reads as its value; any other
+            // (picked in the UI, by a footswitch, by a preset load) is news to the host.
+            if (slot.value.load() != normalized)
+            {
+                MarkChangedByPlugin(slot);
+            }
+
             slot.StoreValue(normalized);
             slot.lastNormalized.store(normalized);
         }
@@ -488,6 +500,7 @@ void AutomationSlotTable::BindDawParameters(const std::vector<std::string>& slot
 
     mDawValueCount = slotIds.size();
     mDawValues = std::make_unique<std::atomic<float>[]>(mDawValueCount);
+    mDawChangedByPlugin = std::make_unique<std::atomic<bool>[]>(mDawValueCount);
 
     for (std::size_t i = 0; i < mDawValueCount; ++i)
     {
@@ -512,7 +525,7 @@ float AutomationSlotTable::GetDawParameterValue(int parameterIndex) const
     return mDawValues[static_cast<std::size_t>(parameterIndex)].load(std::memory_order_relaxed);
 }
 
-void AutomationSlotTable::SyncGlobalSlotValues()
+void AutomationSlotTable::SyncGlobalSlotValues(bool changedByPlugin)
 {
     for (auto& slot : mSlots)
     {
@@ -525,7 +538,112 @@ void AutomationSlotTable::SyncGlobalSlotValues()
         }
 
         const double normalized = (entry->get() - entry->minValue) / (entry->maxValue - entry->minValue);
-        slot.StoreValue(static_cast<float>(std::clamp(normalized, 0.0, 1.0)));
+        const auto stored = static_cast<float>(std::clamp(normalized, 0.0, 1.0));
+
+        // Within rounding of the value it holds is no change: a host's own value comes back this
+        // way when the UI echoes the trim it moved.
+        if (changedByPlugin && std::abs(slot.value.load() - stored) > kPluginEditTolerance)
+        {
+            MarkChangedByPlugin(slot);
+        }
+
+        slot.StoreValue(stored);
+    }
+}
+
+void AutomationSlotTable::MarkChangedByPlugin(const AutomationSlot& slot)
+{
+    if (!slot.dawValue || !mDawChangedByPlugin)
+    {
+        return;
+    }
+
+    const auto index = static_cast<std::size_t>(slot.dawValue - mDawValues.get());
+
+    if (index < mDawValueCount)
+    {
+        mDawChangedByPlugin[index].store(true, std::memory_order_release);
+        mAnyDawChangedByPlugin.store(true, std::memory_order_release);
+    }
+}
+
+void AutomationSlotTable::StoreEditFromPlugin(AutomationSlot& slot, float normalized)
+{
+    if (std::abs(slot.value.load() - normalized) <= kPluginEditTolerance)
+    {
+        return;
+    }
+
+    slot.StoreValue(normalized);
+    slot.lastSource.store(static_cast<int>(AutomationSource::UI));
+    MarkChangedByPlugin(slot);
+}
+
+void AutomationSlotTable::ReflectNodeParamEditLocked(const std::string& presetId, const std::string& nodeId,
+                                                     const std::string& canonicalType, const std::string& paramId,
+                                                     double nativeValue)
+{
+    if (!mDawChangedByPlugin)
+    {
+        return; // No DAW parameters: nothing to tell a host
+    }
+
+    for (auto& slot : mSlots)
+    {
+        const auto* binding = slot.dawValue ? slot.nodeBinding.get() : nullptr;
+
+        if (!binding || binding->isBypass || binding->paramId != paramId || binding->effectType != canonicalType ||
+            (!slot.presetId.empty() && slot.presetId != presetId))
+        {
+            continue;
+        }
+
+        if (binding->nodeId.empty())
+        {
+            // By type, the slot drives the node automation would find: the first enabled one.
+            const auto target =
+                mMixer ? mMixer->FindAutomationTarget(canonicalType) : SignalGraphExecutor::AutomationTarget{};
+
+            if (!target || !*target.id || **target.id != nodeId)
+            {
+                continue;
+            }
+        }
+        else if (binding->nodeId != nodeId)
+        {
+            continue;
+        }
+
+        // The declared range: a node that narrows it (a pitch shift's) is not asked, which at
+        // worst puts the host's copy a little off until the lane next writes it.
+        const double normalized =
+            binding->hasRange ? TaperValueToPosition(binding->taper, binding->minValue, binding->maxValue, nativeValue)
+                              : std::clamp(nativeValue, 0.0, 1.0);
+        StoreEditFromPlugin(slot, static_cast<float>(std::clamp(normalized, 0.0, 1.0)));
+    }
+}
+
+void AutomationSlotTable::ReflectNodeBypassEditLocked(const std::string& presetId, const std::string& nodeId,
+                                                      const std::string& canonicalType, bool enabled)
+{
+    if (!mDawChangedByPlugin)
+    {
+        return;
+    }
+
+    for (auto& slot : mSlots)
+    {
+        const auto* binding = slot.dawValue ? slot.nodeBinding.get() : nullptr;
+
+        // By type, a bypass slot switches every node of the type, so any of them answers to it.
+        if (!binding || !binding->isBypass || binding->effectType != canonicalType ||
+            (!binding->nodeId.empty() && binding->nodeId != nodeId) ||
+            (!slot.presetId.empty() && slot.presetId != presetId))
+        {
+            continue;
+        }
+
+        StoreEditFromPlugin(slot, binding->highMeansEnabled == enabled ? 1.0f : 0.0f);
     }
 }
 
@@ -833,6 +951,14 @@ bool AutomationSlotTable::ApplyAutomationLocked(const std::string& slotId, float
     }
 
     slot->SetValue(normalized, src);
+
+    // The host is told of a value it did not send. A trigger is not: it fires and falls back to
+    // 0, and a lane has nothing to record from that.
+    if (src != AutomationSource::DAW && !IsTriggerSlot(*slot))
+    {
+        MarkChangedByPlugin(*slot);
+    }
+
     return ApplySlotLocked(*slot);
 }
 
@@ -879,7 +1005,20 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
         // Reset both value and lastNormalized so the trigger can fire again
         // on the next rising edge. Without this, a sustained/high MIDI value
         // or repeated Test button presses would prevent retriggering.
-        slot.StoreValue(0.0f);
+        //
+        // A host's value stays in its parameter's cell, though. A plugin wrapper drops a host
+        // value equal to the parameter's own, and with the cell back at 0 a lane resting at 1
+        // fired again on every playback start and every jump, each one loading the preset or
+        // scene anew. Its next real rising edge (a point back to 0, then 1) still fires.
+        if (static_cast<AutomationSource>(slot.lastSource.load()) == AutomationSource::DAW)
+        {
+            slot.value.store(0.0f);
+        }
+        else
+        {
+            slot.StoreValue(0.0f);
+        }
+
         slot.lastNormalized.store(0.0f);
     }
     else
@@ -1000,6 +1139,7 @@ bool AutomationSlotTable::ToggleBypassLocked(const std::string& slotId, Automati
     }
 
     slot->SetValue(ToggledBypassValue(*slot), src);
+    MarkChangedByPlugin(*slot);
     return ApplySlotLocked(*slot);
 }
 
@@ -1378,6 +1518,7 @@ void AutomationSlotTable::HandleMidi(const MidiEvent& ev)
         }
 
         slot.SetValue(normalized, AutomationSource::MIDI);
+        MarkChangedByPlugin(slot); // lock-free: this is the audio thread
         ApplySlotLocked(slot);
     }
 }

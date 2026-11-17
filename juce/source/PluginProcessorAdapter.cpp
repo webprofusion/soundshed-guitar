@@ -744,6 +744,49 @@ void PluginProcessorAdapter::registerAutomationParameters()
     // changes to every parameter several times over before it would have to grow.
     mSlotIdsByParameter = std::move(slotIdsByParameter);
     mPendingDAWParamChanges.reserve(mSlotIdsByParameter.size() * 8);
+    mPluginEditLastMs.assign(mSlotIdsByParameter.size(), 0.0);
+    mPluginEditGestureOpen.assign(mSlotIdsByParameter.size(), false);
+}
+
+void PluginProcessorAdapter::reportPluginParameterEdits()
+{
+    // The standalone has no host to tell, and nothing would ever take the changes; drop them.
+    const bool hasHost = wrapperType != wrapperType_Standalone;
+    const auto& parameters = getParameters();
+    const double now = juce::Time::getMillisecondCounterHiRes();
+
+    mController.GetAutomationSlots().TakeDawParametersChangedByPlugin([&](int index) {
+        const auto i = static_cast<std::size_t>(index);
+
+        if (!hasHost || !juce::isPositiveAndBelow(index, parameters.size()) || i >= mPluginEditGestureOpen.size())
+        {
+            return;
+        }
+
+        auto* parameter = parameters[index];
+
+        if (!mPluginEditGestureOpen[i])
+        {
+            parameter->beginChangeGesture();
+            mPluginEditGestureOpen[i] = true;
+        }
+
+        // Not setValueNotifyingHost: that would call setValue, queueing the value to be applied
+        // again as if the host had sent it. The value is already the parameter's (getValue reads
+        // the slot's cell); the host only needs to hear it.
+        parameter->sendValueChangedMessageToListeners(parameter->getValue());
+        mPluginEditLastMs[i] = now;
+    });
+
+    for (std::size_t i = 0; i < mPluginEditGestureOpen.size(); ++i)
+    {
+        if (mPluginEditGestureOpen[i] && now - mPluginEditLastMs[i] >= kPluginEditGestureIdleMs &&
+            static_cast<int>(i) < parameters.size())
+        {
+            parameters[static_cast<int>(i)]->endChangeGesture();
+            mPluginEditGestureOpen[i] = false;
+        }
+    }
 }
 
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()

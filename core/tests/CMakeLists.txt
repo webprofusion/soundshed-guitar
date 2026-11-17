@@ -153,6 +153,7 @@ set(TEST_SOURCES
     NamResamplerLatencyTests.cpp
     SampleRateConverterTests.cpp
     SceneSelectAutomationTests.cpp
+    PluginEditHostReportTests.cpp
     SetlistMidiOutTests.cpp
     StorageMigrationTests.cpp
     SignalChainMutationStressTest.cpp

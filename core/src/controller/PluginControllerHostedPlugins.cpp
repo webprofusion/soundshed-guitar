@@ -304,8 +304,14 @@ void PluginController::HandleRuntimeNodeConfigChanged(const std::string& presetI
             {"silent",
              true}}.dump());
     }
+    else
+    {
+        // A captured state needs no broadcast: the message above tells the UI, and the state
+        // the UI is sent leaves the blob out anyway (SerializePresetForUi). A full broadcast per
+        // capture re-rendered the whole UI each time a hosted plugin moved during playback.
+        mPendingStateBroadcast = true;
+    }
 
-    mPendingStateBroadcast = true;
     NotifyHostStateChanged();
 }
 
@@ -935,7 +941,13 @@ void PluginController::ApplyRuntimeNodeConfigToMixerCache(const std::string& pre
     }
 
     cachedIt->second = PresetStorage::SerializeToJson(*presetOpt);
-    mPendingStateBroadcast = true;
+
+    // A slot out of focus shows nothing of its plugin's state; see HandleRuntimeNodeConfigChanged.
+    if (key != kHostedPluginStateConfigKey)
+    {
+        mPendingStateBroadcast = true;
+    }
+
     NotifyHostStateChanged();
 }
 

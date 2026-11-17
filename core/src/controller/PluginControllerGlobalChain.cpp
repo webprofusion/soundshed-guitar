@@ -213,15 +213,17 @@ void PluginController::HandleSetGlobalChainParamRequest(const nlohmann::json& pa
         else if (path == "input.gain")
         {
             mPresetMixer.SetGlobalInputGain(value.get<double>());
-            // The trim slot follows, so a host reads (and saves) the trim as it is.
-            mAutomationSlots.SyncGlobalSlotValues();
+            // The trim slot follows, so a host reads (and saves) the trim as it is, and its lane
+            // can record the move.
+            mAutomationSlots.SyncGlobalSlotValues(true);
             persistGlobalFx = true;
         }
         else if (path == "output.gain")
         {
             mPresetMixer.SetGlobalOutputGain(value.get<double>());
-            // The trim slot follows, so a host reads (and saves) the trim as it is.
-            mAutomationSlots.SyncGlobalSlotValues();
+            // The trim slot follows, so a host reads (and saves) the trim as it is, and its lane
+            // can record the move.
+            mAutomationSlots.SyncGlobalSlotValues(true);
             persistGlobalFx = true;
         }
         else if (path == "limiter.enabled")

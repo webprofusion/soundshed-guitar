@@ -92,9 +92,12 @@ void PluginController::HandleUpdateSignalPathNodeParamRequest(const nlohmann::js
 
     node->params[paramKey] = value;
     SyncActivePresetSceneGraph();
+    const auto canonicalType = EffectRegistry::Instance().Resolve(node->type);
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
         mPresetMixer.SetNodeParam(presetId, nodeId, paramKey, value);
+        // A DAW parameter mapped to this one follows it, and the host hears of the move.
+        mAutomationSlots.ReflectNodeParamEditLocked(presetId, nodeId, canonicalType, paramKey, value);
     }
 
     // A change SetParam left for this thread (the IR cab's Normalize and Trim Leading Silence, the
@@ -133,9 +136,11 @@ void PluginController::HandleUpdateSignalPathNodeBypassRequest(const nlohmann::j
 
     node->enabled = enabled;
     SyncActivePresetSceneGraph();
+    const auto canonicalType = EffectRegistry::Instance().Resolve(node->type);
     {
         std::lock_guard<std::mutex> lock(mDSPMutex);
         mPresetMixer.SetNodeEnabled(presetId, nodeId, enabled);
+        mAutomationSlots.ReflectNodeBypassEditLocked(presetId, nodeId, canonicalType, enabled);
     }
     MirrorActivePresetJson();
     mPendingPresetStateBroadcast = true;

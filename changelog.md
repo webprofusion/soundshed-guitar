@@ -28,6 +28,7 @@ Every change of branch crossfades over Crossfade (10 ms to start with). Copy, wh
 * The Chorus, Phaser, Digital Delay and Spatial 3D effects no longer go silent until you reload the preset when an effect before them glitches and sends one invalid sample. They now ignore it and carry on. Nothing else about how they sound has changed.
 * **Custom Effects on every Mac and on 32-bit Windows**: the macOS app (Apple Silicon and Intel alike) and the 32-bit Windows build can now run Custom Effects, as the 64-bit Windows and Linux builds already could. In a DAW whose security settings don't allow them (some macOS hosts), a Custom Effect now says it can't run there instead of loading.
 * Custom Effects run on Wasmtime 48.0.8, the latest security update of its long-term-support release, up from 48.0.6.
+* **Touching a knob in a DAW**: moving a knob or on/off switch that one of your DAW automation parameters controls now tells the DAW you're holding that parameter, so Touch and Latch automation record the move. During playback the lane no longer takes the knob back while you drag it. A scene or setlist trigger your DAW fires no longer fires again each time playback starts, and a hosted plugin whose meters move during playback no longer keeps the app busy saving its state.
 * Updated JUCE to 9.0.5, whose fixes harden how saved and shared data (settings, presets, archives) is read, and the bundled SQLite, JSON, zip and pitch-shifting libraries to their latest releases.
 
 ## 1.7.3 (Oct 31, 2026)

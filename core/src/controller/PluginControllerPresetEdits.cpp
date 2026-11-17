@@ -552,7 +552,9 @@ void PluginController::FoldAutomationNodeChanges()
                 forEachGraph([&](SignalGraph& graph, SignalGraph* baselineGraph) {
                     auto* node = graph.FindNode(*change.nodeId);
 
-                    if (!node)
+                    // A lane or pedal that holds its value still reports it. Only a flip is a
+                    // change: each one re-serialises the preset and redraws the chain.
+                    if (!node || node->enabled == enabled)
                     {
                         return;
                     }
@@ -595,7 +597,8 @@ void PluginController::FoldAutomationNodeChanges()
             forEachGraph([&](SignalGraph& graph, SignalGraph* baselineGraph) {
                 for (auto& node : graph.nodes)
                 {
-                    if (EffectRegistry::Instance().Resolve(node.type) != change.binding->effectType)
+                    if (node.enabled == enabled ||
+                        EffectRegistry::Instance().Resolve(node.type) != change.binding->effectType)
                     {
                         continue;
                     }

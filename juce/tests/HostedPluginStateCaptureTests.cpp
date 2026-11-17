@@ -373,14 +373,66 @@ bool TestGestureCoalescesCaptures()
         return false;
     }
 
-    // A change outside any gesture still captures immediately.
+    // A change outside any gesture still captures. Straight after the gesture end's capture it
+    // waits out the throttle interval rather than capturing again at once.
     raw->ResetStateReadCount();
     raw->SetStateText("state-after-drag");
     parameter->setValueNotifyingHost(0.1f);
+    juce::MessageManager::getInstance()->runDispatchLoopUntil(800);
 
     if (raw->StateReadCount() == 0)
     {
         Fail("a change outside a gesture did not capture");
+        return false;
+    }
+
+    return true;
+}
+
+/// A parameter something modulates outside any gesture (an LFO, host automation of the plugin)
+/// notifies every block while audio plays; each capture is a full getStateInformation(). They
+/// coalesce to one per interval.
+bool TestUngesturedChangesAreThrottled()
+{
+    guitarfx::JuceHostedPluginEffect effect;
+
+    auto plugin = std::make_unique<StubPluginInstance>("state-initial");
+    auto* raw = plugin.get();
+    effect.InstallHostedPluginForTesting(std::move(plugin));
+    effect.Prepare(48000.0, 512);
+    effect.SetConfig(kStateConfigKey, effect.GetConfig(kStateConfigKey));
+
+    auto* parameter = raw->Parameter();
+    raw->ResetStateReadCount();
+    auto* messageManager = juce::MessageManager::getInstance();
+
+    // About 300 ms of a modulated parameter, one notification every 3 ms.
+    for (int step = 0; step < 100; ++step)
+    {
+        raw->SetStateText("state-lfo-" + juce::String(step));
+        parameter->setValueNotifyingHost(static_cast<float>(step % 10) / 10.0f);
+        messageManager->runDispatchLoopUntil(3);
+    }
+
+    messageManager->runDispatchLoopUntil(800);
+    const int reads = raw->StateReadCount();
+
+    if (reads == 0 || reads > 3)
+    {
+        Fail("100 ungestured changes over ~300 ms captured " + std::to_string(reads) +
+             " time(s); expected one or two, plus at most one trailing");
+        return false;
+    }
+
+    // The last value is the one that lands: a capture forced now (a gesture end is never
+    // throttled) finds nothing the trailing one had not already stored.
+    const auto afterTrailing = effect.GetPendingPluginStateForTesting();
+    parameter->beginChangeGesture();
+    parameter->endChangeGesture();
+
+    if (afterTrailing.empty() || effect.GetPendingPluginStateForTesting() != afterTrailing)
+    {
+        Fail("the trailing capture did not store the final state");
         return false;
     }
 
@@ -409,6 +461,8 @@ bool TestUnbalancedGestureEndDoesNotWedgeCapture()
     raw->ResetStateReadCount();
     raw->SetStateText("state-after-unbalanced-gestures");
     parameter->setValueNotifyingHost(0.33f);
+    // The gesture end just captured, so this one waits out the throttle interval.
+    juce::MessageManager::getInstance()->runDispatchLoopUntil(800);
 
     if (raw->StateReadCount() == 0)
     {
@@ -688,6 +742,7 @@ int main()
     run("Empty capture does not overwrite stored state", TestEmptyCaptureDoesNotOverwriteStoredState());
     run("Real capture is still published", TestRealCaptureIsStillPublished());
     run("Gesture coalesces captures", TestGestureCoalescesCaptures());
+    run("Ungestured changes are throttled", TestUngesturedChangesAreThrottled());
     run("Unbalanced gesture end does not wedge capture", TestUnbalancedGestureEndDoesNotWedgeCapture());
     run("Prepare does not restore state twice", TestPrepareDoesNotRestoreStateTwice());
     run("Rebuilt node takes over its predecessor's instance", TestRebuiltNodeTakesOverItsPredecessorsInstance());

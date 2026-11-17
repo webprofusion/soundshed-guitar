@@ -200,12 +200,26 @@ class PluginProcessorAdapter : public juce::AudioProcessor,
     std::size_t mClapSysExArenaUsed = 0;
 #endif
 
+    // Tells the host of DAW parameters the plugin itself moved (its UI, MIDI, a scene picked; see
+    // AutomationSlotTable::TakeDawParametersChangedByPlugin), each inside a change gesture that
+    // stays open until the parameter has been still for kPluginEditGestureIdleMs, which is how a
+    // host's Touch and Latch automation modes know a hand is on it. Message thread, off the
+    // drain timer below.
+    void reportPluginParameterEdits();
+    static constexpr double kPluginEditGestureIdleMs = 300.0;
+    // Per parameter, sized by registerAutomationParameters; message thread.
+    std::vector<double> mPluginEditLastMs;
+    std::vector<bool> mPluginEditGestureOpen;
+
     // Applies the setlist steps, bank changes and scene switches that MIDI and DAW automation
     // park for the message thread, and folds the node changes they made into the working copy.
     // The editor's idle loop does too, but it only runs while the editor is open. Last, so it is
     // stopped before anything its callback uses is destroyed.
     static constexpr int kControlSurfaceDrainHz = 30;
-    juce::TimedCallback mControlSurfaceDrain{[this] { mController.DrainControlSurfaceRequests(); }};
+    juce::TimedCallback mControlSurfaceDrain{[this] {
+        mController.DrainControlSurfaceRequests();
+        reportPluginParameterEdits();
+    }};
 
     // What the play head said on the last block. It may only be asked on the audio thread, and
     // the controller asks for tempo and transport from the message thread.
