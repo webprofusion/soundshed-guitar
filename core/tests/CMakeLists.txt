@@ -47,6 +47,7 @@ set(TEST_SOURCES
     SwapLatencyAlignmentTests.cpp
     GlobalChainEditorTests.cpp
     GlobalChainEngineTests.cpp
+    GraphicEQFlatBandTests.cpp
     GuitarToMidiEffectTests.cpp
     GuitarToMidiPolyphonicTests.cpp
     HarmonizerEffectTests.cpp

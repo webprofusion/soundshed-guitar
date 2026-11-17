@@ -51,41 +51,58 @@ class GraphicEQEffect : public EffectProcessor
     {
         for (auto& band : mBands)
         {
-            band.x1L = band.x2L = band.y1L = band.y2L = 0.0f;
-            band.x1R = band.x2R = band.y1R = band.y2R = 0.0f;
+            band.state = {};
         }
     }
 
+    /// Each channel runs through the bands one band at a time over the block. A band at 0 dB
+    /// would only pass the signal through, and a switched-off band or one past Bands passes it
+    /// by definition, so neither costs a filter: their state follows the signal instead, as a
+    /// flat band's would, so one that comes back from 0 dB sounds exactly as if it had run all
+    /// along, and one switched back on or added starts from the signal rather than from where it
+    /// stopped.
     void Process(float** inputs, float** outputs, int numSamples) override
     {
-        for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
+        if (numSamples <= 0)
         {
-            float left = inputs[0] ? inputs[0][sampleIndex] : 0.0f;
-            float right = inputs[1] ? inputs[1][sampleIndex] : 0.0f;
+            return;
+        }
 
-            for (int bandIndex = 0; bandIndex < mBandCount; ++bandIndex)
+        // Left first, unless its output is the right's input, which it would overwrite.
+        const int first = outputs[0] && outputs[0] == inputs[1] ? 1 : 0;
+
+        for (int step = 0; step < 2; ++step)
+        {
+            const int channel = step == 0 ? first : 1 - first;
+            float* samples = outputs[channel];
+
+            if (!samples)
+            {
+                continue;
+            }
+
+            if (!inputs[channel])
+            {
+                std::fill_n(samples, numSamples, 0.0f);
+            }
+            else if (inputs[channel] != samples)
+            {
+                std::copy_n(inputs[channel], numSamples, samples);
+            }
+
+            for (int bandIndex = 0; bandIndex < kMaxBands; ++bandIndex)
             {
                 auto& band = mBands[bandIndex];
+                auto& state = band.state[channel];
 
-                if (!band.enabled)
+                if (bandIndex < mBandCount && band.enabled && !band.flat)
                 {
-                    continue;
+                    FilterBlock(samples, numSamples, band, state);
                 }
-
-                left = ProcessSample(left, band.b0, band.b1, band.b2, band.a1, band.a2, band.x1L, band.x2L, band.y1L,
-                                     band.y2L);
-                right = ProcessSample(right, band.b0, band.b1, band.b2, band.a1, band.a2, band.x1R, band.x2R, band.y1R,
-                                      band.y2R);
-            }
-
-            if (outputs[0])
-            {
-                outputs[0][sampleIndex] = left;
-            }
-
-            if (outputs[1])
-            {
-                outputs[1][sampleIndex] = right;
+                else
+                {
+                    FollowSignal(samples, numSamples, state);
+                }
             }
         }
     }
@@ -254,16 +271,52 @@ class GraphicEQEffect : public EffectProcessor
         return sections;
     }
 
+    struct BiquadState
+    {
+        float x1 = 0.0f, x2 = 0.0f, y1 = 0.0f, y2 = 0.0f;
+    };
+
     struct Band
     {
         bool enabled = true;
+        bool flat = true; // the coefficients pass the signal through unchanged
         double gainDb = 0.0;
         double frequencyHz = 1000.0;
         double q = 1.0;
         float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f;
-        float x1L = 0.0f, x2L = 0.0f, y1L = 0.0f, y2L = 0.0f;
-        float x1R = 0.0f, x2R = 0.0f, y1R = 0.0f, y2R = 0.0f;
+        std::array<BiquadState, 2> state{}; // left, right
     };
+
+    static void FilterBlock(float* samples, int numSamples, const Band& band, BiquadState& state)
+    {
+        BiquadState s = state;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            samples[i] = ProcessSample(samples[i], band.b0, band.b1, band.b2, band.a1, band.a2, s.x1, s.x2, s.y1, s.y2);
+        }
+
+        state = s;
+    }
+
+    /// The state a flat band would be left in after these samples: its input and output are both
+    /// the signal, with a non-finite sample taken as silence, as ProcessSample takes it.
+    static void FollowSignal(const float* samples, int numSamples, BiquadState& state)
+    {
+        const auto clean = [](float sample) { return IsFinite(sample) ? sample : 0.0f; };
+
+        if (numSamples >= 2)
+        {
+            state.x2 = state.y2 = clean(samples[numSamples - 2]);
+        }
+        else
+        {
+            state.x2 = state.x1;
+            state.y2 = state.y1;
+        }
+
+        state.x1 = state.y1 = clean(samples[numSamples - 1]);
+    }
 
     static double FiniteOr(double value, double fallback)
     {
@@ -348,6 +401,8 @@ class GraphicEQEffect : public EffectProcessor
             const double designFrequencyHz = std::min(band.frequencyHz, maxFrequency);
             band.q = ClampFinite(band.q, 0.2, 8.0, 1.0);
 
+            band.flat = true;
+
             if (std::abs(band.gainDb) < 0.001)
             {
                 band.b0 = 1.0f;
@@ -372,6 +427,7 @@ class GraphicEQEffect : public EffectProcessor
             band.b2 = static_cast<float>((1.0 - alpha * amplitude) / a0);
             band.a1 = band.b1;
             band.a2 = static_cast<float>((1.0 - alpha / amplitude) / a0);
+            band.flat = false;
         }
     }
 
