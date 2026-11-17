@@ -38,9 +38,13 @@ struct GuestSpec
     ByteVector prepareOps = I32Const(0);
     ByteVector resetOps;
     ByteVector processOps;
+    // Locals the kernel declares after its two params, numbered from 2.
+    std::vector<WasmValueType> processLocals;
     ByteVector startOps;
     std::optional<int32_t> abiVersion = WasmEffect::kAbiVersion;
     uint32_t memoryMinPages = 1;
+    // What audiofx_get_latency_samples returns.
+    int32_t latencySamples = 0;
     // What audiofx_buffer_ptr returns; the wrapper itself always uses kBufferOffset.
     int32_t bufferPtr = kBufferOffset;
     // Exports the kernel itself as audiofx_process, the per-sample shape ABI 2 first had.
@@ -132,8 +136,8 @@ inline ByteVector MakeGuestModule(const GuestSpec& spec)
     std::vector<DefinedFuncDef> functions = {
         {firstType, prepareOps},
         {firstType + 1, spec.resetOps},
-        {firstType + 2, processOps},
-        {firstType + 3, I32Const(0)},
+        {firstType + 2, processOps, spec.processLocals},
+        {firstType + 3, I32Const(spec.latencySamples)},
         {firstType + 3, I32Const(0)},
         {firstType + 3, I32Const(static_cast<int32_t>(spec.descriptor.size()))},
         {firstType + 3, I32Const(spec.abiVersion.value_or(0))},
@@ -308,7 +312,8 @@ inline ByteVector MakePairModule(bool reversed)
     return MakeGuestModule(spec);
 }
 
-// Outputs (param 'last', tempo_bpm()).
+// Outputs (param 'last', tempo_bpm() / 100): the host clamps output to +12 dBFS, so the tempo is
+// scaled to fit under it.
 inline ByteVector MakeTempoModule()
 {
     auto spec = ParamGuest(BuildDescriptorBlob({
@@ -320,6 +325,8 @@ inline ByteVector MakeTempoModule()
 
     AppendOp(spec.processOps, ReadParam(1));
     AppendOp(spec.processOps, Call(kTempoImport));
+    AppendOp(spec.processOps, F32Const(0.01f));
+    AppendU8(spec.processOps, 0x94); // f32.mul
     return MakeGuestModule(spec);
 }
 
@@ -526,19 +533,19 @@ inline ByteVector MakeResourceEdgeModule()
     return MakeGuestModule(spec);
 }
 
-// Asks resource_size about handles 0 and 1 instead of asking resource_handle.
+// Asks resource_size about handles 0 and 1 in prepare, instead of asking resource_handle.
 inline ByteVector MakeHardCodedResourceHandleModule()
 {
     auto spec = ResourceGuest(BuildDescriptorBlob({{"resource.data.title", "Data"}}), {});
-    AppendOp(spec.prepareOps, I32Const(0));
 
     for (int32_t handle = 0; handle < 2; ++handle)
     {
-        AppendOp(spec.processOps, I32Const(handle));
-        AppendOp(spec.processOps, Call(kResourceSizeImport));
-        AppendU8(spec.processOps, 0xb3);
+        AppendOp(spec.prepareOps, I32Const(handle));
+        AppendOp(spec.prepareOps, Call(kResourceSizeImport));
+        AppendU8(spec.prepareOps, 0x1a); // drop
     }
 
+    AppendOp(spec.prepareOps, I32Const(0));
     return MakeGuestModule(spec);
 }
 

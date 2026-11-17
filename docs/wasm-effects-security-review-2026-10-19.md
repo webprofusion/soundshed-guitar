@@ -20,6 +20,36 @@ Findings 1-5 are fixed in the working tree (not committed), with parts of 6:
 
 Tests: `WasmEffectHostTests` covers a looping process, recursion, a looping start function, oversized memory, network paths, the gate and a hostile descriptor. Also `CustomEffectsSettingTests`, `CustomEffectLibraryTests`, `PresetArchiveInstallTests`, `sharedArchiveSafety.test.ts` and `addEffectDropdown.test.ts`.
 
+### Tighter limits, 2026-11-17
+
+A second pass assumed a module is written to harm the host, after the block-processing ABI 2 work.
+Gaps it closed (`WasmEffect.cpp`, `WasmDescriptor.cpp`; the authoring guide's "Limits and trust"
+lists them for module authors):
+
+- **Reported latency** had no cap and was summed as `int` along the chain, then given to the DAW.
+  It is now refused above 192,000 samples, and `SignalGraphExecutor::GetTotalLatencySamples` sums
+  in 64 bits and clamps.
+- **Audio-thread time.** The block deadline's floor is 30 ms (200 ms while any instance renders
+  offline). A CPU watchdog stops a module whose blocks take longer than real time on average,
+  which a deadline never catches. A module stopped while running stays stopped through `Prepare`
+  until it is loaded again, so a DAW re-preparing doesn't give it another go.
+- **Loading.** Each module compiles once per process (a cache keyed by SHA-256 in the shared
+  runtime), since compiling is outside every deadline; modules are at most 4 MiB. A load's setup
+  calls share one 2 s budget (8 s for the 32-bit interpreter), and a module that runs out of it is
+  refused for the rest of the session.
+- **Memory.** 64 MiB per store (32 MiB on 32-bit), 64 MiB of resource files per effect, and a
+  process-wide budget of 2 GiB (256 MiB) over guest memory after prepare plus resource files.
+  At most 64 live instances (16). Memory may not grow in `audiofx_process` or `audiofx_reset`.
+- **Audio-thread imports.** `param_handle`, `resource_handle`, `resource_size` and
+  `resource_read` trap from `audiofx_process` or `audiofx_reset`; only `param_value` and
+  `tempo_bpm` may run there.
+- **Smaller ones.** Output is clamped to ±4, the guest's block is capped at 4096 frames, the wasm
+  stack is 128 KiB, and a descriptor may have at most 2,048 entries and 256 labels per param.
+
+`WasmEffectHostTests` covers each of these. Not covered: many modules each just under real time
+(the watchdog is per instance; the instance cap bounds it), and the Release, plugin and non-Windows
+builds were not rebuilt.
+
 ### Sharing modules later
 
 Sharing Custom Effect modules is wanted. The block is meant to be lifted, so it lives in one rule on each side: `IsShareableResourceType` in `PresetArchiveSupport.cpp` and `isShareableResourceType` in `ui/ts/presets/sanitize.ts`. `SanitizeImportedPreset` (both sides) keeps the node and drops only its module. With the runtime limits now in place, a shared module can at worst burn its time budget and pass audio dry. What is still needed to allow it:

@@ -2,6 +2,7 @@
 #include "dsp/EffectRegistry.h"
 #include "dsp/SignalGraphExecutor.h"
 #include "dsp/effects/BuiltinEffects.h"
+#include "dsp/effects/WasmDescriptor.h"
 #include "dsp/effects/WasmEffect.h"
 #include "resources/ResourceLibrary.h"
 
@@ -17,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -257,7 +259,7 @@ bool TestTempoImport(const TempDir& tempDir)
     }
 
     if (const auto [left, right] = ProcessBlock(*effect, 0.0f, 0.0f);
-        !NearlyEqual(left, 0.75f) || !NearlyEqual(right, 120.0f))
+        !NearlyEqual(left, 0.75f) || !NearlyEqual(right, 1.2f))
     {
         std::cerr << "Param default or tempo read back wrong: " << left << ", " << right << "\n";
         return false;
@@ -267,7 +269,7 @@ bool TestTempoImport(const TempDir& tempDir)
     effect->SetParam("bpm", 90.0);
 
     if (const auto [left, right] = ProcessBlock(*effect, 0.0f, 0.0f);
-        !NearlyEqual(left, 0.25f) || !NearlyEqual(right, 90.0f) || effect->GetParam("last") != 0.25)
+        !NearlyEqual(left, 0.25f) || !NearlyEqual(right, 0.9f) || effect->GetParam("last") != 0.25)
     {
         std::cerr << "Param or tempo did not follow SetParam: " << left << ", " << right << "\n";
         return false;
@@ -823,14 +825,27 @@ bool TestResourceReadEdges(const TempDir& tempDir)
     return true;
 }
 
+// Prepare is where resources are read, so a bad handle there fails the load itself.
 bool TestHardCodedResourceHandleTraps(const TempDir& tempDir)
 {
-    auto effect = LoadPrepared(tempDir, "hard_coded_resource.wasm", MakeHardCodedResourceHandleModule());
+    const auto modulePath = tempDir.root / "hard_coded_resource.wasm";
 
-    if (!effect)
+    if (!WriteBytes(modulePath, MakeHardCodedResourceHandleModule()))
     {
+        std::cerr << "Failed to write the hard-coded resource module.\n";
         return false;
     }
+
+    bool loaded = false;
+    auto effect = LoadModuleFile(modulePath, loaded);
+
+    if (!effect || loaded)
+    {
+        std::cerr << "A hard-coded resource handle in prepare did not fail the load.\n";
+        return false;
+    }
+
+    effect->Prepare(kSampleRate, kBlockSize);
 
     if (const auto [left, right] = ProcessBlock(*effect, 0.25f, -0.5f);
         !NearlyEqual(left, 0.25f) || !NearlyEqual(right, -0.5f) ||
@@ -976,7 +991,15 @@ enum class HostileKind
     RecursiveProcess,
     LoopingStart,
     HugeMemory,
+    SlowProcess,
+    GrowingProcess,
+    LookupInProcess,
+    HugeOutput,
 };
+
+// Iterations of an empty loop per sample in SlowProcess: well over real time for an 8-frame
+// block, well under the 30 ms block deadline.
+constexpr int32_t kSlowProcessIterations = 1000000;
 
 ByteVector MakeHostileModule(HostileKind kind)
 {
@@ -1000,8 +1023,41 @@ ByteVector MakeHostileModule(HostileKind kind)
         spec.startOps = foreverOps;
         break;
     case HostileKind::HugeMemory:
-        // One page past the store's 256 MiB limit.
-        spec.memoryMinPages = 4097;
+        // One page past the store's limit.
+        spec.memoryMinPages = static_cast<uint32_t>(WasmEffect::kMaxGuestMemoryBytes / 65536) + 1;
+        break;
+    case HostileKind::SlowProcess:
+        // i32 local 2 counts down from kSlowProcessIterations; then the input goes out unchanged.
+        spec.processLocals = {WasmValueType::I32};
+        AppendOp(spec.processOps, I32Const(kSlowProcessIterations));
+        AppendOp(spec.processOps, LocalSet(2));
+        AppendOp(spec.processOps, {0x03, 0x40}); // loop
+        AppendOp(spec.processOps, LocalGet(2));
+        AppendOp(spec.processOps, I32Const(1));
+        AppendOp(spec.processOps, {0x6b, 0x22, 0x02, 0x0d, 0x00, 0x0b}); // i32.sub, local.tee 2, br_if 0, end
+        AppendOp(spec.processOps, LocalGet(0));
+        AppendOp(spec.processOps, LocalGet(1));
+        break;
+    case HostileKind::GrowingProcess:
+        // memory.grow by a page every sample.
+        AppendOp(spec.processOps, I32Const(1));
+        AppendOp(spec.processOps, {0x40, 0x00, 0x1a}); // memory.grow 0, drop
+        AppendOp(spec.processOps, LocalGet(0));
+        AppendOp(spec.processOps, LocalGet(1));
+        break;
+    case HostileKind::LookupInProcess:
+        // param_handle on the audio thread, where it may not be called.
+        spec = ParamGuest(BuildDescriptorBlob({{"param.gain.default", "1.0"}}), {"gain"});
+        AppendOp(spec.processOps, I32Const(static_cast<int32_t>(kIdOffset)));
+        AppendOp(spec.processOps, I32Const(4));
+        AppendOp(spec.processOps, Call(kParamHandleImport));
+        AppendU8(spec.processOps, 0x1a); // drop
+        AppendOp(spec.processOps, LocalGet(0));
+        AppendOp(spec.processOps, LocalGet(1));
+        break;
+    case HostileKind::HugeOutput:
+        AppendOp(spec.processOps, F32Const(1.0e30f));
+        AppendOp(spec.processOps, F32Const(-1.0e30f));
         break;
     }
 
@@ -1038,7 +1094,7 @@ bool TestHostileProcessIsStopped(const TempDir& tempDir, HostileKind kind, const
     effect->Process(inputs, outputs, kBlockSize);
     const double elapsed = SecondsSince(start);
 
-    // The block budget is 0.2 s; allow for a slow CI machine, but not for a hang.
+    // The block budget is 30 ms; allow for a slow CI machine, but not for a hang.
     if (elapsed > 2.0)
     {
         std::cerr << "The " << label << " module held Process for " << elapsed << " s.\n";
@@ -1071,7 +1127,7 @@ bool TestLoopingStartFunctionIsStopped(const TempDir& tempDir)
     }
 
     // Inspection runs on the message thread when a preset loads; the start function must not
-    // freeze it. The setup budget is 5 s.
+    // freeze it. A load's setup budget is 2 s.
     const auto start = std::chrono::steady_clock::now();
     std::string error;
     const auto descriptor = WasmEffect::InspectModuleFile(modulePath, &error);
@@ -1087,6 +1143,402 @@ bool TestLoopingStartFunctionIsStopped(const TempDir& tempDir)
     {
         std::cerr << "A looping start function held inspection for " << elapsed << " s.\n";
         return false;
+    }
+
+    // Once out of time, the module is refused at once for the rest of the session, by inspection
+    // and by a node alike, so a preset full of it can't freeze the app once per node.
+    const auto again = std::chrono::steady_clock::now();
+    std::string secondError;
+    const auto secondDescriptor = WasmEffect::InspectModuleFile(modulePath, &secondError);
+    bool loaded = false;
+    auto effect = LoadModuleFile(modulePath, loaded);
+    const double secondElapsed = SecondsSince(again);
+
+    if (secondDescriptor || loaded || secondError.find("earlier in this session") == std::string::npos || !effect ||
+        effect->GetConfig("lastError").find("earlier in this session") == std::string::npos)
+    {
+        std::cerr << "A module that ran out of time loading was tried again: " << secondError << "\n";
+        return false;
+    }
+
+    if (secondElapsed > 0.5)
+    {
+        std::cerr << "Refusing a module that ran out of time loading took " << secondElapsed << " s.\n";
+        return false;
+    }
+
+    return true;
+}
+
+// One block of 0.25 / -0.5 in, through a fresh output buffer; the last output frame.
+std::pair<float, float> ProcessConstantBlock(EffectProcessor& effect, int frames = kBlockSize)
+{
+    std::vector<float> leftIn(static_cast<std::size_t>(frames), 0.25f);
+    std::vector<float> rightIn(static_cast<std::size_t>(frames), -0.5f);
+    std::vector<float> leftOut(static_cast<std::size_t>(frames), 0.0f);
+    std::vector<float> rightOut(static_cast<std::size_t>(frames), 0.0f);
+    float* inputs[] = {leftIn.data(), rightIn.data()};
+    float* outputs[] = {leftOut.data(), rightOut.data()};
+    effect.Process(inputs, outputs, frames);
+    return {leftOut.back(), rightOut.back()};
+}
+
+// A module that finishes every block, but takes longer than the block lasts, is stopped by the
+// CPU watchdog; while a host renders offline, it is left to run.
+bool TestSlowProcessIsStoppedByWatchdog(const TempDir& tempDir)
+{
+    auto effect = LoadPrepared(tempDir, "slow_process.wasm", MakeHostileModule(HostileKind::SlowProcess));
+
+    if (!effect)
+    {
+        return false;
+    }
+
+    WasmEffect::NoteOfflineRendering(true);
+
+    for (int block = 0; block < 40; ++block)
+    {
+        ProcessConstantBlock(*effect);
+    }
+
+    WasmEffect::NoteOfflineRendering(false);
+
+    if (!effect->GetConfig("lastError").empty())
+    {
+        std::cerr << "The watchdog stopped a slow module during an offline render: " << effect->GetConfig("lastError")
+                  << "\n";
+        return false;
+    }
+
+    std::string error;
+
+    for (int block = 0; block < 200 && error.empty(); ++block)
+    {
+        ProcessConstantBlock(*effect);
+        error = effect->GetConfig("lastError");
+    }
+
+    if (error.find("real time") == std::string::npos)
+    {
+        std::cerr << "A module slower than real time was not stopped by the watchdog: " << error << "\n";
+        return false;
+    }
+
+    if (const auto [left, right] = ProcessConstantBlock(*effect);
+        !NearlyEqual(left, 0.25f) || !NearlyEqual(right, -0.5f))
+    {
+        std::cerr << "A module the watchdog stopped did not leave the node passing dry.\n";
+        return false;
+    }
+
+    return true;
+}
+
+// A module stopped while running is not revived by the host preparing again (a DAW prepares
+// often); loading it again is what gives it another go.
+bool TestStoppedModuleStaysStopped(const TempDir& tempDir)
+{
+    const auto modulePath = tempDir.root / "stays_stopped.wasm";
+
+    if (!WriteBytes(modulePath, MakeHostileModule(HostileKind::LoopingProcess)))
+    {
+        std::cerr << "Failed to write the stays-stopped module.\n";
+        return false;
+    }
+
+    bool loaded = false;
+    auto effect = LoadModuleFile(modulePath, loaded);
+
+    if (!effect || !loaded)
+    {
+        std::cerr << "The stays-stopped module failed to load.\n";
+        return false;
+    }
+
+    effect->Prepare(kSampleRate, kBlockSize);
+    ProcessConstantBlock(*effect);
+
+    if (effect->GetConfig("lastError").find("time limit") == std::string::npos)
+    {
+        std::cerr << "A looping process was not stopped: " << effect->GetConfig("lastError") << "\n";
+        return false;
+    }
+
+    effect->Prepare(kSampleRate, kBlockSize);
+    const auto start = std::chrono::steady_clock::now();
+    const auto [left, right] = ProcessConstantBlock(*effect);
+    const double elapsed = SecondsSince(start);
+
+    if (elapsed > 0.02 || !NearlyEqual(left, 0.25f) || !NearlyEqual(right, -0.5f) ||
+        effect->GetConfig("lastError").empty())
+    {
+        std::cerr << "Prepare revived a stopped module (" << elapsed << " s for a block).\n";
+        return false;
+    }
+
+    ResourceRef moduleRef;
+    moduleRef.resourceType = "wasm";
+    moduleRef.filePath = modulePath.string();
+
+    if (!effect->LoadResources({moduleRef}, {modulePath}) || !effect->GetConfig("lastError").empty())
+    {
+        std::cerr << "Loading a stopped module again did not give it another go: " << effect->GetConfig("lastError")
+                  << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+// On the audio thread a module may only read params and tempo, and may not grow its memory.
+bool TestAudioThreadRules(const TempDir& tempDir)
+{
+    const std::vector<std::tuple<HostileKind, const char*, const char*>> cases = {
+        {HostileKind::LookupInProcess, "lookup_in_process.wasm", "param_handle was called from audiofx_process"},
+        {HostileKind::GrowingProcess, "growing_process.wasm", "grew the module's memory"},
+    };
+
+    for (const auto& [kind, fileName, expected] : cases)
+    {
+        auto effect = LoadPrepared(tempDir, fileName, MakeHostileModule(kind));
+
+        if (!effect)
+        {
+            return false;
+        }
+
+        const auto [left, right] = ProcessConstantBlock(*effect);
+        const std::string error = effect->GetConfig("lastError");
+
+        if (error.find(expected) == std::string::npos || !NearlyEqual(left, 0.25f) || !NearlyEqual(right, -0.5f))
+        {
+            std::cerr << fileName << " was not stopped as it should be: " << error << "\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool TestOutputIsClamped(const TempDir& tempDir)
+{
+    auto effect = LoadPrepared(tempDir, "huge_output.wasm", MakeHostileModule(HostileKind::HugeOutput));
+
+    if (!effect)
+    {
+        return false;
+    }
+
+    if (const auto [left, right] = ProcessConstantBlock(*effect);
+        !NearlyEqual(left, WasmEffect::kMaxGuestOutputSample) ||
+        !NearlyEqual(right, -WasmEffect::kMaxGuestOutputSample))
+    {
+        std::cerr << "A huge finite output was not clamped: " << left << ", " << right << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestLatencyIsCapped(const TempDir& tempDir)
+{
+    const auto limit = WasmEffect::kMaxGuestLatencySamples;
+
+    for (const int32_t latency : {limit, limit + 1, std::numeric_limits<int32_t>::max()})
+    {
+        GuestSpec spec;
+        spec.latencySamples = latency;
+        const auto modulePath = tempDir.root / ("latency_" + std::to_string(latency) + ".wasm");
+
+        if (!WriteBytes(modulePath, MakeGuestModule(spec)))
+        {
+            std::cerr << "Failed to write the latency module.\n";
+            return false;
+        }
+
+        // A latency past the limit fails the load itself, and every prepare after it.
+        bool loaded = false;
+        auto effect = LoadModuleFile(modulePath, loaded);
+
+        if (!effect)
+        {
+            return false;
+        }
+
+        effect->Prepare(kSampleRate, kBlockSize);
+        const bool allowed = latency <= limit;
+        const std::string error = effect->GetConfig("lastError");
+
+        if (allowed ? (!loaded || effect->GetLatencySamples() != latency || !error.empty())
+                    : (loaded || effect->GetLatencySamples() != 0 || error.find("latency") == std::string::npos))
+        {
+            std::cerr << "A latency of " << latency << " was " << (allowed ? "refused" : "accepted") << ": " << error
+                      << "\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// A host block longer than kMaxGuestBlockFrames reaches the module in pieces it was prepared for.
+bool TestGuestBlockIsCapped(const TempDir& tempDir)
+{
+    const auto modulePath = tempDir.root / "gain_big_block.wasm";
+
+    if (!WriteBytes(modulePath, MakeGainModule()))
+    {
+        std::cerr << "Failed to write the big-block module.\n";
+        return false;
+    }
+
+    bool loaded = false;
+    auto effect = LoadModuleFile(modulePath, loaded);
+    constexpr int kHostBlock = WasmEffect::kMaxGuestBlockFrames * 2 + 3;
+
+    if (!effect || !loaded)
+    {
+        return false;
+    }
+
+    // The fixture's buffer holds 2 x 4096 frames, so a prepare at the host's block would not fit.
+    effect->Prepare(kSampleRate, kHostBlock);
+
+    if (const auto [left, right] = ProcessConstantBlock(*effect, kHostBlock);
+        !effect->GetConfig("lastError").empty() || !NearlyEqual(left, 0.125f) || !NearlyEqual(right, -0.25f))
+    {
+        std::cerr << "A long host block did not go through in guest-sized pieces: " << effect->GetConfig("lastError")
+                  << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestOversizedModuleIsRefused(const TempDir& tempDir)
+{
+    const auto modulePath = tempDir.root / "oversized.wasm";
+    ByteVector module = MakeGainModule();
+    module.resize(WasmEffect::kMaxModuleBytes + 1, 0);
+
+    if (!WriteBytes(modulePath, module))
+    {
+        std::cerr << "Failed to write the oversized module.\n";
+        return false;
+    }
+
+    std::string error;
+    bool loaded = false;
+    auto effect = LoadModuleFile(modulePath, loaded);
+
+    if (WasmEffect::InspectModuleFile(modulePath, &error) || error.find("limit") == std::string::npos || loaded ||
+        !effect || effect->GetConfig("lastError").find("limit") == std::string::npos)
+    {
+        std::cerr << "A module over the size limit was not refused: " << error << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+// The process-wide limits: how many Custom Effects may run, and how much memory they may share.
+bool TestProcessWideLimits(const TempDir& tempDir)
+{
+    const auto gainPath = tempDir.root / "gain_many.wasm";
+    const auto bigPath = tempDir.root / "big_memory.wasm";
+    GuestSpec big;
+    big.memoryMinPages = static_cast<uint32_t>(WasmEffect::kMaxGuestMemoryBytes / 65536);
+
+    if (!WriteBytes(gainPath, MakeGainModule()) || !WriteBytes(bigPath, MakeGuestModule(big)))
+    {
+        std::cerr << "Failed to write the process-wide limit modules.\n";
+        return false;
+    }
+
+    std::vector<std::unique_ptr<EffectProcessor>> effects;
+    bool loaded = true;
+
+    while (loaded && effects.size() <= WasmEffect::kMaxLiveInstances)
+    {
+        effects.push_back(LoadModuleFile(gainPath, loaded));
+    }
+
+    if (loaded || effects.size() != WasmEffect::kMaxLiveInstances + 1 ||
+        effects.back()->GetConfig("lastError").find("at once") == std::string::npos)
+    {
+        std::cerr << "The instance limit did not hold at " << WasmEffect::kMaxLiveInstances << ": "
+                  << effects.back()->GetConfig("lastError") << "\n";
+        return false;
+    }
+
+    // One gone makes room for one more.
+    effects.erase(effects.begin());
+    effects.back() = LoadModuleFile(gainPath, loaded);
+
+    if (!loaded)
+    {
+        std::cerr << "An instance freed no room: " << effects.back()->GetConfig("lastError") << "\n";
+        return false;
+    }
+
+    effects.clear();
+
+    // Each of these keeps all the memory one may have, so the shared budget runs out first.
+    const auto fits = static_cast<std::size_t>(WasmEffect::kMaxTotalGuestBytes / WasmEffect::kMaxGuestMemoryBytes);
+    std::string error;
+
+    while (error.empty() && effects.size() <= fits)
+    {
+        effects.push_back(LoadModuleFile(bigPath, loaded));
+        effects.back()->Prepare(kSampleRate, kBlockSize);
+        error = effects.back()->GetConfig("lastError");
+    }
+
+    if (error.find("share") == std::string::npos || effects.size() + 1 < fits || effects.size() > fits)
+    {
+        std::cerr << "The shared memory budget did not hold (" << effects.size() << " of " << fits << " fit): " << error
+                  << "\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool TestDescriptorSizeLimits()
+{
+    std::vector<std::pair<std::string, std::string>> manyEntries;
+
+    for (std::size_t i = 0; i <= wasm_descriptor::kMaxDescriptorEntries; ++i)
+    {
+        manyEntries.emplace_back("x", "y");
+    }
+
+    std::string labels;
+
+    for (std::size_t i = 0; i <= wasm_descriptor::kMaxParamLabels; ++i)
+    {
+        labels += (i ? "|" : "") + std::string("a");
+    }
+
+    const auto blobText = [](const std::vector<std::pair<std::string, std::string>>& entries) {
+        const ByteVector blob = BuildDescriptorBlob(entries);
+        return std::string(blob.begin(), blob.end());
+    };
+
+    const std::vector<std::pair<std::string, std::string>> cases = {
+        {blobText(manyEntries), "entries"},
+        {blobText({{"param.choice.labels", labels}}), "labels"},
+    };
+
+    for (const auto& [blob, expected] : cases)
+    {
+        std::string error;
+
+        if (wasm_descriptor::ParseDescriptorBlob(blob, &error) || error.find(expected) == std::string::npos)
+        {
+            std::cerr << "A descriptor over its " << expected << " limit was not refused: " << error << "\n";
+            return false;
+        }
     }
 
     return true;
@@ -1295,12 +1747,22 @@ bool RunModuleFile(const std::filesystem::path& modulePath, const std::vector<st
     }
 
     constexpr int kMaxBlock = 512;
+    // A prepare is a whole load's setup (instantiation, descriptor, prepare, buffer, latency), the
+    // calls that share the setup budget; the module itself compiled in LoadResources.
+    const auto prepareStart = std::chrono::steady_clock::now();
     effect->Prepare(kSampleRate, kMaxBlock);
+    const double prepareSeconds = SecondsSince(prepareStart);
 
     if (const auto lastError = effect->GetConfig("lastError"); !lastError.empty())
     {
         std::cerr << modulePath.string() << ": " << lastError << "\n";
         return false;
+    }
+
+    if (verbose)
+    {
+        std::cout << "  setup took " << static_cast<int>(prepareSeconds * 1000.0) << " ms of a load's "
+                  << (WasmEffect::kSmallAddressSpace ? 8 : 2) << " s budget\n";
     }
 
     std::vector<float> leftIn(kMaxBlock);
@@ -1450,6 +1912,15 @@ int main(int argc, char** argv)
         allPassed;
     allPassed = guitarfx::TestLoopingStartFunctionIsStopped(tempDir) && allPassed;
     allPassed = guitarfx::TestHugeMemoryIsRefused(tempDir) && allPassed;
+    allPassed = guitarfx::TestSlowProcessIsStoppedByWatchdog(tempDir) && allPassed;
+    allPassed = guitarfx::TestStoppedModuleStaysStopped(tempDir) && allPassed;
+    allPassed = guitarfx::TestAudioThreadRules(tempDir) && allPassed;
+    allPassed = guitarfx::TestOutputIsClamped(tempDir) && allPassed;
+    allPassed = guitarfx::TestLatencyIsCapped(tempDir) && allPassed;
+    allPassed = guitarfx::TestGuestBlockIsCapped(tempDir) && allPassed;
+    allPassed = guitarfx::TestOversizedModuleIsRefused(tempDir) && allPassed;
+    allPassed = guitarfx::TestProcessWideLimits(tempDir) && allPassed;
+    allPassed = guitarfx::TestDescriptorSizeLimits() && allPassed;
     allPassed = guitarfx::TestNetworkPathsAreRefused(tempDir) && allPassed;
     allPassed = guitarfx::TestHostingGate(tempDir) && allPassed;
     allPassed = guitarfx::TestHostileDescriptorIsSanitised(tempDir) && allPassed;

@@ -149,6 +149,12 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
         return std::nullopt;
     };
 
+    if (entries.size() > kMaxDescriptorEntries)
+    {
+        return fail("WASM descriptor has more than the " + std::to_string(kMaxDescriptorEntries) +
+                    " entries a descriptor may have.");
+    }
+
     IdKeyedBlocks parameterFields;
     IdKeyedBlocks resourceFields;
     std::string thumbnailBase64;
@@ -311,6 +317,13 @@ std::optional<WasmModuleDescriptor> BuildDescriptorFromEntries(const std::vector
         if (const auto labelsIt = fields.find("labels"); labelsIt != fields.end())
         {
             paramDescriptor.definition.labels = SplitLabels(labelsIt->second);
+
+            if (paramDescriptor.definition.labels.size() > kMaxParamLabels)
+            {
+                return fail("WASM descriptor param '" + id + "' has " +
+                            std::to_string(paramDescriptor.definition.labels.size()) + " labels; the limit is " +
+                            std::to_string(kMaxParamLabels) + ".");
+            }
         }
 
         if (!paramDescriptor.definition.labels.empty() && paramDescriptor.definition.unit.empty())
@@ -414,6 +427,12 @@ std::optional<WasmModuleDescriptor> ParseDescriptorBlob(const std::string& text,
             }
 
             return std::nullopt;
+        }
+
+        // Stopped here rather than after every line is copied; BuildDescriptorFromEntries says why.
+        if (entries.size() > kMaxDescriptorEntries)
+        {
+            break;
         }
 
         WasmMetadataEntry entry;

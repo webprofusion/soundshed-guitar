@@ -7,6 +7,7 @@
 #include "resources/CustomEffectLibrary.h"
 #include "util/FileIO.h"
 #include "util/PathEncoding.h"
+#include "util/Sha256.h"
 
 #include <algorithm>
 #include <atomic>
@@ -20,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwctype>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -27,6 +29,7 @@
 #include <sstream>
 #include <string_view>
 #include <thread>
+#include <unordered_set>
 #include <utility>
 
 #include <nlohmann/json.hpp>
@@ -45,22 +48,72 @@ constexpr std::size_t kModuleSlot = 0;
 
 // The shared engine's epoch advances once per tick; a deadline is a number of ticks.
 constexpr std::chrono::milliseconds kEpochTick{10};
-// Instantiation (the start function), the descriptor exports, prepare and the latency query run
-// off the audio thread and may do real work, such as parsing a resource.
-constexpr double kSetupBudgetSeconds = 5.0;
-// A block gets four times its own duration, and never less than this. Offline renders may run
-// slower than real time, so the budget is there to stop a hang, not to enforce real time.
-constexpr double kProcessMinBudgetSeconds = 0.2;
+// Instantiation (the start function), the descriptor exports, prepare, the buffer and the latency
+// query run off the audio thread and may do real work, such as parsing a resource. They share one
+// budget per load, so a module can't take it once per call; the 32-bit interpreter gets more.
+constexpr double kSetupBudgetSeconds = WasmEffect::kSmallAddressSpace ? 8.0 : 2.0;
+// A block gets four times its own duration, and never less than the floor: a hang costs the audio
+// thread one floor's worth, once. Offline renders may run slower than real time, so while one is
+// running the floor is a generous one.
+constexpr double kProcessMinBudgetSeconds = 0.03;
+constexpr double kOfflineProcessMinBudgetSeconds = 0.2;
 constexpr double kProcessBudgetBlockMultiple = 4.0;
+// The CPU watchdog: a moving average (weight 1/16) of guest time over block time, each block's
+// share capped so a few slow first blocks can't trip it, and judged once 16 blocks have run. A
+// block shorter than the floor counts as the floor, so timer noise on tiny blocks can't add up.
+constexpr double kWatchdogWeight = 1.0 / 16.0;
+constexpr double kWatchdogMaxRatio = 4.0;
+constexpr int kWatchdogMinBlocks = 16;
+constexpr double kWatchdogMinBlockSeconds = 0.001;
 
 // The descriptor a module exports reaches the UI and presets; bound its size.
 constexpr std::size_t kMaxDescriptorBytes = 2u * 1024u * 1024u;
+// Compiled modules kept for reuse once no effect uses them.
+constexpr std::size_t kMaxCachedModules = 16;
 
 std::atomic<bool> gHostingEnabled{false};
+std::atomic<int> gOfflineRenderers{0};
+std::atomic<std::size_t> gLiveInstances{0};
+std::atomic<std::int64_t> gAccountedGuestBytes{0};
 
-float ClampFinite(float value, float fallback)
+// A sample the guest left non-finite is taken as the fallback; a finite one is clamped.
+float ClampGuestSample(float value, float fallback)
 {
-    return IsFinite(value) ? value : fallback;
+    if (!IsFinite(value))
+    {
+        return fallback;
+    }
+
+    return std::clamp(value, -WasmEffect::kMaxGuestOutputSample, WasmEffect::kMaxGuestOutputSample);
+}
+
+// Modules (by hash) that ran out of their setup budget. One is not instantiated again this
+// session: each try would freeze whichever thread loads it for the whole budget again. Kept apart
+// from the shared runtime, which goes whenever no Custom Effect is left.
+std::mutex gSetupTimedOutMutex;
+std::unordered_set<std::string> gSetupTimedOut;
+
+void MarkSetupTimedOut(const std::string& hash)
+{
+    std::lock_guard<std::mutex> lock(gSetupTimedOutMutex);
+    gSetupTimedOut.insert(hash);
+}
+
+bool SetupTimedOut(const std::string& hash)
+{
+    std::lock_guard<std::mutex> lock(gSetupTimedOutMutex);
+    return gSetupTimedOut.contains(hash);
+}
+
+bool IsInterruptTrap(const wasm_trap_t* trap)
+{
+    wasmtime_trap_code_t code = 0;
+    return trap && wasmtime_trap_code(trap, &code) && code == WASMTIME_TRAP_CODE_INTERRUPT;
+}
+
+std::string Megabytes(std::int64_t bytes)
+{
+    return std::to_string(bytes / (1024 * 1024)) + " MB";
 }
 
 double DbToLinear(double value)
@@ -229,6 +282,20 @@ wasm_trap_t* BadHandleTrap(const char* import, const char* lookup, int32_t handl
     return wasmtime_trap_new(message.data(), message.size());
 }
 
+// The lookups and resource reads belong in audiofx_prepare; from process or reset they trap.
+wasm_trap_t* AudioThreadImportTrap(void* env, const char* import)
+{
+    if (!env || !static_cast<const WasmEffect*>(env)->InAudioThreadCall())
+    {
+        return nullptr;
+    }
+
+    const std::string message = std::string(import) +
+                                " was called from audiofx_process or audiofx_reset; call it in audiofx_prepare, "
+                                "since only param_value and tempo_bpm may run on the audio thread";
+    return wasmtime_trap_new(message.data(), message.size());
+}
+
 // The host imports are linked unchecked: the linker has already checked the module's import types
 // against these signatures, so `values` holds exactly the arguments, and the results go back over
 // them from index 0. Read every argument before writing a result.
@@ -240,6 +307,11 @@ extern "C" wasm_trap_t* HostParamHandleRaw(void* env, wasmtime_caller_t* caller,
     if (count < 2)
     {
         return nullptr;
+    }
+
+    if (wasm_trap_t* trap = AudioThreadImportTrap(env, "param_handle"))
+    {
+        return trap;
     }
 
     const int32_t pointer = values[0].i32;
@@ -295,6 +367,11 @@ extern "C" wasm_trap_t* HostResourceHandleRaw(void* env, wasmtime_caller_t* call
         return nullptr;
     }
 
+    if (wasm_trap_t* trap = AudioThreadImportTrap(env, "resource_handle"))
+    {
+        return trap;
+    }
+
     const int32_t pointer = values[0].i32;
     const int32_t length = values[1].i32;
     const auto id = ReadGuestString(caller, pointer, length, WasmEffect::kMaxGuestIdLength);
@@ -311,6 +388,11 @@ extern "C" wasm_trap_t* HostResourceSizeRaw(void* env, wasmtime_caller_t* caller
     if (!env || count < 1)
     {
         return nullptr;
+    }
+
+    if (wasm_trap_t* trap = AudioThreadImportTrap(env, "resource_size"))
+    {
+        return trap;
     }
 
     const int32_t handle = values[0].i32;
@@ -335,6 +417,11 @@ extern "C" wasm_trap_t* HostResourceReadRaw(void* env, wasmtime_caller_t* caller
     if (!env || count < 4)
     {
         return nullptr;
+    }
+
+    if (wasm_trap_t* trap = AudioThreadImportTrap(env, "resource_read"))
+    {
+        return trap;
     }
 
     const int32_t handle = values[0].i32;
@@ -466,6 +553,16 @@ class WasmSharedRuntime
             mTicker.join();
         }
 
+        for (auto& entry : mModules)
+        {
+            if (entry.module)
+            {
+                wasmtime_module_delete(entry.module);
+            }
+        }
+
+        mModules.clear();
+
         if (mEngine)
         {
             wasm_engine_delete(mEngine);
@@ -475,6 +572,59 @@ class WasmSharedRuntime
     [[nodiscard]] wasm_engine_t* Engine() const
     {
         return mEngine;
+    }
+
+    // The compiled module for these bytes, as a handle of the caller's own to delete, or null with
+    // the reason in `error`. Each module compiles once per process: compiling is the one step no
+    // deadline reaches, and every Prepare, dual-mono twin and inspection would otherwise pay it. A
+    // module that failed to compile is remembered as failed.
+    wasmtime_module_t* CompiledModule(const std::string& hash, const std::vector<uint8_t>& bytes, std::string& error)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mCacheMutex);
+
+            if (auto* entry = FindModule(hash))
+            {
+                return TakeModule(*entry, error);
+            }
+        }
+
+        // Compiled unlocked, so one slow module doesn't hold up every other effect's load.
+        wasmtime_module_t* module = nullptr;
+        std::string compileError;
+
+        if (wasmtime_error_t* compileFailure = wasmtime_module_new(mEngine, bytes.data(), bytes.size(), &module))
+        {
+            compileError = TakeErrorMessage(compileFailure);
+            module = nullptr;
+        }
+
+        std::lock_guard<std::mutex> lock(mCacheMutex);
+
+        // Another thread compiled the same module meanwhile; keep the one already cached.
+        if (auto* entry = FindModule(hash))
+        {
+            if (module)
+            {
+                wasmtime_module_delete(module);
+            }
+
+            return TakeModule(*entry, error);
+        }
+
+        mModules.push_front({hash, module, compileError});
+
+        while (mModules.size() > kMaxCachedModules)
+        {
+            if (mModules.back().module)
+            {
+                wasmtime_module_delete(mModules.back().module);
+            }
+
+            mModules.pop_back();
+        }
+
+        return TakeModule(mModules.front(), error);
     }
 
   private:
@@ -526,7 +676,42 @@ class WasmSharedRuntime
         }
     }
 
+    struct CachedModule
+    {
+        std::string hash;
+        wasmtime_module_t* module = nullptr;
+        std::string error;
+    };
+
+    // Under mCacheMutex. Moves the entry to the front, as the most recently used.
+    CachedModule* FindModule(const std::string& hash)
+    {
+        for (auto it = mModules.begin(); it != mModules.end(); ++it)
+        {
+            if (it->hash == hash)
+            {
+                mModules.splice(mModules.begin(), mModules, it);
+                return &mModules.front();
+            }
+        }
+
+        return nullptr;
+    }
+
+    static wasmtime_module_t* TakeModule(const CachedModule& entry, std::string& error)
+    {
+        if (!entry.module)
+        {
+            error = entry.error;
+            return nullptr;
+        }
+
+        return wasmtime_module_clone(entry.module);
+    }
+
     wasm_engine_t* mEngine = nullptr;
+    std::mutex mCacheMutex;
+    std::list<CachedModule> mModules;
     std::mutex mTickMutex;
     std::condition_variable mTickWake;
     bool mStopping = false;
@@ -541,6 +726,95 @@ void WasmEffect::SetHostingEnabled(bool enabled)
 bool WasmEffect::IsHostingEnabled()
 {
     return gHostingEnabled.load(std::memory_order_relaxed);
+}
+
+void WasmEffect::NoteOfflineRendering(bool offline)
+{
+    if (offline)
+    {
+        gOfflineRenderers.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+
+    int current = gOfflineRenderers.load(std::memory_order_relaxed);
+
+    while (current > 0 && !gOfflineRenderers.compare_exchange_weak(current, current - 1, std::memory_order_relaxed))
+    {
+    }
+}
+
+bool WasmEffect::IsAnyOfflineRendering()
+{
+    return gOfflineRenderers.load(std::memory_order_relaxed) > 0;
+}
+
+bool WasmEffect::AcquireInstanceSlot()
+{
+    if (mIsProbe || mHoldsInstanceSlot)
+    {
+        return true;
+    }
+
+    std::size_t current = gLiveInstances.load(std::memory_order_relaxed);
+
+    do
+    {
+        if (current >= kMaxLiveInstances)
+        {
+            SetError("Only " + std::to_string(kMaxLiveInstances) +
+                     " Custom Effects can run at once (a dual-mono node counts twice), so this one passes its "
+                     "input through. Remove another to make room.");
+            return false;
+        }
+    } while (!gLiveInstances.compare_exchange_weak(current, current + 1, std::memory_order_relaxed));
+
+    mHoldsInstanceSlot = true;
+    return true;
+}
+
+void WasmEffect::ReleaseInstanceSlot()
+{
+    if (mHoldsInstanceSlot)
+    {
+        gLiveInstances.fetch_sub(1, std::memory_order_relaxed);
+        mHoldsInstanceSlot = false;
+    }
+}
+
+// This effect's share of kMaxTotalGuestBytes becomes resourceBytes + memoryBytes, or stays as it
+// was (lastError set) if that would take the process past it.
+bool WasmEffect::AccountGuestBytes(std::int64_t resourceBytes, std::int64_t memoryBytes)
+{
+    if (mIsProbe)
+    {
+        return true;
+    }
+
+    const std::int64_t mine = mAccountedResourceBytes + mAccountedMemoryBytes;
+    const std::int64_t wanted = resourceBytes + memoryBytes;
+    std::int64_t total = gAccountedGuestBytes.load(std::memory_order_relaxed);
+
+    do
+    {
+        if (wanted > mine && total - mine + wanted > kMaxTotalGuestBytes)
+        {
+            SetError("Custom Effects already use most of the " + Megabytes(kMaxTotalGuestBytes) +
+                     " of memory and files they may share, and this one needs " + Megabytes(wanted) +
+                     ", so it passes its input through. Remove another to make room.");
+            return false;
+        }
+    } while (!gAccountedGuestBytes.compare_exchange_weak(total, total - mine + wanted, std::memory_order_relaxed));
+
+    mAccountedResourceBytes = resourceBytes;
+    mAccountedMemoryBytes = memoryBytes;
+    return true;
+}
+
+void WasmEffect::ReleaseGuestBytes()
+{
+    gAccountedGuestBytes.fetch_sub(mAccountedResourceBytes + mAccountedMemoryBytes, std::memory_order_relaxed);
+    mAccountedResourceBytes = 0;
+    mAccountedMemoryBytes = 0;
 }
 
 bool WasmEffect::IsNetworkPath(const std::filesystem::path& path)
@@ -575,6 +849,8 @@ WasmEffect::WasmEffect()
 WasmEffect::~WasmEffect()
 {
     TeardownRuntime();
+    ReleaseGuestBytes();
+    ReleaseInstanceSlot();
     // The engine is the shared runtime's; dropping mRuntime releases it with the last effect.
     mEngine = nullptr;
 }
@@ -590,6 +866,19 @@ void WasmEffect::ArmGuestDeadline(double budgetSeconds)
     // One more tick than the budget covers, since the current tick is already partly gone.
     const auto ticks = static_cast<std::uint64_t>(std::ceil(budgetSeconds / tickSeconds)) + 1u;
     wasmtime_context_set_epoch_deadline(mContext, ticks);
+}
+
+void WasmEffect::BeginSetupBudget()
+{
+    mSetupDeadline = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                                            std::chrono::duration<double>(kSetupBudgetSeconds));
+}
+
+void WasmEffect::ArmSetupDeadline()
+{
+    // A call that starts with the budget spent still gets a tick, and traps on it.
+    const double left = std::chrono::duration<double>(mSetupDeadline - std::chrono::steady_clock::now()).count();
+    ArmGuestDeadline(std::max(left, 0.0));
 }
 
 std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::filesystem::path& modulePath,
@@ -635,7 +924,20 @@ std::optional<WasmModuleDescriptor> WasmEffect::InspectModuleFile(const std::fil
         return std::nullopt;
     }
 
+    // Refused unread, as LoadResources does.
+    if (std::error_code sizeError; std::filesystem::file_size(modulePath, sizeError) > kMaxModuleBytes && !sizeError)
+    {
+        if (error)
+        {
+            *error =
+                "WASM module is larger than the " + Megabytes(static_cast<std::int64_t>(kMaxModuleBytes)) + " limit.";
+        }
+
+        return std::nullopt;
+    }
+
     WasmEffect probe;
+    probe.mIsProbe = true;
     probe.mModuleBytes = guitarfx::util::ReadFileBytes(modulePath);
     probe.mModulePath = modulePath;
 
@@ -869,10 +1171,14 @@ void WasmEffect::Prepare(double sampleRate, int maxBlockSize)
     mSampleRate = sampleRate;
     mMaxBlockSize = maxBlockSize;
     mLatencySamples = 0;
-    mDryLeft.assign(static_cast<std::size_t>(maxBlockSize), 0.0f);
-    mDryRight.assign(static_cast<std::size_t>(maxBlockSize), 0.0f);
+    // The guest's block, which is all the dry copy ever holds.
+    const auto guestFrames = static_cast<std::size_t>(std::min(maxBlockSize, kMaxGuestBlockFrames));
+    mDryLeft.assign(guestFrames, 0.0f);
+    mDryRight.assign(guestFrames, 0.0f);
 
-    if (!mModuleBytes.empty())
+    // A module stopped while running stays stopped: a hostile one would otherwise get another go
+    // at the audio thread every time the host prepares.
+    if (!mModuleBytes.empty() && !mStopped)
     {
         RebuildRuntime();
     }
@@ -886,12 +1192,41 @@ void WasmEffect::Reset()
     }
 
     // Reset can come from the audio thread, so it gets a block's budget, not setup's.
-    ArmGuestDeadline(kProcessMinBudgetSeconds);
+    ArmGuestDeadline(IsAnyOfflineRendering() ? kOfflineProcessMinBudgetSeconds : kProcessMinBudgetSeconds);
     wasmtime_val_raw_t unused{};
 
-    if (!CallGuest(mResetFunction, &unused, 0, "reset"))
+    if (!CallGuestOnAudioThread(mResetFunction, &unused, 0, "reset"))
     {
-        mRuntimeReady = false;
+        StopGuest();
+    }
+}
+
+void WasmEffect::StopGuest()
+{
+    mRuntimeReady = false;
+    mStopped = true;
+}
+
+void WasmEffect::WatchGuestLoad(double guestSeconds, double blockSeconds)
+{
+    if (IsAnyOfflineRendering() || blockSeconds <= 0.0)
+    {
+        mGuestLoadAverage = 0.0;
+        mGuestLoadBlocks = 0;
+        return;
+    }
+
+    const double ratio = std::min(guestSeconds / std::max(blockSeconds, kWatchdogMinBlockSeconds), kWatchdogMaxRatio);
+    mGuestLoadAverage += (ratio - mGuestLoadAverage) * kWatchdogWeight;
+    mGuestLoadBlocks = std::min(mGuestLoadBlocks + 1, kWatchdogMinBlocks);
+
+    if (mGuestLoadBlocks >= kWatchdogMinBlocks && mGuestLoadAverage > 1.0)
+    {
+        const int percent = static_cast<int>(std::lround(mGuestLoadAverage * 100.0));
+        StopGuest();
+        SetError("WASM module took longer to process each block than the block lasts (" + std::to_string(percent) +
+                 "% of real time on average), so it was stopped and passes its input through. Load the "
+                 "preset again to retry.");
     }
 }
 
@@ -917,12 +1252,17 @@ void WasmEffect::Process(float** inputs, float** outputs, int numSamples)
     const float inputGain = static_cast<float>(DbToLinear(mInputGainDb));
     const float outputGain = static_cast<float>(DbToLinear(mOutputGainDb));
 
-    if (mRuntimeReady)
+    const bool guestRuns = mRuntimeReady;
+    const double blockSeconds = mSampleRate > 0.0 ? static_cast<double>(numSamples) / mSampleRate : 0.0;
+    std::chrono::steady_clock::time_point guestStart{};
+
+    if (guestRuns)
     {
         // One deadline for the whole block: a guest that hangs traps, and the rest of the block
-        // and every block after it pass dry (InvokeProcessBlock clears mRuntimeReady).
-        const double blockSeconds = mSampleRate > 0.0 ? static_cast<double>(numSamples) / mSampleRate : 0.0;
-        ArmGuestDeadline(std::max(kProcessMinBudgetSeconds, blockSeconds * kProcessBudgetBlockMultiple));
+        // and every block after it pass dry (InvokeProcessBlock stops it).
+        const double floor = IsAnyOfflineRendering() ? kOfflineProcessMinBudgetSeconds : kProcessMinBudgetSeconds;
+        ArmGuestDeadline(std::max(floor, blockSeconds * kProcessBudgetBlockMultiple));
+        guestStart = std::chrono::steady_clock::now();
     }
 
     // The guest takes at most the block size it was prepared for; a longer host block goes through
@@ -971,8 +1311,8 @@ void WasmEffect::Process(float** inputs, float** outputs, int numSamples)
             }
 
             // A sample the guest left non-finite is taken as the input it was given.
-            const float guestLeft = wetLeft ? ClampFinite(wetLeft[i], dryLeft * inputGain) : dryLeft;
-            const float guestRight = wetRight ? ClampFinite(wetRight[i], dryRight * inputGain) : dryRight;
+            const float guestLeft = wetLeft ? ClampGuestSample(wetLeft[i], dryLeft * inputGain) : dryLeft;
+            const float guestRight = wetRight ? ClampGuestSample(wetRight[i], dryRight * inputGain) : dryRight;
             const float mixedLeft = (dryLeft * dryMix) + (guestLeft * wetMix);
             const float mixedRight = (dryRight * dryMix) + (guestRight * wetMix);
 
@@ -988,6 +1328,12 @@ void WasmEffect::Process(float** inputs, float** outputs, int numSamples)
         }
 
         start += frames;
+    }
+
+    if (guestRuns && mRuntimeReady)
+    {
+        WatchGuestLoad(std::chrono::duration<double>(std::chrono::steady_clock::now() - guestStart).count(),
+                       blockSeconds);
     }
 }
 
@@ -1089,13 +1435,18 @@ std::string WasmEffect::GetConfig(const std::string& key) const
 bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::vector<std::filesystem::path>& paths)
 {
     mModuleBytes.clear();
+    mModuleHash.clear();
     mResourceBytesBySlot.clear();
     mModulePath.clear();
     mLatencySamples = 0;
     mRuntimeReady = false;
+    // Loading again is how a stopped module gets another go.
+    mStopped = false;
     mLastError.clear();
     ResetGuestDescriptor();
     TeardownRuntime();
+    ReleaseGuestBytes();
+    ReleaseInstanceSlot();
 
     const std::size_t resourceCount = std::min(refs.size(), paths.size());
 
@@ -1126,6 +1477,8 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
         }
     }
 
+    std::int64_t resourceBytes = 0;
+
     for (std::size_t i = 0; i < resourceCount; ++i)
     {
         const std::size_t slotIndex = ParseResourceSlotIndex(refs[i]).value_or(i);
@@ -1135,30 +1488,44 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
             continue;
         }
 
-        // A resource is read into guest memory, so one that could never fit is refused unread.
-        if (std::error_code sizeError;
-            slotIndex != kModuleSlot &&
-            std::filesystem::file_size(paths[i], sizeError) > static_cast<std::uintmax_t>(kMaxGuestMemoryBytes) &&
-            !sizeError)
+        // Files are checked against the limits before they are read, so an oversized one costs
+        // nothing: the module, then all of this effect's resource files together.
+        std::error_code sizeError;
+        const auto fileSize = std::filesystem::file_size(paths[i], sizeError);
+
+        if (!sizeError && slotIndex == kModuleSlot && fileSize > kMaxModuleBytes)
         {
-            SetError("WASM effect resource is larger than the " + std::to_string(kMaxGuestMemoryBytes / (1024 * 1024)) +
-                     " MB a module's memory can hold: " + util::PathToUtf8(paths[i]));
+            SetError("WASM module is larger than the " + Megabytes(static_cast<std::int64_t>(kMaxModuleBytes)) +
+                     " limit.");
             return false;
         }
 
-        const auto fileBytes = guitarfx::util::ReadFileBytes(paths[i]);
+        if (!sizeError && slotIndex != kModuleSlot &&
+            resourceBytes + static_cast<std::int64_t>(std::min<std::uintmax_t>(fileSize, kMaxGuestResourceBytes + 1)) >
+                kMaxGuestResourceBytes)
+        {
+            SetError("WASM effect resources come to more than the " + Megabytes(kMaxGuestResourceBytes) +
+                     " a Custom Effect may load: " + util::PathToUtf8(paths[i]));
+            return false;
+        }
+
+        auto fileBytes = guitarfx::util::ReadFileBytes(paths[i]);
 
         if (mResourceBytesBySlot.size() <= slotIndex)
         {
             mResourceBytesBySlot.resize(slotIndex + 1);
         }
 
-        mResourceBytesBySlot[slotIndex] = fileBytes;
-
+        // The module's bytes are kept once, in mModuleBytes; its slot here stays empty.
         if (slotIndex == kModuleSlot)
         {
-            mModuleBytes = fileBytes;
+            mModuleBytes = std::move(fileBytes);
             mModulePath = paths[i];
+        }
+        else
+        {
+            resourceBytes += static_cast<std::int64_t>(fileBytes.size());
+            mResourceBytesBySlot[slotIndex] = std::move(fileBytes);
         }
     }
 
@@ -1168,15 +1535,31 @@ bool WasmEffect::LoadResources(const std::vector<ResourceRef>& refs, const std::
         return false;
     }
 
-    if (!BuildRuntimeOnly())
+    // Checked again on what was read: a file can grow between its size check and its read.
+    if (mModuleBytes.size() > kMaxModuleBytes || resourceBytes > kMaxGuestResourceBytes)
     {
+        SetError("WASM module or its resources grew past their limit while loading.");
+        mModuleBytes.clear();
+        mResourceBytesBySlot.clear();
         return false;
     }
 
-    if (!LoadGuestDescriptor())
-    {
+    // An effect that fails to load holds no share of the process's limits.
+    const auto failLoad = [this]() {
         TeardownRuntime();
+        ReleaseGuestBytes();
+        ReleaseInstanceSlot();
         return false;
+    };
+
+    if (!AcquireInstanceSlot() || !AccountGuestBytes(resourceBytes + static_cast<std::int64_t>(mModuleBytes.size()), 0))
+    {
+        return failLoad();
+    }
+
+    if (!BuildRuntimeOnly() || !LoadGuestDescriptor())
+    {
+        return failLoad();
     }
 
     TeardownRuntime();
@@ -1303,25 +1686,31 @@ bool WasmEffect::RebuildRuntime()
 {
     mRuntimeReady = false;
     mLatencySamples = 0;
+    mGuestLoadAverage = 0.0;
+    mGuestLoadBlocks = 0;
 
     if (!BuildRuntimeOnly())
     {
         return false;
     }
 
-    if (!LoadGuestDescriptor())
+    if (!LoadGuestDescriptor() || !InvokePrepare())
     {
         TeardownRuntime();
         return false;
     }
 
-    if (!InvokePrepare())
+    const auto latency = QueryLatencySamples();
+
+    // Prepare is where a module takes its memory, and process may not grow it, so this is what
+    // the module holds from now on.
+    if (!latency || !AccountGuestBytes(mAccountedResourceBytes, static_cast<std::int64_t>(mPreparedMemoryBytes)))
     {
         TeardownRuntime();
         return false;
     }
 
-    mLatencySamples = QueryLatencySamples();
+    mLatencySamples = *latency;
     mRuntimeReady = true;
     mLastError.clear();
     return true;
@@ -1357,13 +1746,28 @@ bool WasmEffect::BuildRuntimeOnly()
 
     if (mModuleBytes.size() > kMaxModuleBytes)
     {
-        SetError("WASM module is larger than the " + std::to_string(kMaxModuleBytes / (1024u * 1024u)) + " MB limit.");
+        SetError("WASM module is larger than the " + Megabytes(static_cast<std::int64_t>(kMaxModuleBytes)) + " limit.");
         return false;
     }
 
-    if (wasmtime_error_t* error = wasmtime_module_new(mEngine, mModuleBytes.data(), mModuleBytes.size(), &mModule))
+    if (mModuleHash.empty())
     {
-        SetError(std::string("Failed to compile WASM module: ") + TakeErrorMessage(error));
+        mModuleHash = util::Sha256Hex(mModuleBytes);
+    }
+
+    if (SetupTimedOut(mModuleHash))
+    {
+        SetError("WASM module ran past its time limit while loading earlier in this session, so it is not loaded "
+                 "again until the app restarts.");
+        return false;
+    }
+
+    // Every load's setup calls, from the start function on, share this budget.
+    BeginSetupBudget();
+
+    if (std::string compileError; !(mModule = mRuntime->CompiledModule(mModuleHash, mModuleBytes, compileError)))
+    {
+        SetError("Failed to compile WASM module: " + compileError);
         TeardownRuntime();
         return false;
     }
@@ -1449,7 +1853,7 @@ bool WasmEffect::BuildRuntimeOnly()
     wasm_trap_t* trap = nullptr;
 
     // Instantiation runs the module's start function, so it is the first call that needs a deadline.
-    ArmGuestDeadline(kSetupBudgetSeconds);
+    ArmSetupDeadline();
 
     if (wasmtime_error_t* error = wasmtime_linker_instantiate(mLinker, mContext, mModule, &mInstance, &trap))
     {
@@ -1460,6 +1864,11 @@ bool WasmEffect::BuildRuntimeOnly()
 
     if (trap)
     {
+        if (IsInterruptTrap(trap))
+        {
+            MarkSetupTimedOut(mModuleHash);
+        }
+
         SetError(std::string("Failed to instantiate WASM module: ") + TakeTrapMessage(trap));
         TeardownRuntime();
         return false;
@@ -1599,7 +2008,38 @@ bool WasmEffect::CallGuest(wasmtime_func_t& function, wasmtime_val_raw_t* argsAn
 
     if (trap)
     {
+        // Out of time in a setup call: remembered, so the next load doesn't spend the budget again.
+        if (!mInAudioThreadCall && IsInterruptTrap(trap) && !mModuleHash.empty())
+        {
+            MarkSetupTimedOut(mModuleHash);
+        }
+
         SetError(std::string("WASM ") + what + " trapped: " + TakeTrapMessage(trap));
+        return false;
+    }
+
+    return true;
+}
+
+bool WasmEffect::CallGuestOnAudioThread(wasmtime_func_t& function, wasmtime_val_raw_t* argsAndResults,
+                                        std::size_t count, const char* what)
+{
+    mInAudioThreadCall = true;
+    const bool called = CallGuest(function, argsAndResults, count, what);
+    mInAudioThreadCall = false;
+
+    if (!called)
+    {
+        return false;
+    }
+
+    // Growing memory on the audio thread is a system call, and memory past what prepare took
+    // would go uncounted.
+    if (wasmtime_memory_data_size(mContext, &mGuestMemory) != mPreparedMemoryBytes)
+    {
+        SetError(std::string("WASM ") + what +
+                 " grew the module's memory, which is not allowed on the audio thread; take all the memory the "
+                 "module needs in audiofx_prepare.");
         return false;
     }
 
@@ -1609,7 +2049,7 @@ bool WasmEffect::CallGuest(wasmtime_func_t& function, wasmtime_val_raw_t* argsAn
 // Only for a function LoadFunctionExport checked as () -> i32.
 std::optional<std::int32_t> WasmEffect::CallGuestI32(wasmtime_func_t& function, const char* functionName)
 {
-    ArmGuestDeadline(kSetupBudgetSeconds);
+    ArmSetupDeadline();
     wasmtime_val_raw_t result{};
 
     if (!CallGuest(function, &result, 1, (std::string("call to '") + functionName + "'").c_str()))
@@ -1704,8 +2144,9 @@ bool WasmEffect::InvokePrepare()
 
     std::array<wasmtime_val_raw_t, 2> values{};
     values[0].f32 = static_cast<float>(mSampleRate);
-    values[1].i32 = static_cast<int32_t>(mMaxBlockSize);
-    ArmGuestDeadline(kSetupBudgetSeconds);
+    // The guest's block, never the host's own when that is longer: Process splits a long block.
+    values[1].i32 = static_cast<int32_t>(std::min(mMaxBlockSize, kMaxGuestBlockFrames));
+    ArmSetupDeadline();
 
     if (!CallGuest(mPrepareFunction, values.data(), values.size(), "prepare"))
     {
@@ -1737,7 +2178,7 @@ bool WasmEffect::BindGuestBuffer()
     }
 
     const std::size_t memorySize = mHasGuestMemory ? wasmtime_memory_data_size(mContext, &mGuestMemory) : 0;
-    const auto frames = static_cast<std::size_t>(std::max(mMaxBlockSize, 0));
+    const auto frames = static_cast<std::size_t>(std::clamp(mMaxBlockSize, 0, kMaxGuestBlockFrames));
     const std::size_t bytes = 2u * frames * sizeof(float);
 
     if (*pointer < 0 || (*pointer % static_cast<int32_t>(alignof(float))) != 0 ||
@@ -1751,6 +2192,7 @@ bool WasmEffect::BindGuestBuffer()
 
     mGuestBufferOffset = static_cast<std::size_t>(*pointer);
     mGuestBlockFrames = static_cast<int>(frames);
+    mPreparedMemoryBytes = memorySize;
     return true;
 }
 
@@ -1776,9 +2218,9 @@ bool WasmEffect::InvokeProcessBlock(const float* left, const float* right, int f
     wasmtime_val_raw_t value{};
     value.i32 = frames;
 
-    if (!CallGuest(mProcessFunction, &value, 1, "process"))
+    if (!CallGuestOnAudioThread(mProcessFunction, &value, 1, "process"))
     {
-        mRuntimeReady = false;
+        StopGuest();
         return false;
     }
 
@@ -1788,7 +2230,7 @@ bool WasmEffect::InvokeProcessBlock(const float* left, const float* right, int f
     return true;
 }
 
-int WasmEffect::QueryLatencySamples()
+std::optional<int> WasmEffect::QueryLatencySamples()
 {
     if (!mHasLatencyFunction || !mContext)
     {
@@ -1796,7 +2238,22 @@ int WasmEffect::QueryLatencySamples()
     }
 
     const auto latencySamples = CallGuestI32(mLatencyFunction, "audiofx_get_latency_samples");
-    return latencySamples ? std::max(*latencySamples, 0) : 0;
+
+    if (!latencySamples)
+    {
+        return 0;
+    }
+
+    // The figure reaches the DAW's delay compensation and the chain's latency sums, so a huge one
+    // would hold every track back or overflow them.
+    if (*latencySamples > kMaxGuestLatencySamples)
+    {
+        SetError("WASM module reports " + std::to_string(*latencySamples) + " samples of latency; the limit is " +
+                 std::to_string(kMaxGuestLatencySamples) + ".");
+        return std::nullopt;
+    }
+
+    return std::max(*latencySamples, 0);
 }
 
 bool WasmEffect::LoadGuestDescriptor()
@@ -1945,6 +2402,10 @@ void WasmEffect::TeardownRuntime()
     mGuestMemory = {};
     mGuestBufferOffset = 0;
     mGuestBlockFrames = 0;
+    mPreparedMemoryBytes = 0;
+    mInAudioThreadCall = false;
+    // The guest's memory goes with its store; its files stay counted until they are let go.
+    AccountGuestBytes(mAccountedResourceBytes, 0);
     mHasInstance = false;
     mHasGuestMemory = false;
     mHasPrepareFunction = false;

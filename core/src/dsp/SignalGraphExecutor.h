@@ -444,7 +444,12 @@ class SignalGraphExecutor
         return mLastTotalProcessingTimeUs.load(std::memory_order_relaxed);
     }
 
-    /// Returns the enabled-node longest-path latency through the graph.
+    /// The most GetTotalLatencySamples reports: a quarter of int's range, so the global chain's
+    /// three graphs added together still fit.
+    static constexpr std::int64_t kMaxReportedLatencySamples = std::numeric_limits<int>::max() / 4;
+
+    /// Returns the enabled-node longest-path latency through the graph, at most
+    /// kMaxReportedLatencySamples.
     [[nodiscard]] int GetTotalLatencySamples() const;
 
   private:

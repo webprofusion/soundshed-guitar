@@ -128,6 +128,9 @@ PluginController::~PluginController()
     // Tasks this posted to the message thread that have not run yet find it gone.
     mAliveForPostedTasks.reset();
 
+    // An instance unloaded mid-bounce no longer counts as rendering offline.
+    SetOfflineRendering(false);
+
     // Before anything else goes: a restore or program change the host stopped waiting for can
     // still be queued for the message thread, or running there.
     mHostStateRelay->Shutdown();

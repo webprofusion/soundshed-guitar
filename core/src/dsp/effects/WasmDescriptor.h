@@ -20,6 +20,11 @@ inline constexpr const char* kAbiMigrationHint =
 
 // Strings a module declares about itself reach the UI and presets; bound their size.
 inline constexpr std::size_t kMaxDescriptorTextLength = 1000;
+// Entries (key=value lines) in one descriptor: every one is kept in the node's config and sent to
+// the UI. A full descriptor of 64 params and 16 resources needs well under a thousand.
+inline constexpr std::size_t kMaxDescriptorEntries = 2048;
+// Choices one param's labels may name; each is a row in a dropdown.
+inline constexpr std::size_t kMaxParamLabels = 256;
 
 [[nodiscard]] inline bool IsAsciiLetter(char ch)
 {

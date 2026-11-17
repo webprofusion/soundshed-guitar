@@ -1223,11 +1223,13 @@ SignalGraphExecutor::DSPPerformanceStats SignalGraphExecutor::GetPerformanceStat
 
 int SignalGraphExecutor::GetTotalLatencySamples() const
 {
-    std::map<std::string, int> cumulativeLatencyByNode;
+    // Summed wide and clamped: a node's latency is its own word (a Custom Effect's, its module's),
+    // and a chain of large ones must not overflow an int.
+    std::map<std::string, std::int64_t> cumulativeLatencyByNode;
 
     for (const auto& nodeId : mExecutionOrder)
     {
-        int maxIncomingLatency = 0;
+        std::int64_t maxIncomingLatency = 0;
 
         if (auto incomingIt = mIncomingEdgesByNode.find(nodeId); incomingIt != mIncomingEdgesByNode.end())
         {
@@ -1248,30 +1250,30 @@ int SignalGraphExecutor::GetTotalLatencySamples() const
             }
         }
 
-        int ownLatency = 0;
+        std::int64_t ownLatency = 0;
         auto it = mNodeStates.find(nodeId);
 
         if (it != mNodeStates.end() && it->second.processor && it->second.processor->IsEnabled())
         {
-            ownLatency = it->second.processor->GetLatencySamples();
+            ownLatency = std::max(it->second.processor->GetLatencySamples(), 0);
         }
 
-        cumulativeLatencyByNode[nodeId] = maxIncomingLatency + ownLatency;
+        cumulativeLatencyByNode[nodeId] = std::min(maxIncomingLatency + ownLatency, kMaxReportedLatencySamples);
     }
 
     if (auto outputIt = cumulativeLatencyByNode.find("__output__"); outputIt != cumulativeLatencyByNode.end())
     {
-        return outputIt->second;
+        return static_cast<int>(outputIt->second);
     }
 
-    int maxLatency = 0;
+    std::int64_t maxLatency = 0;
 
     for (const auto& [_, latency] : cumulativeLatencyByNode)
     {
         maxLatency = std::max(maxLatency, latency);
     }
 
-    return maxLatency;
+    return static_cast<int>(maxLatency);
 }
 
 std::vector<SignalGraphExecutor::NodeSignalLevel> SignalGraphExecutor::GetNodeSignalLevels() const

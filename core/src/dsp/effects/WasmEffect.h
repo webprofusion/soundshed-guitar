@@ -5,6 +5,7 @@
 #include "dsp/EffectRegistry.h"
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <initializer_list>
@@ -54,9 +55,16 @@ class WasmSharedRuntime;
 // modules are refused.
 // Every call either way skips Wasmtime's per-call type checks (the unchecked API): each export's
 // signature is checked once when the module loads, and the linker checks the module's imports.
-// What is left is bounded here: every call into the guest has an epoch deadline (a guest that
-// loops traps and the node bypasses), the store caps memory and tables, the wasm stack is capped
-// below the smallest audio-thread stack, and modules load only while Custom Effects are enabled.
+// What is left is bounded here, on the assumption that a module may be written to harm the host:
+// - every call into the guest has an epoch deadline, short on the audio thread; a load's setup
+//   calls share one budget, and a module that runs out of it is not loaded again this session;
+// - a CPU watchdog stops a module whose blocks take longer than real time on average, and a
+//   module stopped while running stays stopped until it is loaded again;
+// - each module compiles once per process (by hash), and is at most kMaxModuleBytes;
+// - memory and tables are capped per store, and memory and resource files across the process;
+// - process and reset may only read params and tempo, and may not grow memory;
+// - output is clamped, reported latency is capped, the wasm stack is capped below the smallest
+//   audio-thread stack, and modules load only while Custom Effects are enabled.
 class WasmEffect final : public EffectProcessor
 {
   public:
@@ -73,15 +81,41 @@ class WasmEffect final : public EffectProcessor
     // stays with its resource when a new version of the module declares them in another order.
     static constexpr const char* kResourceIdsConfigKey = "wasmResourceIds";
 
-    static constexpr std::size_t kMaxModuleBytes = 32u * 1024u * 1024u;
-    static constexpr std::int64_t kMaxGuestMemoryBytes = 256ll * 1024 * 1024;
+    // Limits a module is held to, written for one that is out to harm the host. A 32-bit build
+    // runs modules in Wasmtime's interpreter, in an address space it shares with the DAW, so it
+    // gets less memory and fewer instances.
+    static constexpr bool kSmallAddressSpace = sizeof(void*) < 8;
+    // Compiling is the one step no deadline reaches, and its cost grows with the module; real
+    // modules are well under a megabyte.
+    static constexpr std::size_t kMaxModuleBytes = 4u * 1024u * 1024u;
+    static constexpr std::int64_t kMaxGuestMemoryBytes = (kSmallAddressSpace ? 32ll : 64ll) * 1024 * 1024;
+    // All of one instance's resource files together.
+    static constexpr std::int64_t kMaxGuestResourceBytes = (kSmallAddressSpace ? 16ll : 64ll) * 1024 * 1024;
+    // Guest memory (as prepare leaves it) and resource files, over every Custom Effect in the
+    // process, plugin instances included.
+    static constexpr std::int64_t kMaxTotalGuestBytes = (kSmallAddressSpace ? 256ll : 2048ll) * 1024 * 1024;
+    // Custom Effects with a module loaded, over the process; a dual-mono node is two.
+    static constexpr std::size_t kMaxLiveInstances = kSmallAddressSpace ? 16 : 64;
     static constexpr std::int64_t kMaxGuestTableElements = 100000;
-    static constexpr std::size_t kMaxGuestStackBytes = 256u * 1024u;
+    static constexpr std::size_t kMaxGuestStackBytes = 128u * 1024u;
+    // The most frames audiofx_prepare is told to expect; a longer host block goes in pieces.
+    static constexpr int kMaxGuestBlockFrames = 4096;
+    // The most latency a module may report (a second at 192 kHz); more is refused at load. In
+    // samples, not time, so a load at one sample rate and a prepare at another agree.
+    static constexpr std::int32_t kMaxGuestLatencySamples = 192000;
+    // The most a module's output sample may be (+12 dBFS); a larger one is clamped to it.
+    static constexpr float kMaxGuestOutputSample = 4.0f;
 
     // Process-wide, from the Custom Effects feature setting. While it is off no module is compiled
     // or run, whatever a preset, archive or project asks for.
     static void SetHostingEnabled(bool enabled);
     [[nodiscard]] static bool IsHostingEnabled();
+
+    // Process-wide count of plugin instances the host is rendering offline. While any is, a block
+    // may take longer than real time: the CPU watchdog stands down and the block deadline is a
+    // generous one. Called on a change of mode only.
+    static void NoteOfflineRendering(bool offline);
+    [[nodiscard]] static bool IsAnyOfflineRendering();
 
     // A module path on a network share is refused before anything touches it: opening one would
     // fetch code from another machine, and on Windows send the user's credentials to it.
@@ -162,6 +196,14 @@ class WasmEffect final : public EffectProcessor
     // never gave.
     const std::vector<uint8_t>* GuestResourceBytes(std::int32_t handle) const;
 
+    // True while audiofx_process or audiofx_reset runs, where only param_value and tempo_bpm may
+    // be called: the lookups and resource reads allocate or copy without bound, and the deadline
+    // cannot stop a host call part-way.
+    [[nodiscard]] bool InAudioThreadCall() const
+    {
+        return mInAudioThreadCall;
+    }
+
   private:
     bool LoadGuestDescriptor();
     bool RebuildRuntime();
@@ -176,14 +218,33 @@ class WasmEffect final : public EffectProcessor
     std::optional<std::int32_t> CallGuestI32(wasmtime_func_t& function, const char* functionName);
     // One unchecked call; false, with lastError set, if it failed or trapped.
     bool CallGuest(wasmtime_func_t& function, wasmtime_val_raw_t* argsAndResults, std::size_t count, const char* what);
+    // An audiofx_process or audiofx_reset call: as CallGuest, and the module must leave its memory
+    // the size prepare left it.
+    bool CallGuestOnAudioThread(wasmtime_func_t& function, wasmtime_val_raw_t* argsAndResults, std::size_t count,
+                                const char* what);
     void ArmGuestDeadline(double budgetSeconds);
+    // A load's setup calls (start function, descriptor, prepare, buffer, latency) share one budget,
+    // started by BeginSetupBudget; each is armed with what is left of it.
+    void BeginSetupBudget();
+    void ArmSetupDeadline();
     bool InvokePrepare();
     bool BindGuestBuffer();
     // Runs one block of at most mGuestBlockFrames through the guest, in place in its buffer. The
     // pointers are the buffer's two channels, valid until the guest next runs.
     bool InvokeProcessBlock(const float* left, const float* right, int frames, float inputGain, float*& wetLeft,
                             float*& wetRight);
-    int QueryLatencySamples();
+    // Stops the module for good (until the next LoadResources): Prepare no longer revives it.
+    void StopGuest();
+    // The CPU watchdog, after a block the guest ran in `guestSeconds` of a block `blockSeconds`
+    // long. A module whose average stays above real time is stopped.
+    void WatchGuestLoad(double guestSeconds, double blockSeconds);
+    // Latency, or nothing (lastError set) for one past kMaxGuestLatencySeconds.
+    std::optional<int> QueryLatencySamples();
+    // The process-wide instance count and memory budget this effect holds a share of.
+    bool AcquireInstanceSlot();
+    void ReleaseInstanceSlot();
+    bool AccountGuestBytes(std::int64_t resourceBytes, std::int64_t memoryBytes);
+    void ReleaseGuestBytes();
     void ResetGuestDescriptor();
     void ApplyGuestDescriptor(const WasmModuleDescriptor& descriptor);
     void BindGuestResources();
@@ -242,6 +303,23 @@ class WasmEffect final : public EffectProcessor
     bool mHasResetFunction = false;
     bool mHasProcessFunction = false;
     bool mHasLatencyFunction = false;
+
+    // Guest memory as prepare left it; a process or reset that changes it stops the module.
+    std::size_t mPreparedMemoryBytes = 0;
+    // The SHA-256 of mModuleBytes: the compiled-module cache's key.
+    std::string mModuleHash;
+    std::chrono::steady_clock::time_point mSetupDeadline{};
+    bool mInAudioThreadCall = false;
+    // Set when the module faulted or was stopped while running; cleared by LoadResources.
+    bool mStopped = false;
+    // The watchdog's moving average of guest time over block time, and blocks it has seen.
+    double mGuestLoadAverage = 0.0;
+    int mGuestLoadBlocks = 0;
+    // InspectModuleFile's probe holds no instance slot: it lives for one call on one thread.
+    bool mIsProbe = false;
+    bool mHoldsInstanceSlot = false;
+    std::int64_t mAccountedResourceBytes = 0;
+    std::int64_t mAccountedMemoryBytes = 0;
 
     int mLatencySamples = 0;
     bool mRuntimeReady = false;

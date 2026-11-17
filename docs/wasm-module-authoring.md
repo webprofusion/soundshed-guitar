@@ -51,6 +51,10 @@ hard-codes `0, 1, 2` instead of asking breaks on its first run. Calling `param_v
 `resource_size` or `resource_read` with a handle the host never gave traps, and the effect passes
 audio through dry until it is loaded again.
 
+**On the audio thread, only `param_value` and `tempo_bpm`.** `audiofx_process` and
+`audiofx_reset` may not call `param_handle`, `resource_handle`, `resource_size` or `resource_read`:
+the lookups and reads belong in `audiofx_prepare`, and a call to one from the audio thread traps.
+
 ### How a block runs
 
 1. **Load.** The host checks the exports and imports, instantiates the module, calls
@@ -75,10 +79,9 @@ audiofx_buffer_ptr()                    + 4 * maxBlockSize
   returned. Memory never shrinks, so once it fits it keeps fitting.
 - It is stereo in and stereo out. If the node has only one live input channel, the host copies it
   to both channels of the buffer first.
-- `maxBlockSize` is the host's largest block. It is usually between 32 and 4096 frames, but an
-  offline render can ask for more. Either grow `memory` to fit, as the WAT example does, or size a
-  static buffer generously (the C example takes 16384 frames) and return a non-zero status for
-  anything bigger.
+- `maxBlockSize` is the host's largest block, but never more than 4096: a longer host block, as an
+  offline render may use, reaches the module in pieces. So a static buffer of 4096 frames per
+  channel always fits, as in the C example; or grow `memory` in prepare, as the WAT example does.
 
 What the host does around the module:
 
@@ -91,25 +94,44 @@ What the host does around the module:
 - **Read params once per block**, at the start of `audiofx_process`. Each import call costs about as
   much as a few dozen multiplies, and the value doesn't change within a block.
 - **A non-finite output sample** (NaN or infinity) is replaced by the input sample the module was
-  given. Don't rely on it: a module that produces them is broken.
+  given, and a finite one is clamped to ±4 (+12 dBFS). Don't rely on either: a module that
+  produces them is broken.
 
 ### Limits and trust
 
 A module is code from whoever wrote it, so the host bounds what it can do. It runs in Wasmtime with
 only the `host` imports above: no WASI, no files, no network. On top of that:
 
-- **Time.** Every call has a deadline. `audiofx_process` gets, per host block, four times the
-  block's duration or 200 ms, whichever is longer. Instantiation (the start function), the
-  descriptor exports, `audiofx_prepare` and `audiofx_get_latency_samples` get 5 s. `audiofx_reset`
-  gets 200 ms, because it can run on the audio thread. A module that runs past its deadline traps,
-  and the node passes audio through dry until it is loaded again.
-- **Memory.** 256 MiB of linear memory, one memory, and up to 100,000 table elements. A module that
-  declares more fails to instantiate; `memory.grow` past the limit returns `-1`. A resource file
-  larger than guest memory can hold is refused at load.
-- **Stack.** 256 KiB of wasm stack. Deep recursion traps instead of overflowing the audio thread's
+- **Time on the audio thread.** `audiofx_process` gets, per host block, four times the block's
+  duration or 30 ms, whichever is longer (200 ms while the DAW renders offline). `audiofx_reset`
+  gets 30 ms. A module that runs past its deadline traps.
+- **CPU.** A module that takes longer to process its blocks than the blocks last, on average over
+  the last few dozen blocks, is stopped. While the DAW renders offline this check is off, since a
+  bounce may run slower than real time.
+- **Time to load.** Instantiation (the start function), the descriptor exports, `audiofx_prepare`,
+  `audiofx_buffer_ptr` and `audiofx_get_latency_samples` share one budget per load: 2 s (8 s in the
+  32-bit Windows build, which interprets modules). A module that runs out of it is not loaded again
+  until the app restarts.
+- **Stopped stays stopped.** After a trap, a deadline or the CPU check stops a module, the node
+  passes its input through, and preparing again (as a DAW does often) doesn't revive it. Loading
+  the preset or module again does.
+- **Memory.** 64 MiB of linear memory (32 MiB in the 32-bit build), one memory, and up to 100,000
+  table elements. A module that declares more fails to instantiate; `memory.grow` past the limit
+  returns `-1`. Take all the memory you need in `audiofx_prepare`: a module whose memory grows in
+  `audiofx_process` or `audiofx_reset` is stopped.
+- **Resources.** One effect's resource files together are at most 64 MiB (16 MiB in the 32-bit
+  build); more is refused at load, before the files are read.
+- **Shared limits.** At most 64 Custom Effects run at once in the app or a DAW (16 in the 32-bit
+  build), a dual-mono node counting as two, and together their memory (as prepare leaves it) and
+  files are at most 2 GiB (256 MiB). An effect past either limit passes its input through and says
+  why.
+- **Latency.** `audiofx_get_latency_samples` may report at most 192,000 samples (a second at
+  192 kHz). A module that reports more is refused at load.
+- **Stack.** 128 KiB of wasm stack. Deep recursion traps instead of overflowing the audio thread's
   own stack.
-- **Size.** The module file is at most 32 MiB and the descriptor at most 2 MiB. Each descriptor
-  value is cut at 1,000 characters.
+- **Size.** The module file is at most 4 MiB and the descriptor at most 2 MiB, with at most 2,048
+  entries. Each descriptor value is cut at 1,000 characters, and a param may have at most 256
+  labels. Each distinct module is compiled once per run of the app, however many nodes use it.
 - **Features.** Threads, shared memory, GC, exceptions, stack switching and memory64 are off. SIMD,
   relaxed SIMD, bulk memory, multi-value, reference types and tail calls are on.
 - **What the descriptor can say.** `effect.category` must be 1-40 letters, digits, spaces, `-` or
@@ -503,13 +525,13 @@ func main() {}
 ### C
 
 Build with `clang --target=wasm32 -O2 -nostdlib -Wl,--no-entry -o ai_gain.wasm ai_gain.c`. There is
-no libc, so the buffer is static, sized for 16384 frames, and prepare refuses a larger block.
+no libc, so the buffer is static, sized for the 4096 frames the host's blocks are cut to.
 `wasm-ld` exports `memory` by default.
 
 ```c
 #include <stdint.h>
 
-#define MAX_FRAMES 16384
+#define MAX_FRAMES 4096
 
 __attribute__((import_module("host"), import_name("param_handle")))
 int32_t param_handle(const char *id, int32_t id_len);
@@ -579,8 +601,8 @@ The pattern in every language is the same:
 - **In `audiofx_prepare`:** call `param_handle` once per param id and `resource_handle` once per
   resource id, and keep the handles. Return non-zero if any is `-1`: it means the code and the
   descriptor disagree about an id. Read each resource into your own memory here, with
-  `resource_size` and one `resource_read`, and parse it. Prepare runs off the audio thread with a 5
-  s budget, which is enough for real work.
+  `resource_size` and one `resource_read`, and parse it. Prepare runs off the audio thread, and a
+  load's setup calls share a 2 s budget, which is enough for real work.
 - **At the start of `audiofx_process`:** call `param_value` once per param, and `tempo_bpm` if you
   use the tempo, then process the block.
 
@@ -624,7 +646,8 @@ Before you accept a module, check:
 6. `audiofx_buffer_ptr` returns a 4-byte aligned address with `8 * maxBlockSize` bytes of memory
    behind it after prepare, and `audiofx_process` reads and writes only the first `frames` samples
    of each channel.
-7. Params are read once per block and clamped to their range.
+7. Params are read once per block and clamped to their range. `audiofx_process` and
+   `audiofx_reset` call no import but `param_value` and `tempo_bpm`, and never grow memory.
 8. The output stays finite (no NaN or infinity) for any param value in range and for silence, a
    sine and a full-scale signal.
 
@@ -674,10 +697,13 @@ Imports, from module "host" only, and only the ones you use:
 Rules:
 - In audiofx_prepare, call param_handle once per param id and keep the handles; return 1 if any is
   -1. Never hard-code a handle number. Size or place the I/O buffer for maxBlockSize frames here
-  (grow memory if needed) and return 2 if you can't.
+  (at most 4096; grow memory if needed) and return 2 if you can't. Take all the memory the module
+  will need here.
 - In audiofx_process, call param_value once per param at the start of the block and clamp each
   value to its declared range; the host does not clamp.
 - Read resources in audiofx_prepare with resource_size and resource_read into your own memory.
+- audiofx_process and audiofx_reset may call only param_value and tempo_bpm, and must not grow
+  memory: anything else there stops the module.
 - The host applies input gain before the module and dry/wet mix and output gain after it. Do not
   declare params with the ids mix, inputGainDb, outputGainDb or bpm.
 - Stereo in, stereo out. Keep the output finite for every param value in range.

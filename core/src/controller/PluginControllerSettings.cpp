@@ -399,7 +399,20 @@ void PluginController::SetOfflineRendering(bool offline)
     // whatever thread the host switched from (VST3's process() among them). Every block the
     // host asked for meanwhile came back silent, which a bounce writes into the file, so
     // renders lost up to a second at the start.
-    mOfflineRendering.store(offline, std::memory_order_relaxed);
+    const bool wasOffline = mOfflineRendering.exchange(offline, std::memory_order_relaxed);
+
+#if defined(GUITARFX_ENABLE_WASM_EFFECTS)
+
+    // Custom Effects relax their real-time limits while any instance renders offline; told on a
+    // change only, since VST3 calls this every block.
+    if (wasOffline != offline)
+    {
+        WasmEffect::NoteOfflineRendering(offline);
+    }
+
+#else
+    (void)wasOffline;
+#endif
 }
 
 void PluginController::PushNamQualityToDsp()
