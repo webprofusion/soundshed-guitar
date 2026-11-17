@@ -681,6 +681,9 @@ class PluginController
     };
     void BroadcastState(StateScope scope = StateScope::Full);
     void ApplyPreset(const Preset& preset);
+    /// Builds the preset a DAW instance's Initialize() chose to start on, if it is still waiting
+    /// (see mDeferredStartupPreset); nothing otherwise. Message thread.
+    void BuildDeferredStartupPreset();
     /// What ApplyPreset() does to a preset before the engine builds it, shared with the in-slot
     /// rebuild so a working copy comes out the same whether or not other rigs share the mix:
     /// scenes normalised and `sceneId` resolved, WASM descriptors refreshed, legacy NAM level
@@ -1286,6 +1289,21 @@ class PluginController
     /// True while DeserializeState() is restoring host state, during which
     /// SaveAppSettings() and NotifyHostStateChanged() are no-ops. Set only by its scope guard.
     bool mRestoringHostState = false;
+
+    /**
+     * A DAW instance's start-up preset, chosen by Initialize() but not built yet. The project
+     * restore that usually follows at once replaces it, so building it there (models, IRs,
+     * hosted plugins) was work thrown away; plugin scanners never play it at all. While
+     * mDeferStartupBuild is set (in Initialize() only) ApplyPreset() makes the preset the
+     * working copy and parks it here, and BuildDeferredStartupPreset() builds it: from a task
+     * Initialize() posts, from Prepare() on the message thread, or at the end of a restore that
+     * left nothing playing. A restore that brings its own preset or slots supersedes it. Until
+     * then the mixer has no slot, and SnapshotActivePresetConfigs() reports the one it will
+     * have, so a state saved in between restores the same. Message thread only.
+     */
+    std::optional<Preset> mDeferredStartupPreset;
+    bool mDeferStartupBuild = false;
+    bool mBuildingDeferredStartupPreset = false; // the build tells the host nothing: the state was already the preset
 
     /**
      * The user's NAM quality tier, owned by *this* plugin instance.

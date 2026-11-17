@@ -770,6 +770,24 @@ std::string PluginController::PreparePresetForEngine(Preset& preset, const std::
 
 void PluginController::ApplyPreset(const Preset& preset)
 {
+    // Initialize() in a DAW: the working copy now, the engine later (see mDeferredStartupPreset).
+    if (mDeferStartupBuild)
+    {
+        auto chainConfig = mPresetMixer.GetGlobalChainConfig();
+        Preset normalizedPreset = preset;
+        const std::string resolvedSceneId = PreparePresetForEngine(normalizedPreset, mActiveSceneId, chainConfig);
+        std::string presetJson = PresetStorage::SerializeToJson(normalizedPreset);
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mActiveSceneId = resolvedSceneId;
+        mActivePreset = std::move(normalizedPreset);
+        mActivePresetJson = std::move(presetJson);
+        mDeferredStartupPreset = preset;
+        return;
+    }
+
+    // Anything applied supersedes a start-up preset still waiting to be built.
+    mDeferredStartupPreset.reset();
+
     // === Phase 1: Normalize and prepare preset data — no DSP lock needed. ===
     // All work here modifies local copies only; the audio thread is unaffected.
     //
@@ -858,6 +876,36 @@ void PluginController::ApplyPreset(const Preset& preset)
     // plugins over from the chain it replaced, rather than having made each one again.
     mPresetMixer.CompleteInstanceHandOvers();
     NotifyHostStateChanged();
+}
+
+void PluginController::BuildDeferredStartupPreset()
+{
+    if (!mDeferredStartupPreset)
+    {
+        return;
+    }
+
+    const Preset preset = std::move(*mDeferredStartupPreset);
+    mDeferredStartupPreset.reset();
+
+    struct BuildingScope
+    {
+        bool& flag;
+
+        explicit BuildingScope(bool& f) : flag(f)
+        {
+            flag = true;
+        }
+
+        ~BuildingScope()
+        {
+            flag = false;
+        }
+    };
+
+    const BuildingScope building{mBuildingDeferredStartupPreset};
+    ApplyPreset(preset);
+    mPendingStateBroadcast = true;
 }
 
 std::optional<Preset> PluginController::LoadUserPreset(const std::string& presetId) const

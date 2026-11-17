@@ -39,6 +39,15 @@ std::vector<MultiPresetMixer::InstanceConfig> PluginController::SnapshotActivePr
         }
     }
 
+    // A start-up preset not built yet: the slot ApplyPreset() will give it, at the defaults.
+    if (configs.empty() && mDeferredStartupPreset && mActivePreset)
+    {
+        MultiPresetMixer::InstanceConfig cfg;
+        cfg.id = mActivePreset->id.empty() ? "p1" : mActivePreset->id;
+        cfg.name = mActivePreset->name;
+        configs.push_back(std::move(cfg));
+    }
+
     return configs;
 }
 

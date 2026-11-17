@@ -53,6 +53,7 @@ set(TEST_SOURCES
     HarmonizerEffectTests.cpp
     ParamGlideTests.cpp
     SplitterRoutingTests.cpp
+    StartupPresetDeferralTests.cpp
     PresetRetirementTests.cpp
     DemoPreviewLoopTests.cpp
     HostedPluginCaptureLockTests.cpp

@@ -117,7 +117,8 @@ void PluginController::NotifyHostStateChanged()
     // Hosts take that at its word: the project reads as modified the moment it opens, and a
     // host that snapshots plugin state for undo can record the restore, which may be its own
     // undo, as a new step and discard its redo.
-    if (mRestoringHostState)
+    // Likewise building a DAW instance's start-up preset: it was the state already.
+    if (mRestoringHostState || mBuildingDeferredStartupPreset)
     {
         return;
     }
@@ -462,6 +463,10 @@ void PluginController::RestoreHostState(const std::string& json)
 
     const HostStateRestoreScope restoreScope{*this};
 
+    // The start-up preset a DAW instance has not built yet gives way to the project's. Kept for
+    // a state that brings no preset or slots of its own, which plays on what was there.
+    std::optional<Preset> deferredStartupPreset = std::exchange(mDeferredStartupPreset, std::nullopt);
+
     try
     {
         auto state = nlohmann::json::parse(json);
@@ -747,6 +752,11 @@ void PluginController::RestoreHostState(const std::string& json)
     catch (const std::exception&)
     {
         // Ignore malformed state
+    }
+
+    if (deferredStartupPreset && mPresetMixer.GetPresetCount() == 0)
+    {
+        ApplyPreset(*deferredStartupPreset);
     }
 
     mPendingStateBroadcast = true;

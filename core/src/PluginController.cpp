@@ -224,7 +224,22 @@ void PluginController::Initialize()
         std::lock_guard<std::mutex> riffLock(mRiffLibraryMutex);
         mRiffLibraryIndex = LoadRiffLibraryIndex();
     }
+    // In a DAW the project's own state usually lands straight after this; the preset picked here
+    // is built only if nothing replaces it first (see mDeferredStartupPreset).
+    mDeferStartupBuild = !mHost.IsStandalone();
     LoadLastSessionState();
+    mDeferStartupBuild = false;
+
+    if (mDeferredStartupPreset)
+    {
+        mHost.RunOnMainThread([this, alive = std::weak_ptr<const bool>(mAliveForPostedTasks)] {
+            if (!alive.expired())
+            {
+                BuildDeferredStartupPreset();
+            }
+        });
+    }
+
     ApplyInputModeSettingsFromAppSettings();
 
     // What was playing when the app started is the unsaved-changes baseline, not a preset
@@ -270,6 +285,13 @@ void PluginController::Initialize()
 
 void PluginController::Prepare(double sampleRate, int blockSize)
 {
+    // A host that prepares before its message loop has run the build task, or one with no loop
+    // to run it, gets the start-up preset now rather than an empty chain.
+    if (mDeferredStartupPreset && mHost.IsMessageThread())
+    {
+        BuildDeferredStartupPreset();
+    }
+
     bool channelCountsChanged = false;
 
     // A device or bus that now carries two channels can switch dual mono on; its second
