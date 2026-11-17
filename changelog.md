@@ -34,6 +34,7 @@ Every change of branch crossfades over Crossfade (10 ms to start with). Copy, wh
 * Switching away from a preset whose delays and reverbs are all switched off no longer keeps it running for a 4-second tail, and with the global Doubler off (as it is unless you turn it on) the app goes idle after 1 second of silence instead of 5, which saves CPU and battery.
 * IR Cab uses about half the CPU on a mono guitar input with a mono IR, which is the usual case: it now convolves once and plays the result on both sides. It sounds exactly the same.
 * The Graphic EQ no longer spends CPU on bands left at 0 dB, or on bands that are switched off: with two of ten bands set it uses about a fifth of what it did. It sounds exactly the same.
+* The app and each plugin instance start a little faster and with less memory: the factory preset pack is no longer re-read in full and unpacked on every launch when it hasn't changed.
 * In a DAW with the plugin's window closed, a preset switched away from (by automation or a program change) no longer keeps its hosted plugins loaded until you next open the window, which could hold hundreds of MB for a sampler.
 * Updated JUCE to 9.0.5, whose fixes harden how saved and shared data (settings, presets, archives) is read, and the bundled SQLite, JSON, zip and pitch-shifting libraries to their latest releases.
 

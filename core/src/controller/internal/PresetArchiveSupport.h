@@ -52,7 +52,8 @@ struct FactoryArchiveResourceEntry
     std::string type;
     std::string fileName;
     std::string hash;
-    std::vector<std::uint8_t> bytes;
+    std::vector<std::uint8_t> bytes; // empty when parsed without resource bytes
+    std::uint64_t size = 0;          // the file's size, from the zip's directory
 };
 
 struct ParsedFactoryPresetArchive
@@ -129,9 +130,12 @@ struct ZipEntryContent
     const std::vector<std::uint8_t>& zipBytes, std::span<const std::string_view> extensions);
 
 /// Parses an archive's manifest and payload. On failure returns nullopt and
-/// sets `error` to a message suitable for the UI.
+/// sets `error` to a message suitable for the UI. Without `withResourceBytes`,
+/// each resource's file is found and sized from the zip's directory but not
+/// extracted, so its `bytes` stay empty: ExtractZipEntry reads one when needed.
 [[nodiscard]] std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(
-    const std::filesystem::path& archivePath, const std::vector<std::uint8_t>& zipBytes, std::string& error);
+    const std::filesystem::path& archivePath, const std::vector<std::uint8_t>& zipBytes, std::string& error,
+    bool withResourceBytes = true);
 
 /// Rewrites a graph's resource and blend references onto the archive-scoped ids.
 void RemapPresetGraphResources(SignalGraph& graph, const std::unordered_map<std::string, std::string>& resourceIdMap,

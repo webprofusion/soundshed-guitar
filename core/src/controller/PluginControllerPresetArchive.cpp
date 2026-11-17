@@ -25,6 +25,7 @@
 #include "util/PathSanitizer.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -33,6 +34,26 @@ using namespace guitarfx::controller_detail;
 
 namespace guitarfx
 {
+namespace
+{
+/// An archive file's size and write time, which change with any new copy of it: null when either
+/// can't be read.
+nlohmann::json FactoryArchiveFileStamp(const std::filesystem::path& path)
+{
+    std::error_code sizeEc;
+    std::error_code timeEc;
+    const auto size = std::filesystem::file_size(util::LongPathSafe(path), sizeEc);
+    const auto time = std::filesystem::last_write_time(util::LongPathSafe(path), timeEc);
+
+    if (sizeEc || timeEc)
+    {
+        return nullptr;
+    }
+
+    return {{"size", size}, {"time", static_cast<std::int64_t>(time.time_since_epoch().count())}};
+}
+} // namespace
+
 bool PluginController::IsFactoryPresetArchiveLoadingEnabled() const
 {
     const auto it = mAppSettings.find(kFactoryArchiveLoadingEnabledSettingKey);
@@ -591,6 +612,22 @@ void PluginController::LoadFactoryPresetArchives()
             continue;
         }
 
+        const std::string archiveKey = BuildFactoryArchiveKey(entry.path());
+        auto archiveState = factoryArchiveState["archives"].contains(archiveKey) &&
+                                    factoryArchiveState["archives"][archiveKey].is_object()
+                                ? factoryArchiveState["archives"][archiveKey]
+                                : nlohmann::json::object();
+
+        // The same file as last launch, by size and write time, is the one whose hash is stored:
+        // hashing it again read the whole archive, and nothing in it needs extracting unless a
+        // file it put down has gone missing or been cut short. Stamped before the read, so a copy
+        // landing in between is seen as new next time.
+        const auto fileStamp = FactoryArchiveFileStamp(entry.path());
+        const auto storedHash = archiveState.contains("hash") && archiveState["hash"].is_string()
+                                    ? archiveState["hash"].get<std::string>()
+                                    : std::string{};
+        const bool sameFile = !fileStamp.is_null() && !storedHash.empty() &&
+                              archiveState.value("fileStamp", nlohmann::json()) == fileStamp;
         const auto zipBytes = util::ReadFileBytes(entry.path());
 
         if (zipBytes.empty())
@@ -600,7 +637,7 @@ void PluginController::LoadFactoryPresetArchives()
         }
 
         std::string parseError;
-        auto parsedOpt = ParseFactoryPresetArchive(entry.path(), zipBytes, parseError);
+        auto parsedOpt = ParseFactoryPresetArchive(entry.path(), zipBytes, parseError, !sameFile);
 
         if (!parsedOpt)
         {
@@ -610,12 +647,7 @@ void PluginController::LoadFactoryPresetArchives()
         }
 
         auto parsed = std::move(*parsedOpt);
-        const std::string archiveKey = BuildFactoryArchiveKey(entry.path());
-        const std::string archiveHash = mHasher.HashFile(entry.path());
-        auto archiveState = factoryArchiveState["archives"].contains(archiveKey) &&
-                                    factoryArchiveState["archives"][archiveKey].is_object()
-                                ? factoryArchiveState["archives"][archiveKey]
-                                : nlohmann::json::object();
+        const std::string archiveHash = sameFile ? storedHash : mHasher.HashFile(entry.path());
 
         if (!archiveState.contains("presetMappings") || !archiveState["presetMappings"].is_object())
         {
@@ -647,7 +679,7 @@ void PluginController::LoadFactoryPresetArchives()
         std::unordered_map<std::string, std::string> resourceIdMap;
         std::unordered_map<std::string, std::string> blendIdMap;
 
-        for (const auto& resource : parsed.resources)
+        for (auto& resource : parsed.resources)
         {
             const std::string scopedResourceId = BuildScopedFactoryArchiveId(archiveKey, resource.id);
             std::string resolvedName = resource.fileName.empty() ? resource.id : resource.fileName;
@@ -678,8 +710,23 @@ void PluginController::LoadFactoryPresetArchives()
                 // which still repairs a file an older build left cut short.
                 std::error_code sizeEc;
                 const auto existingSize = std::filesystem::file_size(util::LongPathSafe(targetPath), sizeEc);
-                needsWrite = sizeEc || existingSize != resource.bytes.size() ||
+                needsWrite = sizeEc || existingSize != resource.size ||
                              (archiveChanged && !util::FileContentEquals(targetPath, resource.bytes));
+            }
+
+            // Parsed without its bytes (the archive unchanged): extract just this one.
+            if (needsWrite && resource.bytes.size() != resource.size)
+            {
+                if (auto bytes = ExtractZipEntry(zipBytes, "resources/" + resource.fileName))
+                {
+                    resource.bytes = std::move(*bytes);
+                }
+
+                if (resource.bytes.size() != resource.size)
+                {
+                    AppendSessionLog("Factory preset archive resource could not be extracted: " + resource.fileName);
+                    continue;
+                }
             }
 
             if (needsWrite && !WriteFile(targetPath, resource.bytes))
@@ -864,6 +911,7 @@ void PluginController::LoadFactoryPresetArchives()
         UpdateFactoryPresetFolders(Store(), archiveKey, parsed.presetFolders, presetIdMapping, importedPresetIds);
 
         archiveState["hash"] = archiveHash;
+        archiveState["fileStamp"] = fileStamp;
         archiveState["fileName"] = util::PathToUtf8(entry.path().filename());
         factoryArchiveState["archives"][archiveKey] = archiveState;
 

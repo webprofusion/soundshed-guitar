@@ -410,7 +410,7 @@ std::optional<ZipEntryContent> ExtractFirstZipEntryWithExtension(const std::vect
 
 std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::filesystem::path& archivePath,
                                                                     const std::vector<std::uint8_t>& zipBytes,
-                                                                    std::string& error)
+                                                                    std::string& error, bool withResourceBytes)
 {
     mz_zip_archive archive{};
 
@@ -497,14 +497,34 @@ std::optional<ParsedFactoryPresetArchive> ParseFactoryPresetArchive(const std::f
                 continue;
             }
 
-            const auto resourceBytes = ExtractZipEntry(zipBytes, "resources/" + resource.fileName);
+            // From the archive already open, rather than opening it again for each file.
+            const std::string entryName = "resources/" + resource.fileName;
+            const int entryIndex = mz_zip_reader_locate_file(&archive, entryName.c_str(), nullptr, 0);
+            mz_zip_archive_file_stat stat{};
 
-            if (!resourceBytes)
+            if (entryIndex < 0 || !mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(entryIndex), &stat))
             {
-                return finishWithError("Archive resource missing: resources/" + resource.fileName);
+                return finishWithError("Archive resource missing: " + entryName);
             }
 
-            resource.bytes = *resourceBytes;
+            resource.size = stat.m_uncomp_size;
+
+            if (withResourceBytes)
+            {
+                size_t extractedSize = 0;
+                void* extracted =
+                    mz_zip_reader_extract_to_heap(&archive, static_cast<mz_uint>(entryIndex), &extractedSize, 0);
+
+                if (!extracted)
+                {
+                    return finishWithError("Archive resource missing: " + entryName);
+                }
+
+                const auto* data = static_cast<const std::uint8_t*>(extracted);
+                resource.bytes.assign(data, data + extractedSize);
+                mz_free(extracted);
+            }
+
             parsed.resources.push_back(std::move(resource));
         }
     }

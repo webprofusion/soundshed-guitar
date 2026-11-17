@@ -414,6 +414,86 @@ void TestFactoryArchiveKeepsKnownMetadata()
     }
 }
 
+/// A relaunch with the factory archive unchanged (same size and write time) takes its hash from
+/// the last launch instead of reading the whole file again, and extracts only a model that has gone
+/// missing or been cut short. A new copy of the archive is hashed and its models rewritten.
+void TestFactoryArchiveRelaunchSkipsUnchanged()
+{
+    const auto root = Sandbox("factory-relaunch");
+    const auto archive = root / "ui" / "presets" / "factory" / "Quick-Pack.soundshed.presets";
+    const std::string modelName = kHashA + "-Dumble.nam";
+    const auto writeArchive = [&](const Bytes& model) {
+        const nlohmann::json index = {
+            {"formatVersion", 1},
+            {"presets", {PresetJson("gravity-storm", "e2b2c5ca")}},
+            {"resources",
+             {{{"id", "e2b2c5ca"},
+               {"name", "Dumble"},
+               {"category", "amp"},
+               {"type", "nam"},
+               {"fileName", modelName},
+               {"hash", kHashA}}}},
+            {"blends", nlohmann::json::array()},
+        };
+        WriteBytes(archive, BuildZip({{"presets.json", ToBytes(index.dump())}, {"resources/" + modelName, model}}));
+    };
+    const auto launch = [&] {
+        TestHost host(root);
+        guitarfx::PluginController controller(host);
+        controller.Initialize();
+        return controller.GetResourceLibrary().LookupResource("nam", "Quick-Pack__e2b2c5ca");
+    };
+    const auto hashOf = [](const std::optional<guitarfx::LibraryResource>& resource) {
+        return resource && resource->metadata.count("factoryArchiveHash") ? resource->metadata.at("factoryArchiveHash")
+                                                                          : std::string{};
+    };
+
+    writeArchive(kModelA);
+    const auto first = launch();
+    Expect(first && guitarfx::util::ReadFileBytes(first->filePath) == kModelA, "the model is extracted");
+
+    if (!first)
+    {
+        return;
+    }
+
+    // Put a marker where the archive's hash is kept: an unchanged archive must come back with it.
+    {
+        guitarfx::storage::JsonStore store;
+        std::string error;
+        Expect(store.Open(StorePath(root), error), "the test can open the store: " + error);
+        auto state = store.Get(guitarfx::storage::ItemType::kDocument, "factory-archive-state");
+        Expect(state && (*state)["archives"]["Quick-Pack"].contains("fileStamp"),
+               "the archive's size and write time are kept beside its hash");
+
+        if (state)
+        {
+            (*state)["archives"]["Quick-Pack"]["hash"] = "from-last-launch";
+            store.Put(guitarfx::storage::ItemType::kDocument, "factory-archive-state", *state);
+        }
+    }
+
+    Expect(hashOf(launch()) == "from-last-launch", "an unchanged archive is not hashed again");
+
+    std::error_code ec;
+    fs::remove(first->filePath, ec);
+    const auto restored = launch();
+    Expect(restored && guitarfx::util::ReadFileBytes(restored->filePath) == kModelA,
+           "a model deleted since is extracted again");
+
+    WriteBytes(first->filePath, Bytes(kModelA.begin(), kModelA.begin() + 10));
+    const auto repaired = launch();
+    Expect(repaired && guitarfx::util::ReadFileBytes(repaired->filePath) == kModelA, "and so is one cut short");
+
+    // Same size, other bytes: only the write time tells this copy apart.
+    writeArchive(kModelB);
+    fs::last_write_time(archive, fs::last_write_time(archive, ec) + std::chrono::hours(1), ec);
+    const auto updated = launch();
+    Expect(updated && guitarfx::util::ReadFileBytes(updated->filePath) == kModelB,
+           "a new copy of the archive rewrites its model");
+    Expect(!hashOf(updated).empty() && hashOf(updated) != "from-last-launch", "and is hashed");
+}
+
 /// A tone shared from such an export, installed through installPresetArchives.
 void TestToneSharingInstallDropsTheRepeat()
 {
@@ -746,6 +826,7 @@ int main()
     TestLongPathSafe();
     TestFactoryArchiveDropsTheRepeat();
     TestFactoryArchiveKeepsKnownMetadata();
+    TestFactoryArchiveRelaunchSkipsUnchanged();
     TestImportPresetArchiveFile();
     TestToneSharingInstallDropsTheRepeat();
     TestStartupRenamesDoubledFiles();
