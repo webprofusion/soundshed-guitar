@@ -10,12 +10,14 @@
 - `core/ui/css/themes/studio-2003.css`, `studio-2003-controls.css` — `.theme-studio-2003`, the light theme drawn as used hardware
 - `core/ui/images/themes/studio/`, `studio-2003/` — each one's rendered knob and textures (and 2003's screws)
 - `tools/studio-theme-assets/studio.py`, `studio_2003.py` — the Blender scripts that render them
+- `core/ui/css/themes/stage.css` — `.theme-stage`, the dark theme as a rig on a stage
+- `core/ui/images/themes/stage/stage.jpg` — its backdrop, rendered by `tools/stage-theme-assets/stage.py`
 - `core/ui/css/components.css` — Canonical button/tab/icon-button classes
 - `scripts/convert-css-variables.ps1` — Batch conversion script for CSS files
 
 ## Overview
 
-GuitarFX uses a CSS variable-based theme system with five active themes (light, dark, vintage/classic, studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
+GuitarFX uses a CSS variable-based theme system with six active themes (light, dark, vintage/classic, stage, studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
 
 ## Available Themes
 
@@ -24,6 +26,7 @@ GuitarFX uses a CSS variable-based theme system with five active themes (light, 
 | Light | `.theme-light` | High brightness, clean, modern |
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Vintage | `.theme-classic` | Warm vintage browns/ambers |
+| Stage | `.theme-dark.theme-stage` | Flat charcoal with one amber accent; the effect stands on a spot-lit wooden stage |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, all moulded plastic, chunky 3D keys, soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, a worn steel case, brushed rails and screws |
 
@@ -162,7 +165,7 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 4. The native UI (`core/src/uiclient`, Nano Q) has its own palettes and shows dark for a name it
    does not know. If the new theme is a variant of one it has, map it there (`NormalizeTheme`
    in `UiClientPresetHandlers.cpp` and the `theme` handler in `UiClientLibraryHandlers.cpp`),
-   as both studio themes map to light.
+   as both studio themes map to light. Stage needs no mapping: the native UI shows it as dark.
 
 > Base/default token values live in `css/variables.css` (`:root`). Theme files
 > also own theme-specific component styling selectors (for example
@@ -229,6 +232,30 @@ of sheets do not see each other.
   `studio.py` reuses `studio_2003.py`'s scene helpers. The knobs and screws are path traced;
   the textures are seeded numpy noise made to tile. The app's resource server knows `png` and
   `jpg`, so keep to those formats.
+
+## Stage: the Dark Theme on a Stage
+
+Stage does on the dark side what the studio themes do on the light side: `THEME_BODY_CLASSES`
+gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still applies and
+`stage.css` (linked after the studio sheets) only restyles what makes it Stage.
+
+- Neutral charcoal with no blue in it: near-black bars, panels a step lighter, hairline edges,
+  and the radius scale (`--radius-sm` … `--radius-2xl`) cut to 2–6px, so corners are nearly square.
+- One amber (`--stage-amber`), kept to choices: the selected chain block is filled with it
+  (its legend goes dark, `--stage-on-amber`), a latched key is outlined in it, the primary key
+  and switches that are on are lit with it, and knobs draw their value arc in it.
+- Flat chain blocks: a grey cap with a hairline edge; the category colour stays on the icon.
+- The play page (`#panel-visualizer`) shows `images/themes/stage/stage.jpg`, a dim room with a
+  slatted wall and a plank floor under one warm spotlight, anchored to the bottom so the pool of
+  light falls under the effect, with the edges darkened further in CSS. The effect panel floats
+  over it as a near-opaque charcoal card. Other pages keep the plain charcoal.
+- The backdrop is rendered, not drawn:
+  `blender -b --factory-startup -P tools/stage-theme-assets/stage.py` (Cycles, about a minute;
+  `-- preview <file>` makes a quick small one to judge framing and light). Keep it dim: text
+  around the panel has to read over any part of it.
+- The dark theme hard-codes a few blue-grey colours in component sheets (the effect panel's
+  legends, resource keys, the chain's add keys); `stage.css` restates those neutral. A new
+  hard-coded colour in a dark-only rule needs checking here too.
 
 ## Converting Existing CSS
 

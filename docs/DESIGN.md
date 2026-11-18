@@ -26,6 +26,8 @@ Soundshed Guitar uses a token-driven, multi-theme design system built on CSS cus
   current studio hardware (moulded plastic case and panels, 3D keys, soft shadows, rendered knobs, an LCD)
 - `.theme-studio-2003` — Studio 2003 theme, applied together with `.theme-light`: the light theme drawn
   as used studio hardware (a worn steel case, brushed aluminium, rendered knobs and screws, an LCD)
+- `.theme-stage` — Stage theme, applied together with `.theme-dark`: flat neutral charcoal, near-square
+  corners, amber for what is selected or on, and the effect panel floating over a spot-lit wooden stage
 
 ### Semantic Color Roles
 

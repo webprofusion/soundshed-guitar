@@ -59,6 +59,16 @@ describe("themeSwitcher", () => {
     expect(themeClasses()).toEqual(["theme-light"]);
   });
 
+  // Stage is the dark theme restyled, so the dark rules have to keep matching under it.
+  it("puts stage on top of the dark theme, and drops its class when leaving it", async () => {
+    const { themeSwitcher } = await loadThemeSwitcher();
+    themeSwitcher.applyTheme("stage");
+    expect(themeClasses()).toEqual(["theme-dark", "theme-stage"]);
+    expect(themeSwitcher.getCurrentTheme()).toBe("stage");
+    themeSwitcher.applyTheme("dark");
+    expect(themeClasses()).toEqual(["theme-dark"]);
+  });
+
   it("announces the change with the theme's own name", async () => {
     const { themeSwitcher } = await loadThemeSwitcher();
     const seen: unknown[] = [];
@@ -84,13 +94,14 @@ describe("themeSwitcher", () => {
     expect(themeSwitcher.getThemeDisplayName("studio")).toBe("Studio");
     expect(themeSwitcher.getThemeDisplayName("studio-2003")).toBe("Studio 2003");
     expect(themeSwitcher.getThemeDisplayName("classic")).toBe("Vintage");
+    expect(themeSwitcher.getThemeDisplayName("stage")).toBe("Stage");
   });
 });
 
 describe("normalizeThemeName", () => {
   it("keeps the themes this build has", async () => {
     const { normalizeThemeName } = await loadThemeSwitcher();
-    for (const theme of ["light", "dark", "classic", "studio", "studio-2003"]) {
+    for (const theme of ["light", "dark", "classic", "stage", "studio", "studio-2003"]) {
       expect(normalizeThemeName(theme)).toBe(theme);
     }
   });

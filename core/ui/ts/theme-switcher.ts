@@ -1,15 +1,16 @@
 /**
  * Theme Switcher
- * Manages switching between the light, dark, vintage and the two studio themes
+ * Manages switching between the light, dark, vintage, stage and the two studio themes
  */
 
-export type ThemeName = 'light' | 'dark' | 'classic' | 'studio' | 'studio-2003';
+export type ThemeName = 'light' | 'dark' | 'classic' | 'stage' | 'studio' | 'studio-2003';
 
 /** Every theme, in the order the pickers list them, with the name each one shows. */
 export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
   { value: 'classic', label: 'Vintage' },
+  { value: 'stage', label: 'Stage' },
   { value: 'studio', label: 'Studio' },
   { value: 'studio-2003', label: 'Studio 2003' },
 ];
@@ -24,12 +25,14 @@ const LEGACY_THEME_MAP: Record<string, ThemeName> = {
  * The body classes a theme switches on. The two studio themes are the light theme drawn as
  * hardware: each keeps `theme-light`, so the light rules across the stylesheets still apply,
  * and adds its own class for its stylesheets to build on (css/themes/studio.css, a clean
- * current unit; css/themes/studio-2003.css, a used one).
+ * current unit; css/themes/studio-2003.css, a used one). Stage is the same on the dark side:
+ * it keeps `theme-dark` and adds `theme-stage` (css/themes/stage.css).
  */
 const THEME_BODY_CLASSES: Record<ThemeName, string[]> = {
   light: ['theme-light'],
   dark: ['theme-dark'],
   classic: ['theme-classic'],
+  stage: ['theme-dark', 'theme-stage'],
   studio: ['theme-light', 'theme-studio'],
   'studio-2003': ['theme-light', 'theme-studio-2003'],
 };

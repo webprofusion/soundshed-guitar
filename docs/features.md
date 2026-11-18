@@ -528,13 +528,14 @@ Application configuration panel.
 
 **Key files:** `core/ui/ts/theme-switcher.ts`, `core/ui/css/variables.css`
 
-CSS variable-based theming with five built-in themes (see `docs/theme-system.md`).
+CSS variable-based theming with six built-in themes (see `docs/theme-system.md`).
 
 | Theme | Class | Description |
 |-------|-------|-------------|
 | Light | `.theme-light` | High brightness, clean, modern |
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Vintage | `.theme-classic` | Warm vintage browns/ambers |
+| Stage | `.theme-dark.theme-stage` | Flat charcoal with an amber accent; the effect stands on a spot-lit wooden stage |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, moulded plastic with 3D keys under soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, with rendered knobs, screws and panels |
 
