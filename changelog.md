@@ -40,6 +40,7 @@ Every change of branch crossfades over Crossfade (10 ms to start with). Copy, wh
 * The preset list comes up faster with a large library, when you open the editor, delete a preset or another window changes your presets: it reads only the presets that changed since it last looked.
 * In a DAW with the plugin's window closed, a preset switched away from (by automation or a program change) no longer keeps its hosted plugins loaded until you next open the window, which could hold hundreds of MB for a sampler.
 * Updated JUCE to 9.0.5, whose fixes harden how saved and shared data (settings, presets, archives) is read, and the bundled SQLite, JSON, zip and pitch-shifting libraries to their latest releases.
+* **Windows on ARM**: the ARM installer now also installs ARM64EC builds of the VST3 and CLAP plugins, beside the native ARM64 ones. Hosts that run as ARM64EC, as REAPER for Windows on ARM does, could find the native plugin but not load it. Custom Effects are not available in the ARM64EC plugins. (#62)
 
 ## 1.7.3 (Oct 31, 2026)
 * **macOS**: choosing a template from **New Preset** now creates the preset. Before, the menu closed as you clicked and nothing happened.
