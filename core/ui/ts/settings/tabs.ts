@@ -20,26 +20,27 @@ let equipmentTabsInitialized = false;
 
 let libraryTabsInitialized = false;
 
+/** The Tone 3000 browser used to be the first of these; it is a Tones tab now (tonesPanel/tabs.ts). */
+const LIBRARY_TAB_IDS = ["resources", "advanced"];
+
 export function isLibraryTabEnabled(tabId: string): boolean {
   switch (tabId) {
-    case "tone3000":
-      return isFeatureEnabled(Features.Tone3000);
     case "resources":
       return isFeatureEnabled(Features.ResourceLibrary);
     case "advanced":
       return areAdvancedLibraryFeaturesEnabled();
     default:
-      return true;
+      // Not a tab here, e.g. "tone3000" in a view saved before it moved.
+      return false;
   }
 }
 
 export function resolveLibraryTabId(preferredTabId: string): string | null {
-  const orderedTabs = ["tone3000", "resources", "advanced"];
   if (isLibraryTabEnabled(preferredTabId)) {
     return preferredTabId;
   }
 
-  return orderedTabs.find((tabId) => isLibraryTabEnabled(tabId)) ?? null;
+  return LIBRARY_TAB_IDS.find((tabId) => isLibraryTabEnabled(tabId)) ?? null;
 }
 
 export function isEquipmentTabEnabled(tabId: string): boolean {
@@ -128,12 +129,12 @@ export function initLibraryTabs(): void {
 
   libraryTabButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const tabId = (button as HTMLElement).dataset.libraryTab ?? "tone3000";
+      const tabId = (button as HTMLElement).dataset.libraryTab ?? "resources";
       activateLibraryTab(tabId);
     });
   });
 
-  activateLibraryTab("tone3000");
+  activateLibraryTab("resources");
 }
 
 export function activateLibraryTab(tabId: string): void {

@@ -79,7 +79,7 @@ export async function openSharedTargetFromLocation(): Promise<void> {
 
   browseState.activeSharedTarget = target;
   updateActiveSharedFilter();
-  getToneSharingHostActions().switchMainPanel("sharing");
+  getToneSharingHostActions().switchMainPanel("tones-community");
   browseState.mode = target.kind === "pack" ? "packs" : "items";
   await loadBrowse();
 }
@@ -99,7 +99,7 @@ export function handleToneSharingDeepLink(deepLinkQuery: string): void {
     try {
       browseState.activeSharedTarget = itemId ? { kind: "item", id: itemId } : { kind: "pack", id: packId ?? "" };
       updateActiveSharedFilter();
-      getToneSharingHostActions().switchMainPanel("sharing");
+      getToneSharingHostActions().switchMainPanel("tones-community");
       browseState.mode = itemId ? "items" : "packs";
       await loadBrowse();
     } catch (error) {

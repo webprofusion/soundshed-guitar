@@ -217,7 +217,7 @@ async function createPackFromFolder(folderId: string): Promise<void> {
   }
   if (!signedIn) {
     showNotification("Sign in to create a pack", "Packs are shared through Tone Sharing.");
-    switchMainPanel("sharing");
+    switchMainPanel("tones-community");
     openToneSharingSignInModal();
     return;
   }

@@ -14,7 +14,7 @@ import { switchMainPanel } from "../navigation.js";
 import { licencePolicy, readRemoteAttribution, remoteResourceMetadata } from "../remoteResources.js";
 import type { RemoteResourceRef } from "../remoteResources.js";
 import { getLibraryResource } from "../resourceLibrary.js";
-import { activateLibraryTab } from "../settings.js";
+import { activateEquipmentTab } from "../settings.js";
 import { uiState } from "../state.js";
 import { downloadTone3000ResourceByReference, isTone3000AuthReady, isTone3000ProxyModeEnabled, isTone3000RequestUrlAllowed, saveTone3000ApiKey } from "../tone3000.js";
 import type { LibraryResource } from "../types.js";
@@ -185,9 +185,10 @@ async function promptForTone3000ApiKey(resourceCount: number): Promise<boolean> 
     };
 
     settingsButton.onclick = () => {
+      // The API key field is under General.
       switchMainPanel("settings");
-      activateLibraryTab("tone3000");
-      status.textContent = "Opened Settings › Library › Tone3000.";
+      activateEquipmentTab("settings");
+      status.textContent = "Opened Settings › General.";
     };
 
     cancelButton.onclick = () => closeTone3000RequirementModal(false);

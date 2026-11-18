@@ -48,6 +48,8 @@ import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { initializeModalEscape } from "./modalEscape.js";
 import { activateTab, initCompactStageDestinations, initCompactStagePersistence, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
+// Loaded for its registration: navigation opens the Tones panel through tonesPanelLink.ts.
+import "./tonesPanel.js";
 import { handleDroppedRiffAudioFiles, initializeRiffLibraryPanel } from "./riffLibrary.js";
 import { initializePracticeToolPanel, setPracticeToolPresetRecaller } from "./practiceTool.js";
 import { initializeGlobalFileDrop, registerGlobalFileDropHandler } from "./fileDrop.js";

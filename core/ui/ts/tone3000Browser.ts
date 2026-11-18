@@ -25,6 +25,15 @@ import {
   extractTone3000Tones,
   parseTone3000Pagination,
 } from "./tone3000Api.js";
+import {
+  describeTone3000ResultsAge,
+  getCachedTone3000Results,
+  isTone3000ResultsFresh,
+  loadLastTone3000Results,
+  rememberLastTone3000Results,
+  storeTone3000Results,
+} from "./tone3000BrowserCache.js";
+import type { Tone3000CachedResults, Tone3000ResultsRequest } from "./tone3000BrowserCache.js";
 
 const PAGE_SIZE = 25;
 
@@ -40,6 +49,8 @@ const paginationEl = document.getElementById("tone3000-pagination");
 const prevButtonEl = document.getElementById("tone3000-prev-btn") as HTMLButtonElement | null;
 const nextButtonEl = document.getElementById("tone3000-next-btn") as HTMLButtonElement | null;
 const pageLabelEl = document.getElementById("tone3000-page-label");
+const resultsAgeEl = document.getElementById("tone3000-results-age");
+const refreshButtonEl = document.getElementById("tone3000-refresh-btn") as HTMLButtonElement | null;
 
 interface CategoryConfig {
   id: string;
@@ -64,6 +75,8 @@ let currentPage = 1;
 let totalPages = 1;
 let detailsView: Tone3000DetailsView | null = null;
 let favoritesMode = false;
+/** The results on screen and when they were fetched; null while there are none (loading, an error). */
+let shownResults: Tone3000CachedResults | null = null;
 
 function canUseFavoritesMode(): boolean {
   return isTone3000ByokEnabled();
@@ -182,13 +195,68 @@ export function setTone3000Search(query: string, categoryId?: string): void {
   if (searchInputEl) {
     searchInputEl.value = query;
   }
-  void runSearch();
+  void runSearch(1, { refresh: true });
+}
+
+/**
+ * Puts the browser back on the results it showed last time, if they are under an hour old, so
+ * that opening the tab draws them from the cache. Older than that, it opens on the default
+ * search.
+ */
+function restoreLastView(): void {
+  const last = loadLastTone3000Results();
+  if (!last) {
+    return;
+  }
+  if (last.request.mode === "favorites") {
+    if (!canUseFavoritesMode()) {
+      return;
+    }
+    favoritesMode = true;
+  } else {
+    activeCategory = CATEGORIES.find((category) => category.id === last.request.categoryId) ?? activeCategory;
+    if (searchInputEl) {
+      searchInputEl.value = last.request.query;
+    }
+    if (sortSelectEl && Array.from(sortSelectEl.options).some((option) => option.value === last.request.sort)) {
+      sortSelectEl.value = last.request.sort;
+    }
+  }
+  currentPage = last.request.page;
+}
+
+/**
+ * Called when the browser's tab comes back on screen. Fetches only if what is showing has
+ * gone stale (over an hour old), or if the last search had no way to reach Tone3000 and there
+ * may be one now. Results still within the hour are left as they are.
+ */
+export function refreshTone3000BrowserOnShow(): void {
+  if (waitingForAccess) {
+    retryTone3000BrowserAccess(true);
+    return;
+  }
+  if (shownResults && !isTone3000ResultsFresh(shownResults)) {
+    void runSearch(currentPage);
+    return;
+  }
+  renderResultsAge();
+}
+
+function renderResultsAge(): void {
+  if (resultsAgeEl) {
+    resultsAgeEl.textContent = shownResults ? `Updated ${describeTone3000ResultsAge(shownResults.fetchedAt)}` : "";
+  }
 }
 
 export function initTone3000Browser(): void {
   if (!detailsView) {
     detailsView = new Tone3000DetailsView({
-      fetchModels: (tone) => fetchTone3000Models(tone),
+      // Results shown from the cache have not started a session; the first thing that needs
+      // Tone3000 does.
+      fetchModels: async (tone) => {
+        await ensureTone3000Session();
+        return fetchTone3000Models(tone);
+      },
       onImport: async (tone, models, createBlend) => {
         const imported = await importTone3000Models(tone, models);
         if (createBlend) {
@@ -241,7 +309,10 @@ export function initTone3000Browser(): void {
       void importToneModels(button, tone);
     });
   }
-  searchButtonEl?.addEventListener("click", () => void runSearch());
+  // Search, Enter in the field and Refresh ask Tone3000 again. Everything else (a category,
+  // the sort, a page, the mode) reuses results fetched within the hour.
+  searchButtonEl?.addEventListener("click", () => void runSearch(1, { refresh: true }));
+  refreshButtonEl?.addEventListener("click", () => void runSearch(currentPage, { refresh: true }));
   searchModeTabEl?.addEventListener("click", () => {
     if (favoritesMode) {
       favoritesMode = false;
@@ -258,7 +329,7 @@ export function initTone3000Browser(): void {
   });
   searchInputEl?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
-      void runSearch();
+      void runSearch(1, { refresh: true });
     }
   });
   sortSelectEl?.addEventListener("change", () => void runSearch());
@@ -275,7 +346,10 @@ export function initTone3000Browser(): void {
     }
   });
 
-  void runSearch();
+  restoreLastView();
+  renderCategories();
+  renderResultsAge();
+  void runSearch(currentPage);
 }
 
 function renderCategories(): void {
@@ -304,7 +378,41 @@ function renderCategories(): void {
 /** Bumped by every search, so a reply that is not the latest search's is dropped. */
 let searchSequence = 0;
 
-async function runSearch(page = 1): Promise<void> {
+/** The last search stopped at "Add a Tone3000 API key": there was no way to reach Tone3000 yet. */
+let waitingForAccess = false;
+
+/**
+ * Searches again if the last search had no access and there is some now. The browser can be
+ * shown before the app settings that say how to reach Tone3000 have arrived (a saved view
+ * that opens on this tab), and nothing else would take it off that message.
+ *
+ * `startSession` also tries when there is a key but no session yet, which costs a request to
+ * Tone3000: for when the tab is shown again, not for every settings refresh.
+ */
+export function retryTone3000BrowserAccess(startSession = false): void {
+  if (waitingForAccess && (isTone3000AuthReady() || (startSession && isTone3000ByokEnabled()))) {
+    void runSearch();
+  }
+}
+
+/** Draws a page of results, fetched just now or taken from the cache, and makes it the one to reopen on. */
+function showResults(results: Tone3000CachedResults): void {
+  shownResults = results;
+  currentPage = results.page;
+  totalPages = results.totalPages;
+  renderPagination(false);
+  renderResults(results.tones);
+  renderResultsAge();
+  rememberLastTone3000Results(results);
+}
+
+/**
+ * Shows the results for the browser's current mode, category, search and sort.
+ *
+ * Results fetched within the hour are shown from the cache and nothing is sent. `refresh`
+ * asks Tone3000 regardless: it is what Search and Refresh do.
+ */
+async function runSearch(page = 1, options: { refresh?: boolean } = {}): Promise<void> {
   if (!resultsEl) return;
 
   // Searches overlap: change the category, the sort or the page while one is in flight and the
@@ -317,24 +425,50 @@ async function runSearch(page = 1): Promise<void> {
 
   const useFavoritesMode = favoritesMode;
   if (useFavoritesMode && !canUseFavoritesMode()) {
+    shownResults = null;
     resultsEl.innerHTML = renderFavoritesPrompt();
     updatePagination(false);
+    renderResultsAge();
     return;
   }
 
   activeQuery = useFavoritesMode ? "" : (searchInputEl?.value.trim() ?? "");
   currentPage = page;
+
+  const request: Tone3000ResultsRequest = {
+    mode: useFavoritesMode ? "favorites" : "search",
+    categoryId: category.id,
+    query: activeQuery,
+    sort: sortSelectEl?.value ?? "popular",
+    page,
+  };
+
+  // Before the session: in key mode starting one is a request to Tone3000 too.
+  if (!options.refresh) {
+    const cached = getCachedTone3000Results(request);
+    if (cached) {
+      waitingForAccess = false;
+      showResults(cached);
+      return;
+    }
+  }
+
   await ensureTone3000Session();
 
   if (isStale()) return;
 
-  if (!isTone3000AuthReady()) {
+  waitingForAccess = !isTone3000AuthReady();
+  if (waitingForAccess) {
+    shownResults = null;
     resultsEl.innerHTML = `<div class="tone3000-empty">Add a Tone3000 API key to browse models.</div>`;
+    renderResultsAge();
     return;
   }
 
+  shownResults = null;
   resultsEl.innerHTML = `<div class="tone3000-empty">Loading...</div>`;
   updatePagination(true);
+  renderResultsAge();
 
   try {
     const params = new URLSearchParams({
@@ -348,7 +482,7 @@ async function runSearch(page = 1): Promise<void> {
       if (category.gear) {
         params.set("gear", category.gear);
       }
-      const sortValue = sortSelectEl?.value ?? "popular";
+      const sortValue = request.sort;
       if (sortValue === "popular") {
         params.set("sort", "downloads-all-time");
       } else if (sortValue === "recent") {
@@ -397,8 +531,10 @@ async function runSearch(page = 1): Promise<void> {
         })
       : tones;
 
-    updatePagination(false, data, filtered.length);
-    renderResults(filtered);
+    updatePagination(false, data);
+    const results: Tone3000CachedResults = { request, tones: filtered, page: currentPage, totalPages, fetchedAt: Date.now() };
+    storeTone3000Results(results);
+    showResults(results);
   } catch (error) {
     if (isStale()) return;
 
@@ -408,20 +544,21 @@ async function runSearch(page = 1): Promise<void> {
   }
 }
 
-function updatePagination(loading: boolean, data?: Record<string, unknown>, _pageSize?: number): void {
+/** Takes the page and page count from a reply (or, with none, leaves them at the current page) and draws them. */
+function updatePagination(loading: boolean, data?: Record<string, unknown>): void {
+  const parsed = parseTone3000Pagination(data, currentPage, PAGE_SIZE);
+  currentPage = parsed.page;
+  totalPages = parsed.total ? parsed.totalPages : currentPage;
+  renderPagination(loading);
+}
+
+function renderPagination(loading: boolean): void {
   if (!paginationEl || !pageLabelEl || !prevButtonEl || !nextButtonEl) {
     return;
   }
 
-  if (loading) {
-    paginationEl.style.opacity = "0.6";
-  } else {
-    paginationEl.style.opacity = "1";
-  }
-
-  const parsed = parseTone3000Pagination(data, currentPage, PAGE_SIZE);
-  currentPage = parsed.page;
-  totalPages = parsed.total ? parsed.totalPages : currentPage;
+  // The page label alone dims, not the row: the results' age and Refresh sit in it too.
+  pageLabelEl.style.opacity = loading ? "0.6" : "1";
 
   pageLabelEl.textContent = `Page ${currentPage}${totalPages ? ` of ${totalPages}` : ""}`;
   prevButtonEl.disabled = loading || currentPage <= 1;
@@ -510,6 +647,8 @@ async function fetchToneModels(tone: Tone3000Tone): Promise<Tone3000Model[]> {
 }
 
 async function importToneModels(button: HTMLButtonElement, tone: Tone3000Tone): Promise<void> {
+  // Results shown from the cache have not started a session yet.
+  await ensureTone3000Session();
   if (!isTone3000AuthReady()) {
     showNotification("Tone3000 session missing");
     return;

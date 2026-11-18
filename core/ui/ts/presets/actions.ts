@@ -45,7 +45,7 @@ export function openPublishPresetFlow(): void {
   }
 
   if (!isToneSharingSignedIn()) {
-    switchMainPanel("sharing");
+    switchMainPanel("tones-community");
     openToneSharingSignInModal();
     return;
   }

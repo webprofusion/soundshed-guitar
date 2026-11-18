@@ -1165,6 +1165,46 @@ registers its receiver are lost.
 
 ## Tones Panel Notes
 
+**Three tabs** (`core/ui/ts/tonesPanel/tabs.ts`, strip in `ui-components/panels/sharing-panel.html`):
+**Community Presets** is tone sharing, everything below this paragraph; **Your Presets** is the
+presets on this machine as a grid of cards with the folders down the side
+(`tonesPanel/localPresets.ts`); **Tone 3000** is the full Tone3000 browser (`tone3000Browser.ts`),
+which used to be Settings → Library's first tab. Settings → Library keeps Resource Library and
+Advanced.
+
+- Community Presets follows the Tone Sharing feature and Tone 3000 its own; Your Presets has
+  none, so the Tones panel itself is always available and falls back to it.
+- A tab starts (its first request to a server, its first render) only once it is on screen: when
+  it is picked with Tones open, or when Tones opens on it. Selecting one while Tones is closed,
+  as a restored view does, only marks it.
+- The tab is `uiViewState.tonesTab` (`community`, `local` or `tone3000`). `switchMainPanel`
+  takes `"tones-community"`, `"tones-local"` and `"tones-tone3000"` to open Tones on a tab, and
+  everything that means "go to tone sharing" uses the first; plain `"sharing"` opens the tab
+  Tones was left on. navigation.ts reaches the panel through `tonesPanelLink.ts`, because the
+  panel loads presets and preset loading imports navigation.
+- Your Presets is a second view of the preset library, not a second library: the popover's
+  filter rules (`getFilteredPresets` with a scope), favourites and ratings, and a card loads its
+  preset through `applyPresetFromLibrary`. Its folder, search, tag and sort are its own, so
+  browsing there does not move the popover. It redraws when the library does
+  (`onPresetUIRendered` in `presets/refresh.ts`). The engine's preset list carries `id`, `name`,
+  `category` and `source`, so a card shows a description or tags, and the tag filter appears,
+  only for entries that have them.
+- **Tone 3000 asks Tone3000 as little as it can** (`tone3000BrowserCache.ts`). Every page of
+  results shown in the last hour is kept in memory under its request (mode, category, search,
+  sort, page), and the one last on screen is also in localStorage, so a category, the sort, a
+  page, the mode, coming back to the tab and reopening the app all reuse what was fetched.
+  A request goes out only when there is nothing under an hour old for what is being shown, or
+  when the user presses Search (or Enter in the field) or Refresh, which sits beside the
+  results' age ("Updated 12 min ago"). The cache is looked up before a session is started, so
+  cached results cost no session request either; Details and Import start one when needed.
+  A tab left open past the hour is not refreshed until it is shown again. The first search can
+  run before the app settings say how to reach Tone3000 (a restored view); it then waits and
+  `retryTone3000BrowserAccess` runs it when they arrive.
+- Each tab fills the panel and has one scrolling region (`css/tones.css`); at compact density a
+  tab scrolls as one, as the Community sections do. The card grids set `grid-auto-rows:
+  max-content`: their cards clip their corners, so with `auto` rows a grid of fixed height
+  shrinks them rather than scrolling.
+
 **Presets** (browse mode `items`) is the community preset search, and an empty search is its
 default list: the newest presets from `/items`, paged with Load More. While nothing is searched
 or tagged, the featured packs from `/home` sit over that list as a strip that scrolls sideways;

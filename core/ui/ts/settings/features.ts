@@ -9,7 +9,7 @@ import type { FeatureId } from "../featureFlags.js";
 import { syncPickupMatchFromState } from "../pickupMatchGlobal.js";
 import { updateSelectedNodePeakMeter } from "../signalPath.js";
 import { escapeHtml } from "../utils.js";
-import { advancedTabButton, blendsTabButton, blendsTabPanel, compositeTabButton, compositeTabPanel, equipmentLibraryTabButton, equipmentTabButtons, factoryArchiveExportEffectPresetsToggle, factoryArchiveLoadingRow, factoryArchiveLoadingToggle, factoryArchiveSettingsSection, featureGroupsContainer, footerRiffRecordButton, jamFloatingPlayerRoot, jamPanel, jamPanelButton, jamPlayerDock, layoutsTabButton, layoutsTabPanel, libraryTabButtons, libraryToolsHeading, libraryToolsSection, resourceLibraryTabButton, sharingPanel, sharingPanelButton, tone3000SettingsHeading, tone3000SettingsSection, tone3000TabButton } from "./dom.js";
+import { advancedTabButton, blendsTabButton, blendsTabPanel, compositeTabButton, compositeTabPanel, equipmentLibraryTabButton, equipmentTabButtons, factoryArchiveExportEffectPresetsToggle, factoryArchiveLoadingRow, factoryArchiveLoadingToggle, factoryArchiveSettingsSection, featureGroupsContainer, footerRiffRecordButton, jamFloatingPlayerRoot, jamPanel, jamPanelButton, jamPlayerDock, layoutsTabButton, layoutsTabPanel, libraryTabButtons, libraryToolsHeading, libraryToolsSection, resourceLibraryTabButton, tone3000SettingsHeading, tone3000SettingsSection } from "./dom.js";
 import { syncUserInputCalibrationToolbarTabs } from "./inputCalibration.js";
 import { updateResourceCleanupVisibility } from "./libraryCleanup.js";
 import { refreshLibraryView } from "./libraryView.js";
@@ -152,7 +152,6 @@ export function syncFeatureVisibility(): void {
   const tone3000Enabled = isFeatureEnabled(Features.Tone3000);
   const resourceLibraryEnabled = isFeatureEnabled(Features.ResourceLibrary);
   const riffLibraryEnabled = isFeatureEnabled(Features.RiffLibrary);
-  const toneSharingEnabled = isFeatureEnabled(Features.ToneSharing);
   const jamEnabled = isFeatureEnabled(Features.Jam);
   const jamExperienceEnabled = isJamExperienceEnabled();
   const resourceCleanupEnabled = isFeatureEnabled(Features.ResourceCleanup);
@@ -165,7 +164,6 @@ export function syncFeatureVisibility(): void {
   setSectionVisibility(tone3000SettingsHeading, tone3000SettingsSection, tone3000Enabled);
   setSectionVisibility(libraryToolsHeading, libraryToolsSection, resourceLibraryEnabled);
 
-  setElementVisibility(tone3000TabButton, tone3000Enabled);
   setElementVisibility(resourceLibraryTabButton, resourceLibraryEnabled);
   setElementVisibility(advancedTabButton, advancedLibraryEnabled);
 
@@ -177,8 +175,8 @@ export function syncFeatureVisibility(): void {
   setElementVisibility(layoutsTabPanel, isFeatureEnabled(Features.EffectLayout));
 
   setElementVisibility(equipmentLibraryTabButton, libraryEnabled);
-  setElementVisibility(sharingPanelButton, toneSharingEnabled);
-  setElementVisibility(sharingPanel, toneSharingEnabled);
+  // Tones stays whatever is switched off: its Community Presets and Tone 3000 tabs follow
+  // their features (tonesPanel/tabs.ts), and Your Presets needs none.
   setElementVisibility(jamPanelButton, jamExperienceEnabled);
   setElementVisibility(jamPanel, jamExperienceEnabled);
   setElementVisibility(jamPlayerDock, jamEnabled);
@@ -204,7 +202,7 @@ export function syncFeatureVisibility(): void {
   syncUserInputCalibrationToolbarTabs();
   syncPickupMatchFromState();
 
-  const activeLibraryTab = libraryTabButtons.find((button) => button.classList.contains("active"))?.getAttribute("data-library-tab") ?? "tone3000";
+  const activeLibraryTab = libraryTabButtons.find((button) => button.classList.contains("active"))?.getAttribute("data-library-tab") ?? "resources";
   const resolvedLibraryTab = resolveLibraryTabId(activeLibraryTab);
   if (resolvedLibraryTab && resolvedLibraryTab !== activeLibraryTab) {
     activateLibraryTab(resolvedLibraryTab);

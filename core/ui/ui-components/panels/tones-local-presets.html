@@ -1,0 +1,27 @@
+          <!-- Your Presets: the presets on this machine as a full-size grid (tonesPanel/localPresets.ts).
+               It wears the Community shell's classes so the two tabs lay out alike, at every density. -->
+          <div class="tones-tab-panel" id="tones-tab-local" role="tabpanel" aria-labelledby="tones-tab-btn-local">
+            <div class="tone-sharing-shell tones-local-shell">
+              <aside class="tone-sharing-sidebar">
+                <div class="tone-sharing-browse-nav" id="tones-local-folders" role="navigation" aria-label="Preset folders">
+                  <!-- Recents, Favourites, All Presets and the folders, rendered by JS -->
+                </div>
+              </aside>
+              <div class="tone-sharing-main">
+                <div class="tones-local-toolbar">
+                  <input id="tones-local-search" type="search" placeholder="Search presets…" autocomplete="off" aria-label="Search your presets" />
+                  <select id="tones-local-tag" class="themed-select" aria-label="Filter presets by tag">
+                    <option value="">All tags</option>
+                  </select>
+                  <select id="tones-local-sort" class="themed-select" aria-label="Sort presets">
+                    <option value="name">Name A-Z</option>
+                    <option value="rating">Top rated</option>
+                  </select>
+                  <span class="tones-local-summary" id="tones-local-summary" aria-live="polite"></span>
+                </div>
+                <div class="tones-local-grid" id="tones-local-grid">
+                  <!-- Preset cards rendered by JS -->
+                </div>
+              </div>
+            </div>
+          </div>

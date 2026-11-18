@@ -22,9 +22,20 @@ import { requestPresetUIRender } from "./refresh.js";
 
 export const activeTagFilters = new Set<string>();
 
-export function getFilteredPresets(query: string): Preset[] {
+/** Which folder and tags to filter by, for a view that keeps its own (Tones' Your Presets). */
+export interface PresetFilterScope {
+  folderId?: string | null;
+  tags?: ReadonlySet<string>;
+}
+
+/**
+ * The presets a folder, a set of tags and a search leave. With no scope it is the preset
+ * popover's own folder and tag chips.
+ */
+export function getFilteredPresets(query: string, scope: PresetFilterScope = {}): Preset[] {
   const normalized = query.trim().toLowerCase();
-  const activeFolderId = uiState.activePresetFolderId ?? PRESET_FOLDER_ALL_ID;
+  const activeFolderId = (scope.folderId !== undefined ? scope.folderId : uiState.activePresetFolderId) ?? PRESET_FOLDER_ALL_ID;
+  const tagFilters = scope.tags ?? activeTagFilters;
   const preserveOrder = activeFolderId === PRESET_FOLDER_RECENTS_ID;
   let basePresets = uiState.presets.slice();
 
@@ -51,10 +62,10 @@ export function getFilteredPresets(query: string): Preset[] {
     }
   }
 
-  if (activeTagFilters.size > 0) {
+  if (tagFilters.size > 0) {
     basePresets = basePresets.filter((preset) => {
       const presetTags = preset.tags ?? [];
-      return Array.from(activeTagFilters).every((tag) => presetTags.includes(tag));
+      return Array.from(tagFilters).every((tag) => presetTags.includes(tag));
     });
   }
 

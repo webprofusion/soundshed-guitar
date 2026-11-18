@@ -169,6 +169,8 @@ export interface UiViewState {
   /** Which half of the Play panel is showing at compact density. */
   compactStage?: "chain" | "detail";
   presetTab?: string;
+  /** The Tones panel's tab: "community", "local" or "tone3000". */
+  tonesTab?: string;
   settings?: {
     equipmentTab?: string;
     libraryTab?: string;

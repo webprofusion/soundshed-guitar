@@ -43,3 +43,19 @@ export function setPresetUIRenderer(fn: (preset: Preset | null) => void): void {
 export function requestPresetUIRender(preset: Preset | null): void {
   renderUi?.(preset);
 }
+
+const renderListeners = new Set<() => void>();
+
+/**
+ * For another view of the preset library (Tones' Your Presets): `listener` runs each time
+ * the library is redrawn, which is whenever the presets, the folders, the favourites, the
+ * ratings or the active preset may have changed.
+ */
+export function onPresetUIRendered(listener: () => void): void {
+  renderListeners.add(listener);
+}
+
+/** Called by library.ts at the end of its redraw. */
+export function notifyPresetUIRendered(): void {
+  renderListeners.forEach((listener) => listener());
+}

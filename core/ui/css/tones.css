@@ -1,0 +1,474 @@
+/* ===== Tones panel: the tab strip, Your Presets and the Tone 3000 tab =====
+ *
+ * Community Presets is css/tone-sharing.css; the Tone 3000 browser's own parts (the
+ * categories, the cards, the paging) are still in css/settings.css, where they were
+ * written. This file is what holds the three together and lays each tab out to fill
+ * the panel, with one scrolling region per tab.
+ */
+
+.tones-tabs {
+  flex: none;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-medium);
+}
+
+.tones-tab-panel {
+  display: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tones-tab-panel.active {
+  display: flex;
+}
+
+/* The shell was the panel's only child and took its height; now it takes what the tab
+   strip leaves. */
+.tones-tab-panel > .tone-sharing-shell {
+  flex: 1 1 auto;
+  height: auto;
+}
+
+/* ── Your Presets ──────────────────────────────────────────────────────────── */
+
+.tones-local-shell {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.tones-local-folder {
+  gap: 8px;
+}
+
+.tones-local-folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tones-local-folder-count {
+  flex: none;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.tones-local-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.tones-local-toolbar input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.tones-local-toolbar select {
+  flex: 0 1 150px;
+  min-width: 0;
+}
+
+.tones-local-summary {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tones-local-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  /* Not `auto`: a card clips its corners, so its minimum height is zero, and in a grid of
+     fixed height auto rows shrink to that before the grid scrolls. */
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for the loaded card's ring, which the scroll container would clip. */
+  padding: 1px 4px 4px 1px;
+}
+
+.tones-local-card {
+  --tone-card-accent: var(--accent-primary);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-control), #000 6%) 0%, color-mix(in srgb, var(--bg-control), #000 14%) 100%);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.tones-local-card:hover {
+  border-color: color-mix(in srgb, var(--tone-card-accent), var(--border-medium) 45%);
+}
+
+.tones-local-card.active {
+  border-color: var(--accent-primary);
+  box-shadow: inset 0 0 0 1px var(--accent-primary);
+}
+
+.tones-local-card.loading {
+  opacity: 0.7;
+}
+
+.tones-local-card-art {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 60px;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-medium), transparent 38%);
+  --wash-tint: var(--tone-card-accent);
+  background-image:
+    var(--card-wash),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-control), #fff 3%) 0%, color-mix(in srgb, var(--bg-control), #000 18%) 100%);
+  background-size: cover;
+}
+
+.tones-local-card-category {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-primary), var(--tone-card-accent) 34%);
+}
+
+.tones-local-card-initials {
+  flex: none;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in srgb, var(--text-primary), #fff 10%);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+}
+
+.tones-local-card-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.tones-local-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tones-local-card-title {
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.25;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.tones-local-card-fav {
+  flex: none;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.tones-local-card-fav:hover,
+.tones-local-card-fav.active {
+  color: var(--color-primary);
+}
+
+.tones-local-card-description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--text-primary), var(--text-muted) 30%);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.tones-local-card-folder {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tones-local-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tones-local-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-light), transparent 26%);
+  background: color-mix(in srgb, var(--bg-control), transparent 30%);
+}
+
+.tones-local-card-load {
+  flex: none;
+  min-width: 72px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tones-local-card-load:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* The loaded preset's button says so rather than offering to load it again; clicking it
+   still reloads the saved copy. */
+.tones-local-card.active .tones-local-card-load {
+  border: 1px solid var(--accent-primary);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.tones-local-empty {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tones-local-empty p {
+  margin: 0;
+}
+
+/* Stacked: the folders are a block of chips over the grid, capped so a deep library
+   leaves the grid most of the height. */
+@media (max-width: 860px) {
+  .tones-local-shell {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .tones-local-shell .tone-sharing-browse-nav {
+    max-height: 96px;
+    overflow-y: auto;
+  }
+}
+
+/* ── Tone 3000 ──────────────────────────────────────────────────────────────── */
+
+.tones-tone3000 {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tones-tone3000-hint {
+  flex: none;
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.tones-tone3000-controls {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.tones-tone3000-controls .tone3000-mode-tabs,
+.tones-tone3000-controls .tone3000-search {
+  margin-bottom: 0;
+}
+
+.tones-tone3000-controls .tone3000-search {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* A flex row rather than settings.css's two-column grid: Favourites hides the categories,
+   and the results then take the whole width instead of the categories' column. */
+.tones-tone3000 .tone3000-browser {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 12px;
+  min-height: 0;
+}
+
+.tones-tone3000 .tone3000-categories {
+  flex: 0 0 168px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tones-tone3000 .tone3000-results {
+  flex: 1 1 auto;
+  /* As for the Your Presets grid: auto rows would squash the cards to fit. */
+  grid-auto-rows: max-content;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* "Loading…", an error or "no tones found" is a line across the grid, not one card's width. */
+.tones-tone3000 .tone3000-empty {
+  grid-column: 1 / -1;
+  padding: 20px 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* One height for every card's picture. Left to the photo's own shape, a tall one made its
+   whole row several hundred pixels high; the picture is cropped to fit instead. */
+.tones-tone3000 .tone3000-item-hero {
+  flex: none;
+  height: 128px;
+  min-height: 0;
+}
+
+/* The buttons sit on the card's bottom edge whatever the title wraps to. */
+.tones-tone3000 .tone3000-item-main {
+  flex: 1 1 auto;
+}
+
+.tones-tone3000 .tone3000-pagination {
+  flex: none;
+}
+
+/* How old the results are, and Refresh, at the row's left; the paging stays at its right. */
+.tones-tone3000 .tone3000-results-age {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tones-tone3000 .tone3000-refresh-btn {
+  margin-right: auto;
+}
+
+@media (max-width: 980px) {
+  .tones-tone3000 .tone3000-browser {
+    flex-direction: column;
+  }
+
+  /* settings.css turns the categories into a sideways-scrolling row at this width. */
+  .tones-tone3000 .tone3000-categories {
+    flex: none;
+    overflow-y: hidden;
+  }
+}
+
+/* ── Compact density ──────────────────────────────────────────────────────────
+ *
+ * A Tones section scrolls as one at this size (css/compact/panels.css), so the grids
+ * stop scrolling on their own and the copy that only explains goes.
+ */
+
+html[data-density="compact"] .tones-tabs {
+  flex-wrap: nowrap;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+html[data-density="compact"] .tones-tabs .tones-tab-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+  html .tones-tabs {
+    scrollbar-width: none;
+  }
+}
+
+html[data-density="compact"] .tones-local-shell {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+html[data-density="compact"] .tones-local-shell .tone-sharing-browse-nav {
+  max-height: none;
+}
+
+html[data-density="compact"] .tones-local-grid {
+  flex: none;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  overflow: visible;
+}
+
+html[data-density="compact"] .tones-local-card-art {
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+html[data-density="compact"] .tones-local-card-initials {
+  font-size: 18px;
+}
+
+html[data-density="compact"] .tones-tone3000 {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-density="compact"] .tones-tone3000-hint {
+  display: none;
+}
+
+html[data-density="compact"] .tones-tone3000 .tone3000-browser {
+  flex: none;
+}
+
+html[data-density="compact"] .tones-tone3000 .tone3000-results {
+  overflow: visible;
+}

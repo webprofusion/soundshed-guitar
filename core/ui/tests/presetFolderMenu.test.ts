@@ -79,7 +79,7 @@ describe("the preset folder menu", () => {
     rightClick("gig");
     createPackButton()?.click();
     await vi.waitFor(() => expect(openToneSharingSignInModal).toHaveBeenCalled());
-    expect(switchMainPanel).toHaveBeenCalledWith("sharing");
+    expect(switchMainPanel).toHaveBeenCalledWith("tones-community");
     expect(openFolderPackModal).not.toHaveBeenCalled();
   });
 

@@ -6,7 +6,7 @@ import { applyCompactStage, isCompactStage, setCompactStage, setCompactStageDeta
 import { initSettingsPanel, refreshTone3000ApiKeyField, activateEquipmentTab, activateLibraryTab, activateAdvancedSubTab, setSettingsViewStateSuppressed } from "./settings.js";
 import { ensureTone3000Session } from "./tone3000.js";
 import { handleJamPanelActivated, initializeJamPanel } from "./jam.js";
-import { initializeToneSharingPanel } from "./toneSharingPanel.js";
+import { openTonesPanel, requestTonesTab, setTonesTabChangeListener } from "./tonesPanelLink.js";
 import { scheduleSignalPathLayoutAdapt } from "./signalPath/layout.js";
 import type { UiViewState } from "./types.js";
 import { isJamEnabled } from "./buildFlags.js";
@@ -109,21 +109,31 @@ export function onOpenSettings(): void {
   switchMainPanel("settings");
 }
 
+const TONES_TAB_PANEL_PREFIX = "tones-";
+
+// The Tones tab goes in the saved view with the rest. Through tonesPanelLink.ts, since the
+// Tones panel reaches the preset library, which imports this module.
+setTonesTabChangeListener((tabId) => updateUiViewState({ tonesTab: tabId }));
+
+/**
+ * Shows a main panel. Besides the panels' own ids it takes "tones-community",
+ * "tones-local" and "tones-tone3000", which open Tones on that tab; plain "sharing" opens
+ * Tones on the tab it was left on.
+ */
 export function switchMainPanel(panelId: string): void {
   const requestedSettingsTab = panelId === "library" ? "library" : null;
+  const requestedTonesTab = panelId.startsWith(TONES_TAB_PANEL_PREFIX) ? panelId.slice(TONES_TAB_PANEL_PREFIX.length) : null;
   const openPadsView = panelId === "performance";
   const normalizedPanelId = panelId === "performance"
     ? "visualizer"
-    : panelId === "scalex"
+    : panelId === "scalex" || requestedTonesTab
     ? "sharing"
     : requestedSettingsTab
       ? "settings"
       : panelId;
+  // Tones is always there: Your Presets needs no feature, and the tabs that do hide themselves.
   const effectivePanelId = (() => {
     if (normalizedPanelId === "jam" && (!isJamEnabled() || !isJamExperienceEnabled())) {
-      return "visualizer";
-    }
-    if (normalizedPanelId === "sharing" && !isFeatureEnabled(Features.ToneSharing)) {
       return "visualizer";
     }
     return normalizedPanelId;
@@ -177,7 +187,7 @@ export function switchMainPanel(panelId: string): void {
   }
 
   if (effectivePanelId === "sharing") {
-    initializeToneSharingPanel();
+    openTonesPanel(requestedTonesTab);
   }
 
   if (openPadsView) {
@@ -431,6 +441,11 @@ export function applyUiViewState(state?: UiViewState): void {
   const next = getNavigationViewState();
 
   applyingViewState = true;
+  // Before the panel: opening Tones starts the selected tab, and the one being restored
+  // should be the one that starts.
+  if (next.tonesTab) {
+    requestTonesTab(next.tonesTab);
+  }
   if (next.mainPanel) {
     switchMainPanel(next.mainPanel);
   }

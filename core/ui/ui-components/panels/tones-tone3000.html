@@ -1,0 +1,39 @@
+          <!-- Tone 3000: the full browser for community NAM models and IRs (tone3000Browser.ts).
+               It first searches when this tab is first shown (tonesPanel/tabs.ts). -->
+          <div class="tones-tab-panel" id="tones-tab-tone3000" role="tabpanel" aria-labelledby="tones-tab-btn-tone3000">
+            <div class="tones-tone3000">
+              <p class="tones-tone3000-hint">Browse community NAM models and IRs from Tone3000. For fastest auditioning, use the resource selector directly on Neural FX and Neural Amp nodes in your signal chain.</p>
+              <div class="tones-tone3000-controls">
+                <div class="tone3000-mode-tabs">
+                  <button id="tone3000-mode-search-tab" class="tone3000-mode-tab active" type="button" aria-pressed="true">Search</button>
+                  <button id="tone3000-mode-favorites-tab" class="tone3000-mode-tab" type="button" aria-pressed="false" title="Favorites are available only when using your own Tone3000 API key">Favourites</button>
+                </div>
+                <div class="tone3000-search" id="tone3000-search-controls">
+                  <input type="text" id="tone3000-search-input" placeholder="Search tones…" />
+                  <select id="tone3000-sort-select" class="themed-select">
+                    <option value="popular">Most Popular</option>
+                    <option value="recent">Most Recent</option>
+                    <option value="trending">Trending</option>
+                    <option value="name">Name A-Z</option>
+                  </select>
+                  <button id="tone3000-search-button">Search</button>
+                </div>
+              </div>
+              <div class="tone3000-browser">
+                <div class="tone3000-categories" id="tone3000-category-list">
+                  <!-- Category buttons rendered by JS -->
+                </div>
+                <div class="results tone3000-results" id="tone3000-results">
+                  <!-- Search results rendered by JS -->
+                </div>
+              </div>
+              <div class="tone3000-pagination" id="tone3000-pagination">
+                <!-- Results are reused for an hour (tone3000BrowserCache.ts); Refresh and Search fetch them again. -->
+                <span class="tone3000-results-age" id="tone3000-results-age" aria-live="polite"></span>
+                <button class="tone3000-page-btn tone3000-refresh-btn" id="tone3000-refresh-btn" type="button" title="Fetch these results from Tone3000 again">Refresh</button>
+                <button class="tone3000-page-btn" id="tone3000-prev-btn" type="button">Previous</button>
+                <span class="tone3000-page-label" id="tone3000-page-label">Page 1</span>
+                <button class="tone3000-page-btn" id="tone3000-next-btn" type="button">Next</button>
+              </div>
+            </div>
+          </div>

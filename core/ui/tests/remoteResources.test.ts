@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../ts/settings.js", () => ({ activateLibraryTab: vi.fn() }));
+vi.mock("../ts/settings.js", () => ({ activateEquipmentTab: vi.fn() }));
 vi.mock("../ts/navigation.js", () => ({ switchMainPanel: vi.fn() }));
 vi.mock("../ts/tone3000.js", () => ({
   downloadTone3000ResourceByReference: vi.fn(),

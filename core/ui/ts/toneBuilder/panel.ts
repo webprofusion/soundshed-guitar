@@ -92,7 +92,7 @@ export async function openToneBuilder(artist = "", song = ""): Promise<void> {
   }
   if (!signedIn) {
     showNotification("Sign in to build presets", "The Tone Builder uses your Soundshed account.");
-    switchMainPanel("sharing");
+    switchMainPanel("tones-community");
     openToneSharingSignInModal();
     return;
   }

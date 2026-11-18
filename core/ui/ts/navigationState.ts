@@ -6,9 +6,10 @@ let viewState: UiViewState = {
   mainPanel: "visualizer",
   playView: "visualizer",
   presetTab: "details",
+  tonesTab: "community",
   settings: {
     equipmentTab: "settings",
-    libraryTab: "tone3000",
+    libraryTab: "resources",
     advancedTab: "composites",
   },
 };

@@ -143,8 +143,6 @@ export const tone3000ProxyHealthStatus = document.getElementById("tone3000-proxy
 
 export const advancedTabButton = document.querySelector('.library-tab-btn[data-library-tab="advanced"]') as HTMLElement | null;
 
-export const tone3000TabButton = document.querySelector('.library-tab-btn[data-library-tab="tone3000"]') as HTMLElement | null;
-
 export const resourceLibraryTabButton = document.querySelector('.library-tab-btn[data-library-tab="resources"]') as HTMLElement | null;
 
 export const compositeTabButton = document.querySelector('.advanced-sub-tab-btn[data-advanced-tab="composites"]') as HTMLElement | null;
@@ -167,11 +165,7 @@ export const libraryToolsHeading = document.getElementById("settings-library-too
 
 export const libraryToolsSection = document.getElementById("settings-library-tools-section") as HTMLElement | null;
 
-export const sharingPanelButton = document.querySelector('.icon-btn[data-panel="sharing"]') as HTMLElement | null;
-
 export const jamPanelButton = document.querySelector('.icon-btn[data-panel="jam"]') as HTMLElement | null;
-
-export const sharingPanel = document.getElementById("panel-sharing") as HTMLElement | null;
 
 export const jamPanel = document.getElementById("panel-jam") as HTMLElement | null;
 

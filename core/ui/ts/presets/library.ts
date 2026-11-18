@@ -20,7 +20,7 @@ import { presetLibraryPopover } from "./dom.js";
 import { syncPresetFolderPickerLabel } from "./folderPicker.js";
 import { applyPresetFromLibrary, bindLoadButtons, requestSignalPathTest } from "./load.js";
 import { closePresetLibraryPopover, takePresetChooserOverride } from "./popover.js";
-import { setPresetUIRenderer } from "./refresh.js";
+import { notifyPresetUIRendered, setPresetUIRenderer } from "./refresh.js";
 import { updatePresetFolderExportButtons } from "./toolbar.js";
 
 /**
@@ -51,6 +51,7 @@ export function renderPresetUI(preset: Preset | null): void {
   bindDemoAudioControls();
   renderSignalPathBar();
   updatePresetFolderExportButtons();
+  notifyPresetUIRendered();
 }
 
 function renderPresetRows(): void {
@@ -83,7 +84,7 @@ function renderPresetRows(): void {
     hasAnyPresets: uiState.presets.length > 0,
     onOpenToneSharing: () => {
       closePresetLibraryPopover();
-      switchMainPanel("sharing");
+      switchMainPanel("tones-community");
     },
   });
   syncPresetFolderPickerLabel();

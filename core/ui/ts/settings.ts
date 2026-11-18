@@ -36,7 +36,7 @@ import { uiState } from "./state.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { handleAppSettingUpdate } from "./tone3000.js";
 import { getTone3000ApiClientConfig } from "./tone3000Api.js";
-import { initTone3000Browser } from "./tone3000Browser.js";
+import { retryTone3000BrowserAccess } from "./tone3000Browser.js";
 import { updateSignalDiagnosticsView } from "./views.js";
 
 export { initDensitySelect, initThemeSelect, initZoomControls } from "./settings/appearance.js";
@@ -83,7 +83,6 @@ export function initSettingsPanel(): void {
   initLibraryExport();
 
   refreshSettingsView();
-  initTone3000Browser();
 }
 
 export function refreshSettingsView(): void {
@@ -94,6 +93,8 @@ export function refreshSettingsView(): void {
     updateAppSetting(TONE3000_USE_SOUNDSHED_API_SETTING, true);
     void handleAppSettingUpdate(TONE3000_USE_SOUNDSHED_API_SETTING, true);
   }
+  // Tones' Tone 3000 tab may have been shown before the settings above were known.
+  retryTone3000BrowserAccess();
 
   if (apiKeyInput) {
     apiKeyInput.value = "";

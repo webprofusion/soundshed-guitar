@@ -1,5 +1,14 @@
       <div class="tab-panel" id="panel-sharing">
         <div class="panel-content tone-sharing-panel">
+          <!-- The Tones sections (tonesPanel/tabs.ts). Community Presets follows the Tone Sharing
+               feature and Tone 3000 its own; Your Presets is always there. -->
+          <div class="tones-tabs tab-bar" role="tablist" aria-label="Tones sections">
+            <button class="tones-tab-btn tab-btn active" id="tones-tab-btn-community" type="button" data-tones-tab="community" role="tab" aria-selected="true" aria-controls="tones-tab-community">Community Presets</button>
+            <button class="tones-tab-btn tab-btn" id="tones-tab-btn-local" type="button" data-tones-tab="local" role="tab" aria-selected="false" aria-controls="tones-tab-local">Your Presets</button>
+            <button class="tones-tab-btn tab-btn" id="tones-tab-btn-tone3000" type="button" data-tones-tab="tone3000" role="tab" aria-selected="false" aria-controls="tones-tab-tone3000">Tone 3000</button>
+          </div>
+
+          <div class="tones-tab-panel active" id="tones-tab-community" role="tabpanel" aria-labelledby="tones-tab-btn-community">
           <div class="tone-sharing-shell">
             <aside class="tone-sharing-sidebar">
               <div class="tone-sharing-sidebar-actions">
@@ -52,5 +61,10 @@
               </div>
             </div>
           </div>
+          </div>
+
+          <!--#include:ui-components/panels/tones-local-presets.html-->
+
+          <!--#include:ui-components/panels/tones-tone3000.html-->
         </div>
       </div>
