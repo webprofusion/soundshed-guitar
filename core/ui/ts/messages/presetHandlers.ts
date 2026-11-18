@@ -14,6 +14,7 @@ import { normalizePresetScenes } from "../presetScenes.js";
 import { migratePresetNodeTypes } from "../presetV2.js";
 import { refreshEffectPresetsFlyout } from "../signalPath.js";
 import { setFactoryPackEffectPresets } from "../signalPath/effectPresets.js";
+import { markNodeParamsPanelStale } from "../signalPath/paramsPanel.js";
 import { applyEnginePresetDirty, clonePreset, setActivePresetDraft, setActivePresetIsNew, setActivePresetSnapshot, setPresetDirty, uiState } from "../state.js";
 import { setMixerSlots } from "../mixerStore.js";
 import { cachePreset, markPresetStored, putLibraryPresetFirst, setActivePresetId, setActivePresetSceneId, setLibraryPresets, setPresetLoadingId, setStoredPresetIds, showAllLibraryPresets } from "../presetLibraryStore.js";
@@ -52,6 +53,9 @@ export function onPresetLoaded(payload: IncomingPayload): void {
     if (created) {
       adoptCreatedPreset(preset);
     }
+    // The engine's copy may differ from what the open effect panel shows (a reload of the same
+    // preset discarding edits), and the chain's re-render keeps that panel unless told.
+    markNodeParamsPanelStale();
   }
   const activePresetIds = (payload as { activePresetIds?: string[] }).activePresetIds;
   if (Array.isArray(activePresetIds)) {

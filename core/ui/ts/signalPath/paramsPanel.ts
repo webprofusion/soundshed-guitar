@@ -6,7 +6,7 @@
  * this file re-exports only what the rest of signalPath actually calls.
  */
 
-export { redrawNodeParamsPanelIfOutOfDate, showNodeParamsPanel } from "./paramsPanel/panel.js";
+export { markNodeParamsPanelStale, redrawNodeParamsPanelIfOutOfDate, showNodeParamsPanel } from "./paramsPanel/panel.js";
 export { buildDefaultParamControlsHtml, formatParamLabel, isToggleParam, showEngineParamChange } from "./paramsPanel/paramControls.js";
 export { applySpatialPositionUpdate } from "./paramsPanel/spatial.js";
 export { collapseSplitTitle } from "./paramsPanel/splitBranches.js";

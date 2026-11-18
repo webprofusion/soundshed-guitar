@@ -64,14 +64,30 @@ function nodeResourcesKey(node: GraphNode): string {
   return `${node.id}|${slots.join("|")}`;
 }
 
-/// Redraws the panel when it shows this node but not the resources it has now.
-/// The chain's re-render keeps the selected node's panel as it is, so a state
-/// update that swaps its model (a pick from the resource browser landing, say)
-/// would otherwise leave the old model, or a preview's temp file, on screen.
+/// Set when the engine has replaced the preset under the panel, so the settings
+/// it shows may no longer be the node's.
+let drawnSettingsStale = false;
+
+/// Has the chain's next re-render draw the selected node's panel again. For a
+/// preset the engine has just loaded: loading the one already open (to discard
+/// unsaved edits) keeps the node, and its knobs otherwise stayed where the
+/// discarded edits left them. Not for "state" updates, which also arrive while
+/// a knob is being dragged, where a redraw would end the drag.
+export function markNodeParamsPanelStale(): void {
+  drawnSettingsStale = true;
+}
+
+/// Redraws the panel when it shows this node but not the resources it has now,
+/// or was marked stale. The chain's re-render keeps the selected node's panel
+/// as it is, so a state update that swaps its model (a pick from the resource
+/// browser landing, say) would otherwise leave the old model, or a preview's
+/// temp file, on screen.
 export function redrawNodeParamsPanelIfOutOfDate(node: GraphNode, preset: Preset): void {
+  const stale = drawnSettingsStale;
+  drawnSettingsStale = false;
   const outOfDate = Boolean(nodeParamsPanelElement?.classList.contains("visible"))
     && drawnResourcesKey.startsWith(`${node.id}|`)
-    && drawnResourcesKey !== nodeResourcesKey(node);
+    && (stale || drawnResourcesKey !== nodeResourcesKey(node));
   if (outOfDate) {
     showNodeParamsPanel(node, preset);
   }
@@ -82,6 +98,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     return;
   }
   drawnResourcesKey = nodeResourcesKey(node);
+  drawnSettingsStale = false;
 
   // Tear down any existing interactive EQ curve before replacing panel content
   if (paramsPanelInteractions.eq) {
