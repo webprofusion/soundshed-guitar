@@ -231,6 +231,19 @@ void PluginController::Initialize()
     // is built only if nothing replaces it first (see mDeferredStartupPreset).
     mDeferStartupBuild = !mHost.IsStandalone();
     LoadLastSessionState();
+
+    if (mDeferStartupBuild)
+    {
+        // Building the start-up preset is what gave the global chain's config its default graphs,
+        // and that now waits. A state saved meanwhile has to carry them all the same (a host can
+        // save an instance it never ran): a restore fills them in, so a state saved without them
+        // came back as a different one, which clap-validator's state tests fail. Nothing is built
+        // here, as the mixer is not prepared yet.
+        mPresetMixer.PrepareGlobalChainSwap(mPresetMixer.GetGlobalChainConfig());
+        std::lock_guard<std::mutex> lock(mDSPMutex);
+        mPresetMixer.CommitGlobalChainSwap();
+    }
+
     mDeferStartupBuild = false;
 
     if (mDeferredStartupPreset)

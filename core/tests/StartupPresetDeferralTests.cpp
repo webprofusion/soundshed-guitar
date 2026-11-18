@@ -12,6 +12,8 @@
  *    its state changed (it hasn't).
  *  - A project restored straight away replaces it unbuilt.
  *  - A state saved before the build, and an instance destroyed before it, both come out right.
+ *    That state holds the global chain's default graphs, and restored and saved again it is the
+ *    same state byte for byte, which hosts and clap-validator's state tests compare.
  *  - Prepare() leaves it to the posted task, since REAPER prepares a plugin before restoring a
  *    project into it; only a host that never runs posted tasks gets it built there.
  *  - A restore that brings no preset or slots plays the start-up preset.
@@ -130,6 +132,11 @@ void TestLeftAlone(const fs::path& root)
     Check(saved.value("presetId", "") == kStartupId, "the start-up preset is the working copy already");
     Check(saved["mixer"]["activePresetIds"] == nlohmann::json::array({kStartupId}),
           "and a state saved now lists the slot it will have");
+    const auto chain = saved.value("globalSignalChain", nlohmann::json::object());
+    Check(chain.contains("preChainGraph") && !chain["preChainGraph"].value("nodes", nlohmann::json::array()).empty() &&
+              chain.contains("postChainGraph") &&
+              !chain["postChainGraph"].value("nodes", nlohmann::json::array()).empty(),
+          "and holds the global chain's graphs, though nothing is built yet");
 
     const int changesBefore = host.stateChanges;
     host.Pump();
@@ -171,6 +178,7 @@ void TestSavedBeforeBuild(const fs::path& root)
     const int restoreBuilds = gBuilt;
     Check(controller.GetMixer().GetPresetCount() == 1 && controller.GetMixer().GetPresetConfig(kStartupId).has_value(),
           "a state saved before the build restores into the slot it was saved with");
+    Check(controller.SerializeState() == saved, "and saved again it is the same state, byte for byte");
 
     // The same state restored again costs what the first restore did: neither the early instance
     // nor this one's start-up preset built anything of their own.
