@@ -17,9 +17,32 @@
  *  - Red is light, not paint: the selected block, a latched key, a switch that is on, the
  *    value arc and the display glow red, as a valve or an LED would. Nothing else is red.
  *  - The light comes from above: hardware has a lit top edge and a shadow under it.
+ *  - Type is heavy and condensed, like a gig poster: Oswald for the whole UI, and the
+ *    blackletter Grenze Gotisch only for titles (the effect's name, dialog and panel headings).
  */
 
+/* Both fonts are SIL OFL, latin subsets, licences beside them in css/fonts. A browser fetches a
+   face only when something uses it, so the other themes never load these. */
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url("../fonts/Oswald-VariableFont_wght.latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Grenze Gotisch";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/GrenzeGotisch-VariableFont_wght.latin.woff2") format("woff2");
+}
+
 .theme-high-gain {
+  --hg-font-ui: "Oswald", "Inter", system-ui, sans-serif;
+  --hg-font-title: "Grenze Gotisch", "Oswald", "Inter", serif;
+
   --color-accent: #ff4a3d;
   --color-accent-hover: #ff6a5e;
   --color-accent-dark: #c01820;
@@ -186,6 +209,48 @@ body.theme-high-gain {
   background: var(--bg-primary);
 }
 
+/* ===== Type: heavy and condensed, blackletter for titles =====
+ * Oswald runs narrower than Inter at the same size, so nothing that fits today overflows; it
+ * is set a step heavier, tracked open a little, with figures of one width so values don't
+ * jitter as they change. Form controls don't inherit the page font on their own. */
+
+body.theme-high-gain {
+  font-family: var(--hg-font-ui);
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  font-variant-numeric: tabular-nums;
+}
+
+body.theme-high-gain :where(button, input, select, textarea, optgroup) {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+.theme-high-gain .nav-tab {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.theme-high-gain :is(.knob-label, .control-stack-label, .toggle-label, .node-name, .node-param-label) {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.theme-high-gain :is(.knob-value, .node-param-value) {
+  font-weight: 600;
+}
+
+/* Titles in blackletter: mixed case (blackletter capitals in a row don't read), and scaled up
+   to a sans-serif's x-height, as its letters are small for their size. font-size-adjust keeps
+   each title's own size as the base. */
+.theme-high-gain :is(.default-effect-shell-title, .modal-header h3, .fx-selector-title, .fx-flyout-title, .flyout-settings-title) {
+  font-family: var(--hg-font-title);
+  font-weight: 700;
+  font-size-adjust: 0.54;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
 /* ===== The bars: diamond plate top and bottom, tolex between ===== */
 
 body.theme-high-gain .icon-bar {
@@ -342,6 +407,13 @@ body.theme-high-gain #panel-visualizer {
   border-color: transparent;
 }
 
+/* The stage's tint (its ::before) covers the whole grille, not just the stage's 400px floor,
+   so the grille has no seam halfway down. The card keeps its own height. The id keeps this
+   ahead of the compact layout's `min-height: 0`. */
+body.theme-high-gain #panel-visualizer .effect-visualization {
+  min-height: 100%;
+}
+
 /* The effect's panel is the amp's front panel: near-black, a machined top edge, a long shadow. */
 .theme-high-gain .default-effect-shell,
 .theme-high-gain .effect-visualization .node-params-panel {
@@ -377,7 +449,6 @@ body.theme-high-gain #panel-visualizer {
 
 .theme-high-gain .default-effect-shell-title {
   color: #f4f4f5;
-  letter-spacing: 0.04em;
 }
 
 .theme-high-gain .default-effect-shell .node-param-tabs,

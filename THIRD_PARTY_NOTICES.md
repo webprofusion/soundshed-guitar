@@ -152,3 +152,21 @@ The SMuFL music font alphaTab draws with, shipped as `dist/vendor/alphatab/font/
 Copyright © 2015, Steinberg Media Technologies GmbH. Licensed under the SIL Open
 Font License, Version 1.1; the full text ships beside the font as
 `Bravura-OFL.txt`.
+
+## Oswald and Grenze Gotisch
+
+The High Gain theme's fonts, shipped in `core/ui/css/fonts/` as Latin-subset
+variable woff2 files: Oswald for its text, Grenze Gotisch for its titles.
+
+Oswald: Copyright 2016 The Oswald Project Authors. Grenze Gotisch: Copyright
+2020 The Grenze Gotisch Project Authors. Both are licensed under the SIL Open
+Font License, Version 1.1; the full texts ship beside the fonts as
+`Oswald-OFL.txt` and `GrenzeGotisch-OFL.txt`.
+
+## Archivo
+
+The Stage theme's font, shipped in `core/ui/css/fonts/` as a Latin-subset
+variable woff2 file.
+
+Copyright 2020 The Archivo Project Authors. Licensed under the SIL Open Font
+License, Version 1.1; the full text ships beside the font as `Archivo-OFL.txt`.

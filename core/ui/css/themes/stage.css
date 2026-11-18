@@ -13,9 +13,23 @@
  *  - Amber marks a choice, not decoration: the selected chain block is filled with it, a
  *    latched key is outlined in it, a value arc is drawn in it.
  *  - Everything is flat. Depth comes from the stage behind the effect, not from bevels.
+ *  - Type is solid and sure of itself: the grotesque Archivo for the whole UI, set heavy for
+ *    what names something (tabs, legends, the chain's blocks, the effect's title).
  */
 
+/* SIL OFL, a latin subset, licence beside it in css/fonts. A browser fetches a face only when
+   something uses it, so the other themes never load it. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/Archivo-VariableFont_wght.latin.woff2") format("woff2");
+}
+
 .theme-stage {
+  --stage-font-ui: "Archivo", "Inter", system-ui, sans-serif;
+
   --color-accent: #f2a73b;
   --color-accent-hover: #f7b95c;
   --color-accent-dark: #c9851f;
@@ -177,6 +191,40 @@ body.theme-stage .film-grain {
 
 body.theme-stage {
   background: var(--bg-primary);
+}
+
+/* ===== Type: a heavy grotesque =====
+ * Archivo is about Inter's width, so what fits today still fits; it is set a step heavier
+ * throughout, and much heavier for names and legends, with figures of one width so values
+ * don't jitter as they change. Form controls don't inherit the page font on their own. */
+
+body.theme-stage {
+  font-family: var(--stage-font-ui);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+body.theme-stage :where(button, input, select, textarea, optgroup) {
+  font-family: inherit;
+}
+
+.theme-stage .nav-tab {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.theme-stage :is(.knob-label, .control-stack-label, .toggle-label, .node-param-label) {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.theme-stage :is(.node-name, .knob-value, .node-param-value, .preset-chooser-label) {
+  font-weight: 700;
+}
+
+.theme-stage :is(.default-effect-shell-title, .modal-header h3, .fx-selector-title, .fx-flyout-title, .flyout-settings-title) {
+  font-weight: 800;
+  letter-spacing: -0.005em;
 }
 
 /* ===== The bars: near black, split by hairlines ===== */

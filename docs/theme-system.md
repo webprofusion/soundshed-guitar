@@ -249,6 +249,9 @@ gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still
   (its legend goes dark, `--stage-on-amber`), a latched key is outlined in it, the primary key
   and switches that are on are lit with it, and knobs draw their value arc in it.
 - Flat chain blocks: a grey cap with a hairline edge; the category colour stays on the icon.
+- Type is the grotesque Archivo (a Latin-subset variable woff2 in `css/fonts/`, declared in
+  `stage.css`): weight 500 throughout, 700 for legends, block names and values, 800 for tabs
+  and titles. It is about Inter's width, so labels that fit in dark still fit.
 - The play page (`#panel-visualizer`) shows `images/themes/stage/stage.jpg`, a dim room with a
   slatted wall and a plank floor under one warm spotlight, anchored to the bottom so the pool of
   light falls under the effect, with the edges darkened further in CSS. The effect panel floats
@@ -281,7 +284,14 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
   10.5%; only the white pointer line turns. Everything is in percentages, so any size works.
 - The play page shows `grille.jpg`: a black hex-perforated grille, eight power valves glowing
   red-orange behind it out of focus, low in the frame so the glow rises under the effect
-  panel. The panel floats over it as a near-opaque black card.
+  panel. The panel floats over it as a near-opaque black card. The stage's tint
+  (`.effect-visualization::before`) is stretched over the whole grille; at its usual 400px
+  floor it stopped halfway down and left a seam.
+- Type is heavy and condensed, like a gig poster: Oswald (weight 500, bolder for tabs and
+  labels) for the whole UI, and the blackletter Grenze Gotisch only for titles (the effect
+  panel's name, dialog and flyout headings), scaled by `font-size-adjust` so each keeps its
+  own size. Both are Latin-subset variable woff2 files in `css/fonts/` (the CSP allows only
+  local fonts), declared in `high-gain.css` and used only by this theme.
 - The images are generated: `blender -b --factory-startup -P tools/high-gain-theme-assets/high_gain.py
   -- [knob] [textures] [grille]` (`grille preview <file>` for a quick, small one). The knob uses
   `studio_2003.py`'s scene helpers; the plate and tolex are numpy height fields shaded in the
