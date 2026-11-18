@@ -22,7 +22,7 @@ set "PRODUCT_NAME=Soundshed Guitar"
 set "COMPANY_NAME=Soundshed"
 
 :: --- Inno Setup compiler path --------------------------------------------
-set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if not defined ISCC set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" (
     echo ERROR: Inno Setup not found at "%ISCC%"
     echo Install from https://jrsoftware.org/isinfo.php or set ISCC to the correct path.
