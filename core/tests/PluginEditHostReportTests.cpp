@@ -12,6 +12,9 @@
  *  - A trigger the host fired keeps the host's value, so the same value sent again on playback
  *    start or a jump (which the plugin wrapper drops as unchanged) does not fire it again, and a
  *    real rising edge still does.
+ *  - That value is saved with the project and read back after a restore, as a host expects of
+ *    any parameter (clap-validator's state tests check it). The restore fires nothing, nor does
+ *    the host sending the value again, and a press from the UI still fires first time.
  */
 
 #include <algorithm>
@@ -226,6 +229,57 @@ bool Run(const fs::path& sandbox)
     controller.DrainControlSurfaceRequests();
     passed = Check(controller.GetActiveSceneIndex() == 1 && controller.GetDawParameterValue(triggerParameter) == 0.0f,
                    "Test button fires Scene 2, and its parameter falls back to 0") &&
+             passed;
+
+    // The host's value in a trigger's parameter is part of the saved state. Saved as the 0 the
+    // slot itself falls back to, every trigger a host had fired read 0 after a reload.
+    Send(controller, {{"type", "selectScene"}, {"sceneId", "scene-1"}});
+    controller.DrainControlSurfaceRequests();
+    controller.ApplyAutomationFromDAW(kSceneTrigger, 0.75f);
+    controller.DrainControlSurfaceRequests();
+    passed = Check(controller.GetActiveSceneIndex() == 1 && controller.GetDawParameterValue(triggerParameter) == 0.75f,
+                   "host fires Scene 2 at 0.75: scene 2 plays and the parameter reads 0.75") &&
+             passed;
+
+    const auto saved = controller.SerializeState();
+    const auto savedValues = nlohmann::json::parse(saved).value("automationValues", nlohmann::json::object());
+    controller.ApplyAutomationFromDAW(kGainSlot, 0.5f);
+    controller.ApplyAutomationFromDAW(kSceneTrigger, 0.0f);
+    controller.DrainControlSurfaceRequests();
+    passed = Check(controller.GetDawParameterValue(triggerParameter) == 0.0f,
+                   "setup: the lane falls to 0 before the project is restored") &&
+             passed;
+
+    (void)controller.DeserializeState(saved);
+    host.Pump();
+    controller.DrainControlSurfaceRequests();
+    passed = Check(controller.GetDawParameterValue(triggerParameter) == 0.75f,
+                   "restored: the trigger's parameter reads the saved 0.75 (" +
+                       std::to_string(controller.GetDawParameterValue(triggerParameter)) + ")") &&
+             passed;
+    passed = Check(Near(controller.GetDawParameterValue(gainParameter), 0.25f),
+                   "restored: the gain parameter reads its saved 0.25") &&
+             passed;
+    passed =
+        Check(nlohmann::json::parse(controller.SerializeState()).value("automationValues", nlohmann::json::object()) ==
+                  savedValues,
+              "restored: saving again gives the same parameter values") &&
+        passed;
+
+    // The host sends the restored value once more. Even past a wrapper that did not drop it as
+    // unchanged, it is no rising edge.
+    Send(controller, {{"type", "selectScene"}, {"sceneId", "scene-1"}});
+    controller.DrainControlSurfaceRequests();
+    controller.ApplyAutomationFromDAW(kSceneTrigger, 0.75f);
+    controller.DrainControlSurfaceRequests();
+    passed =
+        Check(controller.GetActiveSceneIndex() == 0, "restored: the host sending 0.75 again fires nothing") && passed;
+
+    // A press that is not the host's fires first time, whatever the lane left in the parameter.
+    Send(controller, {{"type", "setAutomationValue"}, {"slotId", kSceneTrigger}, {"value", 1.0}});
+    controller.DrainControlSurfaceRequests();
+    passed = Check(controller.GetActiveSceneIndex() == 1 && controller.GetDawParameterValue(triggerParameter) == 0.0f,
+                   "restored: the Test button fires Scene 2 on its first press") &&
              passed;
 
     return passed;

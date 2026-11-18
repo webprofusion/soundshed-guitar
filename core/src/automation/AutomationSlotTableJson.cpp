@@ -312,11 +312,15 @@ nlohmann::json AutomationSlotTable::SaveValuesToJson() const
 {
     // A json object is an ordered map, so the same values always dump to the same bytes.
     // Hosts, and clap-validator's state tests, compare saved states byte for byte.
+    //
+    // What is saved is what the slot's DAW parameter reports, so the host reads the same value
+    // back after a restore; clap-validator checks that too. Only for a trigger the host fired is
+    // it not `value`: that is back at 0, and the parameter still holds the host's.
     nlohmann::json values = nlohmann::json::object();
 
     for (const auto& slot : mSlots)
     {
-        values[slot.slotId] = slot.value.load();
+        values[slot.slotId] = slot.hostValue.load();
     }
 
     return values;
@@ -327,7 +331,7 @@ void AutomationSlotTable::LoadValuesFromJson(const nlohmann::json& json)
     LoadValuesInto(mSlots, json);
 }
 
-void AutomationSlotTable::LoadValuesInto(std::vector<AutomationSlot>& slots, const nlohmann::json& json)
+void AutomationSlotTable::LoadValuesInto(std::vector<AutomationSlot>& slots, const nlohmann::json& json) const
 {
     for (auto& slot : slots)
     {
@@ -346,6 +350,15 @@ void AutomationSlotTable::LoadValuesInto(std::vector<AutomationSlot>& slots, con
         }
 
         slot.StoreValue(value);
+
+        // A trigger rests at 0 between firings: what was saved for one is the value its host
+        // left in the parameter (see ApplySlotLocked). The parameter reads that again, and the
+        // slot is back at rest, as it was when the project was saved.
+        if (IsTriggerSlot(slot))
+        {
+            slot.value.store(0.0f);
+        }
+
         // As if this value had been applied: a host re-sending it is then not a rising
         // edge, and does not fire the trigger.
         slot.lastNormalized.store(value);

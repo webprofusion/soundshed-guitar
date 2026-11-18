@@ -76,9 +76,9 @@ bool ListensTo(const MidiControlMap& map, MidiControlMap::EventType eventType, i
 AutomationSlot::AutomationSlot(const AutomationSlot& other)
     : slotId(other.slotId), label(other.label), address(other.address), nodeSelector(other.nodeSelector),
       isDefault(other.isDefault), presetId(other.presetId), midiMap(other.midiMap), keyMaps(other.keyMaps),
-      nodeBinding(other.nodeBinding), value(other.value.load()), lastSource(other.lastSource.load()),
-      lastNormalized(other.lastNormalized.load()), lastToggleGate(other.lastToggleGate.load()),
-      pendingApply(other.pendingApply.load())
+      nodeBinding(other.nodeBinding), value(other.value.load()), hostValue(other.hostValue.load()),
+      lastSource(other.lastSource.load()), lastNormalized(other.lastNormalized.load()),
+      lastToggleGate(other.lastToggleGate.load()), pendingApply(other.pendingApply.load())
 {
 }
 
@@ -95,7 +95,8 @@ AutomationSlot& AutomationSlot::operator=(const AutomationSlot& other)
         midiMap = other.midiMap;
         keyMaps = other.keyMaps;
         nodeBinding = other.nodeBinding;
-        StoreValue(other.value.load());
+        value.store(other.value.load());
+        StoreHostValue(other.hostValue.load());
         lastSource.store(other.lastSource.load());
         lastNormalized.store(other.lastNormalized.load());
         lastToggleGate.store(other.lastToggleGate.load());
@@ -109,8 +110,9 @@ AutomationSlot::AutomationSlot(AutomationSlot&& other) noexcept
     : slotId(std::move(other.slotId)), label(std::move(other.label)), address(std::move(other.address)),
       nodeSelector(std::move(other.nodeSelector)), isDefault(other.isDefault), presetId(std::move(other.presetId)),
       midiMap(std::move(other.midiMap)), keyMaps(std::move(other.keyMaps)), nodeBinding(std::move(other.nodeBinding)),
-      value(other.value.load()), lastSource(other.lastSource.load()), lastNormalized(other.lastNormalized.load()),
-      lastToggleGate(other.lastToggleGate.load()), pendingApply(other.pendingApply.load()), dawValue(other.dawValue)
+      value(other.value.load()), hostValue(other.hostValue.load()), lastSource(other.lastSource.load()),
+      lastNormalized(other.lastNormalized.load()), lastToggleGate(other.lastToggleGate.load()),
+      pendingApply(other.pendingApply.load()), dawValue(other.dawValue)
 {
     other.dawValue = nullptr;
 }
@@ -129,6 +131,7 @@ AutomationSlot& AutomationSlot::operator=(AutomationSlot&& other) noexcept
         keyMaps = std::move(other.keyMaps);
         nodeBinding = std::move(other.nodeBinding);
         value.store(other.value.load());
+        hostValue.store(other.hostValue.load());
         lastSource.store(other.lastSource.load());
         lastNormalized.store(other.lastNormalized.load());
         lastToggleGate.store(other.lastToggleGate.load());
@@ -151,6 +154,12 @@ void AutomationSlot::SetValue(float normalized, AutomationSource src)
 void AutomationSlot::StoreValue(float normalized)
 {
     value.store(normalized);
+    StoreHostValue(normalized);
+}
+
+void AutomationSlot::StoreHostValue(float normalized)
+{
+    hostValue.store(normalized);
 
     if (dawValue)
     {
@@ -651,7 +660,7 @@ void AutomationSlotTable::AttachDawValue(AutomationSlot& slot)
 {
     const auto it = mDawValueBySlotId.find(slot.slotId);
     slot.dawValue = it != mDawValueBySlotId.end() ? it->second : nullptr;
-    slot.StoreValue(slot.value.load());
+    slot.StoreHostValue(slot.hostValue.load());
 }
 
 void AutomationSlotTable::DetachDawValue(AutomationSlot& slot)
@@ -995,7 +1004,13 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
     {
         const float prev = slot.lastNormalized.load();
         slot.lastNormalized.store(normalized);
-        const bool fire = (prev < 0.5f) && (normalized >= 0.5f);
+        const bool fromHost = static_cast<AutomationSource>(slot.lastSource.load()) == AutomationSource::DAW;
+
+        // Only a host's value has to rise to fire. A project restores a trigger's parameter at the
+        // value the host left in it (LoadValuesInto), and the host sending that again is no edge.
+        // A press from anywhere else (a footswitch, a key, the Test button) says "go" each time,
+        // whatever a lane left behind.
+        const bool fire = normalized >= 0.5f && (prev < 0.5f || !fromHost);
 
         if (!fire)
         {
@@ -1009,8 +1024,10 @@ bool AutomationSlotTable::ApplySlotLocked(AutomationSlot& slot)
         // A host's value stays in its parameter's cell, though. A plugin wrapper drops a host
         // value equal to the parameter's own, and with the cell back at 0 a lane resting at 1
         // fired again on every playback start and every jump, each one loading the preset or
-        // scene anew. Its next real rising edge (a point back to 0, then 1) still fires.
-        if (static_cast<AutomationSource>(slot.lastSource.load()) == AutomationSource::DAW)
+        // scene anew. Its next real rising edge (a point back to 0, then 1) still fires. The
+        // value kept is hostValue, which is also what the project saves: a state that restored
+        // the parameter at 0 would not match what the host read when it saved.
+        if (fromHost)
         {
             slot.value.store(0.0f);
         }

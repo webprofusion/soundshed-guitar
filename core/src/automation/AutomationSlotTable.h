@@ -80,7 +80,7 @@ class AutomationSlotTable
     void CommitSlots(std::vector<AutomationSlot>& slots);
 
     /// LoadValuesFromJson, for slots that are not live yet (see BuildSlotsFromJson).
-    static void LoadValuesInto(std::vector<AutomationSlot>& slots, const nlohmann::json& json);
+    void LoadValuesInto(std::vector<AutomationSlot>& slots, const nlohmann::json& json) const;
 
     /// Message thread, before any other thread reads a parameter: the slot behind each DAW
     /// parameter, in parameter order. From then on every slot's value is mirrored into a cell
@@ -96,15 +96,18 @@ class AutomationSlotTable
     /// Serialize to JSON for persistence.
     [[nodiscard]] nlohmann::json SaveToJson() const;
 
-    /// The slots' current values, for the state a DAW saves with its project. Kept out of
-    /// SaveToJson, which is also the machine-wide automation.json and the cross-instance
-    /// sync payload: a value belongs to this instance, not to the user's mappings.
+    /// The slots' current values, for the state a DAW saves with its project: each as its DAW
+    /// parameter reports it, so a host reads the same values after a restore as when it saved.
+    /// Kept out of SaveToJson, which is also the machine-wide automation.json and the
+    /// cross-instance sync payload: a value belongs to this instance, not to the user's mappings.
     [[nodiscard]] nlohmann::json SaveValuesToJson() const;
 
     /// Restores values written by SaveValuesToJson without applying them. Reopening a
     /// project must not fire a setlist or scene trigger, and continuous targets such as
-    /// the input and output trims restore from their own state. A slot the object does not
-    /// name goes back to 0, so a reused instance cannot keep a value the project never had.
+    /// the input and output trims restore from their own state. A trigger's parameter reads
+    /// the saved value again, and the host sending it once more does not fire it. A slot the
+    /// object does not name goes back to 0, so a reused instance cannot keep a value the
+    /// project never had.
     void LoadValuesFromJson(const nlohmann::json& json);
 
     /// Get all slots (default + custom) for UI.

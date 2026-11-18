@@ -489,7 +489,7 @@ void PluginController::ReplaceAutomationSlots(const nlohmann::json& automation, 
 
     if (values != nullptr)
     {
-        AutomationSlotTable::LoadValuesInto(slots, *values);
+        mAutomationSlots.LoadValuesInto(slots, *values);
     }
 
     {

@@ -145,6 +145,10 @@ struct AutomationSlot
     // Runtime state (audio-thread accessible via atomics). Write `value` through StoreValue()
     // or SetValue(), never directly, so a DAW parameter's copy of it stays current.
     std::atomic<float> value{0.0f};
+    /// What the slot's DAW parameter reports, and so what a project saves for it: `value`, except
+    /// for a trigger the host fired. There `value` falls back to 0 and this keeps the host's
+    /// (see AutomationSlotTable::ApplySlotLocked). StoreValue() sets both.
+    std::atomic<float> hostValue{0.0f};
     std::atomic<int> lastSource{static_cast<int>(AutomationSource::UI)};
     std::atomic<float> lastNormalized{0.0f}; ///< For trigger edge detection
     std::atomic<bool> lastToggleGate{false}; ///< For MIDI toggle edge detection
@@ -167,6 +171,9 @@ struct AutomationSlot
 
     /// Sets `value`, and the DAW parameter's copy of it.
     void StoreValue(float normalized);
+
+    /// Sets what the DAW parameter reports (`hostValue` and its cell) and leaves `value` alone.
+    void StoreHostValue(float normalized);
 
     /// Check if this slot has any input mapping (MIDI or keyboard).
     [[nodiscard]] bool HasInputMapping() const
