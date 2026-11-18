@@ -10,10 +10,16 @@ setlocal EnableExtensions EnableDelayedExpansion
 ::                every 256-bit kernel in core/src/dsp/simd/SimdMath.h
 ::   --simd=sse2  no /arch: flag - CPUs with no AVX at all
 ::   --no-avx2 is an alias for --simd=avx, --no-avx an alias for --simd=sse2
+::
+:: arm64 builds the plugins twice: native ARM64 in juce\Builds with the Standalone,
+:: and ARM64EC in juce\builds-arm64ec. An ARM64EC host (REAPER's Windows ARM build
+:: is one) cannot load a native ARM64 plugin, nor a native ARM64 host an ARM64EC
+:: one, so the installer ships both.
 :: ---------------------------------------------------------------------------
 
 set "WORKSPACE_ROOT=%~dp0"
 set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\Builds"
+set "JUCE_BUILDS_ARM64EC=%WORKSPACE_ROOT%juce\builds-arm64ec"
 set "INSTALLER_SCRIPT=%WORKSPACE_ROOT%juce\packaging\build-installer.bat"
 set "UI_DIR=%WORKSPACE_ROOT%core\ui"
 set "CORE_SIMD_LEVEL=avx2"
@@ -165,6 +171,30 @@ if !ERRORLEVEL! neq 0 (
 )
 echo CLAP build succeeded.
 echo.
+
+:: --- Build the ARM64EC plugins (arm64 only) ---------------------------------
+if /I not "%ARCH%"=="ARM64" goto :arm64ec_done
+
+echo [4b/5] Configuring and building the ARM64EC plugins (Release)...
+cmake -G "%CMAKE_GENERATOR%" -A ARM64EC -S juce -B "%JUCE_BUILDS_ARM64EC%"
+if !ERRORLEVEL! neq 0 (
+    echo ERROR: ARM64EC CMake configure failed.
+    goto :fail
+)
+cmake --build "%JUCE_BUILDS_ARM64EC%" --config Release --target SoundshedGuitar_VST3 --parallel
+if !ERRORLEVEL! neq 0 (
+    echo ERROR: ARM64EC VST3 build failed.
+    goto :fail
+)
+cmake --build "%JUCE_BUILDS_ARM64EC%" --config Release --target SoundshedGuitar_CLAP --parallel
+if !ERRORLEVEL! neq 0 (
+    echo ERROR: ARM64EC CLAP build failed.
+    goto :fail
+)
+echo ARM64EC plugin builds succeeded.
+echo.
+
+:arm64ec_done
 
 :: --- Build Installer --------------------------------------------------------
 echo [5/5] Building installer...

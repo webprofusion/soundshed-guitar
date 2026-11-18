@@ -8,8 +8,9 @@
 #include <cmath>
 #include <cstdint>
 
-// Architecture and platform detection
-#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+// Architecture and platform detection. Not Windows ARM64EC: MSVC defines _M_X64 there too, but
+// the code runs on an arm64 CPU, and takes the scalar path as an arm64 build does.
+#if (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)) && !defined(_M_ARM64EC)
     #define GUITARFX_ARCH_X86 1
 #endif
 
@@ -39,7 +40,7 @@
 
 // MSVC never defines __SSE2__: x64 always has SSE2, and 32-bit x86 has it under /arch:SSE2 (the
 // default) and above, which _M_IX86_FP reports as 2.
-#if defined(GUITARFX_ARCH_X86) && \
+#if defined(GUITARFX_ARCH_X86) &&                                                                                      \
     (defined(__SSE2__) || (defined(_MSC_VER) && (defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2))))
     #define GUITARFX_HAS_SSE2 1
 #endif

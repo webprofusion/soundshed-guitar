@@ -15,6 +15,13 @@ If `JUCE/` is still missing (some clones do not have gitlink entries for the sub
 
  `cmake -G "Visual Studio 18 2026" -A ARM64EC -S juce -B juce/builds-arm64ec`
 
+ Windows on ARM needs both ARM builds of the plugins. A host loads only plugins built for its own
+ kind of process: an ARM64EC host (REAPER's Windows ARM build is one) loads ARM64EC and x64 plugins,
+ and a native ARM64 host loads ARM64 ones. `build_windows.bat arm64` builds the Standalone and the
+ native plugins in `juce/Builds`, then the ARM64EC VST3 and CLAP in `juce/builds-arm64ec`, and the
+ installer ships both: `arm64-win` and `arm64ec-win` in the VST3 bundle, and two `.clap` files.
+ The ARM64EC build has no Custom Effects (WASM): Wasmtime publishes no ARM64EC library.
+
  If you need a custom external Steinberg ASIO SDK instead of JUCE's bundled ASIO headers, pass `-DGUITARFX_ASIO_SDK_DIR="C:/path/to/ASIOSDK"` and make sure that directory contains `iasiodrv.h`.
 
  `cmake -B build -G "Xcode"`

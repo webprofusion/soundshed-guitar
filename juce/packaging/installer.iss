@@ -55,6 +55,9 @@ UninstallFilesDir="{commonappdata}\{#ProductName}\uninstall"
 ; Inno Setup already removes every file it installed via the [Files] section.
 Type: filesandordirs; Name: "{code:GetVst3Dir}"
 Type: filesandordirs; Name: "{code:GetClapBinaryPath}"
+#if TargetArch == "ARM64"
+Type: filesandordirs; Name: "{code:GetClapDir}\{#ProductName} (ARM64EC).clap"
+#endif
 ; The editor's WebView2 profile (cache and storage; see juce/source/WebView2UserData.h),
 ; plus the per-launch profiles builds before September 2026 left under %TEMP%.
 Type: filesandordirs; Name: "{localappdata}\Soundshed Guitar\WebView2*"
@@ -72,6 +75,14 @@ Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*";
 Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; Flags: ignoreversion; Components: clap
 Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\resources\*"; DestDir: "{code:GetClapResourcesDir}"; Excludes: node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: clap
 Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{code:GetStandaloneDir}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
+#if TargetArch == "ARM64"
+; The ARM64EC plugins, beside the native ARM64 ones above. A host loads the one built for its own
+; kind of process: REAPER's Windows ARM build is ARM64EC and cannot load an ARM64 plugin, and a
+; native ARM64 host cannot load an ARM64EC one. A VST3 bundle has a folder per architecture. A CLAP
+; is one file, so there are two, sharing the resources folder; each host skips the one it cannot load.
+Source: "..\builds-arm64ec\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\Contents\arm64ec-win\*"; DestDir: "{code:GetVst3Dir}\Contents\arm64ec-win"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "..\builds-arm64ec\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; DestName: "{#ProductName} (ARM64EC).clap"; Flags: ignoreversion; Components: clap
+#endif
 
 
 [Icons]

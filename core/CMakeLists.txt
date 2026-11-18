@@ -39,6 +39,15 @@ option(GUITARFX_CORE_BUILD_WEB_UI "Build the web UI bundle in core/ui with npm, 
 # GUITARFX_CORE_ENABLE_AVX2 shim, and guitarfx_apply_simd_arch_flags().
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/GuitarfxSimdLevel.cmake")
 
+# Windows ARM64EC, the build an ARM64EC host loads (REAPER's Windows ARM build is one, and cannot
+# load a pure ARM64 plugin). Wasmtime publishes no arm64ec C API bundle, and its aarch64-windows
+# one is pure ARM64 objects, which an ARM64EC link rejects, so the generic WASM effect host is
+# unavailable there, as on Android and iOS.
+if(MSVC AND CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64EC" AND GUITARFX_CORE_ENABLE_WASM_EFFECTS)
+    set(GUITARFX_CORE_ENABLE_WASM_EFFECTS OFF CACHE BOOL "Build the generic WASM effect host" FORCE)
+    message(STATUS "Windows ARM64EC build detected; disabling WASM effects (no Wasmtime C API bundle for arm64ec).")
+endif()
+
 function(guitarfx_apply_release_optimizations target_name)
     if(MSVC)
         target_compile_options(${target_name} PRIVATE
@@ -105,7 +114,8 @@ function(guitarfx_get_wasmtime_bundle out_platform out_archive_ext out_static_li
         set(_guitarfx_wasmtime_lib "lib/wasmtime.lib")
         if(_guitarfx_wasmtime_arch MATCHES "^(x64|amd64|x86_64)$")
             set(_guitarfx_wasmtime_platform "x86_64-windows")
-        elseif(_guitarfx_wasmtime_arch MATCHES "^(arm64|arm64ec|aarch64)$")
+        elseif(_guitarfx_wasmtime_arch MATCHES "^(arm64|aarch64)$")
+            # Not arm64ec: this bundle is pure ARM64 objects (see the ARM64EC note above).
             set(_guitarfx_wasmtime_platform "aarch64-windows")
         elseif(_guitarfx_wasmtime_arch MATCHES "^(win32|x86|i386|i686)$")
             # 32-bit Windows: Wasmtime publishes an i686 C API bundle (an older note here said not).
@@ -352,6 +362,13 @@ if(NOT TARGET guitarfx_minimp3)
     # keeping the decoder fully functional (SIMD is an optional optimization).
     if(MSVC AND CMAKE_GENERATOR_PLATFORM MATCHES "^ARM64(EC)?$")
         target_compile_definitions(guitarfx_minimp3 INTERFACE MINIMP3_NO_SIMD)
+    endif()
+
+    # MSVC ARM64EC predefines __ARM_ARCH but not _M_ARM64, which minimp3 reads as 32-bit ARM and
+    # answers with GCC inline assembly (C4430 and friends). __ARM_ARCH_6M__ is the header's own
+    # switch for "no ARMv6 clip instruction", and leaves the portable C path.
+    if(MSVC AND CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64EC")
+        target_compile_definitions(guitarfx_minimp3 INTERFACE __ARM_ARCH_6M__)
     endif()
 endif()
 

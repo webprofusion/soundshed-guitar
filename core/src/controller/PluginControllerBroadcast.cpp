@@ -244,7 +244,11 @@ void PluginController::BroadcastState(StateScope scope)
 #else
             {"os", "Unknown"},
 #endif
-#if defined(__x86_64__) || defined(_M_X64)
+#if defined(_M_ARM64EC)
+            // Before x64: MSVC defines _M_X64 for ARM64EC too. The machine is arm64, and the
+            // update check picks an installer by this.
+            {"cpu", "arm64"},
+#elif defined(__x86_64__) || defined(_M_X64)
             {"cpu", "x64"},
 #elif defined(__i386__) || defined(_M_IX86)
             {"cpu", "x86"},

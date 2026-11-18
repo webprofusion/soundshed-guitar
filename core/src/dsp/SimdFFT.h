@@ -19,7 +19,10 @@
 #include <cstring>
 #include <memory>
 
-#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+// Windows ARM64EC first: MSVC defines _M_X64 there too, but the code runs on an arm64 CPU.
+#if defined(_M_ARM64EC)
+    #define GUITARFX_ARCH_ARM64 1
+#elif defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
     #define GUITARFX_ARCH_X86 1
 #elif defined(__aarch64__) || defined(_M_ARM64)
     #define GUITARFX_ARCH_ARM64 1

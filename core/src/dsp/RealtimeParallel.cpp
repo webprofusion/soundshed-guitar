@@ -26,10 +26,11 @@
     #include <semaphore.h>
 #endif
 
-#if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
-    #include <xmmintrin.h>
-#elif defined(_MSC_VER) && defined(_M_ARM64)
+// Windows ARM64EC first: MSVC defines _M_X64 there too, but the thread's mode is the arm64 FPCR.
+#if defined(_MSC_VER) && (defined(_M_ARM64) || defined(_M_ARM64EC))
     #include <float.h>
+#elif defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
+    #include <xmmintrin.h>
 #endif
 
 namespace guitarfx
@@ -230,10 +231,10 @@ class DispatcherCoreAvoider
 
 void FlushDenormalsOnThisThread() noexcept
 {
-#if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
-    _mm_setcsr(_mm_getcsr() | 0x8040u); // FTZ (bit 15) | DAZ (bit 6)
-#elif defined(_MSC_VER) && defined(_M_ARM64)
+#if defined(_MSC_VER) && (defined(_M_ARM64) || defined(_M_ARM64EC))
     _control87(_DN_FLUSH, _MCW_DN); // FPCR.FZ
+#elif defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
+    _mm_setcsr(_mm_getcsr() | 0x8040u); // FTZ (bit 15) | DAZ (bit 6)
 #elif defined(__aarch64__)
     std::uint64_t fpcr = 0;
     asm volatile("mrs %0, fpcr" : "=r"(fpcr));

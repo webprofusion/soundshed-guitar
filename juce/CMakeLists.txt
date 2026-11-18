@@ -197,19 +197,16 @@ configure_file(
 if(WIN32)
     set(GUITARFX_WEBVIEW2_VERSION "1.0.3856.49" CACHE STRING "WebView2 NuGet package version")
     option(GUITARFX_AUTO_INSTALL_WEBVIEW2 "Auto-download WebView2 NuGet package when missing" ON)
-    set(GUITARFX_WEBVIEW2_STATIC_LINKING 1)
-    set(GUITARFX_WEBVIEW2_LOADER_ARCH "x64")
+    # The loader is linked statically on every architecture, so no WebView2Loader.dll has to sit
+    # beside a plugin, where a host's DLL search would not find it. cmake/FindWebView2.cmake picks
+    # the library (ARM64EC takes the x64 one).
     set(GUITARFX_WINDOWS_PACKAGE_ARCH "x86_64-win")
 
     if(_guitarfx_windows_target_arch MATCHES "^(arm64ec)$")
-        set(GUITARFX_WEBVIEW2_STATIC_LINKING 0)
-        set(GUITARFX_WEBVIEW2_LOADER_ARCH "arm64")
         set(GUITARFX_WINDOWS_PACKAGE_ARCH "arm64ec-win")
     elseif(_guitarfx_windows_target_arch MATCHES "^(arm64|aarch64)$")
-        set(GUITARFX_WEBVIEW2_LOADER_ARCH "arm64")
         set(GUITARFX_WINDOWS_PACKAGE_ARCH "arm64-win")
     elseif(_guitarfx_windows_target_arch MATCHES "^(win32|x86|i386)$")
-        set(GUITARFX_WEBVIEW2_LOADER_ARCH "x86")
         set(GUITARFX_WINDOWS_PACKAGE_ARCH "x86-win")
     endif()
 
@@ -262,8 +259,6 @@ if(WIN32)
             message(STATUS "Using auto-downloaded WebView2 package at ${WebView2_root_dir}")
         endif()
     endif()
-
-    set(GUITARFX_WEBVIEW2_LOADER_DLL "${WebView2_root_dir}/build/native/${GUITARFX_WEBVIEW2_LOADER_ARCH}/WebView2Loader.dll")
 
     set(GUITARFX_ASIO_SDK_DIR "" CACHE PATH "Optional path to a custom Steinberg ASIO SDK root folder")
     set(GUITARFX_JUCE_ASIO_ENABLED 1)
@@ -523,7 +518,7 @@ target_compile_definitions(SharedCode
 
     # Use WebView2 on Windows
     JUCE_USE_WIN_WEBVIEW2=1
-    JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=${GUITARFX_WEBVIEW2_STATIC_LINKING}
+    JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
     # WebView2 DevTools (F12, context menu) follow JUCE_DEBUG, so Release builds have them off.
     # Release used to force JUCE_DEBUG on to keep them, which also kept every jassert and leak
     # detector live in shipped builds. Use a Debug build, or the remote-debugging port
@@ -645,13 +640,6 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
             COMMENT "Copying core UI resources for ${FORMAT_TARGET}"
             COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}" "${_dst_base}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js" "${_dst_base}/build-flags.js"
-        )
-    endif()
-
-    if(WIN32 AND NOT GUITARFX_WEBVIEW2_STATIC_LINKING AND EXISTS "${GUITARFX_WEBVIEW2_LOADER_DLL}")
-        add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
-            COMMENT "Copying WebView2 loader for ${FORMAT_TARGET}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GUITARFX_WEBVIEW2_LOADER_DLL}" "$<TARGET_FILE_DIR:${FORMAT_TARGET}>/WebView2Loader.dll"
         )
     endif()
 

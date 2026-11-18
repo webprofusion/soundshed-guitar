@@ -42,6 +42,16 @@ if not exist "%ARTEFACTS_DIR%" (
     exit /b 1
 )
 
+:: An arm64 installer also carries the ARM64EC plugins (installer.iss), which
+:: build_windows.bat builds into juce\builds-arm64ec\.
+if /I "%GUITARFX_WINDOWS_ARCH%"=="ARM64" (
+    if not exist "%JUCE_DIR%\builds-arm64ec\%PROJECT_NAME%_artefacts\Release\CLAP\%PRODUCT_NAME%.clap" (
+        echo ERROR: ARM64EC plugins not found under "%JUCE_DIR%\builds-arm64ec\%PROJECT_NAME%_artefacts\Release"
+        echo        Build them first: build_windows.bat arm64 does, after the native ARM64 targets.
+        exit /b 1
+    )
+)
+
 :: --- Run Inno Setup -------------------------------------------------------
 echo Building installer...
 echo   PROJECT_NAME : %PROJECT_NAME%

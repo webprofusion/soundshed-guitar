@@ -128,9 +128,28 @@ jobs:
       - name: Validate plugin formats (pluginval, clap-validator)
         # The arm64 leg cross-compiles on an x64 runner, so its plugins cannot be
         # loaded here; the x64 legs cover every SIMD tier the runner can execute.
+        # The validate-arm64ec job below loads the arm64 leg's ARM64EC plugins.
         if: ${{ matrix.arch == 'x64' }}
         shell: pwsh
         run: node tools/validate-plugins.mjs --config Release
+
+      - name: Upload ARM64EC plugins for validation
+        if: ${{ matrix.arch == 'arm64' }}
+        uses: actions/upload-artifact@v7
+        with:
+          # Not named "windows-*": build-all.yml merges every artifact of that
+          # pattern into the release set.
+          name: validation-arm64ec-plugins
+          path: |
+            juce/builds-arm64ec/SoundshedGuitar_artefacts/Release/VST3/Soundshed Guitar.vst3/Contents/arm64ec-win
+            juce/builds-arm64ec/SoundshedGuitar_artefacts/Release/CLAP
+            !juce/builds-arm64ec/**/*.ilk
+            !juce/builds-arm64ec/**/resources/ui/node_modules/**
+            !juce/builds-arm64ec/**/resources/ui/ts/**
+            !juce/builds-arm64ec/**/resources/ui/tests/**
+            !juce/builds-arm64ec/**/resources/ui/Testing/**
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload validation logs
         if: ${{ failure() && matrix.arch == 'x64' }}
@@ -260,3 +279,48 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $key = "builds/${{ github.ref_name }}/${{ github.run_id }}/windows/${{ matrix.arch }}/${{ steps.asset.outputs.asset_name }}"
           wrangler r2 object put "$env:R2_BUCKET/$key" --file "${{ steps.asset.outputs.asset_path }}" --remote
+
+  # The ARM64EC plugins of the arm64 leg, loaded on a real Windows ARM machine. The x64
+  # runner that cross-compiles them cannot load them. Here the x64 validators run
+  # emulated, and an emulated x64 process loads ARM64EC DLLs. An x64 host looks in a
+  # VST3 bundle for x86_64-win only, so the VST3 goes to pluginval as the single file
+  # from arm64ec-win, with its resources folder beside it.
+  validate-arm64ec:
+    name: windows-arm64ec plugin validation
+    if: ${{ inputs.target_arch != 'x64' }}
+    needs: build
+    runs-on: windows-11-arm
+    # Reported, not required, until this job has passed on a real run: it was
+    # written without a Windows ARM machine to try it on.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Download ARM64EC plugins
+        uses: actions/download-artifact@v8
+        with:
+          name: validation-arm64ec-plugins
+          path: arm64ec-plugins
+
+      - name: Validate ARM64EC plugins (pluginval, clap-validator)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path arm64ec-flat | Out-Null
+          Move-Item 'arm64ec-plugins\VST3\Soundshed Guitar.vst3\Contents\arm64ec-win' 'arm64ec-flat\VST3'
+          Move-Item 'arm64ec-plugins\CLAP' 'arm64ec-flat\CLAP'
+          node tools/validate-plugins.mjs --artefacts arm64ec-flat --formats VST3,CLAP
+
+      - name: Upload validation logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-logs-windows-arm64ec
+          path: juce/builds/validation
+          if-no-files-found: ignore

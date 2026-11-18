@@ -1,8 +1,7 @@
 include(FindPackageHandleStandardArgs)
 
-function(guitarfx_webview2_detect_arch out_var out_use_dll_import_var)
+function(guitarfx_webview2_detect_arch out_var)
     set(_arch "")
-    set(_use_dll_import OFF)
 
     foreach(_candidate
             "${MSVC_CXX_ARCHITECTURE_ID}"
@@ -19,9 +18,10 @@ function(guitarfx_webview2_detect_arch out_var out_use_dll_import_var)
                 break()
             endif()
 
+            # ARM64EC takes the x64 static loader: an ARM64EC binary links x64 objects, and the
+            # package's arm64 loader is pure ARM64 (not ARM64X), which it can neither link nor load.
             if(_candidate_lower STREQUAL "arm64ec")
-                set(_arch "arm64")
-                set(_use_dll_import ON)
+                set(_arch "x64")
                 break()
             endif()
 
@@ -46,7 +46,6 @@ function(guitarfx_webview2_detect_arch out_var out_use_dll_import_var)
     endif()
 
     set(${out_var} "${_arch}" PARENT_SCOPE)
-    set(${out_use_dll_import_var} "${_use_dll_import}" PARENT_SCOPE)
 endfunction()
 
 set(_webview2_package_hint "")
@@ -81,15 +80,10 @@ if(NOT _webview2_search_dir STREQUAL "")
 
     if(WebView2_root_dir)
         set(WebView2_include_dir "${WebView2_root_dir}/build/native/include")
-        guitarfx_webview2_detect_arch(WebView2_arch WebView2_use_dll_import)
+        guitarfx_webview2_detect_arch(WebView2_arch)
 
         if(NOT WebView2_arch STREQUAL "")
-            if(WebView2_use_dll_import)
-                set(WebView2_library "${WebView2_root_dir}/build/native/${WebView2_arch}/WebView2Loader.dll.lib")
-                set(WebView2_loader_dll "${WebView2_root_dir}/build/native/${WebView2_arch}/WebView2Loader.dll")
-            else()
-                set(WebView2_library "${WebView2_root_dir}/build/native/${WebView2_arch}/WebView2LoaderStatic.lib")
-            endif()
+            set(WebView2_library "${WebView2_root_dir}/build/native/${WebView2_arch}/WebView2LoaderStatic.lib")
         endif()
     endif()
 elseif(NOT WebView2_FIND_QUIETLY)
@@ -104,7 +98,7 @@ if(WebView2_FOUND)
     set(WebView2_INCLUDE_DIRS "${WebView2_include_dir}")
     set(WebView2_LIBRARIES "${WebView2_library}")
 
-    mark_as_advanced(WebView2_library WebView2_include_dir WebView2_root_dir WebView2_loader_dll)
+    mark_as_advanced(WebView2_library WebView2_include_dir WebView2_root_dir)
 
     if(NOT TARGET juce_webview2)
         add_library(juce_webview2 INTERFACE)
@@ -113,9 +107,5 @@ if(WebView2_FOUND)
         target_link_libraries(juce_webview2 INTERFACE "${WebView2_LIBRARIES}")
     endif()
 
-    if(WebView2_use_dll_import)
-        message(STATUS "WebView2 loader architecture: ${WebView2_arch} (dynamic import)")
-    else()
-        message(STATUS "WebView2 static loader architecture: ${WebView2_arch}")
-    endif()
+    message(STATUS "WebView2 static loader architecture: ${WebView2_arch}")
 endif()

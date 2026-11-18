@@ -17,8 +17,13 @@
 #if defined(__AVX2__) && (defined(__FMA__) || (defined(_MSC_VER) && !defined(__clang__)))
     #define GUITARFX_FWN_AVX2 1
     #include <immintrin.h>
+#elif defined(_M_ARM64EC)
+// Windows ARM64EC: MSVC defines _M_X64 there too, and would compile the SSE kernel through its
+// emulated intrinsics. The code runs on an arm64 CPU, so it takes the NEON kernel.
+    #define GUITARFX_FWN_NEON 1
+    #include <arm_neon.h>
 #elif defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
-    // 32-bit x86 too, where the compiler has SSE2 (MSVC's default /arch:SSE2, _M_IX86_FP 2).
+// 32-bit x86 too, where the compiler has SSE2 (MSVC's default /arch:SSE2, _M_IX86_FP 2).
     #define GUITARFX_FWN_SSE 1
     #include <emmintrin.h>
 #elif defined(__aarch64__) || defined(_M_ARM64)
