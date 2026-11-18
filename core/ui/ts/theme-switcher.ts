@@ -1,9 +1,9 @@
 /**
  * Theme Switcher
- * Manages switching between the light, dark, vintage, stage and the two studio themes
+ * Manages switching between the light, dark, vintage, stage, high gain and the two studio themes
  */
 
-export type ThemeName = 'light' | 'dark' | 'classic' | 'stage' | 'studio' | 'studio-2003';
+export type ThemeName = 'light' | 'dark' | 'classic' | 'stage' | 'high-gain' | 'studio' | 'studio-2003';
 
 /** Every theme, in the order the pickers list them, with the name each one shows. */
 export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> = [
@@ -11,6 +11,7 @@ export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> =
   { value: 'dark', label: 'Dark' },
   { value: 'classic', label: 'Vintage' },
   { value: 'stage', label: 'Stage' },
+  { value: 'high-gain', label: 'High Gain' },
   { value: 'studio', label: 'Studio' },
   { value: 'studio-2003', label: 'Studio 2003' },
 ];
@@ -26,13 +27,15 @@ const LEGACY_THEME_MAP: Record<string, ThemeName> = {
  * hardware: each keeps `theme-light`, so the light rules across the stylesheets still apply,
  * and adds its own class for its stylesheets to build on (css/themes/studio.css, a clean
  * current unit; css/themes/studio-2003.css, a used one). Stage is the same on the dark side:
- * it keeps `theme-dark` and adds `theme-stage` (css/themes/stage.css).
+ * it keeps `theme-dark` and adds `theme-stage` (css/themes/stage.css), and so does High Gain,
+ * the dark theme drawn as a high-gain amp head (css/themes/high-gain.css).
  */
 const THEME_BODY_CLASSES: Record<ThemeName, string[]> = {
   light: ['theme-light'],
   dark: ['theme-dark'],
   classic: ['theme-classic'],
   stage: ['theme-dark', 'theme-stage'],
+  'high-gain': ['theme-dark', 'theme-high-gain'],
   studio: ['theme-light', 'theme-studio'],
   'studio-2003': ['theme-light', 'theme-studio-2003'],
 };

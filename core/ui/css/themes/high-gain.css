@@ -1,0 +1,715 @@
+/* ===== High Gain Theme =====
+ * The dark theme drawn as a modern high-gain amp head, the look shared by the amp sims made
+ * for metalcore, deathcore and djent: black tolex and black diamond plate on the bars, a
+ * perforated black grille on the play page with the valves' red-orange glow showing through
+ * it, chunky black knobs inside a thin red arc, and red reserved for what is lit.
+ *
+ * Its images are rendered by tools/high-gain-theme-assets/high_gain.py into
+ * images/themes/high-gain/: plate.jpg (diamond plate), tolex.jpg (pebble vinyl), grille.jpg
+ * (the play page's backdrop) and knob.png.
+ *
+ * The body carries .theme-dark as well as .theme-high-gain (ts/theme-switcher.ts), so every
+ * dark-theme rule in the other stylesheets still applies and this file only restyles what
+ * makes it High Gain. It loads after dark.css and grain.css.
+ *
+ * The rules of the look:
+ *  - Black with a little cold in it, never blue: steel, not navy.
+ *  - Red is light, not paint: the selected block, a latched key, a switch that is on, the
+ *    value arc and the display glow red, as a valve or an LED would. Nothing else is red.
+ *  - The light comes from above: hardware has a lit top edge and a shadow under it.
+ */
+
+.theme-high-gain {
+  --color-accent: #ff4a3d;
+  --color-accent-hover: #ff6a5e;
+  --color-accent-dark: #c01820;
+  --color-accent-rgb: 255, 74, 61;
+  --color-primary: #e5242c;
+  --accent-primary: var(--color-accent);
+  --toggle-active: var(--hg-red);
+
+  /* Black, cold, neutral. */
+  --bg-primary: #0f1012;
+  --bg-secondary: #151619;
+  --bg-tertiary: #1a1b1e;
+  --bg-surface: #202124;
+  --bg-elevated: #26272b;
+
+  --bg-panel: #18191c;
+  --bg-card: #1f2023;
+  --bg-input: #0c0d0f;
+
+  --bg-dark-primary: #0f1012;
+  --bg-dark-secondary: #151619;
+  --bg-dark-tertiary: #19191c;
+  --bg-dark-surface: #202124;
+
+  --bg-footer: #121315;
+  --bg-header-dark: #0d0e10;
+
+  --bg-fx-primary: #0d0e10;
+  --bg-fx-secondary: #141517;
+  --bg-fx-categories: #0a0a0c;
+
+  /* Text: white for names and values, steel greys for legends. Muted is 6.4:1 on #1a1b1e. */
+  --text-primary: #ededef;
+  --text-secondary: #cacbd0;
+  --text-tertiary: #abacb2;
+  --text-muted: #9fa0a7;
+
+  --text-dark-primary: #f1f1f3;
+  --text-dark-secondary: #d2d3d7;
+  --text-dark-tertiary: #c0c1c6;
+  --text-dark-muted: #b0b1b7;
+  --text-dark-dimmed: #98999f;
+  --text-dark-disabled: #78797f;
+
+  --border-light: #313236;
+  --border-medium: #2a2b2f;
+  --border-strong: #222326;
+  --border-dark: #0b0b0d;
+  --border-darker: #060607;
+
+  --border-dark-light: #45464b;
+  --border-dark-medium: #38393e;
+  --border-dark-strong: #56575d;
+
+  --window-border: #38393e;
+
+  /* Machined, not moulded: corners of a few pixels. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 5px;
+  --radius-2xl: 6px;
+
+  /* Knobs: the rendered black knob (below) inside a thin red arc on a dark track. */
+  --control-bg: #2a2b2f;
+  --control-knob-bg: #111214;
+  --control-border: #000000;
+  --control-indicator: #f4f4f4;
+  --knob-border-highlight: rgba(255, 255, 255, 0.08);
+  --knob-border-shadow: rgba(0, 0, 0, 0.6);
+  --knob-ring-color: #ff3b2f;
+  --knob-ring-start: #b5141b;
+  --knob-ring-end: #ff4a3d;
+  --knob-ring-track: #2c2d31;
+
+  --toggle-bg: #2e2f33;
+  --toggle-border: #45464b;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 6px 18px rgba(0, 0, 0, 0.65);
+  --shadow-xl: 0 12px 36px rgba(0, 0, 0, 0.75);
+
+  --color-preset-bg: #18191c;
+  --color-preset-border: #36373b;
+  --color-preset-text: #e2e2e5;
+  --amp-glow: radial-gradient(ellipse, rgba(255, 60, 30, 0.38) 0%, transparent 70%);
+
+  --bg-browser-shell: rgba(17, 18, 20, 0.95);
+  --bg-browser-header: rgba(26, 27, 30, 0.97);
+  --bg-browser-sidebar: rgba(21, 22, 25, 0.95);
+  --bg-browser-card: rgba(36, 37, 41, 0.92);
+  --bg-browser-input: rgba(12, 13, 15, 0.96);
+  --bg-browser-hover: rgba(255, 255, 255, 0.06);
+  --bg-browser-selected: rgba(229, 36, 44, 0.16);
+  --border-browser: rgba(74, 75, 80, 0.6);
+  --border-browser-strong: rgba(104, 105, 112, 0.75);
+
+  /* Keys: black anodised caps with a lit top edge. */
+  --bg-control: #1f2023;
+  --button-bg: #26272b;
+  --button-text: #e8e8ea;
+  --button-border: #0a0a0b;
+  --button-bg-hover: #2f3035;
+  --button-border-hover: #000000;
+
+  --modal-bg: #17181b;
+  --modal-bg-raised: #1f2023;
+  --modal-text: #f0f0f2;
+  --modal-text-secondary: #cfd0d4;
+  --modal-text-muted: #a9aab0;
+  --modal-border: #36373b;
+  --modal-border-medium: #2e2f33;
+  --modal-close-hover: rgba(255, 255, 255, 0.08);
+  --modal-input-bg: #0c0d0f;
+  --modal-input-text: #f0f0f2;
+  --modal-input-border: #36373b;
+  --modal-input-placeholder: #86878d;
+
+  --eq-curve-grid: rgba(255, 255, 255, 0.06);
+  --eq-curve-response: rgba(255, 74, 61, 0.95);
+  --eq-curve-handle-stroke: rgba(255, 255, 255, 0.9);
+  --eq-curve-spectrum-fill-top: rgba(215, 215, 220, 0.15);
+  --eq-curve-spectrum-fill-bottom: rgba(215, 215, 220, 0.02);
+  --eq-curve-spectrum-line: rgba(225, 225, 230, 0.28);
+
+  --performance-plot-line: rgba(255, 74, 61, 0.95);
+  --performance-plot-fill: rgba(255, 74, 61, 0.14);
+  --performance-plot-grid: rgba(255, 255, 255, 0.1);
+
+  --sb-track: #111214;
+  --sb-track-border: #232427;
+  --sb-thumb: #34353a;
+  --sb-thumb-border: #44454a;
+  --sb-thumb-hover: #46474c;
+  --sb-thumb-hover-border: #56575c;
+
+  /* The chain's blocks (css/signal-path/nodes.css): black anodised, a bright top edge. */
+  --node-face: #1d1e22;
+  --node-sheen: rgb(255 255 255 / 0.05);
+  --node-edge-light: rgb(255 255 255 / 0.16);
+  --node-wall: #060607;
+  --node-wall-edge: rgb(0 0 0 / 0.8);
+  --node-shadow: rgb(0 0 0 / 0.75);
+
+  /* Shared pieces of the look. */
+  --hg-red: #e5242c;
+  --hg-red-hot: #ff4a3d;
+  --hg-red-deep: #a8121a;
+  --hg-glow: rgb(255 52 32 / 0.45);
+  --hg-chrome-edge: rgb(255 255 255 / 0.12);
+  --hg-hairline: #34353a;
+  --hg-card: rgb(17 18 20 / 0.95);
+  --hg-plate: url("../../images/themes/high-gain/plate.jpg");
+  --hg-tolex: url("../../images/themes/high-gain/tolex.jpg");
+}
+
+/* The textures below replace the dark theme's film grain on the same bars. */
+body.theme-high-gain .film-grain {
+  background-image: none;
+}
+
+body.theme-high-gain {
+  background: var(--bg-primary);
+}
+
+/* ===== The bars: diamond plate top and bottom, tolex between ===== */
+
+body.theme-high-gain .icon-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(0, 0, 0, 0.25) 100%),
+    var(--hg-plate) 0 0 / 256px 256px repeat,
+    #141518;
+  border-bottom: 1px solid #000000;
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* dark.css marks its nav colours !important; these have to as well. */
+.theme-high-gain .nav-tab {
+  color: #a0a1a7 !important;
+}
+
+.theme-high-gain .nav-tab:hover {
+  color: #ececee !important;
+}
+
+.theme-high-gain .nav-tab.active {
+  color: var(--hg-red-hot) !important;
+  border-bottom-color: var(--hg-red) !important;
+  text-shadow: 0 0 10px var(--hg-glow);
+}
+
+.theme-high-gain .nav-settings-btn {
+  border-color: var(--hg-hairline) !important;
+  color: #a8a9ae !important;
+}
+
+body.theme-high-gain .control-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(0, 0, 0, 0.18) 100%),
+    var(--hg-tolex) 0 0 / 256px 256px repeat,
+    #111214;
+  border-bottom: 1px solid #000000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.theme-high-gain .control-stack-label,
+.theme-high-gain .toggle-label,
+.theme-high-gain .knob-label {
+  color: #b6b7bc;
+}
+
+body.theme-high-gain .footer-bar {
+  --footer-fg: #a6a7ad;
+  --footer-fg-strong: #ededef;
+  --footer-divider: #2a2b2f;
+  --footer-field-bg: #0c0d0f;
+  --footer-field-border: #36373b;
+  --footer-field-border-hover: #56575c;
+  --footer-on-bg: color-mix(in srgb, var(--hg-red) 18%, #0c0d0f);
+
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(255, 255, 255, 0.02) 100%),
+    var(--hg-plate) 0 0 / 256px 256px repeat,
+    #141518;
+  border-top: 1px solid #000000;
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+/* ===== The chain: a tolex strip with black blocks strung along a line ===== */
+
+body.theme-high-gain .signal-path-bar {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.15) 100%),
+    var(--hg-tolex) 0 0 / 256px 256px repeat,
+    #0d0e10;
+  border-bottom: 1px solid #000000;
+}
+
+.theme-high-gain .signal-path-resize-handle {
+  background: #0d0e10;
+  border-top-color: #1c1d20;
+}
+
+.theme-high-gain .signal-path-nodes {
+  --signal-route-main: #4a4b51;
+  --signal-route-surface: #0d0e10;
+}
+
+/* Each block is black anodised metal with a bright machined top edge; its category colour
+   stays on its edge and icon. The shared shape keeps its size, so nothing in the chain moves. */
+.theme-high-gain .signal-node {
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(180deg, #24252a 0%, #18191c 100%);
+}
+
+.theme-high-gain .signal-node:hover {
+  border-color: #6a6b72;
+}
+
+.theme-high-gain .node-name {
+  color: #ececee;
+}
+
+.theme-high-gain .node-type {
+  color: #9fa0a7;
+}
+
+/* Selected: lit from inside, like a valve. The face stays black, its edge and name glow red. */
+.theme-high-gain .signal-node.selected {
+  border-color: var(--hg-red-hot);
+  background:
+    radial-gradient(120% 90% at 50% 110%, rgb(255 52 32 / 0.28) 0%, rgb(255 52 32 / 0) 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(180deg, #26262a 0%, #19191c 100%);
+  box-shadow:
+    0 0 0 1px rgb(255 52 32 / 0.55),
+    0 0 18px -2px var(--hg-glow),
+    var(--node-raised);
+}
+
+.theme-high-gain .signal-node.selected .node-name {
+  color: #ffffff;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+.theme-high-gain .signal-node:focus:not(.selected) {
+  border-color: #8a8b92;
+  box-shadow: var(--node-raised);
+}
+
+.theme-high-gain .signal-node:focus-visible {
+  outline: 2px solid var(--hg-red-hot);
+  outline-offset: 2px;
+}
+
+.theme-high-gain .parallel-branches {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: #2a2b2f;
+}
+
+/* ===== The play page: the effect in front of the grille ===== */
+
+/* The valves glow behind the lower half of the grille; the top is taken down further, and
+   the edges, so the text round the panel always reads. */
+body.theme-high-gain #panel-visualizer {
+  background:
+    linear-gradient(180deg, rgba(8, 8, 9, 0.75) 0%, rgba(8, 8, 9, 0) 30%),
+    radial-gradient(140% 110% at 50% 75%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 100%),
+    url("../../images/themes/high-gain/grille.jpg") center bottom / cover no-repeat,
+    #080809;
+}
+
+.theme-high-gain .effect-visualization {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* The effect's panel is the amp's front panel: near-black, a machined top edge, a long shadow. */
+.theme-high-gain .default-effect-shell,
+.theme-high-gain .effect-visualization .node-params-panel {
+  border: 1px solid #000000;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 120px),
+    var(--hg-card);
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 18px 50px rgba(0, 0, 0, 0.7);
+}
+
+.theme-high-gain .default-effect-shell .default-effect-section {
+  border: 1px solid #000000;
+  border-radius: 3px;
+  background: #121315;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.theme-high-gain .default-effect-shell-equipment-panel {
+  border-radius: 3px;
+  border-color: #000000;
+  background: #0b0b0d;
+}
+
+.theme-high-gain .default-effect-shell-equipment-image {
+  border-radius: 2px;
+}
+
+.theme-high-gain .default-effect-shell-title {
+  color: #f4f4f5;
+  letter-spacing: 0.04em;
+}
+
+.theme-high-gain .default-effect-shell .node-param-tabs,
+.theme-high-gain .node-param-tabs {
+  background: transparent;
+  border-bottom-color: #2c2d31;
+}
+
+.theme-high-gain .eq-visualizer,
+.theme-high-gain .eq-curve-canvas {
+  background: #0d0e10;
+}
+
+/* ===== Pop-ups, lists and dialogs ===== */
+
+.theme-high-gain .modal-content,
+.theme-high-gain .fx-flyout,
+.theme-high-gain .fx-selector-panel {
+  border-color: var(--hg-hairline);
+}
+
+.theme-high-gain .fx-selector-header,
+.theme-high-gain .fx-flyout-header,
+.theme-high-gain .modal-header {
+  background: var(--modal-bg-raised);
+  border-bottom: 1px solid #2c2d31;
+}
+
+.theme-high-gain .fx-item {
+  background: linear-gradient(180deg, #232428 0%, #1c1d20 100%);
+  border-color: #000000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.theme-high-gain .fx-item:hover {
+  border-color: var(--hg-red);
+  background: linear-gradient(180deg, #2a2b30 0%, #212226 100%);
+}
+
+.theme-high-gain .notification-toast {
+  background: var(--bg-elevated);
+  border-color: var(--hg-hairline);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ===== Knobs: a black knurled knob inside a thin red arc =====
+ * The arc is the base knob's conic ring (css/controls.css) running dark red to bright red;
+ * the knob (images/themes/high-gain/knob.png: a gunmetal cap on a black knurled body, its
+ * shadow baked in, 1.15 skirt diameters across) sits inside it on a black disc. The body is
+ * still and only the white pointer line turns, so the highlights stay where the light is.
+ * Everything is in percentages of the knob, so every size gets the same drawing. A custom
+ * layout's own knob art (an image, or the Pedal, Amp and Minimal styles) is left alone. */
+
+.theme-high-gain .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal)::before {
+  inset: 10.5%;
+  border: 0;
+  background:
+    url("../../images/themes/high-gain/knob.png") center / 100% 100% no-repeat,
+    radial-gradient(circle, #0b0b0c 0%, #0b0b0c 70%, #050506 100%);
+  box-shadow: 0 0 0 1.5px #000000;
+}
+
+/* The pointer: a white line engraved across the cap, from near its centre to the knob's
+   edge. The image spans 79% of the knob (inset 10.5%), the knob's top is 0.8/1.15 of the
+   image's half-width, so the line runs from 4% to 25% out from the centre. */
+.theme-high-gain .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal) .knob-indicator {
+  top: 25%;
+  width: 5%;
+  min-width: 2px;
+  height: 21%;
+  border-radius: 99px;
+  background: #f4f4f4;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  transform-origin: 50% 119%; /* (50% - 25%) / 21% */
+}
+
+.theme-high-gain .knob::after {
+  background: #45464b;
+}
+
+.theme-high-gain .knob-value,
+.theme-high-gain .node-param-value {
+  color: #f0f0f2;
+}
+
+/* ===== Keys: black anodised caps with a lit top edge ===== */
+
+.theme-high-gain .btn,
+.theme-high-gain .preset-action-btn,
+.theme-high-gain .preset-nav-btn,
+.theme-high-gain .eq-icon-btn,
+.theme-high-gain .default-effect-shell-chip,
+.theme-high-gain .effect-visualization-toolbar-btn,
+.theme-high-gain .resource-nav-btn {
+  border-color: #000000;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.theme-high-gain .btn:hover,
+.theme-high-gain .preset-action-btn:hover,
+.theme-high-gain .preset-nav-btn:hover,
+.theme-high-gain .eq-icon-btn:hover,
+.theme-high-gain .default-effect-shell-chip:hover,
+.theme-high-gain .effect-visualization-toolbar-btn:hover,
+.theme-high-gain .resource-nav-btn:hover {
+  border-color: #000000;
+  background: linear-gradient(180deg, #35363c 0%, #24252a 100%);
+}
+
+/* Latched on: the legend lights red, as an LED behind the key. */
+.theme-high-gain .btn.active,
+.theme-high-gain .eq-icon-btn.active,
+.theme-high-gain .effect-visualization-toolbar-btn.is-active {
+  border-color: rgb(255 52 32 / 0.6) !important;
+  background: linear-gradient(180deg, #1c1d20 0%, #222327 100%) !important;
+  color: var(--hg-red-hot) !important;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.6),
+    inset 0 0 10px rgb(255 52 32 / 0.18),
+    0 0 8px -1px rgb(255 52 32 / 0.35) !important;
+  text-shadow: 0 0 6px rgb(255 52 32 / 0.6);
+}
+
+/* The primary key is lit red with a white legend. */
+.theme-high-gain .btn-primary,
+.theme-high-gain .preset-action-btn-primary {
+  border-color: var(--hg-red-deep) !important;
+  background: linear-gradient(180deg, #f0323a 0%, #c9161f 100%) !important;
+  color: #ffffff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 12px -2px var(--hg-glow);
+}
+
+.theme-high-gain .btn-primary:hover,
+.theme-high-gain .preset-action-btn-primary:hover {
+  border-color: var(--hg-red-deep) !important;
+  background: linear-gradient(180deg, #ff4a50 0%, #d81f28 100%) !important;
+  color: #ffffff !important;
+}
+
+.theme-high-gain .btn-primary svg,
+.theme-high-gain .preset-action-btn-primary svg {
+  color: #ffffff;
+}
+
+/* ===== Switches: a black slot, red when on ===== */
+
+.theme-high-gain .toggle-slider {
+  background: #0c0d0f;
+  border-color: #000000;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* The thumb is a chrome cap. */
+.theme-high-gain .toggle-slider:before {
+  background: linear-gradient(180deg, #e8e8ea 0%, #9c9da3 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.theme-high-gain .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, #c9161f 0%, #ef2b33 100%);
+  border-color: var(--hg-red-deep);
+  box-shadow:
+    inset 0 1px 3px rgba(80, 0, 0, 0.5),
+    0 0 10px -2px var(--hg-glow);
+}
+
+.theme-high-gain .default-effect-shell-toggle:not(.bypassed) {
+  border-color: var(--hg-red-deep);
+  background: linear-gradient(180deg, #ef2b33 0%, #c9161f 100%);
+  color: #ffffff;
+  box-shadow: 0 0 12px -2px var(--hg-glow);
+}
+
+/* ===== The preset name and tempo: a black display with red LED type ===== */
+
+.theme-high-gain .preset-selector,
+body.theme-high-gain .footer-bar .bpm-display {
+  border: 1px solid #000000;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 45%),
+    radial-gradient(120% 140% at 50% 50%, #170708 0%, #070708 70%);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--hg-red-hot);
+}
+
+.theme-high-gain .preset-chooser-label,
+.theme-high-gain .preset-chooser-label:hover {
+  color: var(--hg-red-hot);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+.theme-high-gain .preset-favorite {
+  border-right-color: #2a1416;
+}
+
+.theme-high-gain .preset-selector-status {
+  background: rgb(255 52 32 / 0.14);
+  color: var(--hg-red-hot);
+}
+
+body.theme-high-gain .footer-bar .bpm-display {
+  font-weight: 700;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+/* ===== Meters: LED ladders behind a black window ===== */
+
+.theme-high-gain .vu-segments {
+  --vu-seg-off: #24252a;
+  padding: 3px;
+  width: 20px;
+  box-sizing: border-box;
+  border-radius: 3px;
+  background: #050506;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 0 1px #000000,
+    0 1px 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* The window's padding moves the ladder, so the peak tick moves with it. */
+.theme-high-gain .vu-peak-hold {
+  left: 3px;
+  margin-top: 3px;
+}
+
+/* ===== The effect panel's own colours, without the dark theme's blue in them ===== */
+
+.theme-high-gain {
+  --panel-inset-bg: #111214;
+  --panel-inset-border: #26272b;
+  --panel-inset-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.theme-high-gain .default-effect-shell-subtitle,
+.theme-high-gain .default-effect-shell .node-resource-selector > label,
+.theme-high-gain .default-effect-shell .node-param-label,
+.theme-high-gain .default-effect-shell .node-param-group-title {
+  color: #a9aab0;
+}
+
+.theme-high-gain .default-effect-shell .node-param-group-title {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.theme-high-gain .default-effect-shell-chip-presets {
+  border-color: #000000;
+  background: #0c0d0f;
+  color: #ededef;
+}
+
+.theme-high-gain .default-effect-shell .resource-nav-btn,
+.theme-high-gain .custom-layout-resource-selector .resource-nav-btn,
+.theme-high-gain .default-effect-shell .resource-picker-btn,
+.theme-high-gain .default-effect-shell .resource-clear-btn,
+.theme-high-gain .default-effect-shell .resource-browse-btn,
+.theme-high-gain .default-effect-shell .blend-open-btn {
+  border-color: #000000;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+.theme-high-gain .default-effect-shell .resource-nav-btn:hover,
+.theme-high-gain .custom-layout-resource-selector .resource-nav-btn:hover,
+.theme-high-gain .default-effect-shell .resource-picker-btn:hover,
+.theme-high-gain .default-effect-shell .resource-clear-btn:hover,
+.theme-high-gain .default-effect-shell .resource-browse-btn:hover,
+.theme-high-gain .default-effect-shell .blend-open-btn:hover {
+  border-color: #000000;
+  background: linear-gradient(180deg, #35363c 0%, #24252a 100%);
+}
+
+/* The chain's round add keys. */
+.theme-high-gain .signal-add-btn,
+.theme-high-gain .signal-path-add-menu-trigger {
+  border-color: #000000;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+.theme-high-gain .signal-add-btn:hover,
+.theme-high-gain .signal-path-add-menu-trigger:hover,
+.theme-high-gain .signal-path-add-menu-trigger[aria-expanded="true"] {
+  border-color: var(--hg-red-deep);
+  background: linear-gradient(180deg, #ef2b33 0%, #c9161f 100%);
+  color: #ffffff;
+  box-shadow: 0 0 10px -2px var(--hg-glow);
+}
+
+/* ===== Fields: recessed black ===== */
+
+.theme-high-gain select,
+.theme-high-gain input[type="text"],
+.theme-high-gain input[type="search"],
+.theme-high-gain input[type="number"],
+.theme-high-gain textarea {
+  border-color: #000000;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* The model and IR name: a recessed black field. The base mixes the accent into a blue-grey,
+   which turns maroon under red; the red stays for its edge on hover. */
+.theme-high-gain .resource-picker-label,
+.theme-high-gain .default-effect-shell .resource-picker-label {
+  border-color: #000000;
+  background: var(--bg-input);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.theme-high-gain .resource-picker-label:hover,
+.theme-high-gain .default-effect-shell .resource-picker-label:hover {
+  border-color: var(--hg-red);
+  background: #121315;
+}

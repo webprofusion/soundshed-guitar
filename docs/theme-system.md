@@ -12,12 +12,15 @@
 - `tools/studio-theme-assets/studio.py`, `studio_2003.py` — the Blender scripts that render them
 - `core/ui/css/themes/stage.css` — `.theme-stage`, the dark theme as a rig on a stage
 - `core/ui/images/themes/stage/stage.jpg` — its backdrop, rendered by `tools/stage-theme-assets/stage.py`
+- `core/ui/css/themes/high-gain.css` — `.theme-high-gain`, the dark theme as a high-gain amp head
+- `core/ui/images/themes/high-gain/` — its knob, diamond plate, tolex and grille backdrop, rendered by
+  `tools/high-gain-theme-assets/high_gain.py`
 - `core/ui/css/components.css` — Canonical button/tab/icon-button classes
 - `scripts/convert-css-variables.ps1` — Batch conversion script for CSS files
 
 ## Overview
 
-GuitarFX uses a CSS variable-based theme system with six active themes (light, dark, vintage/classic, stage, studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
+GuitarFX uses a CSS variable-based theme system with seven active themes (light, dark, vintage/classic, stage, high gain, studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
 
 ## Available Themes
 
@@ -27,6 +30,7 @@ GuitarFX uses a CSS variable-based theme system with six active themes (light, d
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Vintage | `.theme-classic` | Warm vintage browns/ambers |
 | Stage | `.theme-dark.theme-stage` | Flat charcoal with one amber accent; the effect stands on a spot-lit wooden stage |
+| High Gain | `.theme-dark.theme-high-gain` | A modern high-gain amp head: black plate and tolex, black knobs in red arcs, valves glowing behind a grille |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, all moulded plastic, chunky 3D keys, soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, a worn steel case, brushed rails and screws |
 
@@ -45,7 +49,7 @@ themeSwitcher.setTheme('dark');
 themeSwitcher.cycleTheme();
 
 // Get current theme
-const theme = themeSwitcher.getCurrentTheme(); // 'light' | 'dark' | 'classic' | 'studio' | 'studio-2003'
+const theme = themeSwitcher.getCurrentTheme(); // 'light' | 'dark' | 'classic' | 'stage' | 'high-gain' | 'studio' | 'studio-2003'
 ```
 
 ### UI Control
@@ -165,7 +169,7 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 4. The native UI (`core/src/uiclient`, Nano Q) has its own palettes and shows dark for a name it
    does not know. If the new theme is a variant of one it has, map it there (`NormalizeTheme`
    in `UiClientPresetHandlers.cpp` and the `theme` handler in `UiClientLibraryHandlers.cpp`),
-   as both studio themes map to light. Stage needs no mapping: the native UI shows it as dark.
+   as both studio themes map to light. Stage and High Gain need no mapping: the native UI shows them as dark.
 
 > Base/default token values live in `css/variables.css` (`:root`). Theme files
 > also own theme-specific component styling selectors (for example
@@ -256,6 +260,35 @@ gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still
 - The dark theme hard-codes a few blue-grey colours in component sheets (the effect panel's
   legends, resource keys, the chain's add keys); `stage.css` restates those neutral. A new
   hard-coded colour in a dark-only rule needs checking here too.
+
+## High Gain: the Dark Theme as a High-Gain Amp Head
+
+High Gain is built on dark the same way as Stage (`theme-dark` plus `theme-high-gain` on the
+body; `high-gain.css` loads after `stage.css`). It takes the look shared by the amp sims made
+for metalcore, deathcore and djent: everything black, one hot light source, metal hardware.
+
+- Black with a little cold in it and no blue. The top bar and the footer are black diamond
+  plate (`plate.jpg`), the preset bar and the chain's strip black pebble tolex (`tolex.jpg`),
+  each drawn at half its pixel size and with a gradient over it; hardware has a bright
+  machined top edge (`--hg-chrome-edge`) and a shadow under it, so the light is above.
+- Red is light, not paint (`--hg-red` for fills, `--hg-red-hot` on black): the selected chain
+  block keeps its black face and glows red at its edge and from below, a latched key's legend
+  lights red, the primary key and switches that are on are lit red, knobs draw their value arc
+  dark red to bright red, and the preset name and tempo are red LED type on a black display.
+  Nothing else is red. Meters keep their green/yellow/red LEDs behind a black window.
+- Knobs: `knob.png` (a gunmetal cap on a black knurled body, 1.15 skirt diameters across, its
+  shadow baked in, a faint red rim from below) sits inside the base knob's conic arc, inset
+  10.5%; only the white pointer line turns. Everything is in percentages, so any size works.
+- The play page shows `grille.jpg`: a black hex-perforated grille, eight power valves glowing
+  red-orange behind it out of focus, low in the frame so the glow rises under the effect
+  panel. The panel floats over it as a near-opaque black card.
+- The images are generated: `blender -b --factory-startup -P tools/high-gain-theme-assets/high_gain.py
+  -- [knob] [textures] [grille]` (`grille preview <file>` for a quick, small one). The knob uses
+  `studio_2003.py`'s scene helpers; the plate and tolex are numpy height fields shaded in the
+  script and made to tile.
+- Like Stage, it restates the dark theme's hard-coded blue-greys (effect panel legends,
+  resource keys, the chain's add keys) neutral; a new hard-coded colour in a dark-only rule
+  needs checking here too.
 
 ## Converting Existing CSS
 

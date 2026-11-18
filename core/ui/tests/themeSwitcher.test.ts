@@ -69,6 +69,16 @@ describe("themeSwitcher", () => {
     expect(themeClasses()).toEqual(["theme-dark"]);
   });
 
+  it("puts high gain on top of the dark theme, without stage's class", async () => {
+    const { themeSwitcher } = await loadThemeSwitcher();
+    themeSwitcher.applyTheme("stage");
+    themeSwitcher.applyTheme("high-gain");
+    expect(themeClasses()).toEqual(["theme-dark", "theme-high-gain"]);
+    expect(themeSwitcher.getCurrentTheme()).toBe("high-gain");
+    themeSwitcher.applyTheme("light");
+    expect(themeClasses()).toEqual(["theme-light"]);
+  });
+
   it("announces the change with the theme's own name", async () => {
     const { themeSwitcher } = await loadThemeSwitcher();
     const seen: unknown[] = [];
@@ -95,13 +105,14 @@ describe("themeSwitcher", () => {
     expect(themeSwitcher.getThemeDisplayName("studio-2003")).toBe("Studio 2003");
     expect(themeSwitcher.getThemeDisplayName("classic")).toBe("Vintage");
     expect(themeSwitcher.getThemeDisplayName("stage")).toBe("Stage");
+    expect(themeSwitcher.getThemeDisplayName("high-gain")).toBe("High Gain");
   });
 });
 
 describe("normalizeThemeName", () => {
   it("keeps the themes this build has", async () => {
     const { normalizeThemeName } = await loadThemeSwitcher();
-    for (const theme of ["light", "dark", "classic", "stage", "studio", "studio-2003"]) {
+    for (const theme of ["light", "dark", "classic", "stage", "high-gain", "studio", "studio-2003"]) {
       expect(normalizeThemeName(theme)).toBe(theme);
     }
   });
