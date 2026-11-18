@@ -6,12 +6,15 @@
 - `core/ui/css/themes/light.css` — `.theme-light` token overrides
 - `core/ui/css/themes/dark.css` — `.theme-dark` token overrides (primary theme)
 - `core/ui/css/themes/classic.css` — `.theme-classic` (vintage) token overrides
+- `core/ui/css/themes/studio.css`, `studio-controls.css` — `.theme-studio`, the light theme drawn as hardware
+- `core/ui/images/themes/studio/` — the Studio theme's rendered knob, screws and panel textures
+- `tools/studio-theme-assets/generate.py` — the Blender script that renders them
 - `core/ui/css/components.css` — Canonical button/tab/icon-button classes
 - `scripts/convert-css-variables.ps1` — Batch conversion script for CSS files
 
 ## Overview
 
-GuitarFX uses a CSS variable-based theme system with three active themes (light, dark, vintage/classic). Theme preference persists via backend settings and is reflected in UI state.
+GuitarFX uses a CSS variable-based theme system with four active themes (light, dark, vintage/classic, studio). Theme preference persists via backend settings and is reflected in UI state.
 
 ## Available Themes
 
@@ -20,6 +23,7 @@ GuitarFX uses a CSS variable-based theme system with three active themes (light,
 | Light | `.theme-light` | High brightness, clean, modern |
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Vintage | `.theme-classic` | Warm vintage browns/ambers |
+| Studio | `.theme-light.theme-studio` | Light and skeuomorphic: used studio hardware, with rendered knobs and panels |
 
 Legacy persisted values (`default`, `gritty`) are normalized to `dark` in `theme-switcher.ts` for backward compatibility.
 
@@ -36,7 +40,7 @@ themeSwitcher.setTheme('dark');
 themeSwitcher.cycleTheme();
 
 // Get current theme
-const theme = themeSwitcher.getCurrentTheme(); // 'light' | 'dark' | 'classic'
+const theme = themeSwitcher.getCurrentTheme(); // 'light' | 'dark' | 'classic' | 'studio'
 ```
 
 ### UI Control
@@ -149,15 +153,44 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 2. Link it in `index.template.html` alongside the other `css/themes/*.css` files.
 
 3. Update `theme-switcher.ts`:
-   - add the theme to `ThemeName` and `THEME_LIST`
+   - add the theme to `ThemeName`, to `THEME_OPTIONS` (which fills the theme pickers and the
+     cycle order) and to `THEME_BODY_CLASSES`
    - remove/adjust any relevant legacy mapping in `LEGACY_THEME_MAP`
 
-4. Update `initThemeSelect()` in `settings.ts` if adding a menu option.
+4. The native UI (`core/src/uiclient`, Nano Q) has its own palettes and shows dark for a name it
+   does not know. If the new theme is a variant of one it has, map it there (`NormalizeTheme`
+   in `UiClientPresetHandlers.cpp` and the `theme` handler in `UiClientLibraryHandlers.cpp`),
+   as Studio maps to light.
 
 > Base/default token values live in `css/variables.css` (`:root`). Theme files
 > also own theme-specific component styling selectors (for example
 > `.theme-classic .footer-*` and per-theme scrollbar/input treatments), so
 > `base.css` stays theme-agnostic.
+
+## A Theme Built on Another: Studio
+
+Studio is the light theme drawn as hardware: putty powder-coated faceplates, brushed
+aluminium rails at the top and bottom, panel screws, an LCD for the preset name, LED ladders
+for the meters and a rendered knob. It is a variant of light rather than a fourth palette, so
+`THEME_BODY_CLASSES` puts **both** `theme-light` and `theme-studio` on the body. Every
+`.theme-light` rule across the stylesheets keeps matching, and the two studio sheets (linked
+after `light.css` and `grain.css`) only restyle what makes it hardware. A new light-only rule
+therefore reaches Studio for free; check it there too.
+
+- `studio.css` holds the tokens and the surfaces; `studio-controls.css` the knobs, switches,
+  keys, LCD and meters. Shared pieces (textures, screws, edge colours) are `--studio-*` tokens
+  defined on `.theme-studio`.
+- One light is assumed throughout, above and a little to the left: highlights on top edges,
+  shadows falling down and slightly right. The rendered images use the same light, so keep new
+  shadows consistent with it.
+- The knob is a still image (`knob.png`, shadow baked in) under the existing `.knob-indicator`,
+  which the theme redraws as a pointer line sized in percentages of the knob. Only the line
+  turns, so the highlights stay where the light is. A custom layout's own knob art (an image,
+  or the Pedal, Amp and Minimal styles) is left alone.
+- The images are generated, not hand-made:
+  `blender -b --factory-startup -P tools/studio-theme-assets/generate.py -- [knob] [screws] [textures]`
+  (Blender 5.x). The knob and screws are path traced; the textures are seeded numpy noise made
+  to tile. The app's resource server knows `png` and `jpg`, so keep to those formats.
 
 ## Converting Existing CSS
 

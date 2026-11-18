@@ -1,0 +1,294 @@
+/* ===== Studio Theme: controls =====
+ * Knobs, switches, keys, the LCD and the meters. Tokens and surfaces are in studio.css,
+ * which also explains the theme; this sheet must load after it.
+ */
+
+/* ===== Knobs =====
+ * A rendered knob (images/themes/studio/knob.png: a moulded body with a spun aluminium
+ * cap, lit from the upper left, its shadow baked in) under a pointer line that turns.
+ * The body is still and only the line rotates, so the highlights stay where the light is.
+ * The image is 1.3 body diameters across to leave room for the shadow.
+ *
+ * A custom layout's own knob art (an image, or the Pedal, Amp and Minimal styles) is left
+ * alone; a layout knob on the Default style follows the theme like any other.
+ */
+
+.theme-studio .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal)::before {
+  inset: -1px;
+  border: 0;
+  border-radius: 0;
+  background: url("../../images/themes/studio/knob.png") center / 100% 100% no-repeat;
+  box-shadow: none;
+}
+
+/* The pointer: a painted line down the body's shoulder that carries on across the cap as
+   an engraved one. Sized in percentages of the knob so every knob size gets the same
+   drawing; the pivot is the knob's centre. */
+.theme-studio .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal) .knob-indicator {
+  top: 11.5%;
+  width: 5.5%;
+  min-width: 2px;
+  height: 27%;
+  border-radius: 1px;
+  background: linear-gradient(180deg, #fffdf6 0%, #e6e2d6 42%, #26262a 42%, #3a3a3e 100%);
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.7);
+  transform-origin: 50% 142.6%; /* (50% - 11.5%) / 27% */
+}
+
+.theme-studio .knob::after {
+  background: rgba(54, 46, 30, 0.45);
+}
+
+.theme-studio .knob-value,
+.theme-studio .node-param-value {
+  color: var(--text-secondary);
+}
+
+/* ===== Slide switches: a dark slot with a cream cap; the slot lights when on ===== */
+
+.theme-studio .toggle-slider {
+  background: linear-gradient(180deg, #24231f 0%, #45423b 100%);
+  border-color: #1b1a17;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 252, 244, 0.8);
+}
+
+.theme-studio .toggle-slider:before {
+  background: linear-gradient(180deg, #fdfbf5 0%, #cbc6b8 100%);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 #ffffff;
+}
+
+.theme-studio .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, #7a2a0e 0%, #e2622a 100%);
+  border-color: #5c1f0a;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 5px rgba(226, 98, 42, 0.55),
+    0 1px 0 rgba(255, 252, 244, 0.8);
+}
+
+.theme-studio .toggle-switch input:checked + .toggle-slider:before,
+.theme-studio .mini-toggle-control input:checked + .toggle-slider:before {
+  border: 0;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 #ffffff;
+}
+
+/* The effect's power switch: the same slot, wider, with its legend inside. */
+.theme-studio .default-effect-shell-toggle {
+  border-color: #1b1a17;
+  background: linear-gradient(180deg, #24231f 0%, #45423b 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 252, 244, 0.8);
+}
+
+.theme-studio .default-effect-shell-toggle:not(.bypassed) {
+  border-color: #5c1f0a;
+  background: linear-gradient(180deg, #7a2a0e 0%, #e2622a 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 6px rgba(226, 98, 42, 0.5),
+    0 1px 0 rgba(255, 252, 244, 0.8);
+}
+
+.theme-studio .default-effect-shell-toggle-track {
+  background: linear-gradient(180deg, #fdfbf5 0%, #cbc6b8 100%);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 #ffffff;
+}
+
+/* ===== Keys: moulded plastic caps that sit proud of the plate and go down when pressed ===== */
+
+.theme-studio .btn,
+.theme-studio .preset-action-btn,
+.theme-studio .preset-nav-btn,
+.theme-studio .eq-icon-btn,
+.theme-studio .default-effect-shell-chip,
+.theme-studio .effect-visualization-toolbar-btn,
+.theme-studio .resource-nav-btn,
+.theme-studio .default-effect-shell .resource-nav-btn,
+.theme-studio .default-effect-shell .resource-clear-btn,
+.theme-studio .default-effect-shell .resource-browse-btn,
+.theme-studio .input-vu-meter-dropdown-trigger,
+.theme-studio .gate-settings-trigger,
+.theme-studio .output-quick-mute-btn,
+.theme-studio .output-status-trigger,
+.theme-studio .signal-path-add-menu-trigger {
+  border: 1px solid #7d7666 !important;
+  background: linear-gradient(180deg, #f6f3ea 0%, #e3dfd2 48%, #cfc9b9 100%) !important;
+  color: var(--studio-ink) !important;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 rgba(44, 36, 20, 0.14),
+    0 1px 1px rgba(44, 36, 20, 0.45),
+    1px 2px 3px rgba(44, 36, 20, 0.2);
+}
+
+.theme-studio .btn:hover,
+.theme-studio .preset-action-btn:hover,
+.theme-studio .preset-nav-btn:hover,
+.theme-studio .eq-icon-btn:hover,
+.theme-studio .default-effect-shell-chip:hover,
+.theme-studio .effect-visualization-toolbar-btn:hover,
+.theme-studio .resource-nav-btn:hover,
+.theme-studio .default-effect-shell .resource-nav-btn:hover,
+.theme-studio .signal-path-add-menu-trigger:hover {
+  border-color: #5f594c !important;
+  background: linear-gradient(180deg, #fdfbf5 0%, #ece8dc 48%, #d8d3c4 100%) !important;
+  color: #000000 !important;
+}
+
+.theme-studio .btn:active,
+.theme-studio .preset-action-btn:active,
+.theme-studio .preset-nav-btn:active,
+.theme-studio .eq-icon-btn:active,
+.theme-studio .default-effect-shell-chip:active,
+.theme-studio .effect-visualization-toolbar-btn:active,
+.theme-studio .resource-nav-btn:active {
+  background: linear-gradient(180deg, #cfc9b9 0%, #dcd7c9 100%) !important;
+  box-shadow:
+    inset 0 2px 3px rgba(44, 36, 20, 0.4),
+    0 1px 0 rgba(255, 252, 244, 0.7);
+}
+
+/* A key that is latched on: held down, with its legend lit. */
+.theme-studio .effect-visualization-toolbar-btn.is-active,
+.theme-studio .eq-icon-btn.active,
+.theme-studio .btn.active {
+  border-color: #6b2710 !important;
+  background: linear-gradient(180deg, #d9c9b6 0%, #e9dccb 100%) !important;
+  color: var(--color-accent-dark) !important;
+  box-shadow:
+    inset 0 2px 3px rgba(44, 36, 20, 0.38),
+    0 1px 0 rgba(255, 252, 244, 0.7);
+}
+
+.theme-studio .btn-primary,
+.theme-studio .preset-action-btn-primary {
+  border-color: #6b2710 !important;
+  background: linear-gradient(180deg, #d9693a 0%, #b8461c 52%, #9c3713 100%) !important;
+  color: #fff8ee !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 190, 0.7),
+    0 1px 1px rgba(44, 36, 20, 0.5),
+    1px 2px 3px rgba(44, 36, 20, 0.24);
+}
+
+.theme-studio .btn-primary:hover,
+.theme-studio .preset-action-btn-primary:hover {
+  border-color: #56200d !important;
+  background: linear-gradient(180deg, #e3764a 0%, #c24c20 52%, #a43b15 100%) !important;
+  color: #ffffff !important;
+}
+
+.theme-studio .effect-visualization-toolbar-btn.bypassed {
+  color: #9f3f35 !important;
+}
+
+/* ===== The LCD: grey-green glass, dark segments, a bezel pressed into the plate ===== */
+
+.theme-studio .preset-selector,
+.theme-studio .bpm-display {
+  --studio-lcd-ink: #1c2412;
+  border: 1px solid #4d4a40;
+  background:
+    /* The pixel grid, just visible against the backlight. */
+    repeating-linear-gradient(0deg, rgba(20, 30, 10, 0.05) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(20, 30, 10, 0.04) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #a3b287 0%, #b4c298 55%, #a9b88d 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(20, 28, 10, 0.5),
+    inset 0 0 0 1px rgba(20, 28, 10, 0.18),
+    0 0 0 2px #2b2924,
+    0 1px 0 3px rgba(255, 252, 244, 0.75);
+  color: var(--studio-lcd-ink);
+}
+
+.theme-studio .preset-selector {
+  border-radius: 3px;
+}
+
+.theme-studio .preset-chooser-label,
+.theme-studio .preset-chooser-label:hover {
+  color: var(--studio-lcd-ink);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  /* Each segment throws a faint shadow on the reflector behind the glass. */
+  text-shadow: 1px 1px 0 rgba(20, 30, 10, 0.2);
+}
+
+.theme-studio .preset-favorite {
+  border-right-color: rgba(20, 30, 10, 0.25);
+  color: var(--studio-lcd-ink);
+}
+
+.theme-studio .preset-selector-status {
+  background: rgba(20, 30, 10, 0.16);
+  color: var(--studio-lcd-ink);
+}
+
+body.theme-studio .footer-bar .bpm-display {
+  border-radius: 2px;
+  color: var(--studio-lcd-ink);
+  font-weight: 700;
+  text-shadow: 1px 1px 0 rgba(20, 30, 10, 0.2);
+  box-shadow:
+    inset 0 2px 4px rgba(20, 28, 10, 0.5),
+    0 0 0 1px #2b2924,
+    0 1px 0 2px rgba(255, 255, 255, 0.6);
+}
+
+/* ===== Meters: LED ladders behind a smoked window ===== */
+
+.theme-studio .vu-segments {
+  --vu-seg-off: #3b3a34;
+  padding: 3px;
+  width: 20px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #14130f 0%, #24221d 100%);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 0 1px #57534a,
+    0 1px 0 2px rgba(255, 252, 244, 0.75);
+}
+
+/* The window's padding moves the ladder, so the peak tick moves with it. */
+.theme-studio .vu-peak-hold {
+  left: 3px;
+  margin-top: 3px;
+}
+
+/* ===== Fields: recessed, paler than the plate ===== */
+
+.theme-studio select,
+.theme-studio input[type="text"],
+.theme-studio input[type="search"],
+.theme-studio input[type="number"],
+.theme-studio textarea {
+  border-color: #857e6c;
+  box-shadow:
+    inset 0 1px 3px rgba(44, 36, 20, 0.3),
+    0 1px 0 rgba(255, 252, 244, 0.7);
+}
+
+.theme-studio .resource-picker-label,
+.theme-studio .default-effect-shell .resource-picker-label {
+  border-color: #857e6c;
+  background: var(--bg-input);
+  box-shadow:
+    inset 0 1px 3px rgba(44, 36, 20, 0.3),
+    0 1px 0 rgba(255, 252, 244, 0.7);
+}
+
+.theme-studio .resource-picker-label:hover,
+.theme-studio .default-effect-shell .resource-picker-label:hover {
+  border-color: var(--color-accent);
+  background: #f3f0e7;
+}

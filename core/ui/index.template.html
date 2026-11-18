@@ -192,6 +192,10 @@
   <link rel="stylesheet" href="css/themes/dark.css" />
   <link rel="stylesheet" href="css/themes/classic.css" />
   <link rel="stylesheet" href="css/grain.css" />
+  <!-- Studio builds on the light theme (the body carries both classes), so it loads after
+       light.css, and after grain.css, whose texture it replaces with its own. -->
+  <link rel="stylesheet" href="css/themes/studio.css" />
+  <link rel="stylesheet" href="css/themes/studio-controls.css" />
   <!-- Compact density. Last in the cascade because every rule here is a layout
        override of a sheet above it, keyed off html[data-density="compact"];
        anything they tint uses theme tokens, so the themes are untouched. Order

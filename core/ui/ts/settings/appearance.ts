@@ -6,7 +6,7 @@
 import type { DensityPreference } from "../compactMode.js";
 import { getDensityPreference, setDensityPreference } from "../compactMode.js";
 import { uiState } from "../state.js";
-import { themeSwitcher } from "../theme-switcher.js";
+import { THEME_OPTIONS, themeSwitcher } from "../theme-switcher.js";
 import type { ThemeName } from "../theme-switcher.js";
 import { updateAppSetting } from "../appSettingsStore.js";
 import { WHEEL_ADJUST_SETTING, isWheelAdjustEnabled } from "../wheelAdjust.js";
@@ -108,13 +108,7 @@ export function initThemeSelect(): void {
   }
   themeSelectInitialized = true;
 
-  const themes: Array<{ value: ThemeName; label: string }> = [
-    { value: "light", label: "Light" },
-    { value: "dark", label: "Dark" },
-    { value: "classic", label: "Vintage" },
-  ];
-
-  select.innerHTML = themes
+  select.innerHTML = THEME_OPTIONS
     .map((theme) => `<option value="${theme.value}">${theme.label}</option>`)
     .join("");
 

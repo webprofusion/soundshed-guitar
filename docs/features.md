@@ -528,15 +528,14 @@ Application configuration panel.
 
 **Key files:** `core/ui/ts/theme-switcher.ts`, `core/ui/css/variables.css`
 
-CSS variable-based theming with five built-in themes.
+CSS variable-based theming with four built-in themes (see `docs/theme-system.md`).
 
 | Theme | Class | Description |
 |-------|-------|-------------|
-| Default | (none) | Medium-contrast cool grays |
 | Light | `.theme-light` | High brightness, clean, modern |
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
-| Classic 70s | `.theme-classic` | Warm vintage browns/ambers |
-| Worn Pedal | `.theme-gritty` | Gritty, worn metal textures |
+| Vintage | `.theme-classic` | Warm vintage browns/ambers |
+| Studio | `.theme-light.theme-studio` | Light and skeuomorphic: used studio hardware, with rendered knobs and panels |
 
 - All colors use CSS variables (`--color-primary`, `--bg-primary`, `--text-primary`, etc.) — no hardcoded values in components.
 - **Persistence**: Selection stored in `localStorage` and `settings/app.json`.

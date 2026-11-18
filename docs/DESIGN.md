@@ -22,6 +22,8 @@ Soundshed Guitar uses a token-driven, multi-theme design system built on CSS cus
 - `.theme-light` — Light theme (bright background, dark text, clean minimalist)
 - `.theme-dark` — Dark theme (dark background, light text, high contrast)
 - `.theme-classic` — Classic theme (warm brown background, cream text, vintage studio aesthetic)
+- `.theme-studio` — Studio theme, applied together with `.theme-light`: the light theme drawn as
+  used studio hardware (putty faceplates, brushed aluminium, rendered knobs and screws, an LCD)
 
 ### Semantic Color Roles
 

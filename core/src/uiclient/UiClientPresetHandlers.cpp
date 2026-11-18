@@ -25,6 +25,12 @@ std::string NormalizeTheme(const std::string& theme)
         return theme;
     }
 
+    // The web UI's Studio theme is its light theme drawn as hardware; here it is light.
+    if (theme == "studio")
+    {
+        return "light";
+    }
+
     return "dark";
 }
 } // namespace
