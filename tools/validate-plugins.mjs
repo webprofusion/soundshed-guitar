@@ -199,12 +199,15 @@ function run(cmd, cmdArgs, options = {}) {
 function extractZip(zip, dest) {
   if (PLATFORM === "win32") {
     // Git Bash's tar is GNU tar, which cannot read zips; Expand-Archive always can.
-    const status = run("powershell", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${dest}' -Force`,
-    ]);
+    // Without PSModulePath: under a PowerShell 7 parent (a CI step's shell) the variable lists
+    // PowerShell 7's modules, and Windows PowerShell then loads that Archive module, which can
+    // fail there ("Cannot find an overload for ExtractToDirectory"). Unset, it uses its own.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toLowerCase() !== "psmodulepath"));
+    const status = run(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-Command", `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${dest}' -Force`],
+      { env },
+    );
     if (status !== 0) fail(`could not extract ${zip}`);
   } else if (run("unzip", ["-o", "-q", zip, "-d", dest]) !== 0) {
     fail(`could not extract ${zip}`);
