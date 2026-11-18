@@ -1,9 +1,9 @@
 /**
  * Theme Switcher
- * Manages switching between the light, dark, vintage and studio themes
+ * Manages switching between the light, dark, vintage and the two studio themes
  */
 
-export type ThemeName = 'light' | 'dark' | 'classic' | 'studio';
+export type ThemeName = 'light' | 'dark' | 'classic' | 'studio' | 'studio-2003';
 
 /** Every theme, in the order the pickers list them, with the name each one shows. */
 export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> = [
@@ -11,6 +11,7 @@ export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> =
   { value: 'dark', label: 'Dark' },
   { value: 'classic', label: 'Vintage' },
   { value: 'studio', label: 'Studio' },
+  { value: 'studio-2003', label: 'Studio 2003' },
 ];
 
 const THEME_LIST: ThemeName[] = THEME_OPTIONS.map((option) => option.value);
@@ -20,15 +21,17 @@ const LEGACY_THEME_MAP: Record<string, ThemeName> = {
 };
 
 /**
- * The body classes a theme switches on. Studio is the light theme drawn as hardware: it
- * keeps `theme-light`, so the light rules across the stylesheets still apply, and adds its
- * own class for css/themes/studio.css to build on.
+ * The body classes a theme switches on. The two studio themes are the light theme drawn as
+ * hardware: each keeps `theme-light`, so the light rules across the stylesheets still apply,
+ * and adds its own class for its stylesheets to build on (css/themes/studio.css, a clean
+ * current unit; css/themes/studio-2003.css, a used one).
  */
 const THEME_BODY_CLASSES: Record<ThemeName, string[]> = {
   light: ['theme-light'],
   dark: ['theme-dark'],
   classic: ['theme-classic'],
   studio: ['theme-light', 'theme-studio'],
+  'studio-2003': ['theme-light', 'theme-studio-2003'],
 };
 
 const ALL_THEME_BODY_CLASSES = [...new Set(Object.values(THEME_BODY_CLASSES).flat())];

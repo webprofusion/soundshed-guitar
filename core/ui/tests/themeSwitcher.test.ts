@@ -33,7 +33,7 @@ describe("themeSwitcher", () => {
     expect(themeClasses()).toEqual(["theme-classic"]);
   });
 
-  // Studio is the light theme drawn as hardware, so the light rules have to keep matching.
+  // The studio themes are the light theme drawn as hardware, so the light rules have to keep matching.
   it("puts studio on top of the light theme", async () => {
     const { themeSwitcher } = await loadThemeSwitcher();
     themeSwitcher.applyTheme("studio");
@@ -41,12 +41,20 @@ describe("themeSwitcher", () => {
     expect(themeSwitcher.getCurrentTheme()).toBe("studio");
   });
 
+  it("puts studio 2003 on top of the light theme, without the new studio's class", async () => {
+    const { themeSwitcher } = await loadThemeSwitcher();
+    themeSwitcher.applyTheme("studio-2003");
+    expect(themeClasses()).toEqual(["theme-light", "theme-studio-2003"]);
+    themeSwitcher.applyTheme("studio");
+    expect(themeClasses()).toEqual(["theme-light", "theme-studio"]);
+  });
+
   it("drops both studio classes when leaving it", async () => {
     const { themeSwitcher } = await loadThemeSwitcher();
     themeSwitcher.applyTheme("studio");
     themeSwitcher.applyTheme("dark");
     expect(themeClasses()).toEqual(["theme-dark"]);
-    themeSwitcher.applyTheme("studio");
+    themeSwitcher.applyTheme("studio-2003");
     themeSwitcher.applyTheme("light");
     expect(themeClasses()).toEqual(["theme-light"]);
   });
@@ -74,6 +82,7 @@ describe("themeSwitcher", () => {
   it("names every theme", async () => {
     const { themeSwitcher } = await loadThemeSwitcher();
     expect(themeSwitcher.getThemeDisplayName("studio")).toBe("Studio");
+    expect(themeSwitcher.getThemeDisplayName("studio-2003")).toBe("Studio 2003");
     expect(themeSwitcher.getThemeDisplayName("classic")).toBe("Vintage");
   });
 });
@@ -81,7 +90,7 @@ describe("themeSwitcher", () => {
 describe("normalizeThemeName", () => {
   it("keeps the themes this build has", async () => {
     const { normalizeThemeName } = await loadThemeSwitcher();
-    for (const theme of ["light", "dark", "classic", "studio"]) {
+    for (const theme of ["light", "dark", "classic", "studio", "studio-2003"]) {
       expect(normalizeThemeName(theme)).toBe(theme);
     }
   });

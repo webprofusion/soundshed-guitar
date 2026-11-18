@@ -159,23 +159,40 @@ body.signal-path-resizing * {
   box-sizing: border-box;
 }
 
+/* A node is a piece of equipment: a block standing a few pixels proud of the strip,
+   with a lit top edge, a side wall below its face and a soft shadow, and its
+   category colour as a thin line all round its edge. The block's colours are theme
+   tokens, each with a fallback here, so a theme only says what its plastic or paint
+   looks like:
+
+     --node-face         the face (default: the theme's card colour)
+     --node-sheen        a highlight across the top of the face
+     --node-edge-light   the lit top edge
+     --node-wall         the side wall (default: the face in shade)
+     --node-wall-edge    the line where the wall meets the strip
+     --node-shadow       the soft shadow on the strip
+     --node-shadow-x     how far the shadow falls sideways, for a theme lit from one side */
 .signal-node {
   --node-accent-strong: var(--color-accent);
   --node-accent-soft: color-mix(in srgb, var(--node-accent-strong) 20%, transparent);
-  --node-accent-border: color-mix(in srgb, var(--node-accent-strong) 42%, var(--border-light));
+  --node-accent-border: color-mix(in srgb, var(--node-accent-strong) 72%, var(--node-face, var(--bg-card)));
   --node-accent-glow: color-mix(in srgb, var(--node-accent-strong) 24%, transparent);
+  --node-raised:
+    inset 0 1px 0 var(--node-edge-light, rgb(255 255 255 / 0.1)),
+    inset 0 -1px 0 rgb(0 0 0 / 0.06),
+    0 3px 0 var(--node-wall, color-mix(in srgb, black 38%, var(--node-face, var(--bg-card)))),
+    0 4px 0 var(--node-wall-edge, rgb(0 0 0 / 0.3)),
+    var(--node-shadow-x, 0px) 7px 12px color-mix(in srgb, var(--node-shadow, rgb(0 0 0 / 0.5)) 55%, transparent),
+    var(--node-shadow-x, 0px) 20px 40px -10px var(--node-shadow, rgb(0 0 0 / 0.5));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   padding: 8px 12px 10px;
-  /* A wash of the category colour from the top, a soft pool of it under the
-     label, and a shade at the foot so the card reads as a raised panel. */
   background:
-    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--node-accent-strong) 16%, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, transparent 55%, color-mix(in srgb, black 10%, transparent) 100%),
-    var(--bg-card);
-  border-radius: var(--radius-xl);
+    linear-gradient(180deg, var(--node-sheen, rgb(255 255 255 / 0.06)) 0%, transparent 42%, rgb(0 0 0 / 0.04) 100%),
+    var(--node-face, var(--bg-card));
+  border-radius: 10px;
   border: 1px solid var(--node-accent-border);
   min-width: 72px;
   min-height:72px;
@@ -200,62 +217,25 @@ body.signal-path-resizing * {
     gap 0.1s ease-out,
     border-radius 0.1s ease-out;
   position: relative;
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 8%, var(--node-accent-soft)),
-    0 3px 8px -2px rgb(0 0 0 / 0.35);
-}
-
-/* The underglow: a strip of the category colour along the foot of the card,
-   brighter on hover and wider on the selected node, dark when bypassed. */
-.signal-node::after {
-  content: "";
-  position: absolute;
-  left: 22%;
-  right: 22%;
-  bottom: -1px;
-  height: 2px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, transparent, var(--node-accent-strong), transparent);
-  box-shadow: 0 0 10px var(--node-accent-glow);
-  opacity: 0.5;
-  pointer-events: none;
-  transition: opacity 0.15s ease, left 0.15s ease, right 0.15s ease;
+  box-shadow: var(--node-raised);
 }
 
 .signal-node:hover {
-  border-color: var(--node-accent-border);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 8%, var(--node-accent-soft)),
-    0 10px 18px -4px color-mix(in srgb, rgb(0, 0, 0) 55%, var(--node-accent-strong) 45%);
+  border-color: color-mix(in srgb, var(--node-accent-strong) 88%, var(--node-face, var(--bg-card)));
 }
 
 .signal-node:hover:not(.dragging):not(.signal-node-drag-preview) {
   transform: translateY(-1px);
 }
 
-/* Brighter while the node passes signal (ts/signalPath/signalFlow.ts). */
-.signal-node:hover::after,
-.signal-node.signal-live::after {
-  opacity: 0.9;
-}
-
-/* The ring is drawn inside rather than by thickening the border, so selecting
-   a node does not nudge its contents. */
+/* Selected: the line goes to full colour, with a soft halo of it outside. The halo is
+   a shadow rather than a thicker border, so selecting a node does not nudge its contents. */
 .signal-node.selected, .signal-node:focus {
   border-color: var(--node-accent-strong);
   box-shadow:
-    inset 0 0 0 1px var(--node-accent-strong),
-    inset 0 1px 0 color-mix(in srgb, white 7%, var(--node-accent-soft)),
-    0 0 0 1px color-mix(in srgb, var(--node-accent-strong) 36%, transparent),
-    0 0 22px var(--node-accent-glow),
-    0 6px 14px -4px rgb(0 0 0 / 0.4);
+    0 0 0 2px color-mix(in srgb, var(--node-accent-strong) 24%, transparent),
+    var(--node-raised);
   outline: none;
-}
-
-.signal-node.selected::after, .signal-node:focus::after {
-  left: 10%;
-  right: 10%;
-  opacity: 1;
 }
 
 .signal-node.amp {
@@ -362,17 +342,12 @@ body.signal-path-resizing * {
   filter: saturate(0.35);
 }
 
-.signal-node.bypassed::after {
-  opacity: 0;
-}
-
 .signal-node.bypassed .node-label::after {
   content: none;
 }
 
 .signal-node.input-node {
   --node-accent-strong: var(--node-input);
-  border-color: color-mix(in srgb, var(--node-input) 60%, var(--border-light));
 }
 
 .signal-node.input-node:hover {
@@ -381,7 +356,6 @@ body.signal-path-resizing * {
 
 .signal-node.output-node {
   --node-accent-strong: var(--node-output);
-  border-color: color-mix(in srgb, var(--node-output) 60%, var(--border-light));
 }
 
 .signal-node.output-node:hover {

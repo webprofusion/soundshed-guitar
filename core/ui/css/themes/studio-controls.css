@@ -4,10 +4,10 @@
  */
 
 /* ===== Knobs =====
- * A rendered knob (images/themes/studio/knob.png: a moulded body with a spun aluminium
- * cap, lit from the upper left, its shadow baked in) under a pointer line that turns.
- * The body is still and only the line rotates, so the highlights stay where the light is.
- * The image is 1.3 body diameters across to leave room for the shadow.
+ * A rendered knob (images/themes/studio/knob.png: a light plastic cap with a dished top,
+ * moulded onto a dark grey plastic skirt, under a soft box; its shadow baked in)
+ * under a short printed line that turns. The body is still and only the line rotates, so
+ * the light stays where it is. The image is 1.3 skirt diameters across, as Studio 2003's.
  *
  * A custom layout's own knob art (an image, or the Pedal, Amp and Minimal styles) is left
  * alone; a layout knob on the Default style follows the theme like any other.
@@ -21,22 +21,21 @@
   box-shadow: none;
 }
 
-/* The pointer: a painted line down the body's shoulder that carries on across the cap as
-   an engraved one. Sized in percentages of the knob so every knob size gets the same
-   drawing; the pivot is the knob's centre. */
+/* The pointer: a short graphite line printed on the top face, in from its edge. Sized in
+   percentages of the knob so every size gets the same drawing; the pivot is the centre. */
 .theme-studio .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal) .knob-indicator {
-  top: 11.5%;
-  width: 5.5%;
+  top: 21%;
+  width: 4.5%;
   min-width: 2px;
-  height: 27%;
-  border-radius: 1px;
-  background: linear-gradient(180deg, #fffdf6 0%, #e6e2d6 42%, #26262a 42%, #3a3a3e 100%);
-  box-shadow: 0 0 1px rgba(0, 0, 0, 0.7);
-  transform-origin: 50% 142.6%; /* (50% - 11.5%) / 27% */
+  height: 12%;
+  border-radius: 99px;
+  background: #2a2c30;
+  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.6);
+  transform-origin: 50% 241.7%; /* (50% - 21%) / 12% */
 }
 
 .theme-studio .knob::after {
-  background: rgba(54, 46, 30, 0.45);
+  background: rgba(30, 34, 40, 0.3);
 }
 
 .theme-studio .knob-value,
@@ -44,66 +43,71 @@
   color: var(--text-secondary);
 }
 
-/* ===== Slide switches: a dark slot with a cream cap; the slot lights when on ===== */
+/* ===== Switches: a pill moulded into the panel, with a plastic thumb that stands in it ===== */
 
 .theme-studio .toggle-slider {
-  background: linear-gradient(180deg, #24231f 0%, #45423b 100%);
-  border-color: #1b1a17;
+  background: linear-gradient(180deg, #cdcdc8 0%, #dcdcd8 100%);
+  border-color: rgba(28, 28, 24, 0.14);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.7),
-    0 1px 0 rgba(255, 252, 244, 0.8);
+    inset 0 2px 3px rgba(28, 28, 24, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .theme-studio .toggle-slider:before {
-  background: linear-gradient(180deg, #fdfbf5 0%, #cbc6b8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f1f1ee 100%);
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 #ffffff;
+    inset 0 1px 0 #ffffff,
+    0 1px 0 #b9b9b4,
+    0 2px 3px rgba(28, 28, 24, 0.25);
 }
 
 .theme-studio .toggle-switch input:checked + .toggle-slider {
-  background: linear-gradient(180deg, #7a2a0e 0%, #e2622a 100%);
-  border-color: #5c1f0a;
+  background: linear-gradient(180deg, #c24515 0%, #e0602a 100%);
+  border-color: rgba(120, 40, 10, 0.5);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 0 5px rgba(226, 98, 42, 0.55),
-    0 1px 0 rgba(255, 252, 244, 0.8);
+    inset 0 2px 3px rgba(80, 24, 4, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .theme-studio .toggle-switch input:checked + .toggle-slider:before,
 .theme-studio .mini-toggle-control input:checked + .toggle-slider:before {
   border: 0;
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 #ffffff;
+    inset 0 1px 0 #ffffff,
+    0 1px 0 #b9b9b4,
+    0 2px 3px rgba(60, 20, 4, 0.3);
 }
 
-/* The effect's power switch: the same slot, wider, with its legend inside. */
+/* The effect's power switch: the same pill, wider, with its legend inside. */
 .theme-studio .default-effect-shell-toggle {
-  border-color: #1b1a17;
-  background: linear-gradient(180deg, #24231f 0%, #45423b 100%);
+  border-color: rgba(28, 28, 24, 0.16);
+  background: linear-gradient(180deg, #c3c3be 0%, #d3d3ce 100%);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.7),
-    0 1px 0 rgba(255, 252, 244, 0.8);
+    inset 0 2px 3px rgba(28, 28, 24, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .theme-studio .default-effect-shell-toggle:not(.bypassed) {
-  border-color: #5c1f0a;
-  background: linear-gradient(180deg, #7a2a0e 0%, #e2622a 100%);
+  border-color: rgba(120, 40, 10, 0.5);
+  background: linear-gradient(180deg, #c24515 0%, #e0602a 100%);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 0 6px rgba(226, 98, 42, 0.5),
-    0 1px 0 rgba(255, 252, 244, 0.8);
+    inset 0 2px 3px rgba(80, 24, 4, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .theme-studio .default-effect-shell-toggle-track {
-  background: linear-gradient(180deg, #fdfbf5 0%, #cbc6b8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f1f1ee 100%);
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 #ffffff;
+    inset 0 1px 0 #ffffff,
+    0 1px 0 #b9b9b4,
+    0 2px 3px rgba(28, 28, 24, 0.25);
 }
 
-/* ===== Keys: moulded plastic caps that sit proud of the plate and go down when pressed ===== */
+/* ===== Keys: chunky plastic caps =====
+ * Each key stands 3px proud of the panel: a face with a lit top edge and a slight dome, a
+ * side wall below it (a hard shadow in the case colour), then a soft shadow. Pressed, it
+ * travels down by the wall's height and the wall and shadow go; a latched key stays down.
+ * `translate` rather than `transform`, so a key's own transform is left alone. */
 
 .theme-studio .btn,
 .theme-studio .preset-action-btn,
@@ -120,14 +124,20 @@
 .theme-studio .output-quick-mute-btn,
 .theme-studio .output-status-trigger,
 .theme-studio .signal-path-add-menu-trigger {
-  border: 1px solid #7d7666 !important;
-  background: linear-gradient(180deg, #f6f3ea 0%, #e3dfd2 48%, #cfc9b9 100%) !important;
+  --studio-key-wall: #cfcfca;
+  border: 1px solid rgba(28, 28, 24, 0.16) !important;
+  background:
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #fbfbf9 0%, #f0f0ec 100%) !important;
   color: var(--studio-ink) !important;
   box-shadow:
     inset 0 1px 0 #ffffff,
-    inset 0 -1px 0 rgba(44, 36, 20, 0.14),
-    0 1px 1px rgba(44, 36, 20, 0.45),
-    1px 2px 3px rgba(44, 36, 20, 0.2);
+    inset 0 -2px 2px rgba(28, 28, 24, 0.04),
+    0 2px 0 var(--studio-key-wall),
+    0 3px 0 rgba(28, 28, 24, 0.16),
+    0 4px 6px rgba(28, 28, 24, 0.1),
+    0 8px 14px -4px rgba(28, 28, 24, 0.14);
+  transition: translate 0.06s ease, box-shadow 0.06s ease;
 }
 
 .theme-studio .btn:hover,
@@ -139,8 +149,10 @@
 .theme-studio .resource-nav-btn:hover,
 .theme-studio .default-effect-shell .resource-nav-btn:hover,
 .theme-studio .signal-path-add-menu-trigger:hover {
-  border-color: #5f594c !important;
-  background: linear-gradient(180deg, #fdfbf5 0%, #ece8dc 48%, #d8d3c4 100%) !important;
+  border-color: rgba(28, 28, 24, 0.24) !important;
+  background:
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #ffffff 0%, #f5f5f2 100%) !important;
   color: #000000 !important;
 }
 
@@ -150,68 +162,102 @@
 .theme-studio .eq-icon-btn:active,
 .theme-studio .default-effect-shell-chip:active,
 .theme-studio .effect-visualization-toolbar-btn:active,
-.theme-studio .resource-nav-btn:active {
-  background: linear-gradient(180deg, #cfc9b9 0%, #dcd7c9 100%) !important;
-  box-shadow:
-    inset 0 2px 3px rgba(44, 36, 20, 0.4),
-    0 1px 0 rgba(255, 252, 244, 0.7);
-}
-
-/* A key that is latched on: held down, with its legend lit. */
+.theme-studio .resource-nav-btn:active,
+.theme-studio .signal-path-add-menu-trigger:active,
+/* A key that is latched on stays down, its legend lit. */
 .theme-studio .effect-visualization-toolbar-btn.is-active,
 .theme-studio .eq-icon-btn.active,
 .theme-studio .btn.active {
-  border-color: #6b2710 !important;
-  background: linear-gradient(180deg, #d9c9b6 0%, #e9dccb 100%) !important;
-  color: var(--color-accent-dark) !important;
+  translate: 0 2px;
+  background: linear-gradient(180deg, #ecece8 0%, #f3f3f0 100%) !important;
   box-shadow:
-    inset 0 2px 3px rgba(44, 36, 20, 0.38),
-    0 1px 0 rgba(255, 252, 244, 0.7);
+    inset 0 1px 2px rgba(28, 28, 24, 0.14),
+    0 1px 0 var(--studio-key-wall),
+    0 1px 2px rgba(28, 28, 24, 0.1);
 }
 
+.theme-studio .effect-visualization-toolbar-btn.is-active,
+.theme-studio .eq-icon-btn.active,
+.theme-studio .btn.active {
+  border-color: rgba(164, 59, 16, 0.4) !important;
+  color: var(--color-accent-dark) !important;
+}
+
+/* The primary key is graphite, not orange: the colour stays for what is on. */
 .theme-studio .btn-primary,
 .theme-studio .preset-action-btn-primary {
-  border-color: #6b2710 !important;
-  background: linear-gradient(180deg, #d9693a 0%, #b8461c 52%, #9c3713 100%) !important;
-  color: #fff8ee !important;
+  --studio-key-wall: #18191b;
+  border-color: #1b1c1f !important;
+  background:
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #3d4045 0%, #2c2e32 100%) !important;
+  color: #f7f7f5 !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 220, 190, 0.7),
-    0 1px 1px rgba(44, 36, 20, 0.5),
-    1px 2px 3px rgba(44, 36, 20, 0.24);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 2px 0 var(--studio-key-wall),
+    0 3px 0 rgba(0, 0, 0, 0.25),
+    0 4px 6px rgba(28, 28, 24, 0.14),
+    0 8px 14px -4px rgba(28, 28, 24, 0.2);
 }
 
 .theme-studio .btn-primary:hover,
 .theme-studio .preset-action-btn-primary:hover {
-  border-color: #56200d !important;
-  background: linear-gradient(180deg, #e3764a 0%, #c24c20 52%, #a43b15 100%) !important;
+  border-color: #111214 !important;
+  background:
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #474a50 0%, #33363a 100%) !important;
   color: #ffffff !important;
+}
+
+.theme-studio .btn-primary:active,
+.theme-studio .preset-action-btn-primary:active {
+  background: linear-gradient(180deg, #2a2c30 0%, #34363b 100%) !important;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.4),
+    0 1px 0 var(--studio-key-wall);
 }
 
 .theme-studio .effect-visualization-toolbar-btn.bypassed {
   color: #9f3f35 !important;
 }
 
-/* ===== The LCD: grey-green glass, dark segments, a bezel pressed into the plate ===== */
+/* A disabled key cannot be pressed, so it does not look pressed either. */
+.theme-studio .btn:disabled,
+.theme-studio .preset-action-btn:disabled,
+.theme-studio .preset-nav-btn:disabled {
+  translate: none;
+}
+
+/* ===== The LCD: grey-green glass, dark segments, behind a smoked window =====
+ * Kept from Studio 2003, so the preset name and tempo still read as a display rather than
+ * a label. Only its bezel is new: one thin dark line, set into the panel. */
 
 .theme-studio .preset-selector,
 .theme-studio .bpm-display {
   --studio-lcd-ink: #1c2412;
-  border: 1px solid #4d4a40;
+  border: 1px solid #45474b;
   background:
     /* The pixel grid, just visible against the backlight. */
     repeating-linear-gradient(0deg, rgba(20, 30, 10, 0.05) 0 1px, transparent 1px 3px),
     repeating-linear-gradient(90deg, rgba(20, 30, 10, 0.04) 0 1px, transparent 1px 3px),
+    /* A soft reflection across the top of the glass. */
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 45%),
     linear-gradient(180deg, #a3b287 0%, #b4c298 55%, #a9b88d 100%);
   box-shadow:
-    inset 0 2px 5px rgba(20, 28, 10, 0.5),
-    inset 0 0 0 1px rgba(20, 28, 10, 0.18),
-    0 0 0 2px #2b2924,
-    0 1px 0 3px rgba(255, 252, 244, 0.75);
+    inset 0 2px 4px rgba(20, 28, 10, 0.4),
+    inset 0 0 0 1px rgba(20, 28, 10, 0.14),
+    0 0 0 1px rgba(28, 28, 24, 0.18),
+    0 1px 0 1px rgba(255, 255, 255, 0.85);
   color: var(--studio-lcd-ink);
 }
 
 .theme-studio .preset-selector {
-  border-radius: 3px;
+  border-radius: 6px;
+}
+
+/* The keys above stand 3px proud and throw a shadow; give the display room below them. */
+html:not([data-density="compact"]) body.theme-studio .preset-selector-row {
+  margin-top: 8px;
 }
 
 .theme-studio .preset-chooser-label,
@@ -234,29 +280,29 @@
 }
 
 body.theme-studio .footer-bar .bpm-display {
-  border-radius: 2px;
+  border-radius: 4px;
   color: var(--studio-lcd-ink);
   font-weight: 700;
   text-shadow: 1px 1px 0 rgba(20, 30, 10, 0.2);
   box-shadow:
-    inset 0 2px 4px rgba(20, 28, 10, 0.5),
-    0 0 0 1px #2b2924,
-    0 1px 0 2px rgba(255, 255, 255, 0.6);
+    inset 0 2px 4px rgba(20, 28, 10, 0.4),
+    0 0 0 1px rgba(28, 28, 24, 0.18),
+    0 1px 0 1px rgba(255, 255, 255, 0.85);
 }
 
 /* ===== Meters: LED ladders behind a smoked window ===== */
 
 .theme-studio .vu-segments {
-  --vu-seg-off: #3b3a34;
+  --vu-seg-off: #3a3c40;
   padding: 3px;
   width: 20px;
   box-sizing: border-box;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #14130f 0%, #24221d 100%);
+  border-radius: 4px;
+  background: linear-gradient(180deg, #17181b 0%, #26282c 100%);
   box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, 0.9),
-    0 0 0 1px #57534a,
-    0 1px 0 2px rgba(255, 252, 244, 0.75);
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(28, 28, 24, 0.35),
+    0 1px 0 1px rgba(255, 255, 255, 0.8);
 }
 
 /* The window's padding moves the ladder, so the peak tick moves with it. */
@@ -265,30 +311,30 @@ body.theme-studio .footer-bar .bpm-display {
   margin-top: 3px;
 }
 
-/* ===== Fields: recessed, paler than the plate ===== */
+/* ===== Fields: recessed, lighter than the plastic around them ===== */
 
 .theme-studio select,
 .theme-studio input[type="text"],
 .theme-studio input[type="search"],
 .theme-studio input[type="number"],
 .theme-studio textarea {
-  border-color: #857e6c;
+  border-color: rgba(28, 28, 24, 0.18);
   box-shadow:
-    inset 0 1px 3px rgba(44, 36, 20, 0.3),
-    0 1px 0 rgba(255, 252, 244, 0.7);
+    inset 0 1px 2px rgba(28, 28, 24, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .theme-studio .resource-picker-label,
 .theme-studio .default-effect-shell .resource-picker-label {
-  border-color: #857e6c;
+  border-color: rgba(28, 28, 24, 0.18);
   background: var(--bg-input);
   box-shadow:
-    inset 0 1px 3px rgba(44, 36, 20, 0.3),
-    0 1px 0 rgba(255, 252, 244, 0.7);
+    inset 0 1px 2px rgba(28, 28, 24, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .theme-studio .resource-picker-label:hover,
 .theme-studio .default-effect-shell .resource-picker-label:hover {
   border-color: var(--color-accent);
-  background: #f3f0e7;
+  background: #ffffff;
 }

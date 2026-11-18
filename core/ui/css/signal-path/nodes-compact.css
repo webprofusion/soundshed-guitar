@@ -36,11 +36,6 @@
   box-shadow: none;
 }
 
-.signal-path-bar[data-density="compact"] .signal-node::after {
-  left: 18%;
-  right: 18%;
-}
-
 .signal-path-bar[data-density="compact"] .signal-node .node-icon .fx-effect-icon {
   width: 16px;
   height: 16px;
@@ -68,7 +63,6 @@
 }
 
 /* What the node shows over itself stays above the picture (z-index 1). */
-.signal-path-bar[data-density="compact"] .signal-node.has-thumb::after,
 .signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-bypass-badge,
 .signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-missing-badge,
 .signal-path-bar[data-density="compact"] .signal-node.has-thumb .node-clip-indicator {

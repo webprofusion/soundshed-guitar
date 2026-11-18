@@ -1,11 +1,11 @@
 """
-Renders the Studio theme's images: the knob, the panel screws and the panel textures.
+Renders the Studio 2003 theme's images: the knob, the panel screws and the case textures.
 
 Run it with Blender (5.x), headless, from the repo root:
 
-    blender -b --factory-startup -P tools/studio-theme-assets/generate.py -- [knob] [screws] [textures]
+    blender -b --factory-startup -P tools/studio-theme-assets/studio_2003.py -- [knob] [screws] [textures]
 
-With no names after "--" it makes everything. Output goes to core/ui/images/themes/studio/.
+With no names after "--" it makes everything. Output goes to core/ui/images/themes/studio-2003/.
 The knob and screws are path traced (Cycles, top-down orthographic, one light rig shared by
 both so their shadows agree); the textures are numpy noise, made to tile.
 
@@ -21,7 +21,7 @@ import bpy
 import numpy as np
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(REPO, "core", "ui", "images", "themes", "studio")
+OUT = os.path.join(REPO, "core", "ui", "images", "themes", "studio-2003")
 
 # The light comes from above and a little to the left, as the stylesheet's shadows assume.
 KEY_AZIMUTH = math.radians(112.0)  # measured anticlockwise from +X, so up and to the left
@@ -117,9 +117,9 @@ def principled(name):
     return material, material.node_tree.nodes["Principled BSDF"]
 
 
-def render_to(scene, filename, body_radius):
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, filename)
+def render_to(scene, filename, body_radius, out=OUT):
+    os.makedirs(out, exist_ok=True)
+    path = os.path.join(out, filename)
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
     trim_shadow(path, body_radius)
@@ -375,7 +375,7 @@ def unit(field):
     return (field - field.mean()) / (field.std() + 1e-9)
 
 
-def save_image(filename, rgba, jpeg_quality=None):
+def save_image(filename, rgba, jpeg_quality=None, out=OUT):
     """rgba: float array (height, width, 4), sRGB values in 0..1, row 0 at the top."""
     height, width, _ = rgba.shape
     image = bpy.data.images.new(filename, width, height, alpha=True)
@@ -397,8 +397,8 @@ def save_image(filename, rgba, jpeg_quality=None):
         settings.file_format = "JPEG"
         settings.color_mode = "RGB"
         settings.quality = jpeg_quality
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, filename)
+    os.makedirs(out, exist_ok=True)
+    path = os.path.join(out, filename)
     image.save_render(path, scene=scene)
     bpy.data.images.remove(image)
     print("wrote", path)
@@ -408,32 +408,67 @@ def opaque(rgb):
     return np.concatenate([rgb, np.ones(rgb.shape[:2] + (1,))], axis=2)
 
 
-def make_panel(rng):
-    """Powder-coated steel in a warm putty: orange-peel grain lit from above, faint mottling."""
-    size = 384
-    grain = unit(blur_wrap(rng.standard_normal((size, size)), 0.9, 0.9))
-    # Light from the top: a bump's upper slope is brighter than its lower one.
-    relief = unit(np.roll(grain, 1, axis=0) - np.roll(grain, -1, axis=0))
-    mottle = unit(blur_wrap(rng.standard_normal((size, size)), 26.0, 26.0))
-    speck = unit(blur_wrap(rng.standard_normal((size, size)), 0.6, 0.6))
-    shade = 1.0 + 0.02 * relief + 0.004 * mottle + 0.007 * speck
-    base = np.array([0.835, 0.812, 0.752])
-    rgb = base[None, None, :] * shade[..., None]
-    # Age: the mottling leans slightly yellow where it is darker.
-    rgb[..., 2] *= 1.0 - 0.003 * np.clip(-mottle, 0.0, None)
-    save_image("panel.jpg", opaque(rgb), jpeg_quality=90)
-
-
 def make_brushed(rng):
-    """Brushed aluminium, grain running left to right."""
-    height, width = 192, 512
-    noise = rng.standard_normal((height, width))
-    fine = unit(blur_wrap(noise, 0.35, 42.0))
-    coarse = unit(blur_wrap(rng.standard_normal((height, width)), 1.4, 150.0))
-    cloud = unit(blur_wrap(rng.standard_normal((height, width)), 30.0, 90.0))
-    shade = 1.0 + 0.034 * fine + 0.02 * coarse + 0.012 * cloud
-    base = np.array([0.795, 0.800, 0.805])
-    save_image("brushed.jpg", opaque(base[None, None, :] * shade[..., None]), jpeg_quality=88)
+    """
+    Brushed aluminium, grain running left to right. Made at twice the size it is shown
+    (the stylesheet draws it at 512 x 128), so the grain is finer than a screen pixel and
+    reads as a sheen rather than as lines. Three scales of brushing, all shallow: the fine
+    hairlines, longer streaks where the abrasive dragged, and a broad uneven sheen.
+    """
+    height, width = 256, 1024
+    fine = unit(blur_wrap(rng.standard_normal((height, width)), 0.45, 60.0))
+    streak = unit(blur_wrap(rng.standard_normal((height, width)), 0.9, 260.0))
+    sheen = unit(blur_wrap(rng.standard_normal((height, width)), 40.0, 220.0))
+    shade = 1.0 + 0.011 * fine + 0.006 * streak + 0.008 * sheen
+    base = np.array([0.818, 0.822, 0.826])
+    save_image("brushed.jpg", opaque(base[None, None, :] * shade[..., None]), jpeg_quality=92)
+
+
+def make_casing(rng):
+    """
+    The case: sheet steel with a satin finish that has seen years of racks and benches.
+    Faint brushing left to right from the factory, then a fog of fine scratches in every
+    direction, patches where it has been rubbed duller or brighter, and a light patina.
+    Made at twice the size it is shown (256 px), like the brushed rails.
+    """
+    size = 512
+    brushing = unit(blur_wrap(rng.standard_normal((size, size)), 0.5, 26.0))
+    patina = unit(blur_wrap(rng.standard_normal((size, size)), 48.0, 48.0))
+    blotch = unit(blur_wrap(rng.standard_normal((size, size)), 9.0, 9.0))
+    speck = unit(blur_wrap(rng.standard_normal((size, size)), 0.5, 0.5))
+
+    # Scratches: short, thin, every which way; most catch the light, some hold dirt.
+    bright = np.zeros((size, size))
+    dull = np.zeros((size, size))
+    for _ in range(900):
+        length = rng.uniform(6, 70)
+        steps = max(2, int(length * 2))
+        t = np.linspace(0.0, 1.0, steps)
+        angle = rng.uniform(0.0, math.pi)
+        x0, y0 = rng.uniform(0, size, 2)
+        x = x0 + np.cos(angle) * t * length
+        y = y0 + np.sin(angle) * t * length
+        weight = rng.uniform(0.15, 1.0) * np.sin(math.pi * t) ** 0.5
+        splat(bright if rng.uniform() < 0.7 else dull, y, x, weight)
+    bright = blur_wrap(bright, 0.4, 0.4)
+    dull = blur_wrap(dull, 0.5, 0.5)
+    # Rubbed patches: where hands and gear have polished it, the scratches are denser.
+    rubbed = np.clip(unit(blur_wrap(rng.standard_normal((size, size)), 30.0, 30.0)), 0.0, None)
+
+    shade = (
+        1.0
+        + 0.006 * brushing
+        + 0.010 * patina
+        + 0.004 * blotch
+        + 0.004 * speck
+        + 0.030 * np.clip(bright, 0.0, 1.0) * (0.6 + 0.4 * rubbed)
+        - 0.024 * np.clip(dull, 0.0, 1.0)
+    )
+    base = np.array([0.790, 0.784, 0.766])
+    rgb = base[None, None, :] * shade[..., None]
+    # The patina leans warm where it is darker.
+    rgb[..., 2] *= 1.0 - 0.006 * np.clip(-patina, 0.0, None)
+    save_image("casing.jpg", opaque(rgb), jpeg_quality=90)
 
 
 def splat(layer, y, x, weight):
@@ -508,7 +543,7 @@ def make_wear(rng):
 def make_textures():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     rng = np.random.default_rng(1987)
-    make_panel(rng)
+    make_casing(rng)
     make_brushed(rng)
     make_wear(rng)
 

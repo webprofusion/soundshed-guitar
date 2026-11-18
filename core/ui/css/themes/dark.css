@@ -3,6 +3,15 @@
  */
 
 .theme-dark {
+  /* The chain's node blocks (css/signal-path/nodes.css): a graphite face on a dark
+     aluminium body (the banded wall is below), lit from above. */
+  --node-face: #24242c;
+  --node-sheen: rgb(255 255 255 / 0.07);
+  --node-edge-light: rgb(255 255 255 / 0.12);
+  --node-wall: #4a4d55;
+  --node-wall-edge: rgb(0 0 0 / 0.45);
+  --node-shadow: rgb(0 0 0 / 0.55);
+
   /* Primary Colors */
   --color-accent: #ff8850;
   --color-accent-hover: #ff9860;
@@ -254,4 +263,20 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.58),
     0 28px 55px rgba(0, 0, 0, 0.5);
+}
+
+/* The node's side wall is dark anodised aluminium: a bright chamfer under the face, then
+   bands that darken toward the strip, so the edge reads as machined metal rather than a
+   shadow. Solid offset shadows draw the bands; nodes.css documents the other tokens. */
+.theme-dark .signal-node {
+  --node-raised:
+    inset 0 1px 0 var(--node-edge-light),
+    inset 0 -1px 0 rgb(0 0 0 / 0.2),
+    0 1px 0 #70747d,
+    0 2px 0 #565961,
+    0 3px 0 #4a4d55,
+    0 4px 0 #3e4047,
+    0 5px 0 rgb(0 0 0 / 0.6),
+    0 8px 12px color-mix(in srgb, var(--node-shadow) 55%, transparent),
+    0 20px 40px -10px var(--node-shadow);
 }

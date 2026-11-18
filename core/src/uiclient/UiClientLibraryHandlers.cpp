@@ -228,8 +228,9 @@ void UiClient::RegisterLibraryHandlers()
 
     On("theme", [this](const nlohmann::json& m) {
         const auto theme = m.value("theme", "dark");
-        // "studio" is the web UI's light theme drawn as hardware; here it is light.
-        mState.theme = theme == "light" || theme == "classic" ? theme : (theme == "studio" ? "light" : "dark");
+        // The web UI's studio themes are its light theme drawn as hardware; here they are light.
+        const bool studio = theme == "studio" || theme == "studio-2003";
+        mState.theme = theme == "light" || theme == "classic" ? theme : (studio ? "light" : "dark");
         Notify(Topic::Session);
     });
 

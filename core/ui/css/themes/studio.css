@@ -1,148 +1,168 @@
 /* ===== Studio Theme =====
- * A light theme drawn as hardware: a used piece of digital studio gear with analogue
- * controls. Powder-coated putty faceplates, brushed aluminium rails, panel screws, a
- * backlit LCD for the preset name and rendered knobs.
+ * A light theme drawn as a current piece of studio hardware, all moulded plastic: a warm
+ * light-grey case, paler raised panels, chunky keys that stand proud and travel when pressed,
+ * and one colour used sparingly. Soft shadows from one large soft box overhead. Studio 2003
+ * (studio-2003.css) is the older, used unit.
  *
  * The body carries .theme-light as well as .theme-studio (ts/theme-switcher.ts), so every
  * light-theme rule in the other stylesheets still applies and this file only restyles what
  * makes it hardware. Tokens and surfaces live here; the controls (knobs, switches, keys,
  * the LCD, meters) are in studio-controls.css.
  *
- * The images are rendered by tools/studio-theme-assets/generate.py. One light, above and a
- * little to the left, is assumed throughout: highlights on top edges, shadows falling down
- * and slightly right.
+ * Plastic has thickness: a raised part shows a lit top edge, a narrow side wall below its
+ * face (a hard shadow of a few pixels in a darker tone of the case), then a soft shadow on
+ * the case. A recessed part is the same turned over. The images are rendered by
+ * tools/studio-theme-assets/studio.py; grain.png is the moulding texture, a transparent
+ * overlay laid over every plastic colour.
  */
 
 .theme-studio {
-  /* Signal orange, the colour of an indicator lens. */
-  --color-accent: #a83c16;
-  --color-accent-hover: #bd4a1e;
-  --color-accent-dark: #8a2f10;
-  --color-accent-rgb: 168, 60, 22;
+  /* The one colour: a signal orange, kept to rings, lit keys and the on state. */
+  --color-accent: #d4501c;
+  --color-accent-hover: #e25e28;
+  --color-accent-dark: #a43b10;
+  --color-accent-rgb: 212, 80, 28;
 
-  /* Putty faceplate; raised parts a step paler, wells a step deeper. */
-  --bg-primary: #d5cfc0;
-  --bg-secondary: #d9d4c6;
-  --bg-tertiary: #cbc5b5;
-  --bg-surface: #e2ddd0;
-  --bg-elevated: #e9e5da;
+  /* The case, a pale warm grey; raised panels near white, wells a step deeper. */
+  --bg-primary: #ebebe8;
+  --bg-secondary: #eeeeeb;
+  --bg-tertiary: #e3e3df;
+  --bg-surface: #f8f8f6;
+  --bg-elevated: #fbfbfa;
 
-  --bg-panel: #c9c3b3;
-  --bg-card: #e2ddd0;
-  --bg-input: #ece8dd;
+  --bg-panel: #e6e6e2;
+  --bg-card: #fafaf8;
+  --bg-input: #fdfdfc;
 
   --bg-footer: var(--bg-secondary);
 
-  --bg-fx-primary: #cbc5b5;
-  --bg-fx-secondary: #d5cfc0;
-  --bg-fx-categories: #c9c3b3;
+  --bg-fx-primary: #e3e3df;
+  --bg-fx-secondary: #ebebe8;
+  --bg-fx-categories: #e6e6e2;
 
-  /* Silk-screen ink. Muted is 4.7:1 on the deepest well (#c9c3b3). */
-  --text-primary: #1d1b17;
-  --text-secondary: #3b3832;
-  --text-tertiary: #4a463f;
-  --text-muted: #534f47;
+  /* Pad-printed ink. Muted is 5.9:1 on the deepest well (#e3e3df). */
+  --text-primary: #17181a;
+  --text-secondary: #333539;
+  --text-tertiary: #44474b;
+  --text-muted: #52555a;
 
-  --border-light: #bdb6a5;
-  --border-medium: #aaa392;
-  --border-strong: #948d7c;
-  --border-dark: #7f7868;
-  --border-darker: #6a6456;
+  --border-light: #d9d9d4;
+  --border-medium: #c8c8c3;
+  --border-strong: #aaaaa5;
+  --border-dark: #8a8a85;
+  --border-darker: #6c6c68;
 
-  /* The value ring: a channel milled round the knob, lit from the accent. */
-  --control-bg: #e9e5da;
-  --control-knob-bg: #2a2a2c;
-  --control-border: #18181a;
-  --control-indicator: #f6f3ea;
-  --knob-ring-color: #d2541c;
-  --knob-ring-start: #b8431a;
-  --knob-ring-end: #ee7a2c;
-  --knob-ring-track: rgba(54, 46, 30, 0.2);
+  --control-bg: #f7f7f4;
+  --control-knob-bg: #ecebe8;
+  --control-border: #b4b4af;
+  --control-indicator: #2a2c30;
+  --knob-ring-color: #dc5822;
+  --knob-ring-start: #cf4c1a;
+  --knob-ring-end: #ee7a44;
+  --knob-ring-track: rgba(30, 32, 36, 0.12);
 
-  --toggle-bg: #3a3833;
-  --toggle-border: #1f1e1b;
+  --toggle-bg: #d0d0cb;
+  --toggle-border: #b4b4af;
 
-  --shadow-sm: 0 1px 2px rgba(44, 36, 20, 0.22);
-  --shadow-md: 1px 4px 10px rgba(44, 36, 20, 0.24);
-  --shadow-lg: 2px 8px 22px rgba(44, 36, 20, 0.28);
-  --shadow-xl: 3px 16px 38px rgba(44, 36, 20, 0.34);
+  /* Soft and layered: a tight contact shadow under a wide, faint one. */
+  --shadow-sm: 0 1px 1px rgba(28, 28, 24, 0.07), 0 1px 3px rgba(28, 28, 24, 0.07);
+  --shadow-md: 0 1px 2px rgba(28, 28, 24, 0.07), 0 5px 14px rgba(28, 28, 24, 0.1);
+  --shadow-lg: 0 2px 4px rgba(28, 28, 24, 0.07), 0 12px 30px rgba(28, 28, 24, 0.13);
+  --shadow-xl: 0 4px 10px rgba(28, 28, 24, 0.08), 0 24px 56px rgba(28, 28, 24, 0.17);
 
-  --bg-browser-shell: rgba(213, 207, 192, 0.97);
-  --bg-browser-header: rgba(217, 212, 198, 0.98);
-  --bg-browser-sidebar: rgba(201, 195, 179, 0.97);
-  --bg-browser-card: rgba(226, 221, 208, 0.97);
-  --bg-browser-input: rgba(236, 232, 221, 0.98);
-  --bg-browser-hover: rgba(168, 60, 22, 0.08);
-  --bg-browser-selected: rgba(168, 60, 22, 0.14);
-  --border-browser: rgba(170, 163, 146, 0.9);
-  --border-browser-strong: rgba(148, 141, 124, 0.95);
+  --bg-browser-shell: rgba(246, 246, 243, 0.98);
+  --bg-browser-header: rgba(250, 250, 248, 0.98);
+  --bg-browser-sidebar: rgba(238, 238, 235, 0.97);
+  --bg-browser-card: rgba(252, 252, 250, 0.98);
+  --bg-browser-input: rgba(253, 253, 252, 0.98);
+  --bg-browser-hover: rgba(212, 80, 28, 0.06);
+  --bg-browser-selected: rgba(212, 80, 28, 0.11);
+  --border-browser: rgba(206, 206, 201, 0.9);
+  --border-browser-strong: rgba(170, 170, 165, 0.95);
 
-  --bg-control: #cbc5b5;
-  --button-bg: #e9e5da;
-  --button-text: #1d1b17;
-  --button-border: #948d7c;
-  --button-bg-hover: #f2efe6;
-  --button-border-hover: #7f7868;
+  --bg-control: #e3e3df;
+  --button-bg: #fafaf8;
+  --button-text: #17181a;
+  --button-border: #b4b4af;
+  --button-bg-hover: #ffffff;
+  --button-border-hover: #8a8a85;
 
-  --modal-bg: #d9d3c5;
-  --modal-bg-raised: #e2ddd0;
-  --modal-text: #1d1b17;
-  --modal-text-secondary: #3b3832;
-  --modal-text-muted: #534f47;
-  --modal-border: #aaa392;
-  --modal-border-medium: #948d7c;
-  --modal-close-hover: rgba(44, 36, 20, 0.1);
-  --modal-input-bg: #ece8dd;
-  --modal-input-text: #1d1b17;
-  --modal-input-border: #948d7c;
-  --modal-input-placeholder: #6f6a5f;
+  /* Dialogs are near white, as the tuner and MIDI dialogs show them. */
+  --modal-bg: #f8f8f6;
+  --modal-bg-raised: #fdfdfc;
+  --modal-text: #17181a;
+  --modal-text-secondary: #333539;
+  --modal-text-muted: #52555a;
+  --modal-border: #d0d0cb;
+  --modal-border-medium: #bdbdb8;
+  --modal-close-hover: rgba(28, 28, 24, 0.07);
+  --modal-input-bg: #ffffff;
+  --modal-input-text: #17181a;
+  --modal-input-border: #b4b4af;
+  --modal-input-placeholder: #737570;
 
-  --eq-curve-grid: rgba(29, 27, 23, 0.14);
-  --eq-curve-response: rgba(168, 60, 22, 0.96);
-  --eq-curve-handle-stroke: rgba(29, 27, 23, 0.85);
-  --eq-curve-spectrum-fill-top: rgba(70, 62, 44, 0.22);
-  --eq-curve-spectrum-fill-bottom: rgba(70, 62, 44, 0.03);
-  --eq-curve-spectrum-line: rgba(70, 62, 44, 0.4);
+  --eq-curve-grid: rgba(23, 24, 26, 0.1);
+  --eq-curve-response: rgba(212, 80, 28, 0.95);
+  --eq-curve-handle-stroke: rgba(23, 24, 26, 0.8);
+  --eq-curve-spectrum-fill-top: rgba(60, 62, 66, 0.18);
+  --eq-curve-spectrum-fill-bottom: rgba(60, 62, 66, 0.02);
+  --eq-curve-spectrum-line: rgba(60, 62, 66, 0.36);
 
-  --performance-plot-line: rgba(168, 60, 22, 0.96);
-  --performance-plot-fill: rgba(168, 60, 22, 0.14);
-  --performance-plot-grid: rgba(120, 112, 94, 0.42);
+  --performance-plot-line: rgba(212, 80, 28, 0.95);
+  --performance-plot-fill: rgba(212, 80, 28, 0.12);
+  --performance-plot-grid: rgba(112, 112, 106, 0.36);
 
   --sb-track: var(--bg-tertiary);
   --sb-thumb: var(--border-strong);
-  --sb-thumb-hover: var(--border-darker);
+  --sb-thumb-hover: var(--border-dark);
 
-  /* A well pressed into the plate: dark inside its top edge, a lit lip under its foot. */
-  --panel-inset-bg: linear-gradient(180deg, rgba(60, 50, 30, 0.11) 0%, rgba(60, 50, 30, 0.05) 100%);
-  --panel-inset-border: rgba(48, 40, 24, 0.3);
+  /* A well moulded into the panel: shade inside its top edge, a lit lip at its foot. */
+  --panel-inset-bg: linear-gradient(180deg, rgba(40, 40, 34, 0.06) 0%, rgba(40, 40, 34, 0.025) 100%);
+  --panel-inset-border: rgba(40, 40, 34, 0.12);
   --panel-inset-shadow:
-    inset 0 2px 4px rgba(44, 36, 20, 0.22),
-    inset 0 1px 1px rgba(44, 36, 20, 0.16),
-    0 1px 0 rgba(255, 252, 244, 0.75);
+    inset 0 2px 4px rgba(28, 28, 24, 0.1),
+    inset 0 1px 1px rgba(28, 28, 24, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.85);
 
   /* Shared pieces of the look, used by both studio stylesheets. */
-  --studio-plate: url("../../images/themes/studio/panel.jpg");
-  --studio-plate-size: 192px 192px;
-  --studio-brushed: url("../../images/themes/studio/brushed.jpg");
-  --studio-brushed-size: 256px 96px;
-  --studio-wear: url("../../images/themes/studio/wear.png");
-  --studio-wear-size: 640px 640px;
-  --studio-screw-a: url("../../images/themes/studio/screw-a.png");
-  --studio-screw-b: url("../../images/themes/studio/screw-b.png");
-  --studio-screw-size: 13px 13px;
-  --studio-edge-light: rgba(255, 252, 244, 0.8);
-  --studio-edge-dark: rgba(44, 36, 20, 0.36);
-  --studio-ink: #2b2822;
-  --studio-rail: #d2d3d3;
-  /* The rails' own ink: neutral, since they are bare metal rather than paint. */
-  --studio-rail-ink: #2a2c2f;
-  --studio-rail-ink-soft: #4b4e52;
+  --studio-grain: url("../../images/themes/studio/grain.png");
+  --studio-grain-size: 256px 256px;
+  --studio-ink: #1d1e21;
+  --studio-ink-soft: #55585d;
+  --studio-edge-light: rgba(255, 255, 255, 0.95);
+  /* The side wall of a raised part: the case colour in shade. */
+  --studio-wall: #d1d1cc;
+  --studio-wall-edge: rgba(28, 28, 24, 0.14);
+  /* A raised panel: a few pixels proud of the case. */
+  --studio-raised:
+    inset 0 1px 0 var(--studio-edge-light),
+    inset 0 -1px 0 rgba(28, 28, 24, 0.05),
+    0 2px 0 var(--studio-wall),
+    0 3px 0 var(--studio-wall-edge),
+    0 5px 8px rgba(28, 28, 24, 0.08),
+    0 14px 28px -8px rgba(28, 28, 24, 0.16);
+  /* A block that stands taller: chain modules, the effect panel. */
+  --studio-raised-high:
+    inset 0 1px 0 var(--studio-edge-light),
+    inset 0 -1px 0 rgba(28, 28, 24, 0.05),
+    0 3px 0 var(--studio-wall),
+    0 4px 0 var(--studio-wall-edge),
+    0 7px 12px rgba(28, 28, 24, 0.09),
+    0 20px 40px -10px rgba(28, 28, 24, 0.2);
 
-  --window-border: #8f9193;
+  /* The chain's node blocks (css/signal-path/nodes.css): the panels' plastic. */
+  --node-face: var(--bg-card);
+  --node-sheen: rgb(255 255 255 / 0.75);
+  --node-edge-light: var(--studio-edge-light);
+  --node-wall: var(--studio-wall);
+  --node-wall-edge: var(--studio-wall-edge);
+  --node-shadow: rgb(28 28 24 / 0.2);
+
+  --window-border: #a6a6a1;
 }
 
 body.theme-studio {
-  background: var(--bg-primary) var(--studio-plate) 0 0 / var(--studio-plate-size);
+  background: var(--studio-grain) 0 0 / var(--studio-grain-size), var(--bg-primary);
 }
 
 /* The film grain the other themes lay over their bars would sit on top of real texture. */
@@ -150,87 +170,66 @@ body.theme-studio .film-grain {
   background-image: none;
 }
 
-/* ===== Rails: the bare aluminium bars at the top and bottom ===== */
+/* ===== Top and bottom: the case itself, with a parting line where the halves meet ===== */
 
 body.theme-studio .icon-bar,
 body.theme-studio .footer-bar {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 42%, rgba(30, 32, 36, 0.16) 100%),
-    var(--studio-brushed) 0 0 / var(--studio-brushed-size),
-    var(--studio-rail);
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 60%),
+    var(--bg-primary);
 }
 
 body.theme-studio .icon-bar {
-  border-bottom: 1px solid #76797c;
+  border-bottom: 1px solid rgba(28, 28, 24, 0.14);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.28),
-    0 2px 4px rgba(44, 36, 20, 0.35);
-  /* Above the plate below it, so its shadow falls on the plate. */
+    0 1px 0 rgba(255, 255, 255, 0.7);
   position: relative;
   z-index: 3;
 }
 
 .theme-studio .nav-tab {
-  color: var(--studio-rail-ink-soft);
-  /* Engraved: the cut's lower edge catches the light. */
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+  color: var(--studio-ink-soft);
 }
 
-.theme-studio .nav-tab:hover {
-  color: var(--studio-rail-ink);
-}
-
+.theme-studio .nav-tab:hover,
 .theme-studio .nav-tab.active {
-  color: var(--color-accent-dark);
+  color: var(--studio-ink);
 }
 
 .theme-studio .nav-settings-btn {
-  color: var(--studio-rail-ink-soft);
+  color: var(--studio-ink-soft);
 }
 
 body.theme-studio .footer-bar {
-  --footer-fg: var(--studio-rail-ink-soft);
-  --footer-fg-strong: var(--studio-rail-ink);
-  --footer-divider: rgba(30, 32, 36, 0.3);
-  --footer-field-bg: #e6e6e4;
-  --footer-field-border: #85888b;
-  --footer-field-border-hover: #5f6265;
-  --footer-on-bg: color-mix(in srgb, var(--color-accent) 16%, #e6e6e4);
+  --footer-fg: var(--studio-ink-soft);
+  --footer-fg-strong: var(--studio-ink);
+  --footer-divider: rgba(28, 28, 24, 0.14);
+  --footer-field-bg: #f6f6f3;
+  --footer-field-border: #bdbdb8;
+  --footer-field-border-hover: #8a8a85;
+  --footer-on-bg: color-mix(in srgb, var(--color-accent) 12%, #f6f6f3);
 
-  border-top: 1px solid #f4f4f4;
-  box-shadow:
-    0 -1px 0 #76797c,
-    0 -3px 6px rgba(44, 36, 20, 0.3),
-    inset 0 -1px 0 rgba(30, 32, 36, 0.25);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+  border-top: 1px solid rgba(28, 28, 24, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
-/* ===== The control bar: the unit's own front panel, screwed down at its corners ===== */
+/* ===== The control bar: a paler panel fitted into the case ===== */
 
 body.theme-studio .control-bar {
-  --studio-control-screw-size: var(--studio-screw-size);
   background:
-    var(--studio-screw-a) left 9px top 20px / var(--studio-control-screw-size) no-repeat,
-    var(--studio-screw-b) right 9px top 20px / var(--studio-control-screw-size) no-repeat,
-    var(--studio-screw-b) left 9px bottom 8px / var(--studio-control-screw-size) no-repeat,
-    var(--studio-screw-a) right 9px bottom 8px / var(--studio-control-screw-size) no-repeat,
-    linear-gradient(180deg, rgba(255, 252, 244, 0.3) 0%, rgba(255, 252, 244, 0) 30%, rgba(44, 36, 20, 0.07) 100%),
-    var(--studio-wear) 40px 10px / var(--studio-wear-size),
-    var(--studio-plate) 0 0 / var(--studio-plate-size),
-    var(--bg-primary);
-  border-bottom: 1px solid #8d8674;
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 45%),
+    var(--bg-surface);
+  border-bottom: 1px solid rgba(28, 28, 24, 0.1);
   box-shadow:
     inset 0 1px 0 var(--studio-edge-light),
-    inset 0 -1px 0 rgba(44, 36, 20, 0.12),
-    0 2px 5px rgba(44, 36, 20, 0.4);
+    0 2px 0 var(--studio-wall),
+    0 3px 0 var(--studio-wall-edge),
+    0 6px 14px -4px rgba(28, 28, 24, 0.14);
   position: relative;
   z-index: 2;
-}
-
-/* The compact bar is one row of keys from edge to edge, with no corner left for a screw. */
-html[data-density="compact"] body.theme-studio .control-bar {
-  --studio-control-screw-size: 0 0;
 }
 
 .theme-studio .control-stack-label,
@@ -239,101 +238,56 @@ html[data-density="compact"] body.theme-studio .control-bar {
   color: var(--studio-ink);
 }
 
-/* ===== The chain: a bay cut into the plate, with the units standing in it ===== */
+/* ===== The chain: a tray moulded into the case, with the modules standing in it ===== */
 
 body.theme-studio .signal-path-bar {
   background:
-    linear-gradient(180deg, rgba(44, 36, 20, 0.2) 0, rgba(44, 36, 20, 0.05) 9px, rgba(44, 36, 20, 0) 22px),
-    var(--studio-plate) 0 0 / var(--studio-plate-size),
+    linear-gradient(180deg, rgba(28, 28, 24, 0.06) 0, rgba(28, 28, 24, 0.015) 10px, rgba(28, 28, 24, 0) 24px),
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
     var(--bg-tertiary);
-  background-blend-mode: normal, multiply, normal;
-  border-bottom: 1px solid rgba(255, 252, 244, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.75);
 }
 
 .theme-studio .signal-path-resize-handle {
   background: transparent;
 }
 
-.theme-studio .signal-node {
-  border: 1px solid #857e6c;
-  border-radius: 7px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%, rgba(44, 36, 20, 0.1) 100%),
-    var(--bg-card);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -3px 0 var(--node-accent-strong),
-    inset 0 -4px 0 rgba(255, 255, 255, 0.35),
-    1px 2px 2px rgba(44, 36, 20, 0.4),
-    2px 6px 9px -2px rgba(44, 36, 20, 0.34);
-}
-
-.theme-studio .signal-node:hover {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -3px 0 var(--node-accent-strong),
-    inset 0 -4px 0 rgba(255, 255, 255, 0.35),
-    1px 3px 3px rgba(44, 36, 20, 0.4),
-    3px 9px 14px -2px rgba(44, 36, 20, 0.4);
-}
-
-.theme-studio .signal-node.selected,
-.theme-studio .signal-node:focus {
-  border-color: var(--node-accent-strong);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -3px 0 var(--node-accent-strong),
-    0 0 0 2px color-mix(in srgb, var(--node-accent-strong) 55%, transparent),
-    1px 2px 2px rgba(44, 36, 20, 0.4),
-    2px 7px 12px -2px rgba(44, 36, 20, 0.42);
-}
-
+/* The modules are the shared node blocks (css/signal-path/nodes.css), in this plastic. */
 .theme-studio .node-name {
   color: var(--studio-ink);
 }
 
-/* ===== The effect panel: one unit, lifted out of the rack onto the bench ===== */
+/* ===== The effect panel: one module, lifted onto the case ===== */
 
 body.theme-studio .main-content {
   background:
-    radial-gradient(120% 90% at 50% 0%, rgba(255, 252, 244, 0.16) 0%, rgba(44, 36, 20, 0.1) 100%),
-    var(--studio-wear) 0 0 / var(--studio-wear-size),
-    var(--studio-plate) 0 0 / var(--studio-plate-size),
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 60%, rgba(28, 28, 24, 0.025) 100%),
     var(--bg-primary);
 }
 
 .theme-studio .effect-visualization {
   background-color: transparent;
   border-color: transparent;
-  box-shadow: inset 0 3px 6px -2px rgba(44, 36, 20, 0.3);
+  box-shadow: inset 0 4px 8px -4px rgba(28, 28, 24, 0.1);
 }
 
 .theme-studio .effect-visualization .node-params-panel {
-  border: 1px solid #8a8371;
-  border-radius: 6px;
+  border: 1px solid rgba(28, 28, 24, 0.1);
+  border-radius: 14px;
   background:
-    var(--studio-plate) 0 0 / var(--studio-plate-size),
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 30%),
     var(--bg-surface);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 1px 0 0 rgba(255, 255, 255, 0.4),
-    inset 0 -1px 0 rgba(44, 36, 20, 0.2),
-    1px 2px 3px rgba(44, 36, 20, 0.4),
-    4px 14px 28px -4px rgba(44, 36, 20, 0.5);
+  box-shadow: var(--studio-raised-high);
 }
 
 .theme-studio .default-effect-shell {
   border-color: transparent;
-  border-radius: 5px;
-  /* Lighter than the bench it sits on: blend the plate texture up toward the raised tone. */
+  border-radius: 13px;
   background:
-    var(--studio-screw-b) left 6px top 6px / var(--studio-screw-size) no-repeat,
-    var(--studio-screw-a) right 6px top 6px / var(--studio-screw-size) no-repeat,
-    var(--studio-screw-a) left 6px bottom 6px / var(--studio-screw-size) no-repeat,
-    var(--studio-screw-b) right 6px bottom 6px / var(--studio-screw-size) no-repeat,
-    linear-gradient(180deg, rgba(255, 252, 244, 0.42) 0%, rgba(255, 252, 244, 0.22) 100%),
-    var(--studio-wear) 120px 60px / var(--studio-wear-size),
-    var(--studio-plate) 0 0 / var(--studio-plate-size),
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 30%),
     var(--bg-surface);
   box-shadow: none;
 }
@@ -361,93 +315,97 @@ body.theme-studio .main-content {
   color: var(--text-secondary);
 }
 
-/* The controls sit in a shallow well rather than on a raised card. */
+/* The controls sit in a well moulded into the panel. */
 .theme-studio .default-effect-shell .default-effect-section {
   border: 1px solid var(--panel-inset-border);
-  border-radius: 6px;
+  border-radius: 11px;
   background: var(--panel-inset-bg);
   box-shadow: var(--panel-inset-shadow);
 }
 
 .theme-studio .default-effect-shell-equipment-panel {
-  border-radius: 6px;
-  border-color: rgba(48, 40, 24, 0.5);
+  border-radius: 11px;
+  border-color: rgba(28, 28, 24, 0.16);
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(255, 252, 244, 0.75);
+    inset 0 2px 6px rgba(0, 0, 0, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .theme-studio .default-effect-shell-equipment-image {
-  border-radius: 5px;
+  border-radius: 10px;
 }
 
 .theme-studio .default-effect-shell .node-param-tabs,
 .theme-studio .node-param-tabs {
   background: transparent;
-  border-bottom-color: rgba(48, 40, 24, 0.3);
-  box-shadow: 0 1px 0 rgba(255, 252, 244, 0.7);
+  border-bottom-color: rgba(28, 28, 24, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .theme-studio .eq-visualizer,
 .theme-studio .eq-curve-canvas {
-  background: #cdc7b6;
+  background: #f1f1ee;
 }
 
-/* ===== Pop-ups, lists and dialogs: the same painted steel ===== */
+/* ===== Pop-ups, lists and dialogs: the same plastic ===== */
 
 /* body. in front so these outrank the film-grain reset above, which the picker carries. */
 body.theme-studio .fx-selector-panel,
 body.theme-studio .fx-flyout,
 body.theme-studio .modal-content {
-  background-image: var(--studio-plate);
-  background-size: var(--studio-plate-size);
+  background-image: var(--studio-grain);
+  background-size: var(--studio-grain-size);
+}
+
+.theme-studio .modal-content,
+.theme-studio .fx-flyout {
+  box-shadow:
+    inset 0 1px 0 var(--studio-edge-light),
+    var(--shadow-xl);
 }
 
 .theme-studio .fx-selector-header,
 .theme-studio .fx-flyout-header,
 .theme-studio .modal-header {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 45%, rgba(30, 32, 36, 0.14) 100%),
-    var(--studio-brushed) 0 0 / var(--studio-brushed-size),
-    var(--studio-rail);
-  border-bottom: 1px solid #76797c;
+    var(--studio-grain) 0 0 / var(--studio-grain-size),
+    var(--modal-bg-raised);
+  border-bottom: 1px solid rgba(28, 28, 24, 0.12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  color: var(--studio-rail-ink);
+  color: var(--studio-ink);
 }
 
 .theme-studio .fx-item {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 45%, rgba(44, 36, 20, 0.08) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 50%),
     var(--bg-card);
-  border-color: var(--border-strong);
+  border-color: rgba(28, 28, 24, 0.1);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    1px 2px 3px rgba(44, 36, 20, 0.28);
+    inset 0 1px 0 var(--studio-edge-light),
+    0 2px 0 var(--studio-wall),
+    0 3px 0 var(--studio-wall-edge),
+    0 5px 10px -3px rgba(28, 28, 24, 0.12);
 }
 
 .theme-studio .notification-toast {
   background: var(--bg-elevated);
-  border-color: var(--border-strong);
-}
-
-.theme-studio .signal-path-add-menu-trigger:hover,
-.theme-studio .signal-path-add-menu-trigger[aria-expanded="true"] {
-  box-shadow: 0 3px 10px rgba(168, 60, 22, 0.3);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-lg);
 }
 
 .theme-studio .signal-path-add-menu-options button:hover,
 .theme-studio .signal-path-add-menu-options button:focus-visible,
 .theme-studio .default-effect-shell .plugin-host-item:hover {
-  background: rgba(168, 60, 22, 0.1);
+  background: rgba(212, 80, 28, 0.07);
 }
 
 .theme-studio .parallel-branches {
-  background: rgba(44, 36, 20, 0.05);
-  border-color: rgba(48, 40, 24, 0.22);
+  background: rgba(28, 28, 24, 0.035);
+  border-color: rgba(28, 28, 24, 0.1);
 }
 
 .theme-studio .parallel-branch {
-  background: rgba(255, 252, 244, 0.22);
-  border-color: rgba(48, 40, 24, 0.18);
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(28, 28, 24, 0.08);
   box-shadow: none;
 }

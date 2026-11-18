@@ -429,24 +429,14 @@
 
 
 /* ===== From signal-path.css ===== */
-/* Flat cards: no accent wash, foot shade, inner highlight or lit icon well. */
-.theme-light .signal-node {
-  border-width: 2px;
-  border-color: var(--node-accent-border);
-  background: var(--bg-card);
-  box-shadow: 0 1px 3px rgb(37 44 61 / 0.12);
-}
-
-.theme-light .signal-node:hover {
-  box-shadow: 0 4px 10px -2px rgb(37 44 61 / 0.2);
-}
-
-.theme-light .signal-node.selected,
-.theme-light .signal-node:focus {
-  border-color: var(--node-accent-strong);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--node-accent-strong) 28%, transparent),
-    0 0 12px color-mix(in srgb, var(--node-accent-strong) 22%, transparent);
+/* The node block (css/signal-path/nodes.css) in white plastic. No lit icon well. */
+.theme-light {
+  --node-face: #fbfcfe;
+  --node-sheen: rgb(255 255 255 / 0.8);
+  --node-edge-light: #ffffff;
+  --node-wall: #ccd2de;
+  --node-wall-edge: rgb(37 44 61 / 0.14);
+  --node-shadow: rgb(37 44 61 / 0.18);
 }
 
 .theme-light .signal-node:not(.has-thumb) .node-icon {
@@ -455,11 +445,6 @@
 
 .theme-light .node-icon .fx-effect-icon {
   filter: none;
-}
-
-/* The underglow strip reads as a bowed bottom edge on a flat card. */
-.theme-light .signal-node::after {
-  content: none;
 }
 
 .theme-light .signal-path-add-menu-trigger {

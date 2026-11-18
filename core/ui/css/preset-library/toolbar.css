@@ -173,6 +173,20 @@
   transition: transform 0.2s ease;
 }
 
+/* A key that opens a menu (New, and the extra actions) carries a caret beside its icon.
+   The caret is smaller and quieter than the icon, so it reads as part of the key rather
+   than a second control, and the key sets its own width to fit both. */
+.preset-action-btn-menu {
+  gap: 3px;
+}
+
+.preset-action-btn-menu .preset-extra-actions-caret {
+  width: 9px;
+  height: 9px;
+  margin-left: 0;
+  opacity: 0.7;
+}
+
 .preset-extra-actions-btn[aria-expanded="true"] .preset-extra-actions-caret {
   transform: rotate(180deg);
 }
@@ -450,6 +464,13 @@ html[data-density="compact"] .preset-toolbar .is-toolbar-overflow {
 
   .preset-extra-actions-btn {
     min-width: 28px;
+  }
+
+  /* An icon and a caret do not fit a 28px square: the key grows just enough, a touch more
+     room on the icon side so the pair sits optically centred. */
+  .preset-action-btn.preset-action-btn-menu {
+    width: auto;
+    padding: 0 5px 0 7px;
   }
 
   .preset-toolbar-group {

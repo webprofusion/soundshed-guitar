@@ -4,6 +4,14 @@
  */
 
 .theme-classic {
+  /* The chain's node blocks (css/signal-path/nodes.css): brown enamel under warm light. */
+  --node-face: #3f3127;
+  --node-sheen: rgb(255 226 180 / 0.08);
+  --node-edge-light: rgb(255 226 180 / 0.16);
+  --node-wall: #1f1712;
+  --node-wall-edge: rgb(0 0 0 / 0.45);
+  --node-shadow: rgb(20 10 2 / 0.55);
+
   /* Primary Colors - warm amber-orange (like Fender chicken-head knobs) */
   --color-accent: #f0a010;
   --color-accent-hover: #f8b533;
