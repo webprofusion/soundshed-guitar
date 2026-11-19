@@ -25,6 +25,7 @@ import { onEffectPresets, onPresetArchiveSessionEnded, onPresetArchiveSessionFai
 import { onBlendExportFailed, onBlendExportSaved, onHostedPluginResourceLoadCompleted, onHostedPluginResourceLoadFailed, onIrLoaded, onLibraryExportFailed, onLibraryExportSaved, onModelLoaded, onNodeResourceBrowseCancelled, onResourceCleanupResult, onResourceData, onResourceDataFailed, onResourceDeleteFailed, onResourceFolderListing, onResourceFolderListingFailed, onResourceFolderMetadata, onResourceFolderPicked, onResourceImported, onResourceImportFailed, onResourceRemoved, onResourceUsageInfo, onToneSharingPackDeleteFailed } from "./messages/resourceHandlers.js";
 import { onResourceFileContentHash } from "./resourceBrowser/folderTone3000.js";
 import { onResourceThumbnails } from "./resourceBrowser/libraryThumbnails.js";
+import { onUiBackgroundImageSelected } from "./visualizerBackground.js";
 import { onSharedSyncState, onSharedSyncUpdated } from "./messages/sharedSync.js";
 import { onInputLevelling, onInputLevellingSaved, onInputLevellingTraining } from "./settings/inputCalibration.js";
 import { onGlobalSignalChainChanged, onSignalPathNodeConfigUpdated, onSignalPathNodeParamUpdated, onSignalPathTestResult, onSpatialPosition } from "./messages/signalPathHandlers.js";
@@ -113,6 +114,7 @@ const MESSAGE_HANDLERS: Record<string, MessageHandler> = {
   "presetList": onPresetList,
   "appInfo": onAppInfo,
   "appSettingChanged": onAppSettingChanged,
+  "uiBackgroundImageSelected": onUiBackgroundImageSelected,
   "inputLevelling": onInputLevelling,
   "inputLevellingTraining": onInputLevellingTraining,
   "inputLevellingSaved": onInputLevellingSaved,

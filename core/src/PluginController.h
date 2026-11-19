@@ -59,6 +59,7 @@ class MetronomeService;
 class SignalTestService;
 class ResourceFolderScanner;
 class ResourceThumbnailService;
+class UiBackgroundService;
 class PresetLevelMeter;
 struct PresetLevelJob;
 class TelemetryPublisher;
@@ -1378,6 +1379,8 @@ class PluginController
     std::unique_ptr<ResourceFolderScanner> mResourceFolderScanner;
     /// Answers "getResourceThumbnails" and "saveResourceThumbnail": the browser's tone pictures.
     std::unique_ptr<ResourceThumbnailService> mResourceThumbnails;
+    /// Answers "browseUiBackgroundImage" and "clearUiBackgroundImage": the play page's own picture.
+    std::unique_ptr<UiBackgroundService> mUiBackground;
     /// Answers "measurePresetLevel" itself, rendering on a worker of its own. Shut down
     /// explicitly in the destructor, ahead of the resource library its graphs read.
     std::unique_ptr<PresetLevelMeter> mPresetLevelMeter;

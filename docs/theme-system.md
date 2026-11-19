@@ -15,6 +15,8 @@
 - `core/ui/css/themes/high-gain.css` — `.theme-high-gain`, the dark theme as a high-gain amp head
 - `core/ui/images/themes/high-gain/` — its knob, diamond plate, tolex and grille backdrop, rendered by
   `tools/high-gain-theme-assets/high_gain.py`
+- `core/ui/css/custom-background.css`, `core/ui/ts/visualizerBackground.ts` — the player's own
+  effect-panel background, drawn over whichever theme is on
 - `core/ui/css/components.css` — Canonical button/tab/icon-button classes
 - `scripts/convert-css-variables.ps1` — Batch conversion script for CSS files
 
@@ -299,6 +301,31 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
 - Like Stage, it restates the dark theme's hard-coded blue-greys (effect panel legends,
   resource keys, the chain's add keys) neutral; a new hard-coded colour in a dark-only rule
   needs checking here too.
+
+## The Player's Own Effect-Panel Background
+
+Settings → UI → Effect Panel Background lets the player put their own picture behind the play
+page's effect panel (`#panel-visualizer`), in place of whatever the theme draws there: Stage's
+stage, High Gain's grille, or the plain panel of the others. It applies under every theme.
+
+- **Storage.** Choose Image… sends `browseUiBackgroundImage`; the engine
+  (`core/src/controller/UiBackgroundService.h`) opens a file dialog, copies the PNG, JPEG, GIF or
+  WebP (at most 32 MB) to `<profile>/data/v1/ui-backgrounds/<hash>.<ext>` (the folder's only file:
+  picking another removes the one before) and answers `uiBackgroundImageSelected` with
+  `ui-backgrounds/<file>`, which the editor's resource route serves. The UI keeps that URL in the
+  app setting `ui.visualizerBackground.image`, so every instance shows it, as the theme is. Remove
+  clears the setting and sends `clearUiBackgroundImage`.
+- **Fade** (`ui.visualizerBackground.fade`, 0-90 %, default 30) veils the picture toward the
+  theme's ground — black on the dark themes, white on `.theme-light` and the studio themes — so the
+  text over it keeps its contrast.
+- **Drawing.** `visualizerBackground.ts` sets `.has-custom-visualizer-bg` on the body with the
+  picture in `--custom-visualizer-bg` and the fade in `--custom-visualizer-bg-fade`.
+  `custom-background.css` loads after every theme sheet and matches their
+  `body.theme-x #panel-visualizer` weight, so it wins by coming later. It also clears the effect
+  frame's base tint and faint icon watermark, which would otherwise sit over the picture. The
+  theme's card for the effect's controls still floats over it. Only a URL of the engine's own form
+  ever reaches the CSS, since the setting is shared.
+- The native UI (Nano Q) does not show it.
 
 ## Converting Existing CSS
 

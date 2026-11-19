@@ -15,6 +15,7 @@
 #include "editor/UiResourcePrefetch.h"
 #include "WebView2UserData.h"
 #include "controller/ResourceThumbnailService.h"
+#include "controller/UiBackgroundService.h"
 
 namespace
 {
@@ -717,6 +718,18 @@ std::optional<juce::WebBrowserComponent::Resource> PluginEditor::getResource(con
     if (urlToRetrieve.startsWith("layout-images/"))
     {
         if (const auto image = processorRef.getController().ResolveLayoutImageResource(urlToRetrieve.toStdString()))
+        {
+            return juce::WebBrowserComponent::Resource{readFileToVector(soundshed::toJuceFile(image->first)),
+                                                       juce::String(image->second)};
+        }
+
+        return std::nullopt;
+    }
+
+    // The player's own background for the play page (controller/UiBackgroundService.h).
+    if (urlToRetrieve.startsWith(guitarfx::UiBackgroundService::kRoutePrefix))
+    {
+        if (const auto image = guitarfx::UiBackgroundService::ResolveUiResource(urlToRetrieve.toStdString()))
         {
             return juce::WebBrowserComponent::Resource{readFileToVector(soundshed::toJuceFile(image->first)),
                                                        juce::String(image->second)};

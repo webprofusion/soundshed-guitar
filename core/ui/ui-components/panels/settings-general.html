@@ -158,5 +158,24 @@
               </div>
               <div class="settings-hint">Lights the cables in the signal chain and runs pulses along them while audio is playing. Uses a little extra CPU while you play.</div>
             </div>
+            <div class="settings-section" id="visualizer-background-section">
+              <h3>Effect Panel Background</h3>
+              <div class="settings-row settings-row-two">
+                <label for="visualizer-background-choose">Image</label>
+                <div class="visualizer-background-actions">
+                  <button type="button" class="secondary" id="visualizer-background-choose">Choose Image…</button>
+                  <button type="button" class="secondary" id="visualizer-background-remove" disabled>Remove</button>
+                </div>
+              </div>
+              <div class="visualizer-background-preview" id="visualizer-background-preview" hidden></div>
+              <div class="settings-row settings-row-two">
+                <label for="visualizer-background-fade">Fade</label>
+                <div class="visualizer-background-fade">
+                  <input type="range" id="visualizer-background-fade" min="0" max="90" step="5" value="30" disabled />
+                  <span class="visualizer-background-fade-value" id="visualizer-background-fade-value">30%</span>
+                </div>
+              </div>
+              <div class="settings-hint">Your own picture behind the effect panel, in place of the theme's backdrop, whichever theme is on. Fade veils it toward the theme's background so the text over it stays readable.</div>
+            </div>
 
           </div>

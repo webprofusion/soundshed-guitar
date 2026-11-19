@@ -1018,7 +1018,7 @@ void PluginProcessorAdapter::BrowseFileAsync(guitarfx::BrowseFileType type, cons
         filters = "*.json";
         break;
     case guitarfx::BrowseFileType::ImageFile:
-        filters = "*.png;*.jpg;*.jpeg;*.svg";
+        filters = "*.png;*.jpg;*.jpeg;*.webp;*.gif;*.svg";
         break;
     case guitarfx::BrowseFileType::AudioFile:
         // FLAC/OGG are accepted here but our decoder only supports WAV/AIFF/MP3;

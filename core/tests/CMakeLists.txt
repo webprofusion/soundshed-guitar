@@ -182,6 +182,7 @@ set(TEST_SOURCES
     Tone3000ResourceWorkflowTests.cpp
     ResourceThumbnailTests.cpp
     ResourceThumbnailClientTests.cpp
+    UiBackgroundTests.cpp
     TonePreviewTests.cpp
     ToneSharingLinkTests.cpp
     JamPracticeToolTests.cpp

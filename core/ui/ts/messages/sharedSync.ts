@@ -3,6 +3,7 @@
  * re-reads it.
  */
 
+import { applyVisualizerBackground } from "../visualizerBackground.js";
 import { renderBlendList } from "../blendManager.js";
 import { replaceAppSettings } from "../appSettingsStore.js";
 import { postMessage } from "../bridge.js";
@@ -73,6 +74,7 @@ export function onSharedSyncState(payload: IncomingPayload): void {
     replaceAppSettings(sharedPayload.appSettings as AppSettings);
     applySharedTone3000Settings(previousAppSettings);
     applyDensityAppSettings(sharedPayload.appSettings);
+    applyVisualizerBackground();
     applyStoredDemoAudioSelection();
     applyToneSharingAppSettings(sharedPayload.appSettings);
     applyJamAppSettings();

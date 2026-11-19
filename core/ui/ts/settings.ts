@@ -34,6 +34,7 @@ import { refreshSettingsUpdateBanner, updateCurrentVersionDisplay } from "./sett
 import { getSettingValue, restoreIndexSelectSetting, sanitizeNumericSetting } from "./settings/values.js";
 import { uiState } from "./state.js";
 import { themeSwitcher } from "./theme-switcher.js";
+import { initVisualizerBackgroundControls, refreshVisualizerBackgroundControls } from "./visualizerBackground.js";
 import { handleAppSettingUpdate } from "./tone3000.js";
 import { getTone3000ApiClientConfig } from "./tone3000Api.js";
 import { retryTone3000BrowserAccess } from "./tone3000Browser.js";
@@ -76,6 +77,7 @@ export function initSettingsPanel(): void {
   initDensitySelect();
   initWheelAdjustToggle();
   initSignalFlowAnimationToggle();
+  initVisualizerBackgroundControls();
   initMultiCoreToggle();
   initNamEngineToggle();
   initMonoOutputUnityToggle();
@@ -107,6 +109,7 @@ export function refreshSettingsView(): void {
   refreshFeatureToggleStates();
   refreshWheelAdjustToggle();
   refreshSignalFlowAnimationToggle();
+  refreshVisualizerBackgroundControls();
   refreshMultiCoreToggle();
   refreshNamEngineToggle();
   refreshMonoOutputUnityToggle();

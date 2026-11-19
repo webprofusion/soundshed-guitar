@@ -21,10 +21,12 @@
     "browsePracticeToolFile",
     "browsePracticeToolTab",
     "browseResourceFolder",
+    "browseUiBackgroundImage",
     "cancelMidiLearn",
     "cancelPreviewResource",
     "captureDebugSnapshot",
     "cleanupResourceLibrary",
+    "clearUiBackgroundImage",
     "collapseSignalPathSplit",
     "createPresetFolder",
     "createSetlist",
@@ -362,6 +364,7 @@
     "tunerStarted",
     "tunerStopped",
     "tunerUpdate",
+    "uiBackgroundImageSelected",
     "windowChromeState"
   ],
   "engineOnlyRequests": {

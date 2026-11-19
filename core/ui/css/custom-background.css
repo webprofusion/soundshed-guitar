@@ -1,0 +1,93 @@
+/* ===== The player's own effect-panel background =====
+ * Settings → UI → Effect Panel Background (ts/visualizerBackground.ts) puts a picture behind the
+ * play page's effect panel in place of whatever the theme draws there: Stage's stage, High Gain's
+ * grille, or the plain panel of the others. The body carries .has-custom-visualizer-bg while one
+ * is set, with the picture in --custom-visualizer-bg and the Fade (0..0.9) in
+ * --custom-visualizer-bg-fade.
+ *
+ * Loaded after every theme sheet; the selectors match the themes' own `body.theme-x
+ * #panel-visualizer` weight, so being later is what wins.
+ *
+ * The veil fades toward the theme's own ground: black on the dark themes, white on the light
+ * ones, so the text that sits over the picture keeps its contrast whichever theme is on.
+ */
+
+body.has-custom-visualizer-bg {
+  --custom-visualizer-bg-veil: 0, 0, 0;
+}
+
+body.has-custom-visualizer-bg.theme-light {
+  --custom-visualizer-bg-veil: 255, 255, 255;
+}
+
+body.has-custom-visualizer-bg #panel-visualizer {
+  background:
+    linear-gradient(
+      rgba(var(--custom-visualizer-bg-veil), var(--custom-visualizer-bg-fade, 0.3)),
+      rgba(var(--custom-visualizer-bg-veil), var(--custom-visualizer-bg-fade, 0.3))
+    ),
+    var(--custom-visualizer-bg) center / cover no-repeat,
+    var(--bg-primary);
+}
+
+/* The effect's own frame steps aside so the picture fills the panel; the theme's card for the
+   effect's controls still floats over it. */
+body.has-custom-visualizer-bg #panel-visualizer .effect-visualization {
+  min-height: 100%;
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* The base tint and the theme's faint effect icon would sit over the picture as a second veil
+   and a watermark; the Fade is the one veil. */
+body.has-custom-visualizer-bg #panel-visualizer .effect-visualization::before {
+  background: transparent;
+}
+
+body.has-custom-visualizer-bg #panel-visualizer .effect-visualization::after {
+  display: none;
+}
+
+/* ===== Settings ===== */
+
+.visualizer-background-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.visualizer-background-preview {
+  height: 96px;
+  margin: 2px 0 8px 130px;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.visualizer-background-preview[hidden] {
+  display: none;
+}
+
+.visualizer-background-fade {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.visualizer-background-fade input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  max-width: 300px;
+  accent-color: var(--color-primary);
+}
+
+.visualizer-background-fade-value {
+  min-width: 3.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}

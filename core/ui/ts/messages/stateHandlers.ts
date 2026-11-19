@@ -3,6 +3,7 @@
  * alongside it.
  */
 
+import { applyVisualizerBackground } from "../visualizerBackground.js";
 import { applyAutomationState } from "../automationPanel.js";
 import { renderBlendList } from "../blendManager.js";
 import { recordAppSetting, replaceAppSettings } from "../appSettingsStore.js";
@@ -91,6 +92,7 @@ export function onState(payload: IncomingPayload): void {
   if (appSettings) {
     replaceAppSettings(appSettings as AppSettings);
     applyDensityAppSettings(appSettings);
+    applyVisualizerBackground();
     applyStoredDemoAudioSelection();
     applyToneSharingAppSettings(appSettings);
     applyJamAppSettings();

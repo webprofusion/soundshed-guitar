@@ -202,6 +202,9 @@
   <link rel="stylesheet" href="css/themes/stage.css" />
   <!-- High Gain too: the dark theme as a high-gain amp head. -->
   <link rel="stylesheet" href="css/themes/high-gain.css" />
+  <!-- The player's own effect-panel background replaces any theme's backdrop, so it
+       comes after them all (ts/visualizerBackground.ts). -->
+  <link rel="stylesheet" href="css/custom-background.css" />
   <!-- Compact density. Last in the cascade because every rule here is a layout
        override of a sheet above it, keyed off html[data-density="compact"];
        anything they tint uses theme tokens, so the themes are untouched. Order

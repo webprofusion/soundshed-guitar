@@ -616,6 +616,8 @@ set(GUITARFX_CORE_SOURCES
     src/controller/ResourceFolderScanner.cpp
     src/controller/ResourceThumbnailService.h
     src/controller/ResourceThumbnailService.cpp
+    src/controller/UiBackgroundService.h
+    src/controller/UiBackgroundService.cpp
     src/controller/PresetLevelMeter.h
     src/controller/PresetLevelMeter.cpp
     src/controller/PluginControllerPresetLevel.cpp
