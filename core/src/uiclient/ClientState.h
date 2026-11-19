@@ -680,6 +680,8 @@ struct Environment
 {
     bool standalone = true;
     bool audioDeviceSettings = false;
+    /// The host can build either editor and picks one by guitarfx::kNativeEditorSettingKey.
+    bool nativeEditor = false;
     std::string version;
     std::string os;
     std::string cpu;

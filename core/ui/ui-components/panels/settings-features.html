@@ -2,6 +2,17 @@
             <h2>Feature Toggles</h2>
             <div class="settings-hint">Simplify the options available in the app depending on your preferences for trying online or advanced features.</div>
             <div id="settings-feature-groups"></div>
+            <div class="settings-section" id="native-editor-settings-section" hidden>
+              <h3>Experimental</h3>
+              <div class="settings-row">
+                <label for="native-editor-toggle">Native UI (Nano)</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="native-editor-toggle" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-hint" id="native-editor-hint">Draws the app with the native UI from Soundshed Nano Q instead of this one. It starts faster and uses less memory, but not everything is there yet. Switch back from its Settings page.</div>
+            </div>
             <div class="settings-section" id="factory-archive-settings-section" hidden>
               <h3>Factory Preset Archives</h3>
               <div class="settings-row" id="factory-archive-loading-row">

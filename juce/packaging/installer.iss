@@ -85,6 +85,13 @@ Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: 
 Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\*"; DestDir: "{code:GetVst3Dir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: vst3
 Source: "{#ArtefactsDir}\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; Flags: ignoreversion; Components: clap
 Source: "{#ArtefactsDir}\Standalone\*"; DestDir: "{code:GetStandaloneDir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: standalone
+; The experimental native UI's fonts (juce/cmake/NanoQUi.cmake; x64 builds only, hence
+; skipifsourcedoesntexist). Elements finds them only beside the binary that draws: resources\ next
+; to the exe or the VST3's library, and "<name> Resources" next to the CLAP, which keeps them out of
+; the resources folder every vendor's CLAP shares.
+Source: "{#ArtefactsDir}\Standalone\resources\*.ttf"; DestDir: "{code:GetStandaloneDir}\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: standalone
+Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\Contents\x86_64-win\resources\*.ttf"; DestDir: "{code:GetVst3Dir}\Contents\x86_64-win\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: vst3
+Source: "{#ArtefactsDir}\CLAP\resources\*.ttf"; DestDir: "{code:GetClapDir}\{#ProductName} Resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
 Source: "{#UiStageDir}\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui"; Excludes: assets\amps\*,*\assets\amps\*,assets\ir\*,*\assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone or vst3 or clap
 #if TargetArch == "ARM64"
 ; The ARM64EC plugins, beside the native ARM64 ones above. A host loads the one built for its own

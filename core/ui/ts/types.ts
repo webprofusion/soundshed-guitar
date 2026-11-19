@@ -559,6 +559,8 @@ export interface EnvironmentState {
   standalone: boolean;
   /** The engine drives the audio devices itself: Settings shows its own device controls. */
   audioDeviceSettings?: boolean;
+  /** The host can draw the app with the native UI instead: Settings shows the switch. */
+  nativeEditor?: boolean;
   version?: string;
   os?: string;
   cpu?: string;

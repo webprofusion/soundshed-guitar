@@ -1,10 +1,9 @@
-# ── Nano Q's UI in Soundshed Guitar (spike) ─────────────────────────────────────
-# With -DSOUNDSHED_NANOQ_UI=ON the JUCE app's editor is Nano Q's native UI (nanoq/src/ui, drawn
-# with Cycfi's Elements) instead of the WebView: source/NanoQUiEditor.cpp hosts it in a child
-# window. The UI sources are Nano Q's own, compiled here; nothing of QPlug comes along.
-# Windows only. Use a build tree of its own, so the WebView build is untouched:
-#   cmake -G "Visual Studio 18 2026" -A x64 -S juce -B juce/builds-nanoq-ui -DSOUNDSHED_NANOQ_UI=ON
-#   cmake --build juce/builds-nanoq-ui --config Release --target SoundshedGuitar_Standalone
+# ── Nano Q's UI in Soundshed Guitar (experimental) ──────────────────────────────
+# With SOUNDSHED_NANOQ_UI (on by default for Windows x64, juce/CMakeLists.txt) the JUCE app can
+# draw itself with Nano Q's native UI (nanoq/src/ui, drawn with Cycfi's Elements) beside the
+# WebView editor: source/NanoQUiEditor.cpp hosts it in a child window, and the "ui.nativeEditor"
+# setting picks which editor PluginProcessorAdapter::createEditor builds. The UI sources are Nano
+# Q's own, compiled here; nothing of QPlug comes along. Windows only.
 
 if(NOT WIN32)
     message(FATAL_ERROR "SOUNDSHED_NANOQ_UI: Windows only so far")
@@ -31,11 +30,13 @@ set(ELEMENTS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(ELEMENTS_HOST_IN_CONSUMER ON CACHE BOOL "" FORCE)
 add_subdirectory("${cycfi_elements_SOURCE_DIR}" "${cycfi_elements_BINARY_DIR}" EXCLUDE_FROM_ALL)
 
-# The UI and the platform helpers it uses (paths, the log, the Jam tab's web view, the caption
-# colour). Nano Q's engine, QPlug glue and dialogs stay out: the JUCE adapter is the engine's host.
+# The UI and the platform helpers it uses (the file picker's folder listing, paths, the log, the
+# Jam tab's web view, the caption colour). Nano Q's engine, QPlug glue and dialogs stay out: the
+# JUCE adapter is the engine's host.
 file(GLOB_RECURSE _nanoq_ui_sources CONFIGURE_DEPENDS "${_nanoq_dir}/src/ui/*.cpp")
 add_library(SoundshedNanoQUi STATIC
     ${_nanoq_ui_sources}
+    "${_nanoq_dir}/src/FileBrowsing.cpp"
     "${_nanoq_dir}/src/Log.cpp"
     "${_nanoq_dir}/src/Paths.cpp"
     "${_nanoq_dir}/src/WebView.cpp"
@@ -59,7 +60,7 @@ foreach(_src IN LISTS _nanoq_ui_sources)
     endif()
 endforeach()
 set_source_files_properties(
-    "${_nanoq_dir}/src/Log.cpp" "${_nanoq_dir}/src/Paths.cpp" "${_nanoq_dir}/src/WebView.cpp"
+    "${_nanoq_dir}/src/FileBrowsing.cpp" "${_nanoq_dir}/src/Log.cpp" "${_nanoq_dir}/src/Paths.cpp" "${_nanoq_dir}/src/WebView.cpp"
     "${_nanoq_dir}/src/WindowChrome.cpp" ${ELEMENTS_HOST_SOURCES}
     TARGET_DIRECTORY SoundshedNanoQUi
     PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

@@ -267,6 +267,11 @@ class MainWindow : public juce::DocumentWindow
                     ? processor->createEditorIfNeeded()
                     : static_cast<juce::AudioProcessorEditor*>(new juce::GenericAudioProcessorEditor(*processor));
 
+            if (auto* adapter = getAdapter())
+            {
+                mShowsNativeEditor = adapter->wantsNativeEditor();
+            }
+
             if (editor != nullptr)
             {
                 setContentOwned(editor, true);
@@ -352,6 +357,18 @@ class MainWindow : public juce::DocumentWindow
                 adapter->SendMessageToUI(mCustomCaption ? R"({"type":"windowChromeState","customCaption":true})"
                                                         : R"({"type":"windowChromeState","customCaption":false})");
             });
+
+            // Settings' experimental switch between the WebView and the native UI: the
+            // editor is swapped in place, no relaunch. Later, not now: the change arrives from
+            // inside the editor being replaced.
+            adapter->setEditorSwitchHandler([safe = juce::Component::SafePointer<MainWindow>(this)] {
+                juce::MessageManager::callAsync([safe] {
+                    if (safe != nullptr)
+                    {
+                        safe->switchEditorIfChosen();
+                    }
+                });
+            });
 #endif
         }
 
@@ -436,6 +453,7 @@ class MainWindow : public juce::DocumentWindow
             adapter->setAudioDeviceRequestHandler(nullptr);
             adapter->setDeviceLatencyQuery(nullptr);
             adapter->setWindowChromeHandler(nullptr);
+            adapter->setEditorSwitchHandler(nullptr);
         }
 
         mAudioSettings = nullptr;
@@ -616,6 +634,50 @@ class MainWindow : public juce::DocumentWindow
                                                                               : nullptr);
     }
 
+#if !SOUNDSHED_MOBILE
+    /// Replaces the editor with the other one when Settings has just chosen it (the WebView or
+    /// the native UI), keeping the window where and as big as it is. The engine carries on; the
+    /// new UI catches up with it at its uiReady, as a reopened plugin window does.
+    void switchEditorIfChosen()
+    {
+        auto* processor = mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr;
+        auto* adapter = getAdapter();
+
+        if (processor == nullptr || adapter == nullptr || adapter->wantsNativeEditor() == mShowsNativeEditor)
+        {
+            return;
+        }
+
+        const bool wasFullScreen = isFullScreen();
+        const auto bounds = getBounds();
+
+        if (auto* old = dynamic_cast<juce::AudioProcessorEditor*>(getContentComponent()))
+        {
+            processor->editorBeingDeleted(old);
+        }
+
+        clearContentComponent();
+
+        mShowsNativeEditor = adapter->wantsNativeEditor();
+
+        if (auto* editor = processor->createEditorIfNeeded())
+        {
+            setContentOwned(editor, true);
+            setResizable(editor->isResizable(), true);
+        }
+
+        // setContentOwned() sized the window to the new editor; put it back.
+        if (wasFullScreen)
+        {
+            setFullScreen(true);
+        }
+        else
+        {
+            setBounds(bounds);
+        }
+    }
+#endif
+
     // The profile folder is the adapter's user data path (PluginProcessorAdapter::GetUserDataPath),
     // read here directly so the curtain can be sized before the adapter exists.
     static juce::File getWindowStateFile()
@@ -735,6 +797,9 @@ class MainWindow : public juce::DocumentWindow
     std::optional<soundshed::WindowChromeColours> mWindowChrome;
     void* mChromeWindowHandle = nullptr; // the native window they were applied to
     bool mCustomCaption = false;
+
+    // Which editor is up: the native UI or the WebView (switchEditorIfChosen).
+    bool mShowsNativeEditor = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainWindow)
 };

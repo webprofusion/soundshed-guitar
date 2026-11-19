@@ -234,6 +234,7 @@ void PluginController::BroadcastState(StateScope scope)
         state["environment"] = {
             {"standalone", mHost.IsStandalone()},
             {"audioDeviceSettings", mHost.SupportsAudioDeviceSettings()},
+            {"nativeEditor", mHost.SupportsNativeEditor()},
             {"version", GUITARFX_APP_VERSION},
 #if defined(_WIN32)
             {"os", "Windows"},

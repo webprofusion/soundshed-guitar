@@ -566,8 +566,15 @@ target_link_libraries(SharedCode
 # Link the JUCE plugin targets our SharedCode target
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
-# Spike: Nano Q's native UI as the editor in place of the WebView (cmake/NanoQUi.cmake).
-option(SOUNDSHED_NANOQ_UI "Build the editor from Nano Q's native UI instead of the WebView (Windows, spike)" OFF)
+# Experimental: Nano Q's native UI as a second editor beside the WebView (cmake/NanoQUi.cmake),
+# picked in Settings (PluginProcessorAdapter::wantsNativeEditor). Windows x64 only so far:
+# EmbeddedUi has no macOS or Linux parent yet, and Elements has not been built for ARM64(EC).
+set(_soundshed_nanoq_ui_default OFF)
+if(WIN32 AND NOT SSG_MOBILE AND _guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
+    set(_soundshed_nanoq_ui_default ON)
+endif()
+option(SOUNDSHED_NANOQ_UI "Build Nano Q's native UI as an experimental second editor (Windows x64)"
+    ${_soundshed_nanoq_ui_default})
 if(SOUNDSHED_NANOQ_UI)
     include(NanoQUi)
 endif()

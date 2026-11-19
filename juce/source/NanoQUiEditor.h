@@ -2,8 +2,9 @@
 
 /**
  * NanoQUiEditor - Soundshed Guitar's editor drawn by Nano Q's native UI (nanoq/src/ui), not
- * the WebView. A spike: built only with -DSOUNDSHED_NANOQ_UI=ON (juce/cmake/NanoQUi.cmake), on
- * Windows.
+ * the WebView. Experimental: built with SOUNDSHED_NANOQ_UI (juce/cmake/NanoQUi.cmake, on by
+ * default for Windows x64) and made in place of the WebView editor when the "ui.nativeEditor"
+ * setting is on (PluginProcessorAdapter::wantsNativeEditor).
  *
  * JUCE gives the window and nothing else. The UI is an Elements view in a child window of the
  * editor's peer (nanoq::ui::EmbeddedUi), placed over the editor's area, and it reaches the

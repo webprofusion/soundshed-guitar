@@ -177,6 +177,15 @@ class PluginController
         return mAppSettings;
     }
 
+    /// Takes what other instances have written to the shared store since this one last loaded it.
+    /// The host calls it before choosing an editor by a shared setting: an instance whose editor is
+    /// closed otherwise catches up only once its UI has loaded (uiReady), too late for that choice.
+    /// Message thread.
+    void CatchUpWithSharedSettings()
+    {
+        CatchUpWithSharedStore();
+    }
+
     // ── Editor window size ─────────────────────────────────────────
     /// The size, in the wrapper's own logical units, that this instance's editor window
     /// was last left at. Zero in either field means "never sized".

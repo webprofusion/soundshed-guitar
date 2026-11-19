@@ -650,6 +650,17 @@ setlists and mixer slots from loading factory presets. Switching it on restores
 the entries. This is separate from the Power Feature **Factory Preset Archive Tools**,
 which controls development/authoring tools.
 
+**Native UI (Nano)** (`ui.nativeEditor`, `core/ui/ts/settings/nativeEditor.ts`) is an
+experimental switch under its own Experimental card, shown only when `environment.nativeEditor`
+is true: the host can build either editor (`IPluginHost::SupportsNativeEditor`; the Windows x64
+builds, where `SOUNDSHED_NANOQ_UI` is on by default). On, the JUCE app draws itself with Nano Q's
+native UI (`juce/source/NanoQUiEditor.*`, see [plans/nano-q-ui-in-juce.md](plans/nano-q-ui-in-juce.md))
+instead of the WebView. It is an ordinary `setSetting`; the JUCE adapter also passes the change to
+the standalone window, which swaps its editor in place with no relaunch (`MainWindow::switchEditorIfChosen`
+in `juce/source/Main.cpp`). A plugin's next editor follows the setting, so in a DAW it applies when the
+plugin window is next opened, for every instance. The native UI's Settings → Features has the same
+switch, shown under the same condition, as the way back. Nano Q's own app never shows it.
+
 ## Settings → Audio & MIDI
 
 The Settings panel's own tab strip (`core/ui/ts/settings/tabs.ts`, markup in

@@ -1,7 +1,12 @@
 # Nano Q's UI in the JUCE app
 
-Status: **spike, 2026-10-28, Windows only.** Built with `-DSOUNDSHED_NANOQ_UI=ON`; the normal
-build is unchanged. See Results.
+Status: **experimental, Windows x64 only.** Spike 2026-10-28 (see Results). Since 2026-11-19
+`SOUNDSHED_NANOQ_UI` is on by default for Windows x64 builds and builds the native UI *beside* the
+WebView editor, not in place of it: Settings → Features → Experimental → Native UI (Nano)
+(`ui.nativeEditor`) picks one, the standalone swaps its editor in place, and a plugin's next
+window follows the setting ([user-interface.md](../user-interface.md#settings--features)). The
+installer ships the fonts beside each binary, where Elements looks for them. An existing build
+tree keeps the value it cached; pass `-DSOUNDSHED_NANOQ_UI=ON` once to turn it on there.
 
 ## The question
 
@@ -98,21 +103,26 @@ zoom (no `getZoom`/`setZoom` from JUCE yet, so the zoom control is hidden).
 
 ## Problems found
 
-- **Two Elements binaries in one process collide on Windows.** Elements registers one window
-  class, `ElementsView`, against the host executable's module (`GetModuleHandleW(nullptr)`), and
-  `ELEMENTS_CLASS_PREFIX` renames only the macOS class. A second binary with Elements in the
-  same DAW (Nano Q's CLAP and VST3 together, or Nano Q beside this build) fails `RegisterClassW`,
-  shows a "Could not register class" box, and makes its windows with the first binary's window
-  procedure, which goes when that binary unloads. Read from the source, not reproduced. It is
-  Nano Q's problem today as much as this spike's; the fix is in Elements (a class name per
-  binary, registered against the binary's own module).
+- **Two Elements binaries in one process: not a problem (checked 2026-11-19).** This list once
+  said Elements registers `ElementsView` against the executable's module, so a second binary
+  with Elements in one DAW would fail `RegisterClassW`. The Elements Nano Q pins (v1.0.2)
+  does not: `ElementsView` (`lib/host/windows/base_view.cpp`) and `ElementsWindow`
+  (`window.cpp`) are registered against the module that holds the code, found with
+  `GetModuleHandleExW(FROM_ADDRESS)`, and unregistered when it unloads. Windows keys a
+  non-global class by name and module, so each binary gets its own class and window procedure.
+  Checked with a throwaway host that loaded two copies of the Nano Q CLAP from two folders into
+  one process, opened both editors side by side, then closed and unloaded one while resizing
+  and sending mouse moves to the other. Each view's class belonged to its own module, the class
+  window procedures differed, no "Could not register class" box appeared, and the survivor
+  kept running. (Each view's window procedure reads as comctl32's: Windows subclasses it, and
+  the subclass passes on to the class procedure.) Not tried: a real DAW, and Nano Q beside the
+  JUCE build of this spike, which works the same way.
 - **JUCE's `HWNDComponent` cannot hold another library's window**: it destroys the window when it
   lets go. The editor places the window itself.
 
 ## Next steps, if this goes ahead
 
-1. Elements: a window class per binary (above), upstream or as a patch beside
-   `elements-input-redraws.patch`.
+1. ~~Elements: a window class per binary.~~ Already so in Elements v1.0.2 (see Problems found).
 2. Run the JUCE build in DAWs (Reaper, Cubase, Studio One): focus, DPI, editor reopen, two
    instances.
 3. macOS: `EmbeddedUi` on an `NSView` parent (Elements' Cocoa host takes one), and

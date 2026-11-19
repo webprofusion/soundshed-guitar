@@ -299,6 +299,7 @@ void UiClient::RegisterPresetHandlers()
                 const auto& env = m["environment"];
                 s.environment.standalone = env.value("standalone", true);
                 s.environment.audioDeviceSettings = env.value("audioDeviceSettings", false);
+                s.environment.nativeEditor = env.value("nativeEditor", false);
                 s.environment.version = env.value("version", "");
                 s.environment.os = env.value("os", "");
                 s.environment.cpu = env.value("cpu", "");

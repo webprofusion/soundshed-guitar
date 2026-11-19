@@ -117,11 +117,12 @@ export function onState(payload: IncomingPayload): void {
     replaceNavigationViewState(uiViewState);
     applyUiViewState(uiViewState);
   }
-  const environment = (payload as { environment?: { standalone?: boolean; audioDeviceSettings?: boolean; version?: string; os?: string; cpu?: string } }).environment;
+  const environment = (payload as { environment?: { standalone?: boolean; audioDeviceSettings?: boolean; nativeEditor?: boolean; version?: string; os?: string; cpu?: string } }).environment;
   if (environment) {
     applyEnvironmentState({
       standalone: Boolean(environment.standalone),
       audioDeviceSettings: environment.audioDeviceSettings === true,
+      nativeEditor: environment.nativeEditor === true,
       version: environment.version ?? uiState.environment?.version,
       os: environment.os ?? uiState.environment?.os,
       cpu: environment.cpu ?? uiState.environment?.cpu
@@ -296,6 +297,7 @@ export function onAppInfo(payload: IncomingPayload): void {
   applyEnvironmentState({
     standalone: uiState.environment?.standalone ?? false,
     audioDeviceSettings: uiState.environment?.audioDeviceSettings ?? false,
+    nativeEditor: uiState.environment?.nativeEditor ?? false,
     version: infoPayload.version ?? uiState.environment?.version,
     os: infoPayload.os ?? uiState.environment?.os,
     cpu: infoPayload.cpu ?? uiState.environment?.cpu,

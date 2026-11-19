@@ -806,11 +806,17 @@ juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
 #endif
 
 #if SOUNDSHED_NANOQ_UI
-    // The spike build (-DSOUNDSHED_NANOQ_UI=ON): Nano Q's native UI instead of the WebView.
-    return new NanoQUiEditor(*this);
-#else
-    return new PluginEditor(*this);
+    // Experimental: Nano Q's native UI instead of the WebView, when chosen in Settings, perhaps
+    // from another instance's window since this one's was last open.
+    mController.CatchUpWithSharedSettings();
+
+    if (wantsNativeEditor())
+    {
+        return new NanoQUiEditor(*this);
+    }
 #endif
+
+    return new PluginEditor(*this);
 }
 
 bool PluginProcessorAdapter::hasEditor() const
@@ -1407,6 +1413,32 @@ void PluginProcessorAdapter::setWindowChromeHandler(WindowChromeHandler handler)
     mWindowChromeHandler = std::move(handler);
 }
 
+bool PluginProcessorAdapter::SupportsNativeEditor() const
+{
+#if SOUNDSHED_NANOQ_UI
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool PluginProcessorAdapter::wantsNativeEditor() const
+{
+    if (!SupportsNativeEditor())
+    {
+        return false;
+    }
+
+    const auto& settings = mController.GetAppSettings();
+    const auto it = settings.find(guitarfx::kNativeEditorSettingKey);
+    return it != settings.end() && it->is_boolean() && it->get<bool>();
+}
+
+void PluginProcessorAdapter::setEditorSwitchHandler(EditorSwitchHandler handler)
+{
+    mEditorSwitchHandler = std::move(handler);
+}
+
 void PluginProcessorAdapter::NotifyStateChanged()
 {
     updateHostDisplay(juce::AudioProcessor::ChangeDetails().withNonParameterStateChanged(true));
@@ -1542,9 +1574,15 @@ void PluginProcessorAdapter::handleWebMessage(const juce::String& message)
 {
     // Handle openUrl locally — open in the system default browser.
     const auto parsed = juce::JSON::parse(message);
+    bool editorChoiceChanged = false;
 
     if (auto* obj = parsed.getDynamicObject(); obj != nullptr)
     {
+        // Stored by the controller like any setting (below); the window, if it is ours, then
+        // swaps the editor.
+        editorChoiceChanged = obj->getProperty("type").toString() == "setSetting" &&
+                              obj->getProperty("key").toString() == guitarfx::kNativeEditorSettingKey;
+
         const auto typeId = juce::Identifier{"type"};
         const auto urlId = juce::Identifier{"url"};
 
@@ -1573,6 +1611,11 @@ void PluginProcessorAdapter::handleWebMessage(const juce::String& message)
     }
 
     mController.HandleUIMessage(message.toStdString());
+
+    if (editorChoiceChanged && mEditorSwitchHandler)
+    {
+        mEditorSwitchHandler();
+    }
 }
 
 void PluginProcessorAdapter::sendMessageToUI(const juce::String& message)
