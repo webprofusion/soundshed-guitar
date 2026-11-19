@@ -170,8 +170,10 @@ async function assignToSlot(node: GraphNode, preset: Preset, sourceSlot: number,
 }
 
 function resolveSlotTarget(nodeId: string, event: PointerEvent): SlotDropTarget | null {
-  const element = document.elementFromPoint(event.clientX, event.clientY)
-    ?.closest<HTMLElement>(".cab-ir-resource-selectors .node-resource-selector[data-resource-index]");
+  const hit = document.elementFromPoint(event.clientX, event.clientY);
+  // Side by side (irAbPanel.ts), anywhere on a slot's card lands on that slot.
+  const element = hit?.closest<HTMLElement>(".ir-ab-slot")?.querySelector<HTMLElement>(".node-resource-selector[data-resource-index]")
+    ?? hit?.closest<HTMLElement>(".cab-ir-resource-selectors .node-resource-selector[data-resource-index]");
   if (!element || element.dataset.nodeId !== nodeId) {
     return null;
   }
@@ -180,7 +182,7 @@ function resolveSlotTarget(nodeId: string, event: PointerEvent): SlotDropTarget 
 }
 
 export function bindIrSlotList(node: GraphNode, preset: Preset): void {
-  const root = nodeParamsPanelElement?.querySelector<HTMLElement>(".cab-ir-resource-selectors > .ir-slot-list");
+  const root = nodeParamsPanelElement?.querySelector<HTMLElement>(":is(.cab-ir-resource-selectors, .ir-ab-grid) > .ir-slot-list");
   if (!root) {
     return;
   }

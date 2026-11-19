@@ -127,7 +127,8 @@ export type BlendKnobBinding = {
 };
 
 /** A parameter as the params panel lays it out; `blend` is set on a blend node's mapped knobs. */
-export type BlendParamDef = ParameterDef & { blend?: BlendKnobBinding };
+/** `blendAsKnob`: an A/B blend ("blend" unit) drawn as a knob rather than the A–B slider. */
+export type BlendParamDef = ParameterDef & { blend?: BlendKnobBinding; blendAsKnob?: boolean };
 
 /** The attributes that make a knob or slider a blend knob (see bindNodeParamControls). */
 export function blendKnobDataAttributes(binding: BlendKnobBinding): string {

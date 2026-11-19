@@ -279,12 +279,12 @@ html[data-density="compact"] .ir-slot-list:not(.is-open) .ir-slot-list-toggle {
 }
 
 /* While a row is dragged, the slots it can land on say so. */
-body.ir-slot-list-dragging .cab-ir-resource-selectors .node-resource-selector .resource-picker-label {
+body.ir-slot-list-dragging :is(.cab-ir-resource-selectors, .ir-ab) .node-resource-selector .resource-picker-label {
   border-style: dashed;
   border-color: var(--color-accent);
 }
 
-body.ir-slot-list-dragging .cab-ir-resource-selectors .node-resource-selector.drag-over .resource-picker-label {
+body.ir-slot-list-dragging :is(.cab-ir-resource-selectors, .ir-ab) .node-resource-selector.drag-over .resource-picker-label {
   border-style: solid;
   background: color-mix(in srgb, var(--color-accent) 24%, transparent);
 }

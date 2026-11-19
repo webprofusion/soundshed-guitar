@@ -55,6 +55,8 @@ EffectTypeRegistry.register(EffectGuids.kCabIr, {
     { key: "slotAPolarity", name: "IR A Invert", default: 0, min: 0, max: 1, unit: "toggle", group: "IR A", advanced: true },
     { key: "slotBPolarity", name: "IR B Invert", default: 0, min: 0, max: 1, unit: "toggle", group: "IR B", advanced: true },
     { key: "slotBOffset", name: "IR B Offset", default: 0, min: -10, max: 10, unit: "ms", group: "Alignment", advanced: true },
+    // The A/B section (irAbPanel.ts) takes the slot controls; this keeps an Advanced tab.
+    { key: "quality", name: "Quality", default: 1, min: 0, max: 3, unit: "enum", group: "Tone", advanced: true, labels: ["Economy", "Standard", "High", "Full"] },
   ],
 });
 
@@ -179,7 +181,7 @@ describe("the IR Cabinet's Alignment section", () => {
     expect(paramUpdates("slotBPolarity")).toEqual([1]);
     expect(node.params.slotBOffset).toBe(-0.024);
     expect(panel().querySelector(".ir-alignment-status")?.textContent).toBe("Lined up");
-    // The IR B group's own Invert toggle follows.
+    // IR B's card's own Invert switch follows.
     expect(panel().querySelector<HTMLInputElement>('.node-param-toggle[data-param-key="slotBPolarity"]')?.checked).toBe(true);
 
     // On purpose, off the aligned point: the nudges and the typed value.

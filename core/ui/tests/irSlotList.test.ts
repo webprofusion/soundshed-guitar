@@ -125,8 +125,11 @@ describe("the IR list between the slots", () => {
   });
 
   it("is a button between IR A and IR B until opened", () => {
-    const children = Array.from(panel().querySelector(".cab-ir-resource-selectors")!.children);
-    expect(children.map((child) => child.className.split(" ")[0])).toEqual(["node-resource-selector", "ir-slot-list", "node-resource-selector"]);
+    // Side by side: IR A's card, the blend, IR B's card, and the list's button (drawn in the middle).
+    const children = Array.from(panel().querySelector(".ir-ab-grid")!.children);
+    expect(children.map((child) => child.className.split(" ").find((name) => name.startsWith("ir-ab-") || name === "ir-slot-list")))
+      .toEqual(["ir-ab-slot", "ir-ab-centre", "ir-ab-slot", "ir-slot-list"]);
+    expect(panel().querySelectorAll(".ir-ab-slot .node-resource-selector")).toHaveLength(2);
     expect(panel().querySelector(".ir-slot-list-rows")).toBeNull();
   });
 
@@ -134,7 +137,7 @@ describe("the IR list between the slots", () => {
     pickedFromFolder("ir-cab");
     click(".ir-slot-list-toggle");
 
-    expect(panel().querySelector(".cab-ir-resource-selectors")!.classList.contains("has-slot-list")).toBe(true);
+    expect(panel().querySelector(".ir-ab")!.classList.contains("has-slot-list")).toBe(true);
     expect(panel().querySelector(".ir-slot-list-source.is-active")?.textContent).toBe("IR A · Folder");
     const rows = Array.from(panel().querySelectorAll(".ir-slot-list-row"));
     expect(rows.map((row) => row.querySelector(".ir-slot-list-row-name")?.textContent)).toEqual(["421", "57", "906"]);

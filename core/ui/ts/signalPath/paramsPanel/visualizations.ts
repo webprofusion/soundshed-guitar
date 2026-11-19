@@ -10,6 +10,7 @@ import type { GraphNode } from "../../types.js";
 import { updateCabResponseVisualization } from "./cabResponse.js";
 import { updateEqVisualization } from "./eq.js";
 import { updateGateLearnVisualization } from "./gateLearnPanel.js";
+import { updateIrAbVisualization } from "./irAbPanel.js";
 import { updateIrAlignmentVisualization } from "./irAlignmentPanel.js";
 import { updateMultibandVisualization } from "./multibandPanel.js";
 import { updatePickupResponseVisualization } from "./pickupResponse.js";
@@ -20,6 +21,7 @@ export function refreshNodeVisualizations(node: GraphNode): void {
   updateSpatialVisualization(node);
   updateCabResponseVisualization(node);
   updateIrAlignmentVisualization(node);
+  updateIrAbVisualization(node);
   updatePickupResponseVisualization(node);
   updateGateLearnVisualization(node);
   updateMultibandVisualization(node);

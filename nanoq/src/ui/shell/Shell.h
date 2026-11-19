@@ -528,7 +528,8 @@ class Shell
     struct IrAlignmentPanel;
     /// The section's height for this node: 0 for any other effect, or a cab with no IR.
     [[nodiscard]] static float IrAlignmentHeight(const guitarfx::GraphNode& node);
-    [[nodiscard]] Ptr BuildIrAlignment(const guitarfx::GraphNode& node);
+    /// `inverts`: its Invert A and B, which the IR A/B cards hold when they are shown.
+    [[nodiscard]] Ptr BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts = true);
     void SyncIrAlignment();
     std::shared_ptr<IrAlignmentPanel> mIrAlignment;
 

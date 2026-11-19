@@ -1,0 +1,238 @@
+/* The IR Cabinet's IR A and IR B side by side (ts/signalPath/paramsPanel/irAbPanel.ts): a card
+   per slot (its picker, Level, Pan, the mic's Radial and Proximity, Invert) with the blend
+   between them. Wide, the three sit on one line; narrower, the cards share a line and the blend
+   goes under them; narrowest, everything stacks. The cards are the panel's inset group boxes,
+   so each theme's group look applies; A and B take the Alignment section's colours. */
+
+.default-effect-shell .effect-inline-resource-selectors.ir-ab {
+  display: block;
+  container: ir-ab / inline-size;
+  margin-bottom: 14px;
+}
+
+html[data-density="compact"]:not([data-compact-split]) .default-effect-section-controls > .effect-inline-resource-selectors.ir-ab {
+  flex: 1 1 100%;
+}
+
+html[data-density="compact"] .default-effect-shell .effect-inline-resource-selectors.ir-ab {
+  margin-bottom: 6px;
+}
+
+.ir-ab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas:
+    "a centre b"
+    "list list list";
+  gap: 8px 12px;
+}
+
+.ir-ab-slot-a {
+  grid-area: a;
+}
+
+.ir-ab-slot-b {
+  grid-area: b;
+}
+
+.ir-ab-centre {
+  grid-area: centre;
+}
+
+/* Closed, the IR list is a button at the top of the middle column. */
+.ir-ab-grid > .ir-slot-list:not(.is-open) {
+  grid-area: centre;
+  justify-self: center;
+  align-self: start;
+  margin-top: 10px;
+}
+
+.ir-ab-grid > .ir-slot-list.is-open {
+  grid-area: list;
+}
+
+/* The cards: the slot's header, its picker, its controls. */
+.default-effect-shell .ir-ab .ir-ab-slot {
+  min-width: 0;
+  gap: 10px;
+}
+
+.ir-ab-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.ir-ab-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--param-group-title-ink, var(--text-secondary));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ir-ab-key::before {
+  content: "";
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ir-alignment-a);
+}
+
+.ir-ab-key-b::before {
+  background: var(--ir-alignment-b);
+}
+
+.ir-ab-share {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Invert: a small Ø switch at the header's end, lit while the slot plays inverted. */
+.ir-ab-invert {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.ir-ab-invert input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ir-ab-invert:hover {
+  border-color: var(--color-accent);
+}
+
+.ir-ab-invert:has(input:checked) {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  color: var(--color-accent);
+}
+
+.ir-ab-invert:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The card's header names the slot, so the picker's own label goes. */
+.default-effect-shell .ir-ab .node-resource-selector > label {
+  display: none;
+}
+
+.default-effect-shell .ir-ab .node-resource-selector {
+  flex: none;
+}
+
+.default-effect-shell .ir-ab .ir-ab-slot-controls {
+  flex-wrap: wrap;
+  justify-content: space-around;
+  gap: 10px 8px;
+}
+
+.default-effect-shell .ir-ab .node-param-group {
+  min-width: 54px;
+}
+
+.ir-ab-divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 0;
+  background: var(--panel-inset-border);
+}
+
+/* Between the cards: Blend, L/R Split and Mics, down the middle. */
+.default-effect-shell .ir-ab .ir-ab-centre {
+  min-width: 0;
+  justify-content: center;
+  padding: 48px 10px 12px;
+}
+
+.default-effect-shell .ir-ab .ir-ab-centre-controls {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* A setting that does nothing as things stand stays where it is, faded; its title says why. */
+.ir-ab [data-ir-ab-key].is-inactive {
+  opacity: 0.4;
+}
+
+.ir-ab-slot.is-empty .ir-ab-slot-controls,
+.ir-ab-slot.is-empty .ir-ab-share {
+  opacity: 0.45;
+}
+
+/* The cards hold each IR's Invert, so the Alignment section under them need not repeat it. */
+.ir-ab ~ .ir-alignment .ir-alignment-invert {
+  display: none;
+}
+
+/* Narrower: the cards share a line, the blend controls go in a row under them, and the IR
+   list's button sits at that row's end. */
+@container ir-ab (max-width: 700px) {
+  .ir-ab-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "a b"
+      "centre centre"
+      "list list";
+  }
+
+  .ir-ab-grid > .ir-slot-list:not(.is-open) {
+    justify-self: end;
+    align-self: center;
+    margin: 0 10px 0 0;
+  }
+
+  .default-effect-shell .ir-ab .ir-ab-centre {
+    padding: 8px 52px 8px 12px;
+  }
+
+  .default-effect-shell .ir-ab .ir-ab-centre-controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 10px 24px;
+  }
+}
+
+/* Narrowest: one card over the other, the blend between them. */
+@container ir-ab (max-width: 520px) {
+  .ir-ab-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "a"
+      "centre"
+      "b"
+      "list";
+  }
+}

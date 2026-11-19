@@ -4,10 +4,15 @@
    panel like the parameter groups above it; the plots share the EQ curve's canvas
    look, so each theme's canvas background applies to them too. */
 
-.ir-alignment {
+/* Shared with the A/B cards above it (ir-ab.css), which key their slots in the same colours. */
+.ir-alignment,
+.ir-ab {
   --ir-alignment-a: rgba(72, 168, 224, 0.95);
   --ir-alignment-b: rgba(240, 160, 64, 0.95);
   --ir-alignment-match-fill: rgba(72, 168, 224, 0.4);
+}
+
+.ir-alignment {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -18,7 +23,7 @@ html[data-density="compact"] .default-effect-shell .ir-alignment {
   margin-top: 6px;
 }
 
-.theme-light .ir-alignment {
+.theme-light :is(.ir-alignment, .ir-ab) {
   --ir-alignment-a: rgba(40, 104, 160, 0.95);
   --ir-alignment-b: rgba(190, 96, 20, 0.95);
   --ir-alignment-match-fill: rgba(40, 104, 160, 0.3);

@@ -51,6 +51,7 @@ import { applyParamVisibility, isParamVisible, withParamVisibility } from "./par
 import { isPitchShiftType, semitoneKnobRange } from "./pitchShiftRange.js";
 import { buildNodeResourceSelector, preloadResourceNavigationCaches } from "./resourceSelector.js";
 import { bindIrSlotList, isIrSlotListOpen } from "./irSlotList.js";
+import { buildIrAbSectionHtml, IR_AB_PARAM_KEYS } from "./irAbPanel.js";
 import { setNodeParamsPanelRenderer } from "../render.js";
 import { nodeParamKnobs, paramsPanelInteractions } from "./state.js";
 import { refreshNodeVisualizations } from "./visualizations.js";
@@ -234,7 +235,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       `;
     }
 
-    if (unit === "blend") {
+    if (unit === "blend" && !paramDef.blendAsKnob) {
       const blendLabel = value <= 0.01 ? "A" : value >= 0.99 ? "B" : `${Math.round(value * 100)}%`;
       return `
         <div class="node-param-group node-param-blend-group">
@@ -318,10 +319,14 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
     }).join("");
   };
 
-  let advancedParamDefs = paramDefs.filter((paramDef) => Boolean(paramDef.advanced));
-  let mainParamDefs = paramDefs.filter((paramDef) => !paramDef.advanced);
+  // The IR Cabinet's slot and blend controls are in its A/B section (irAbPanel.ts), not the groups.
+  const groupedParamDefs = isIrCabNode(node)
+    ? paramDefs.filter((paramDef) => !IR_AB_PARAM_KEYS.includes(paramDef.key))
+    : paramDefs;
+  let advancedParamDefs = groupedParamDefs.filter((paramDef) => Boolean(paramDef.advanced));
+  let mainParamDefs = groupedParamDefs.filter((paramDef) => !paramDef.advanced);
   if (mainParamDefs.length === 0) {
-    mainParamDefs = paramDefs;
+    mainParamDefs = groupedParamDefs;
     advancedParamDefs = [];
   }
   const hasAdvancedTab = advancedParamDefs.length > 0;
@@ -389,7 +394,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
 
   preloadResourceNavigationCaches(node, preset, typeInfo);
 
-  const { html: resourceSelector, layoutControls: customLayoutResourceControls } =
+  const { html: resourceSelector, layoutControls: customLayoutResourceControls, cabIrPickers } =
     buildNodeResourceSelector(node, preset, typeInfo, blendState);
 
   // Resolve the layout to render. Preference rules (preset > keyword > effect type)
@@ -507,6 +512,10 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       ${irAlignmentSection}
     </div>
   ` : (() => {
+    // The IR Cabinet's two IRs side by side, each with its own controls, the blend between them.
+    const irAbSection = placeCabIrResourcesInControls && cabIrPickers
+      ? buildIrAbSectionHtml(node, paramDefs, (paramDef) => renderParamControl(paramDef), cabIrPickers)
+      : "";
     // Build the standard default controls HTML
     const neuralResourceSelector = placeNeuralResourceInControls && resourceSelector
       ? `<div class="neural-model-resource-selector">${resourceSelector}</div>`
@@ -552,7 +561,7 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
       ${mixerInputControls}
       ${splitBranchControls}
       <div class="default-effect-section default-effect-section-controls">
-        ${cabIrResourceSelectors}
+        ${irAbSection || cabIrResourceSelectors}
         ${renderedControls}
         ${irAlignmentSection}
       </div>

@@ -175,6 +175,14 @@ std::string FormatParamValue(const EffectParamInfo& param, double value)
         return (value < 0 ? "L" : "R") + Fixed(std::abs(value * 100.0), 0);
     }
 
+    // An A/B blend as its two shares, A's first: "A", "70/30", "B" (paramValueFormat.ts
+    // formatBlendShare).
+    if (param.unit == "blend")
+    {
+        const long b = std::lround(std::clamp(value, 0.0, 1.0) * 100.0);
+        return b <= 0 ? "A" : b >= 100 ? "B" : std::to_string(100 - b) + "/" + std::to_string(b);
+    }
+
     // A parameter that moves in whole steps (a MIDI channel, semitones, a count) shows a whole
     // number, as the web UI's wholeStepLabel (core/ui/ts/paramLabels.ts) does. Before the taper,
     // so a stepped count on a log taper (the Dispersal's Stages) reads "64".

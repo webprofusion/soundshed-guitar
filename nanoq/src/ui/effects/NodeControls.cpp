@@ -171,6 +171,12 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
 
     auto controls = Row({previous, HGap(6), choose, HGap(6), next, HGap(6), clear});
 
+    // On a card that names the slot itself (the IR Cabinet's A and B), the row alone.
+    if (stacked && label.empty())
+    {
+        return controls;
+    }
+
     // Stacked, as the effect editor's model card (.neural-model-resource-selector): the label
     // over the row, which takes the card's width.
     if (stacked)

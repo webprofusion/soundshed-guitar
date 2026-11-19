@@ -558,7 +558,7 @@ float Shell::IrAlignmentHeight(const guitarfx::GraphNode& node)
            kPlotLabelH + kPlotH + kGap + kNoteH;
 }
 
-Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node)
+Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
 {
     if (!mIrAlignment)
     {
@@ -728,7 +728,8 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node)
                 FixedHeight(kHeaderH, Row({FixedWidth(40, keyA), FixedWidth(40, keyB), Stretch(), status})), VGap(kGap),
                 FixedHeight(kWavesH, waves), VGap(kGap), FixedHeight(kStripH, strip), VGap(kGap),
                 FixedHeight(kControlsH, Row(controls)), VGap(kGap),
-                FixedHeight(kReadoutH, Row({invertA, HGap(6), invertB, HGap(12), distance, Stretch(), match})),
+                FixedHeight(kReadoutH, inverts ? Row({invertA, HGap(6), invertB, HGap(12), distance, Stretch(), match})
+                                               : Row({distance, Stretch(), match})),
                 VGap(kGap), FixedHeight(kPlotLabelH, Row({plotLabel, Stretch(), plotKey})), FixedHeight(kPlotH, plot),
                 VGap(kGap), FixedHeight(kNoteH, note)});
 }

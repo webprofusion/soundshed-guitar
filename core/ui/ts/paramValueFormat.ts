@@ -27,6 +27,12 @@ export function formatParamValue(
   if (unit === "enum" && Array.isArray(labels)) {
     return enumLabel(value, labels, min, step) ?? `${Math.round(value)}`;
   }
+  if (unit === "blend") {
+    return formatBlendShare(value);
+  }
+  if (unit === "pan") {
+    return Math.abs(value) < 0.01 ? "C" : `${value < 0 ? "L" : "R"}${Math.abs(value * 100).toFixed(0)}`;
+  }
   // Whole steps first, so a stepped count on a log taper (the Dispersal's Stages) reads "64".
   const whole = wholeStepLabel(value, unit, step);
   if (whole !== undefined) {
@@ -39,6 +45,15 @@ export function formatParamValue(
     return `${value.toFixed(1)}${unit}`;
   }
   return value.toFixed(2);
+}
+
+/**
+ * An A/B blend from 0 (all A) to 1 (all B) as its two shares, A's first: "A", "70/30", "B".
+ * Core's ParamFormat.cpp FormatParamValue says the same for Nano Q.
+ */
+export function formatBlendShare(value: number): string {
+  const b = Math.round(Math.min(1, Math.max(0, value)) * 100);
+  return b <= 0 ? "A" : b >= 100 ? "B" : `${100 - b}/${b}`;
 }
 
 /**
@@ -61,6 +76,9 @@ export function knobValueFormatter(knob: HTMLElement): (value: number) => string
     }
     if (isBlendParam) {
       return rawValue.toFixed(1);
+    }
+    if (unit === "blend") {
+      return formatBlendShare(rawValue);
     }
     if (unit === "pan") {
       if (Math.abs(rawValue) < 0.01) return "C";

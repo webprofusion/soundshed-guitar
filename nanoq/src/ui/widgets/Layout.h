@@ -276,6 +276,41 @@ template <el::concepts::Element Subject> class MinSizeElement : public el::proxy
     return el::share(el::hstretch(weight, el::hold_any(std::move(content))));
 }
 
+/// `content` drawn at `opacity` as one layer, as CSS opacity draws it: a control that does nothing
+/// as things stand, still there to be set. It is hit and focused as it would be unfaded.
+class Faded final : public el::proxy_base
+{
+  public:
+    Faded(Ptr subject, float opacity) : mSubject(std::move(subject)), mOpacity(opacity)
+    {
+    }
+
+    el::element& subject() override
+    {
+        return *mSubject;
+    }
+
+    const el::element& subject() const override
+    {
+        return *mSubject;
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        auto group = ctx.canvas.new_group(mOpacity);
+        proxy_base::draw(ctx);
+    }
+
+  private:
+    Ptr mSubject;
+    float mOpacity;
+};
+
+[[nodiscard]] inline Ptr Fade(float opacity, Ptr content)
+{
+    return std::make_shared<Faded>(std::move(content), opacity);
+}
+
 [[nodiscard]] inline Ptr Fill(el::color colour, Ptr content)
 {
     return Over(std::move(content), el::share(el::box(colour)));

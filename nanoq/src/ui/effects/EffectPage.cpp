@@ -58,6 +58,40 @@ constexpr float kPanelMinWidth = 448.0f;
 constexpr float kHeaderHeight = 36.0f;
 constexpr float kStackedSlot = 16.0f + 6.0f + 26.0f; // a slot's label over its row
 
+// The IR Cabinet's A/B section (the web UI's paramsPanel/irAbPanel.ts): each slot's own
+// controls on its card, Level, Pan, then the mic's Radial and Proximity, and Invert as a Ø in
+// its header; what is between the two IRs in the middle.
+constexpr const char* kIrAbSlotKeys[2][5] = {{"slotAGain", "slotAPan", "micRadialA", "micProximityA", "slotAPolarity"},
+                                             {"slotBGain", "slotBPan", "micRadialB", "micProximityB", "slotBPolarity"}};
+constexpr const char* kIrAbCentreKeys[3] = {"irBlend", "lrSplit", "micEmulation"};
+
+bool IsIrAbParam(const std::string& key)
+{
+    for (const auto& slot : kIrAbSlotKeys)
+    {
+        if (std::find(std::begin(slot), std::end(slot), key) != std::end(slot))
+        {
+            return true;
+        }
+    }
+
+    return std::find(std::begin(kIrAbCentreKeys), std::end(kIrAbCentreKeys), key) != std::end(kIrAbCentreKeys);
+}
+
+/// "IR A Level" is "Level" on IR A's card, "Mic B Radial" is "Radial" on IR B's.
+std::string NameInSlot(const std::string& name)
+{
+    for (const char* prefix : {"IR A ", "IR B ", "Mic A ", "Mic B "})
+    {
+        if (name.rfind(prefix, 0) == 0)
+        {
+            return name.substr(std::char_traits<char>::length(prefix));
+        }
+    }
+
+    return name;
+}
+
 /// A slot's label over its row, whose controls touch sizes give 36 px (NodeControls.cpp).
 float StackedSlot()
 {
@@ -281,6 +315,18 @@ std::string Shell::EffectPageSignature() const
 
     s += "|blends" + std::to_string(mState.blends.size());
 
+    // The IR Cabinet's cards fade what L/R Split and Mics leave doing nothing.
+    if (node->type == guitarfx::EffectGuids::kCabIr)
+    {
+        s += "|ab";
+
+        for (const char* key : {"lrSplit", "micEmulation"})
+        {
+            const auto it = node->params.find(key);
+            s += it != node->params.end() && it->second >= 0.5 ? "1" : "0";
+        }
+    }
+
     // The model and IR slots show what is loaded and what the library holds.
     for (const auto& ref : node->resources)
     {
@@ -377,6 +423,9 @@ Ptr Shell::BuildEffectPage()
     const float stageWidth = StageWidth();
     const float stageHeight = split ? StageHeight() - mChainAreaHeight - 10.0f : StageHeight();
 
+    // The IR Cabinet's IR A and IR B side by side, each with its own controls, the blend between.
+    const bool irAb = hasSlots && !layoutPlacesSlots && node->type == guitarfx::EffectGuids::kCabIr && !customControls;
+
     // ── Which controls: this tab's, and only those whose condition holds ──
     std::vector<EffectParamInfo> params;
     bool anyAdvanced = false;
@@ -394,6 +443,12 @@ Ptr Shell::BuildEffectPage()
 
         for (const auto& param : type->parameters)
         {
+            // The IR Cabinet's A and B controls are on its slots' cards, whichever tab is shown.
+            if (irAb && IsIrAbParam(param.key))
+            {
+                continue;
+            }
+
             anyAdvanced = anyAdvanced || param.advanced;
 
             if (branches > 0 && !guitarfx::uiclient::IsSplitterParamInUse(param.key, branches))
@@ -439,21 +494,8 @@ Ptr Shell::BuildEffectPage()
                         std::ceil(MeasureControlText(name, label, metrics::Readable(label.size + 1.0f))) + 4.0f);
     };
 
-    for (const auto& info : params)
-    {
-        // A group gathers every control of its name, where they are apart in the list too
-        // (a NAM amp's Input and Output both in Level), as the web UI groups them.
-        auto group =
-            std::find_if(groups.begin(), groups.end(), [&info](const Group& g) { return g.name == info.group; });
-
-        if (group == groups.end())
-        {
-            groups.push_back({info.group, {}});
-            group = std::prev(groups.end());
-        }
-
-        auto& target = *group;
-        target.controls.push_back(info.name);
+    // A control's cell, its width and the cell, named `shown`: a list's chip, a switch or a knob.
+    const auto makeCell = [&](const EffectParamInfo& info, const std::string& shown) -> std::pair<float, Ptr> {
         // A right click on any of them: MIDI Learn, for whichever control it is (Automation.cpp).
         auto menu = [this, key = info.key](el::point at) {
             if (const auto* n = SelectedNode())
@@ -478,19 +520,18 @@ Ptr Shell::BuildEffectPage()
                                 : std::string(),
                             11.0f);
                 });
-            auto label = std::make_shared<Text>(mTheme, Upper(NameInGroup(info.name, info.group)),
-                                                metrics::Readable(9.0f), Weight::SemiBold);
+            auto label = std::make_shared<Text>(mTheme, Upper(shown), metrics::Readable(9.0f), Weight::SemiBold);
             label->Colour(Theme::Argb(mTheme.Controls().label.colour)).Alignment(Text::Align::Centre);
             // Touch sizes: the chip is hit over 36 px.
             const bool touch = metrics::Touch();
-            target.cells.emplace_back(
-                kPickerWidth, Sized(kPickerWidth, kCellHeight,
-                                    Col({FixedHeight(12, label), VGap(touch ? 2 : 12),
-                                         FixedHeight(touch ? 36 : 26, picker), std::make_shared<el::element>()})));
+            return {kPickerWidth, Sized(kPickerWidth, kCellHeight,
+                                        Col({FixedHeight(12, label), VGap(touch ? 2 : 12),
+                                             FixedHeight(touch ? 36 : 26, picker), std::make_shared<el::element>()}))};
         }
-        else if (IsToggleParam(info))
+
+        if (IsToggleParam(info))
         {
-            auto toggle = std::make_shared<ParamToggle>(mTheme, NameInGroup(info.name, info.group));
+            auto toggle = std::make_shared<ParamToggle>(mTheme, shown);
             toggle->AccessName(info.name);
             toggle->onMenu = menu;
             mLive.Bind(
@@ -510,13 +551,13 @@ Ptr Shell::BuildEffectPage()
                 NoteChainEdit();
                 Mark(kValues | kPage);
             };
-            target.cells.emplace_back(cellFor(NameInGroup(info.name, info.group)), toggle);
+            return {cellFor(shown), toggle};
         }
-        else
+
         {
             // A knob: continuous values, and an enum short enough to turn through, as the web
             // UI's Mode knobs are.
-            auto knob = std::make_shared<ParamKnob>(mTheme, NameInGroup(info.name, info.group));
+            auto knob = std::make_shared<ParamKnob>(mTheme, shown);
             knob->AccessName(info.name);
             knob->Large(true);
             knob->onMenu = menu;
@@ -571,11 +612,303 @@ Ptr Shell::BuildEffectPage()
                 };
             }
 
-            const float cell = cellFor(NameInGroup(info.name, info.group));
+            const float cell = cellFor(shown);
             knob->CellWidth(cell);
-            target.cells.emplace_back(cell, knob);
+            return {cell, knob};
         }
+    };
+
+    for (const auto& info : params)
+    {
+        // A group gathers every control of its name, where they are apart in the list too
+        // (a NAM amp's Input and Output both in Level), as the web UI groups them.
+        auto group =
+            std::find_if(groups.begin(), groups.end(), [&info](const Group& g) { return g.name == info.group; });
+
+        if (group == groups.end())
+        {
+            groups.push_back({info.group, {}});
+            group = std::prev(groups.end());
+        }
+
+        group->controls.push_back(info.name);
+        group->cells.push_back(makeCell(info, NameInGroup(info.name, info.group)));
     }
+
+    // ── The IR Cabinet's IR A and IR B side by side (the web UI's irAbPanel.ts) ──
+    // Each slot's card: its key, the share of the sound it plays and its Ø (Invert) over its
+    // picker and its own knobs; between the cards, the blend, L/R Split and Mics. A control that
+    // does nothing as things stand is faded where it is, as the web UI's are (the page is rebuilt
+    // when L/R Split, Mics or a slot changes).
+    constexpr float kAbPickerMin = 220.0f, kAbDivider = 13.0f, kAbHeadHeight = 22.0f, kAbPadTop = 10.0f,
+                    kAbPadBottom = 8.0f;
+    const auto abParam = [type](const char* key) -> const EffectParamInfo* {
+        if (type == nullptr)
+        {
+            return nullptr;
+        }
+
+        const auto it = std::find_if(type->parameters.begin(), type->parameters.end(),
+                                     [key](const EffectParamInfo& p) { return p.key == key; });
+        return it != type->parameters.end() ? &*it : nullptr;
+    };
+    // The knobs' widths four abreast and two by two, and the middle's.
+    float abKnobRow = 0.0f, abKnobPair = 0.0f, abCentre = 0.0f;
+
+    if (irAb)
+    {
+        float w[4] = {};
+
+        for (std::size_t i = 0; i < 4; ++i)
+        {
+            const auto* info = abParam(kIrAbSlotKeys[0][i]);
+            w[i] = info != nullptr ? cellFor(NameInSlot(info->name)) : 0.0f;
+        }
+
+        abKnobRow = w[0] + w[1] + w[2] + w[3] + 3.0f * kCellGap + kAbDivider;
+        abKnobPair = std::max(w[0] + w[1], w[2] + w[3]) + kCellGap;
+        abCentre = std::max(cellFor("Blend"), cellFor("L/R Split") + kCellGap + cellFor("Mics")) + 2.0f * kGroupPadX;
+    }
+
+    // The section's width with the cards' knobs `knobs` wide: a card is never narrower than its
+    // picker needs.
+    const auto abWidth = [&](float knobs) {
+        return 2.0f * (std::max(knobs, kAbPickerMin) + 2.0f * kGroupPadX) + abCentre + 2.0f * kGroupGap;
+    };
+
+    const auto buildIrAb = [&](float inner, float& height) -> Ptr {
+        const auto on = [node](const char* key) {
+            const auto it = node->params.find(key);
+            return it != node->params.end() && it->second >= 0.5;
+        };
+        const auto filled = [node](std::size_t index) {
+            return index < node->resources.size() &&
+                   (node->resources[index].IsLibraryRef() || node->resources[index].IsFilePath());
+        };
+        const bool lrSplit = on("lrSplit");
+        const bool mics = on("micEmulation");
+        const bool both = filled(0) && filled(1);
+
+        // Pan and Blend under L/R Split, the mic knobs while Mics is off, Blend and L/R Split
+        // with one IR (irAbPanel.ts updateIrAbVisualization).
+        const auto idle = [&](const std::string& key) {
+            const bool pan = key == "slotAPan" || key == "slotBPan";
+            const bool mic = key.rfind("mic", 0) == 0 && key != "micEmulation";
+            return (pan && lrSplit) || (mic && !mics) || (key == "irBlend" && (lrSplit || !both)) ||
+                   (key == "lrSplit" && !both);
+        };
+        const auto cell = [&](const char* key, const std::string& name, bool emptySlot) -> std::pair<float, Ptr> {
+            const auto* info = abParam(key);
+
+            if (info == nullptr)
+            {
+                return {0.0f, nullptr};
+            }
+
+            auto [w, c] = makeCell(*info, name);
+            const float opacity = idle(key) ? 0.4f : emptySlot ? 0.45f : 1.0f;
+            return {w, opacity < 1.0f ? Fade(opacity, std::move(c)) : std::move(c)};
+        };
+        // Cells in a row, centred; a rule between the slot's level and its mic after `divideAt`.
+        const auto cellsRow = [this](const std::vector<std::pair<float, Ptr>>& cells, std::size_t divideAt) {
+            std::vector<Ptr> row{Stretch()};
+
+            for (std::size_t i = 0; i < cells.size(); ++i)
+            {
+                if (!cells[i].second)
+                {
+                    continue;
+                }
+
+                if (i == divideAt)
+                {
+                    row.push_back(HGap(6));
+                    row.push_back(
+                        FixedWidth(1, Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>())));
+                    row.push_back(HGap(6));
+                }
+                else if (row.size() > 1)
+                {
+                    row.push_back(HGap(kCellGap));
+                }
+
+                row.push_back(FixedWidth(cells[i].first, cells[i].second));
+            }
+
+            row.push_back(Stretch());
+            return Row(row);
+        };
+        // What share of the sound a slot plays, as its card's header says it.
+        const auto shareOf = [this, nodeId](std::size_t index) -> std::string {
+            const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+
+            if (n == nullptr)
+            {
+                return {};
+            }
+
+            const auto has = [n](std::size_t i) {
+                return i < n->resources.size() && (n->resources[i].IsLibraryRef() || n->resources[i].IsFilePath());
+            };
+
+            if (!has(index))
+            {
+                return "EMPTY";
+            }
+
+            if (!has(0) || !has(1))
+            {
+                return "ALONE";
+            }
+
+            const auto param = [n](const char* key, double fallback) {
+                const auto it = n->params.find(key);
+                return it != n->params.end() && std::isfinite(it->second) ? it->second : fallback;
+            };
+
+            if (param("lrSplit", 0.0) >= 0.5)
+            {
+                return index == 0 ? "LEFT" : "RIGHT";
+            }
+
+            const double blend = std::clamp(param("irBlend", 0.0), 0.0, 1.0);
+            return std::to_string(std::lround((index == 0 ? 1.0 - blend : blend) * 100.0)) + "%";
+        };
+        const float slotHeight = metrics::Touch() ? 36.0f : 26.0f;
+        const auto& groupTitle = mTheme.Controls().groupTitle;
+
+        const auto card = [&](std::size_t index, bool pairs, float& h) -> Ptr {
+            const auto& keys = kIrAbSlotKeys[index];
+            const bool empty = !filled(index);
+            const std::string slot = index == 0 ? "IR A" : "IR B";
+
+            // The header: the slot's colour and name (the Alignment section's), its share, Ø.
+            auto bar = Rounded(index == 0 ? el::rgba(72, 168, 224, 242) : el::rgba(240, 160, 64, 242), 1.5f,
+                               std::make_shared<el::element>());
+            auto name = std::make_shared<Text>(mTheme, Upper(slot), metrics::Readable(10.0f), Weight::SemiBold);
+            name->Colour(Theme::Argb(groupTitle.colour)).Fixed(true);
+            auto share = std::make_shared<Text>(mTheme, "", metrics::Readable(10.0f), Weight::SemiBold);
+            share->Colour(empty ? mTheme.TextMuted() : mTheme.TextSecondary())
+                .Alignment(Text::Align::Right)
+                .Fixed(true);
+            mLive.Bind(share, [shareOf, index] { return shareOf(index); }, &Text::Set);
+            std::vector<Ptr> head{
+                Middle(FixedWidth(14, FixedHeight(3, bar))), HGap(6),
+                FixedWidth(MeasureTextWidth(Upper(slot), Font(Weight::SemiBold).size(11.0f)) + 4.0f, Middle(name)),
+                Stretch(), Middle(share)};
+
+            if (const auto* invert = abParam(keys[4]))
+            {
+                // Invert as a console's phase button: a small Ø, lit while the slot is inverted.
+                auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+                button->Size(26, 22).Label("\xC3\x98", 13.0f);
+                button->AccessName("Invert " + slot);
+                button->onClick = [this, nodeId, info = *invert] {
+                    const auto* n = SelectedNode();
+
+                    if (n == nullptr || n->id != nodeId)
+                    {
+                        return;
+                    }
+
+                    const bool now = NodeParamValue(*n, info) >= 0.5;
+                    mSession.Commands().SetNodeParam(nodeId, info.key, now ? info.minValue : info.maxValue);
+                    NoteChainEdit();
+                    Mark(kValues);
+                };
+                button->onMenu = [this, key = invert->key](el::point at) {
+                    if (const auto* n = SelectedNode())
+                    {
+                        OpenNodeParamMidiMenu(n->type, key, at);
+                    }
+                };
+                mLive.Bind(
+                    button, [valueOf, info = *invert] { return valueOf(info) >= 0.5; },
+                    [](IconButton& b, bool lit) { b.Lit(lit); });
+                head.push_back(HGap(8));
+                head.push_back(Middle(button));
+            }
+
+            // The picker, without its own label: the header names the slot.
+            auto picker = BuildResourceSlot(*node, type->resourceType, static_cast<int>(index), "", index == 1, true);
+
+            std::vector<std::pair<float, Ptr>> knobs;
+
+            for (std::size_t i = 0; i < 4; ++i)
+            {
+                const auto* info = abParam(keys[i]);
+                knobs.push_back(cell(keys[i], info != nullptr ? NameInSlot(info->name) : std::string(), empty));
+            }
+
+            std::vector<Ptr> rows{FixedHeight(kAbHeadHeight, Row(head)), VGap(8), FixedHeight(slotHeight, picker),
+                                  VGap(10)};
+            h = kAbPadTop + kAbHeadHeight + 8.0f + slotHeight + 10.0f + kCellHeight + kAbPadBottom;
+
+            if (pairs)
+            {
+                // Level and Pan over the mic's Radial and Proximity.
+                rows.push_back(FixedHeight(kCellHeight, cellsRow({knobs[0], knobs[1]}, SIZE_MAX)));
+                rows.push_back(VGap(6));
+                rows.push_back(FixedHeight(kCellHeight, cellsRow({knobs[2], knobs[3]}, SIZE_MAX)));
+                h += 6.0f + kCellHeight;
+            }
+            else
+            {
+                rows.push_back(FixedHeight(kCellHeight, cellsRow(knobs, 2)));
+            }
+
+            rows.push_back(std::make_shared<el::element>());
+            return Over(Pad(kGroupPadX, kAbPadTop, kGroupPadX, kAbPadBottom, Col(rows)),
+                        std::make_shared<InsetBox>(mTheme));
+        };
+
+        // Between the cards: the blend over L/R Split and Mics; stacked, the three in a row.
+        const auto centre = [&](bool inRow, float& h) -> Ptr {
+            auto blend = cell("irBlend", "Blend", false);
+            auto lr = cell("lrSplit", "L/R Split", false);
+            auto mic = cell("micEmulation", "Mics", false);
+            Ptr content;
+
+            if (inRow)
+            {
+                h = 8.0f + kCellHeight + 4.0f;
+                content =
+                    Pad(kGroupPadX, 8, kGroupPadX, 4, FixedHeight(kCellHeight, cellsRow({blend, lr, mic}, SIZE_MAX)));
+            }
+            else
+            {
+                h = kAbPadTop + 2.0f * kCellHeight + 6.0f + kAbPadBottom;
+                content = Pad(
+                    kGroupPadX, kAbPadTop, kGroupPadX, kAbPadBottom,
+                    Col({FixedHeight(kCellHeight, cellsRow({blend}, SIZE_MAX)), VGap(6),
+                         FixedHeight(kCellHeight, cellsRow({lr, mic}, SIZE_MAX)), std::make_shared<el::element>()}));
+            }
+
+            return Over(content, std::make_shared<InsetBox>(mTheme));
+        };
+
+        float hA = 0.0f, hB = 0.0f, hC = 0.0f;
+        const bool four = inner >= abWidth(abKnobRow);
+
+        if (four || inner >= abWidth(abKnobPair))
+        {
+            auto a = card(0, !four, hA);
+            auto b = card(1, !four, hB);
+            auto c = centre(false, hC);
+            height = std::max({hA, hB, hC});
+            const float cardWidth = std::floor((inner - abCentre - 2.0f * kGroupGap) * 0.5f);
+            return Row({FixedWidth(cardWidth, a), HGap(kGroupGap), FixedWidth(abCentre, c), HGap(kGroupGap),
+                        FixedWidth(cardWidth, b), Stretch()});
+        }
+
+        // Too narrow for the three abreast: IR A, the blend, IR B, one over another.
+        const bool pairs = inner < abKnobRow + 2.0f * kGroupPadX;
+        auto a = card(0, pairs, hA);
+        auto c = centre(true, hC);
+        auto b = card(1, pairs, hB);
+        height = hA + 8.0f + hC + 8.0f + hB;
+        return Col({FixedHeight(hA, a), VGap(8), FixedHeight(hC, c), VGap(8), FixedHeight(hB, b)});
+    };
 
     // A group's title, as the web UI's: none for the controls that have no group (it was "Other",
     // which names nothing), and none where it would only repeat its one control's name ("SWELL"
@@ -637,6 +970,12 @@ Ptr Shell::BuildEffectPage()
     for (const auto& g : groups)
     {
         groupsWidth += groupWidth(g) + (groupsWidth > 0.0f ? kGroupGap : 0.0f);
+    }
+
+    // The IR Cabinet asks for room for its two cards and the blend abreast, knobs four abreast.
+    if (irAb)
+    {
+        groupsWidth = std::max(groupsWidth, abWidth(abKnobRow));
     }
 
     // Split, the effect's artwork stands in a column left of its controls where the stage leaves
@@ -921,7 +1260,14 @@ Ptr Shell::BuildEffectPage()
     {
         const auto& rt = type->resourceType;
 
-        if (node->type == guitarfx::EffectGuids::kCabIr)
+        if (irAb)
+        {
+            float abHeight = 0.0f;
+            auto ab = buildIrAb(sectionInner, abHeight);
+            addToSection(ab, abHeight);
+            addToSection(BuildIrList(*node), mShowIrList ? 28.0f + 150.0f : 28.0f);
+        }
+        else if (node->type == guitarfx::EffectGuids::kCabIr)
         {
             addToSection(BuildResourceSlot(*node, rt, 0, "IR A", false, true), StackedSlot());
             addToSection(BuildIrList(*node), mShowIrList ? 28.0f + 150.0f : 28.0f);
@@ -1000,7 +1346,7 @@ Ptr Shell::BuildEffectPage()
     if (const float h = IrAlignmentHeight(*node); h > 0.0f && !boundary)
     {
         const float pad = mTheme.Controls().cardPadding;
-        addToSection(Over(Pad(pad, pad, pad, pad, BuildIrAlignment(*node)),
+        addToSection(Over(Pad(pad, pad, pad, pad, BuildIrAlignment(*node, !irAb)),
                           std::make_shared<SkinBox>(mTheme, &ControlSkin::card)),
                      h + 2.0f * pad);
     }

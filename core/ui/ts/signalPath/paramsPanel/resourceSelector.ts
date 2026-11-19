@@ -22,6 +22,7 @@ import { getNodeResourceDisplayName } from "../nodeLabels.js";
 import { getNodeResourceAtIndex } from "../nodeResources.js";
 import { collectPreferredNodeResourceIds, getDeduplicatedLibraryResources } from "../nodeTypes.js";
 import { resolveResourceContextKey, resolveResourceNavigationCategoryHint } from "../resourceContext.js";
+import type { IrAbSlots } from "./irAbPanel.js";
 import { buildIrSlotListHtml } from "./irSlotList.js";
 
 /**
@@ -64,6 +65,8 @@ function isOptionalResourceSlot(node: GraphNode, resourceIndex: number): boolean
 export interface NodeResourceSelector {
   html: string;
   layoutControls: LayoutResourceControlDef[];
+  /** The IR Cabinet's two pickers and its IR list apart, for the side-by-side section (irAbPanel.ts). */
+  cabIrPickers?: IrAbSlots;
 }
 
 /**
@@ -79,6 +82,7 @@ export function buildNodeResourceSelector(
   // Build resource selector if this node type requires a resource,
   // or if a composite node surfaces inner resources.
   let resourceSelector = "";
+  let cabIrPickers: IrAbSlots | undefined;
   const hideRedundantLibraryBrowseButton = !librarySlotHasBrowseButton(node.type);
   const customLayoutResourceControls: LayoutResourceControlDef[] = [];
   const exposedResources = typeInfo?.exposedResources ?? [];
@@ -229,9 +233,12 @@ export function buildNodeResourceSelector(
           </div>
         `;
       });
-    resourceSelector = isCabIr && exposedSlots.length === 2
-      ? `${exposedSlots[0]}${buildIrSlotListHtml(node, preset)}${exposedSlots[1]}`
-      : exposedSlots.join("");
+    if (isCabIr && exposedSlots.length === 2) {
+      cabIrPickers = { slots: [exposedSlots[0], exposedSlots[1]], list: buildIrSlotListHtml(node, preset) };
+      resourceSelector = `${exposedSlots[0]}${cabIrPickers.list}${exposedSlots[1]}`;
+    } else {
+      resourceSelector = exposedSlots.join("");
+    }
   } else if (typeInfo?.requiresResource && typeInfo.resourceType) {
     const resourceType = typeInfo.resourceType;
     const preferredResourceIds = collectPreferredNodeResourceIds(node, resourceType);
@@ -397,11 +404,12 @@ export function buildNodeResourceSelector(
         const irSlotA = buildSelector(0, "IR A", true);
         const irSlotB = buildSelector(1, "IR B", true);
         // The IR list sits between the slots it drags onto.
-        resourceSelector = `${irSlotA}${buildIrSlotListHtml(node, preset)}${irSlotB}`;
+        cabIrPickers = { slots: [irSlotA, irSlotB], list: buildIrSlotListHtml(node, preset) };
+        resourceSelector = `${irSlotA}${cabIrPickers.list}${irSlotB}`;
       } else {
         resourceSelector = buildSelector(0, resourceType === "nam" ? "Model" : resourceType === "ir" ? "IR" : resourceType === "plugin" ? "Plugin" : "Resource", false);
       }
     }
   }
-  return { html: resourceSelector, layoutControls: customLayoutResourceControls };
+  return { html: resourceSelector, layoutControls: customLayoutResourceControls, cabIrPickers };
 }
