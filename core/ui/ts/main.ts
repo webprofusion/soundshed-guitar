@@ -30,7 +30,8 @@ import { initFxSelector, refreshFxSelector } from "./fxSelector.js";
 import { themeSwitcher } from "./theme-switcher.js";
 import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudio } from "./demoAudio.js";
-import { initDensitySelect, initDiagnosticsToggle, initThemeSelect, initZoomControls, initUserInputCalibrationControls } from "./settings.js";
+import { initDensitySelect, initDiagnosticsToggle, initZoomControls, initUserInputCalibrationControls } from "./settings.js";
+import { initThemeFlyout } from "./themeFlyout.js";
 import { postMessage, requestLooperState } from "./bridge.js";
 import { initWindowChrome } from "./windowChrome.js";
 import { initializeMetronome } from "./metronome.js";
@@ -166,6 +167,10 @@ function initFooterActionsPopup(): void {
     if (target && footer.contains(target)) {
       return;
     }
+    // A flyout the footer opened but hung from the body (the theme flyout) is still the footer.
+    if (target instanceof Element && target.closest("[data-footer-popover]")) {
+      return;
+    }
     setOpen(false);
   });
 
@@ -232,7 +237,7 @@ async function bootstrap(): Promise<void> {
   // Initialize theme switcher
   void themeSwitcher; // Ensure the singleton is constructed
   console.log("[JS] Theme switcher initialized:", themeSwitcher.getCurrentTheme());
-  initThemeSelect();
+  initThemeFlyout();
   initZoomControls();
   initDensitySelect();
   

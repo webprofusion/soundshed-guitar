@@ -128,7 +128,7 @@ html[data-density="compact"] .footer-actions-panel .footer-demo-audio-container 
   width: 100%;
 }
 
-html[data-density="compact"] .footer-actions-panel :is(.footer-zoom-control, .footer-theme-select, .footer-layout-control) {
+html[data-density="compact"] .footer-actions-panel .footer-layout-control {
   display: flex;
   flex: 1 1 96px;
   flex-direction: column;
@@ -139,7 +139,7 @@ html[data-density="compact"] .footer-actions-panel :is(.footer-zoom-control, .fo
 
 /* Laid out as a column, the pickers' flex-basis (compact/shell.css) became a
    138px height. */
-html[data-density="compact"] .footer-actions-panel :is(.footer-zoom-control, .footer-theme-select, .footer-layout-control) .footer-demo-select {
+html[data-density="compact"] .footer-actions-panel .footer-layout-control .footer-demo-select {
   flex: none;
   width: 100%;
   max-width: none;

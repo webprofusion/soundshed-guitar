@@ -155,7 +155,7 @@
   }
 
   html .footer-bar :is(.footer-compact-shortcuts, .footer-chain-history, .footer-group,
-    .footer-demo-controls, .footer-right, .footer-zoom-control, .footer-theme-select) {
+    .footer-demo-controls, .footer-right) {
     gap: 12px;
   }
 
@@ -181,7 +181,7 @@
      4px across (40 wide). */
   @media (max-width: 420px) {
     html .footer-bar :is(.footer-compact-shortcuts, .footer-chain-history, .footer-group,
-      .footer-demo-controls, .footer-right, .footer-zoom-control, .footer-theme-select) {
+      .footer-demo-controls, .footer-right) {
       gap: 8px;
     }
 

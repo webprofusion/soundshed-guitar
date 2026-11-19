@@ -17,6 +17,9 @@
   `tools/high-gain-theme-assets/high_gain.py`
 - `core/ui/css/custom-background.css`, `core/ui/ts/visualizerBackground.ts` — the player's own
   effect-panel background, drawn over whichever theme is on
+- `core/ui/ts/themeFlyout.ts`, `core/ui/css/theme-flyout.css` — the footer's Theme button and the
+  flyout of zoom and theme pictures
+- `core/ui/images/themes/thumbnails/` — those pictures, captured by `tools/theme-thumbnails/capture.mjs`
 - `core/ui/css/components.css` — Canonical button/tab/icon-button classes
 - `scripts/convert-css-variables.ps1` — Batch conversion script for CSS files
 
@@ -54,8 +57,17 @@ themeSwitcher.cycleTheme();
 const theme = themeSwitcher.getCurrentTheme(); // 'light' | 'dark' | 'classic' | 'stage' | 'high-gain' | 'studio' | 'studio-2003'
 ```
 
-### UI Control
-Click the 🎨 icon in the icon bar to cycle through themes.
+### Choosing a theme
+The footer's **Theme** button (`#footer-theme-btn`) opens the theme flyout (`ts/themeFlyout.ts`,
+`css/theme-flyout.css`): the UI zoom at the top, then a tile per theme with a picture of the app
+wearing it. A tile applies its theme at once and the flyout stays open, so themes can be tried
+one after another; a click outside, Escape or the button closes it. At compact density the button
+is in the footer's OPTIONS sheet, which stays open while the flyout is used.
+
+The pictures are `core/ui/images/themes/thumbnails/<theme>.jpg`: 320px squares of the app's top-left
+corner (its 560px square at 1280x800 and 100% zoom), captured from the running Standalone by
+`tools/theme-thumbnails/capture.mjs` (usage in its header). Capture them with a factory preset
+whose names are our own, as they ship. A theme with no picture yet gets an empty frame.
 
 ## CSS Variables
 
@@ -167,6 +179,8 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
    - add the theme to `ThemeName`, to `THEME_OPTIONS` (which fills the theme pickers and the
      cycle order) and to `THEME_BODY_CLASSES`
    - remove/adjust any relevant legacy mapping in `LEGACY_THEME_MAP`
+   - capture its flyout picture: `node tools/theme-thumbnails/capture.mjs <ws>` redoes them all
+     (see "Choosing a theme")
 
 4. The native UI (`core/src/uiclient`, Nano Q) has its own palettes and shows dark for a name it
    does not know. If the new theme is a variant of one it has, map it there (`NormalizeTheme`

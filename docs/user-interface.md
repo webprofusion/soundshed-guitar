@@ -620,7 +620,7 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   (`#nav-rail-tuner-btn`, `#nav-rail-looper-btn`; the Looper lights while its strip is open),
   and the bar shows neither; held upright (no rail) the footer has both. What does not fit is
   in the sheet. The sheet's rows are labelled (Chain, Demo audio, MIDI, Tap tempo, Metronome,
-  Click, Zoom, Theme, Layout), repeat nothing on the bar, and stay open for TAP and Click; the
+  Click, Theme, Layout; Theme opens the theme flyout, which holds the zoom), repeat nothing on the bar, and stay open for TAP and Click; the
   bar is not re-fitted while the sheet is open. Nano Q's compact frame (`ShellFrame.cpp`) has
   the same bar, sheet and rail.
 - **Short screens** (`data-compact-short`: compact and 500px tall or less, a phone held
@@ -659,6 +659,20 @@ the engine-side settings that used to sit beside them — Preset Switching, Adva
 Targets — stayed in General under its *DSP* heading. Each tab is one partial under
 `ui-components/panels/`, and its id is `equipment-tab-<tabId>`; a new one needs the button,
 the partial's include, and the tab id in `resolveEquipmentTabId()`.
+
+### Theme and zoom (`core/ui/ts/themeFlyout.ts`)
+
+The footer's Theme button opens a flyout hung from the body: the zoom picker (75% to 200%, with
+135% between 125% and 150%) and a tile per theme with its picture. It carries
+`data-footer-popover` and `data-control-bar-popover`, so neither compact sheet closes for a click in
+it; tiles are updated in place, never redrawn, when a theme is chosen. See `docs/theme-system.md`.
+
+### Space above the effect panel
+
+At full density the play page's effect panel (`#panel-visualizer`) has a top margin that grows
+with the window's height, `clamp(0px, 4vh - 24px, 24px)` in `css/amp.css`: none below 600px, 8px at
+800px, 16px at 1000px. It is on the tab panel, so a theme's backdrop there moves down with it.
+Compact density has none.
 
 ### Audio Device
 

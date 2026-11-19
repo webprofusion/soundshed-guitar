@@ -6,16 +6,12 @@
 import type { DensityPreference } from "../compactMode.js";
 import { getDensityPreference, setDensityPreference } from "../compactMode.js";
 import { uiState } from "../state.js";
-import { THEME_OPTIONS, themeSwitcher } from "../theme-switcher.js";
-import type { ThemeName } from "../theme-switcher.js";
 import { updateAppSetting } from "../appSettingsStore.js";
 import { WHEEL_ADJUST_SETTING, isWheelAdjustEnabled } from "../wheelAdjust.js";
 import { SIGNAL_FLOW_ANIMATION_SETTING, isSignalFlowAnimationEnabled, updateSignalPathFlow } from "../signalPath/signalFlow.js";
 import { updateUiSettings } from "../windowSettings.js";
-import { densityLevelSelect, footerDensitySelect, signalFlowAnimationToggle, themeSelect, wheelAdjustToggle, zoomLevelSelect } from "./dom.js";
+import { densityLevelSelect, footerDensitySelect, signalFlowAnimationToggle, wheelAdjustToggle, zoomLevelSelect } from "./dom.js";
 import { ZOOM_DEFAULT, ZOOM_LEVEL_OPTIONS, ZOOM_MAX, ZOOM_MIN } from "./keys.js";
-
-let themeSelectInitialized = false;
 
 let zoomControlsInitialized = false;
 
@@ -96,32 +92,6 @@ export function refreshSignalFlowAnimationToggle(): void {
   if (signalFlowAnimationToggle) {
     signalFlowAnimationToggle.checked = isSignalFlowAnimationEnabled();
   }
-}
-
-export function initThemeSelect(): void {
-  // Bound to a local so the null check still narrows inside the listeners:
-  // TypeScript will not carry a narrowing on an imported binding into a
-  // closure, because another module could reassign it between the two.
-  const select = themeSelect;
-  if (!select || themeSelectInitialized) {
-    return;
-  }
-  themeSelectInitialized = true;
-
-  select.innerHTML = THEME_OPTIONS
-    .map((theme) => `<option value="${theme.value}">${theme.label}</option>`)
-    .join("");
-
-  select.value = themeSwitcher.getCurrentTheme();
-
-  select.addEventListener("change", () => {
-    const value = select.value as ThemeName;
-    themeSwitcher.setTheme(value);
-  });
-
-  window.addEventListener("themeChanged", ((event: CustomEvent) => {
-    select.value = event.detail.theme as ThemeName;
-  }) as EventListener);
 }
 
 export function initZoomControls(): void {

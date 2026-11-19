@@ -1,0 +1,152 @@
+/* The footer's Theme button and the flyout it opens (ts/themeFlyout.ts): the UI zoom, and a tile
+   per theme with a picture of the app wearing it (images/themes/thumbnails/). */
+
+.footer-theme-btn {
+  flex: none;
+  padding: 0 10px 0 8px;
+}
+
+.footer-theme-btn[aria-expanded="true"] {
+  border-color: var(--footer-field-border-hover, var(--border-medium));
+  color: var(--footer-fg-strong, var(--text-primary));
+}
+
+/* A child of the body once the page is up, fixed, and placed by positionFlyout() against the
+   button: above it, right edges lined up. */
+.theme-flyout {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-popover, 900);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(432px, calc(100vw - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border-light);
+  background: var(--bg-elevated, rgba(16, 18, 24, 0.98));
+  color: var(--text-primary);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.42);
+}
+
+.theme-flyout[hidden] {
+  display: none;
+}
+
+.theme-flyout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--border-dark, var(--border-light));
+}
+
+.theme-flyout-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.theme-flyout-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.theme-flyout-zoom-select {
+  min-width: 80px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* Three across at the flyout's full width, two on a narrow window. */
+.theme-flyout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 8px;
+}
+
+.theme-flyout-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg, 8px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.theme-flyout-tile:hover {
+  background: var(--overlay-light);
+  color: var(--text-primary);
+}
+
+.theme-flyout-tile:focus-visible {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: 1px;
+}
+
+.theme-flyout-tile[aria-checked="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--text-primary);
+}
+
+/* The pictures are square crops of the app's top-left corner; the frame keeps that shape before
+   one has loaded, or when a theme has none yet (.is-missing). */
+.theme-flyout-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.06));
+}
+
+.theme-flyout-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.theme-flyout-thumb.is-missing img {
+  display: none;
+}
+
+.theme-flyout-name {
+  overflow: hidden;
+  padding: 0 2px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.theme-flyout-tile[aria-checked="true"] .theme-flyout-name::after {
+  content: " ✓";
+  color: var(--color-accent);
+}
+
+/* A touch screen: the tiles are the targets, and they are already larger than 44px. */
+@media (pointer: coarse) {
+  .theme-flyout-zoom-select {
+    height: 36px;
+  }
+}

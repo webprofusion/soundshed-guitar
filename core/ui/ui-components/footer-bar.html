@@ -147,14 +147,24 @@
           </button>
         </div>
         <div class="footer-group footer-view-group footer-right" aria-label="View options">
-          <div class="footer-zoom-control">
-            <span class="footer-sheet-label">Zoom</span>
-            <select id="zoom-level-select" class="footer-demo-select themed-select zoom-level-select" aria-label="UI zoom level" title="UI zoom level"></select>
-          </div>
-          <div class="footer-theme-select">
-            <span class="footer-sheet-label">Theme</span>
-            <select id="theme-select" class="footer-demo-select themed-select" aria-label="Theme" title="Theme"></select>
-          </div>
+          <!-- Opens the theme flyout below (ts/themeFlyout.ts): the zoom, and every theme as a picture. -->
+          <button
+            class="footer-btn footer-theme-btn"
+            id="footer-theme-btn"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="theme-flyout"
+            title="Theme and zoom"
+          >
+            <svg class="footer-tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.2 0 1.9-.8 1.9-1.8 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7h2.1a4.2 4.2 0 0 0 4.2-4.2C21 6.9 17 3.5 12 3.5Z" />
+              <circle cx="7.6" cy="11.2" r="1.1" />
+              <circle cx="10.4" cy="7.4" r="1.1" />
+              <circle cx="15" cy="7.6" r="1.1" />
+            </svg>
+            <span class="footer-theme-btn-label">Theme</span>
+          </button>
           <!-- The layout density (Settings has the same choice), in the compact sheet only. -->
           <div class="footer-layout-control">
             <span class="footer-sheet-label">Layout</span>
@@ -163,3 +173,15 @@
         </div>
       </div>
     </footer>
+    <!-- The theme flyout (ts/themeFlyout.ts), hung from the body once the page is up. The footer
+         sheet and the controls sheet both treat a click in it as a click in themselves. -->
+    <div class="theme-flyout" id="theme-flyout" role="dialog" aria-label="Theme and zoom" data-control-bar-popover data-footer-popover hidden>
+      <div class="theme-flyout-header">
+        <span class="theme-flyout-title">Theme</span>
+        <label class="theme-flyout-zoom">
+          <span>Zoom</span>
+          <select id="zoom-level-select" class="themed-select theme-flyout-zoom-select" aria-label="UI zoom level" title="UI zoom level"></select>
+        </label>
+      </div>
+      <div class="theme-flyout-grid" role="radiogroup" aria-label="Theme"></div>
+    </div>

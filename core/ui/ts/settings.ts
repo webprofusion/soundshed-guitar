@@ -10,14 +10,13 @@ import { updateAppSetting } from "./appSettingsStore.js";
 import {
   initDensitySelect,
   initSignalFlowAnimationToggle,
-  initThemeSelect,
   initWheelAdjustToggle,
   initZoomControls,
   refreshSignalFlowAnimationToggle,
   refreshWheelAdjustToggle,
 } from "./settings/appearance.js";
 import { initAudioDeviceSettings, syncAudioDeviceSettingsAvailability } from "./settings/audioDevice.js";
-import { apiKeyInput, channelModeControlToggle, clearButton, dspNominalLevelInput,dspOutputLimiterToggle, dspProtectionCeilingInput, factoryArchiveExportEffectPresetsToggle, factoryArchiveLoadingToggle, namAntiAliasPhaseSelect, namAutoInputCalibrationToggle, namInterfaceCalibrationLevelInput, namOversamplingSelect, namSlimmableSizeInput, presetSwitchTailSelect, saveButton, themeSelect, tone3000UseSoundshedApiToggle, updateCheckToggle } from "./settings/dom.js";
+import { apiKeyInput, channelModeControlToggle, clearButton, dspNominalLevelInput,dspOutputLimiterToggle, dspProtectionCeilingInput, factoryArchiveExportEffectPresetsToggle, factoryArchiveLoadingToggle, namAntiAliasPhaseSelect, namAutoInputCalibrationToggle, namInterfaceCalibrationLevelInput, namOversamplingSelect, namSlimmableSizeInput, presetSwitchTailSelect, saveButton, tone3000UseSoundshedApiToggle, updateCheckToggle } from "./settings/dom.js";
 import { initChannelModeControlToggle, initDiagnosticsToggle, initDspLevelTargetControls,initFactoryArchiveExportEffectPresetsToggle, initFactoryArchiveLoadingToggle, initPresetSwitchControls, initUpdateCheckToggle } from "./settings/dspSettings.js";
 import { initFeatureToggles, refreshFeatureToggleStates, syncFeatureVisibility } from "./settings/features.js";
 import { initUserInputCalibrationControls, refreshUserInputCalibrationView } from "./settings/inputCalibration.js";
@@ -33,14 +32,13 @@ import { applyTone3000ModeVisibility, clearApiKey, initTone3000ProxyHealthCheck,
 import { refreshSettingsUpdateBanner, updateCurrentVersionDisplay } from "./settings/updateBanner.js";
 import { getSettingValue, restoreIndexSelectSetting, sanitizeNumericSetting } from "./settings/values.js";
 import { uiState } from "./state.js";
-import { themeSwitcher } from "./theme-switcher.js";
 import { initVisualizerBackgroundControls, refreshVisualizerBackgroundControls } from "./visualizerBackground.js";
 import { handleAppSettingUpdate } from "./tone3000.js";
 import { getTone3000ApiClientConfig } from "./tone3000Api.js";
 import { retryTone3000BrowserAccess } from "./tone3000Browser.js";
 import { updateSignalDiagnosticsView } from "./views.js";
 
-export { initDensitySelect, initThemeSelect, initZoomControls } from "./settings/appearance.js";
+export { initDensitySelect, initZoomControls } from "./settings/appearance.js";
 export { initDiagnosticsToggle } from "./settings/dspSettings.js";
 export { initUserInputCalibrationControls } from "./settings/inputCalibration.js";
 export { activateAdvancedSubTab, activateEquipmentTab, activateLibraryTab } from "./settings/tabs.js";
@@ -72,7 +70,6 @@ export function initSettingsPanel(): void {
   initEquipmentTabs();
   initLibraryFilters();
   initLibraryCleanup();
-  initThemeSelect();
   initZoomControls();
   initDensitySelect();
   initWheelAdjustToggle();
@@ -103,9 +100,6 @@ export function refreshSettingsView(): void {
   }
   refreshTone3000ApiKeyField();
   refreshUserInputCalibrationView();
-  if (themeSelect) {
-    themeSelect.value = themeSwitcher.getCurrentTheme();
-  }
   refreshFeatureToggleStates();
   refreshWheelAdjustToggle();
   refreshSignalFlowAnimationToggle();

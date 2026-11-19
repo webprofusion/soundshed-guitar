@@ -562,15 +562,8 @@ html[data-density="compact"] .footer-right {
   margin-left: 0;
 }
 
-html[data-density="compact"] .footer-zoom-control,
-html[data-density="compact"] .footer-theme-select {
+html[data-density="compact"] .footer-theme-btn {
   flex: 1 1 112px;
-}
-
-html[data-density="compact"] .zoom-level-select,
-html[data-density="compact"] .footer-theme-select .footer-demo-select {
-  width: 100%;
-  max-width: none;
 }
 
 html[data-density="compact"] .footer-bpm-panel {

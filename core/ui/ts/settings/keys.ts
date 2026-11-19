@@ -105,6 +105,7 @@ export const ZOOM_LEVEL_OPTIONS = [
   1.0,
   1.1,
   1.25,
+  1.35,
   1.5,
   1.75,
   2.0,

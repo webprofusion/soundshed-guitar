@@ -52,7 +52,6 @@ export const equipmentTabPanels = Array.from(document.querySelectorAll(".equipme
 
 export const equipmentLibraryTabButton = document.querySelector('.equipment-tab-btn[data-equipment-tab="library"]') as HTMLElement | null;
 
-export const themeSelect = document.getElementById("theme-select") as HTMLSelectElement | null;
 
 export const zoomLevelSelect = document.getElementById("zoom-level-select") as HTMLSelectElement | null;
 

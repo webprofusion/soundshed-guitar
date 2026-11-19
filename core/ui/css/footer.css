@@ -129,13 +129,6 @@
   justify-content: flex-end;
 }
 
-.footer-zoom-control,
-.footer-theme-select {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .footer-demo-controls {
   display: flex;
   align-items: center;
@@ -317,10 +310,6 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 
-.zoom-level-select {
-  min-width: 82px;
-}
-
 /* ── Signal-chain undo/redo and the A/B switch ───────────────────────────────
  *
  * Sits outside .footer-actions-panel, so unlike the tools/tempo/view groups it
@@ -466,10 +455,6 @@
   .footer-demo-select {
     max-width: 120px;
   }
-
-  .zoom-level-select {
-    min-width: 68px;
-  }
 }
 
 /* A full-density window this narrow (density pinned to full) folds the actions
@@ -547,15 +532,8 @@
     flex-wrap: wrap;
   }
 
-  .footer-zoom-control,
-  .footer-theme-select {
+  .footer-theme-btn {
     flex: 1 1 112px;
-  }
-
-  .zoom-level-select,
-  .footer-theme-select .footer-demo-select {
-    width: 100%;
-    max-width: none;
   }
 
   .footer-bpm-panel {

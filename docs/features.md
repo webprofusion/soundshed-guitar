@@ -514,7 +514,7 @@ Application configuration panel.
 - **Resource folders**: Configure search paths for NAM models and IR files.
 - **Input Levelling**: Named levelling profiles apply one fixed gain before the chain to match a guitar/interface setup.
 - **Advanced DSP level targets**: Shared nominal operating level and output protection ceiling are configurable and apply immediately at runtime.
-- **Theme selection**: Cycle or select UI theme (see §20).
+- **Theme selection**: the footer's Theme flyout, with the UI zoom (see §20).
 - **Tone3000 API key**: Enter and persist API key for Tone3000 integration.
 - **Diagnostics**: Real-time signal level and DSP performance streaming stays enabled at all times.
 - **Features tab**: Exposes per-feature toggles for core workflows and power-user tools.
@@ -542,7 +542,7 @@ CSS variable-based theming with seven built-in themes (see `docs/theme-system.md
 
 - All colors use CSS variables (`--color-primary`, `--bg-primary`, `--text-primary`, etc.) — no hardcoded values in components.
 - **Persistence**: Selection stored in `localStorage` and `settings/app.json`.
-- **Cycle**: Click 🎨 icon in the icon bar or call `themeSwitcher.cycleTheme()`.
+- **Choose**: the footer's Theme button opens a flyout with the UI zoom and a picture of each theme; a tile applies its theme at once (see `docs/theme-system.md`). `themeSwitcher.cycleTheme()` steps through them in code.
 - **Own effect-panel background**: Settings → UI → Effect Panel Background puts the player's own picture (PNG, JPEG, GIF or WebP) behind the play page's effect panel under every theme, with a Fade to keep text readable (see `docs/theme-system.md`).
 - **Variable categories**: Primary colors, backgrounds, text, borders, controls, overlays, shadows.
 
