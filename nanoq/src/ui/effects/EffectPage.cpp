@@ -213,7 +213,7 @@ class ArtworkPanel final : public el::element
         cnv.begin_path();
         cnv.add_round_rect(b, 10.0f);
         cnv.clip();
-        cnv.fill_style(mTheme.Pick(el::rgba(10, 12, 18, 255), mTheme.Card()));
+        cnv.fill_style(mTheme.DarkOr(el::rgba(10, 12, 18, 255), mTheme.Card()));
         cnv.fill_rect(b);
 
         if (image)
@@ -475,7 +475,7 @@ Ptr Shell::BuildEffectPage()
                 });
             auto label = std::make_shared<Text>(mTheme, Upper(NameInGroup(info.name, info.group)),
                                                 metrics::Readable(9.0f), Weight::SemiBold);
-            label->Colour(mTheme.Pick(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()))
+            label->Colour(mTheme.DarkOr(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()))
                 .Alignment(Text::Align::Centre);
             // Touch sizes: the chip is hit over 36 px.
             const bool touch = metrics::Touch();
@@ -825,7 +825,7 @@ Ptr Shell::BuildEffectPage()
 
     auto led = std::make_shared<HeaderLed>(node->enabled, false);
     auto title = std::make_shared<Text>(mTheme, titleText, 12.5f, Weight::SemiBold);
-    title->Colour(mTheme.Pick(el::rgba(238, 242, 255, 255), mTheme.Text()));
+    title->Colour(mTheme.EffectTitleInk());
     auto subtitle = std::make_shared<Text>(mTheme, subtitleText, metrics::Readable(9.0f, 10.0f), Weight::SemiBold);
     subtitle->Colour(mTheme.TextMuted()).Fixed(true);
 

@@ -883,9 +883,7 @@ Ptr Shell::BuildScaleGuide(float width)
         }
     }
 
-    const auto face = [this](Ptr content) {
-        return Rounded(mTheme.Pick(el::rgba(255, 255, 255, 7), el::rgba(20, 24, 34, 6)), 12.0f, std::move(content));
-    };
+    const auto face = [this](Ptr content) { return Rounded(mTheme.ScaleGuide().surface, 12.0f, std::move(content)); };
 
     // ── The chord showing, as tab beside the boxes (the web UI's chordTab.ts): the progression's
     // current chord, or the shape picked; a hint while the whole neck shows ──

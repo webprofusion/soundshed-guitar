@@ -129,9 +129,10 @@ Ptr Shell::BuildMixerTabs()
     };
     tray->push_back(mix);
     tray->push_back(HGap(2));
-    return Row({HGap(26),
-                Rounded(mTheme.Pick(el::rgba(24, 24, 30, 184), mTheme.Text().opacity(0.06f)), 11.0f, PadXY(0, 2, tray)),
-                Stretch()});
+    return Row(
+        {HGap(26),
+         Rounded(mTheme.DarkOr(el::rgba(24, 24, 30, 184), mTheme.Text().opacity(0.06f)), 11.0f, PadXY(0, 2, tray)),
+         Stretch()});
 }
 
 Ptr Shell::BuildInlineMixer()

@@ -174,9 +174,7 @@ Ptr Shell::PlacePanel(Ptr panel, el::rect anchor, float width, float height, boo
     float y = above ? anchor.top - height - 6.0f : anchor.bottom + 6.0f;
     y = std::clamp(y, 8.0f, std::max(8.0f, view.y - height - 8.0f));
 
-    auto face =
-        Over(std::move(panel),
-             el::share(Surface(mTheme.Bar(), mTheme.Pick(el::rgba(58, 58, 72, 255), mTheme.BorderStrong()), 10.0f)));
+    auto face = Over(std::move(panel), el::share(Surface(mTheme.Bar(), mTheme.ModalRule(), 10.0f)));
     auto placed = Pad(x, y, std::max(0.0f, view.x - x - width), std::max(0.0f, view.y - y - height),
                       FixedWidth(width, FixedHeight(height, Expand(face))));
     return Over(placed, std::make_shared<ClickCatcher>(std::move(onOutside)));

@@ -184,12 +184,12 @@ class Connector final : public el::element, public Drawn, public Focusable
             // The add button (.signal-add-btn): 24 px, raised, a bold +.
             auto state = cnv.new_state();
             artist::canvas::linear_gradient fill{el::point{c.x, c.y - 11.0f}, el::point{c.x, c.y + 11.0f}};
-            fill.add_color_stop(0.0f, mTheme.Pick(el::rgba(58, 58, 68, 255), mTheme.Elevated()));
-            fill.add_color_stop(1.0f, mTheme.Pick(el::rgba(32, 32, 42, 255), mTheme.Card()));
+            fill.add_color_stop(0.0f, mTheme.ButtonBg());
+            fill.add_color_stop(1.0f, mTheme.Surface());
             cnv.fill_style(fill);
             cnv.add_circle(artist::circle(c, 11.0f));
             cnv.fill();
-            cnv.stroke_style(mTheme.Pick(el::rgba(74, 74, 88, 255), mTheme.BorderStrong()));
+            cnv.stroke_style(mTheme.ButtonBorder());
             cnv.line_width(2.0f);
             cnv.add_circle(artist::circle(c, 11.0f));
             cnv.stroke();

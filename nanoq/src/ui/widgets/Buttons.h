@@ -215,7 +215,7 @@ class IconButton final : public Pressable
         case Look::Boxed:
             radius = 6.0f;
             fill = mHover ? mTheme.Elevated() : mTheme.Bar();
-            line = mTheme.Pick(el::rgba(58, 58, 72, 255), mTheme.BorderStrong());
+            line = mTheme.ModalRule();
             break;
         case Look::Primary:
             radius = 6.0f;
@@ -225,17 +225,17 @@ class IconButton final : public Pressable
             break;
         case Look::Chip:
             radius = 6.0f;
-            fill = mTheme.Pick(mHover ? el::rgba(40, 40, 50, 255) : el::rgba(30, 30, 38, 255),
-                               mHover ? mTheme.Elevated() : mTheme.Card());
-            line = mTheme.Pick(el::rgba(38, 38, 48, 255), mTheme.Border());
-            ink = mTheme.Pick(el::rgba(235, 240, 250, 242), mTheme.Text());
+            fill = mTheme.DarkOr(mHover ? el::rgba(40, 40, 50, 255) : el::rgba(30, 30, 38, 255),
+                                 mHover ? mTheme.Elevated() : mTheme.Card());
+            line = mTheme.DarkOr(el::rgba(38, 38, 48, 255), mTheme.Border());
+            ink = mTheme.DarkOr(el::rgba(235, 240, 250, 242), mTheme.Text());
             break;
         case Look::Slate:
             radius = 7.0f;
-            fill = mTheme.Pick(mHover ? el::rgba(72, 78, 98, 255) : el::rgba(56, 61, 79, 255),
-                               mHover ? mTheme.Elevated() : mTheme.Card());
-            line = mTheme.Pick(el::rgba(255, 255, 255, 18), mTheme.BorderStrong());
-            ink = mTheme.Pick(el::rgba(203, 203, 220, 255), mTheme.Text());
+            fill = mTheme.DarkOr(mHover ? el::rgba(72, 78, 98, 255) : el::rgba(56, 61, 79, 255),
+                                 mHover ? mTheme.Elevated() : mTheme.Card());
+            line = mTheme.DarkOr(el::rgba(255, 255, 255, 18), mTheme.BorderStrong());
+            ink = mTheme.DarkOr(el::rgba(203, 203, 220, 255), mTheme.Text());
             break;
         case Look::Accent:
             fill = mTheme.Accent().opacity(mHover ? 0.22f : 0.14f);
@@ -609,7 +609,7 @@ class ParamToggle final : public Pressable
         const auto b = ctx.bounds;
         const auto label = Font(Weight::SemiBold).size(metrics::Readable(9.0f));
         FillText(cnv, Ellipsize(cnv, mName, label, b.width() + 6.0f), label,
-                 mTheme.Pick(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()),
+                 mTheme.DarkOr(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()),
                  el::rect{b.left, b.top, b.right, b.top + 12.0f}, HAlign::Centre);
         const float cx = (b.left + b.right) * 0.5f;
         const el::rect track{cx - 17.0f, b.top + 22.0f, cx + 17.0f, b.top + 40.0f};
@@ -621,8 +621,7 @@ class ParamToggle final : public Pressable
         cnv.add_circle(
             cycfi::artist::circle(el::point{track.left + 9.0f + (track.width() - 18.0f) * on, track.top + 9.0f}, 7.0f));
         cnv.fill();
-        FillText(cnv, mOn ? "On" : "Off", Font(Weight::SemiBold).size(10.0f),
-                 mTheme.Pick(el::rgba(231, 236, 246, 194), mTheme.Text()),
+        FillText(cnv, mOn ? "On" : "Off", Font(Weight::SemiBold).size(10.0f), mTheme.EffectValueInk(),
                  el::rect{b.left, b.bottom - 13.0f, b.right, b.bottom}, HAlign::Centre);
     }
 

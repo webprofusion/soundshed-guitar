@@ -78,7 +78,7 @@ void Shell::OpenInputLevelling(el::rect anchor)
         const auto* active = levelling.trainingActive ? nullptr : levelling.Active();
 
         auto title = std::make_shared<Text>(mTheme, "INPUT LEVELLING", 9.0f, Weight::SemiBold);
-        title->Colour(mTheme.Pick(el::rgba(220, 227, 243, 173), mTheme.TextSecondary()));
+        title->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 173), mTheme.TextSecondary()));
         auto subtitle = std::make_shared<Text>(mTheme,
                                                levelling.trainingActive ? "Training bypass active"
                                                : active != nullptr      ? active->name + " active"

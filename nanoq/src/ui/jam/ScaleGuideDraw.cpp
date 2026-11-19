@@ -375,7 +375,7 @@ void ScaleNeck::draw(const el::context& ctx)
         }
     }
 
-    cnv.fill_style(mTheme.Pick(el::rgba(141, 144, 151, 255), el::rgba(138, 140, 146, 255)));
+    cnv.fill_style(mTheme.ScaleGuide().fret);
 
     for (int fret = 1; fret <= frets; ++fret)
     {
@@ -384,14 +384,14 @@ void ScaleNeck::draw(const el::context& ctx)
         cnv.fill();
     }
 
-    cnv.fill_style(mTheme.Pick(el::rgba(230, 224, 207, 255), el::rgba(251, 248, 240, 255)));
+    cnv.fill_style(mTheme.ScaleGuide().nut);
     cnv.begin_path();
     cnv.add_round_rect({x(kNutX) - 4.5f, top - 1.0f, x(kNutX) + 4.5f, bottom + 1.0f}, 2.0f);
     cnv.fill();
 
     if (mModel.capo > 0)
     {
-        cnv.fill_style(mTheme.Pick(el::rgba(214, 216, 224, 107), el::rgba(40, 42, 50, 140)));
+        cnv.fill_style(mTheme.ScaleGuide().capo);
         const float cx = x(NoteX(mModel.capo, frets, end));
         cnv.begin_path();
         cnv.add_round_rect({cx - 7.0f, top - 4.0f, cx + 7.0f, bottom + 4.0f}, 5.0f);
@@ -410,7 +410,7 @@ void ScaleNeck::draw(const el::context& ctx)
         Line(cnv, x(kOpenX - 12.0f), y(s), x(end), y(s));
         FillText(cnv, mModel.stringNames[static_cast<std::size_t>(s)], nameFont, mTheme.TextSecondary(),
                  {x(kNameX) - 10.0f, y(s) - 9.0f, x(kNameX) + 10.0f, y(s) + 9.0f}, HAlign::Centre);
-        cnv.fill_style(mTheme.Pick(el::rgba(255, 255, 255, 18), el::rgba(20, 24, 34, 20)));
+        cnv.fill_style(mTheme.ScaleGuide().openSlot);
         Circle(cnv, x(kOpenX), y(s), 8.0f);
         cnv.fill();
     }
@@ -505,7 +505,7 @@ void ScaleNeck::draw(const el::context& ctx)
             Circle(cnv, cx, cy, kDotRadius + 1.5f);
             cnv.fill_style(mTheme.Accent());
             cnv.fill();
-            cnv.stroke_style(mTheme.Pick(el::rgba(242, 243, 247, 255), el::rgba(22, 24, 29, 255)));
+            cnv.stroke_style(mTheme.ScaleGuide().dotText);
             cnv.line_width(3.0f);
             cnv.stroke();
             const std::string name = mLabels == "none" ? std::string() : dot.name;
@@ -517,10 +517,9 @@ void ScaleNeck::draw(const el::context& ctx)
 
         const int age = heardAge(dot);
         const float alpha = dot.inPosition || age >= 0 ? 1.0f : 0.45f;
-        const el::color fill = dot.root ? mTheme.Accent()
-                               : !dot.inPosition && age < 0
-                                   ? mTheme.Pick(el::rgba(58, 63, 73, 255), el::rgba(212, 204, 191, 255))
-                                   : mTheme.Pick(el::rgba(18, 23, 32, 255), el::rgba(255, 255, 255, 255));
+        const el::color fill = dot.root                     ? mTheme.Accent()
+                               : !dot.inPosition && age < 0 ? mTheme.ScaleGuide().dimFill
+                                                            : mTheme.ScaleGuide().dotFill;
         Circle(cnv, cx, cy, kDotRadius);
         cnv.fill_style(fill.opacity(alpha * (dot.root && !dot.inPosition && age < 0 ? 0.85f : 1.0f)));
         cnv.fill();
@@ -530,7 +529,7 @@ void ScaleNeck::draw(const el::context& ctx)
             Circle(cnv, cx, cy, kDotRadius);
             cnv.stroke_style(age >= 0   ? heardColours[std::min(age, 2)]
                              : dot.root ? mTheme.Accent()
-                                        : mTheme.Pick(el::rgba(200, 204, 214, 255), el::rgba(74, 78, 87, 255)));
+                                        : mTheme.ScaleGuide().dotEdge);
             cnv.line_width(age == 0 ? 3.5f : age > 0 ? 2.5f : 1.5f);
             cnv.stroke();
         }
@@ -544,10 +543,9 @@ void ScaleNeck::draw(const el::context& ctx)
 
         if (!label.empty())
         {
-            const el::color ink = dot.root ? el::rgba(255, 255, 255, 255)
-                                  : !dot.inPosition && age < 0
-                                      ? mTheme.Pick(el::rgba(170, 176, 188, 255), el::rgba(109, 101, 88, 255))
-                                      : mTheme.Pick(el::rgba(242, 243, 247, 255), el::rgba(22, 24, 29, 255));
+            const el::color ink = dot.root                     ? el::rgba(255, 255, 255, 255)
+                                  : !dot.inPosition && age < 0 ? mTheme.ScaleGuide().dimText
+                                                               : mTheme.ScaleGuide().dotText;
             const float size = label.size() > 3 ? 9.5f : 11.5f;
             FillText(cnv, label, Font(Weight::SemiBold).size(size), ink.opacity(alpha),
                      {cx - kDotRadius, cy - kDotRadius, cx + kDotRadius, cy + kDotRadius}, HAlign::Centre);
@@ -632,7 +630,7 @@ void RunTabView::draw(const el::context& ctx)
     };
     const float end = b.left + kTabLeft + static_cast<float>(mRun.steps.size()) * kTabSlot + 4.0f;
     const auto small = Font(Weight::Regular).size(11.0f);
-    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
+    const el::color line = mTheme.ScaleGuide().boxLine;
     const el::color ink = mTheme.Text();
 
     // The strings, each broken around its numbers the way printed tab sits on its lines.
@@ -752,7 +750,7 @@ void ChordTabView::draw(const el::context& ctx)
     const float end = pickFrom + static_cast<float>(mPicked.size()) * kTabSlot;
     const auto small = Font(Weight::Regular).size(11.0f);
     const auto number = Font(Weight::SemiBold).size(13.0f);
-    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
+    const el::color line = mTheme.ScaleGuide().boxLine;
     const auto isRoot = [&](int s, int fret) {
         const int midi =
             (static_cast<std::size_t>(s) < mOpenMidi.size() ? mOpenMidi[static_cast<std::size_t>(s)] : 0) + fret;
@@ -965,7 +963,7 @@ void ProgressionTabView::draw(const el::context& ctx)
         return index < run.notes.size() ? &run.notes[index] : nullptr;
     };
     const auto small = Font(Weight::Regular).size(11.0f);
-    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
+    const el::color line = mTheme.ScaleGuide().boxLine;
     const el::color ink = mTheme.Text();
 
     // The chord showing on the neck, behind its bar.
@@ -1178,7 +1176,7 @@ void ChordBoxView::draw(const el::context& ctx)
     // The card it sits in: the accent when chosen.
     cnv.begin_path();
     cnv.add_round_rect(b.inset(1.0f, 1.0f), 10.0f);
-    cnv.fill_style(mSelected ? mTheme.AccentTint() : mTheme.Pick(el::rgba(255, 255, 255, 6), el::rgba(20, 24, 34, 6)));
+    cnv.fill_style(mSelected ? mTheme.AccentTint() : mTheme.ScaleGuide().surface);
     cnv.fill();
     cnv.stroke_style(mSelected ? mTheme.Accent() : mTheme.Border());
     cnv.line_width(1.0f);
@@ -1220,8 +1218,8 @@ void ChordBoxView::draw(const el::context& ctx)
     const auto rowY = [&](int fret) { return gridTop + (static_cast<float>(fret - base) + 0.5f) * rowGap; };
     const float left = sx(mLeftHanded ? strings - 1 : 0);
     const float right = sx(mLeftHanded ? 0 : strings - 1);
-    const el::color line = mTheme.Pick(el::rgba(220, 224, 236, 140), el::rgba(40, 44, 56, 153));
-    const el::color dot = mTheme.Pick(el::rgba(230, 230, 238, 255), el::rgba(34, 37, 44, 255));
+    const el::color line = mTheme.ScaleGuide().boxLine;
+    const el::color dot = mTheme.ScaleGuide().boxDot;
     cnv.stroke_style(line);
 
     for (int row = 0; row <= rows; ++row)
@@ -1291,8 +1289,7 @@ void ChordBoxView::draw(const el::context& ctx)
         if (finger > 0)
         {
             FillText(cnv, std::to_string(finger), Font(Weight::SemiBold).size(9.0f),
-                     root ? el::rgba(255, 255, 255, 255)
-                          : mTheme.Pick(el::rgba(21, 21, 26, 255), el::rgba(255, 255, 255, 255)),
+                     root ? el::rgba(255, 255, 255, 255) : mTheme.ScaleGuide().boxText,
                      {cx - 6.0f, rowY(fret) - 6.0f, cx + 6.0f, rowY(fret) + 6.0f}, HAlign::Centre);
         }
     }

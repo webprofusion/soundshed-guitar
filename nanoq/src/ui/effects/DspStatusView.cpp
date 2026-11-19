@@ -191,7 +191,7 @@ void Shell::OpenOutputStatus(el::rect anchor)
 {
     CloseOverlay();
     auto title = std::make_shared<Text>(mTheme, "OUTPUT STATUS", 9.0f, Weight::SemiBold);
-    title->Colour(mTheme.Pick(el::rgba(220, 227, 243, 173), mTheme.TextSecondary()));
+    title->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 173), mTheme.TextSecondary()));
     auto tiles = BuildDspStatus(guitarfx::uiclient::OutputDspStatus(), {}, {}, true);
     const float width = std::min(6.0f * 116.0f + 44.0f, ViewSize().x - 24.0f);
     ShowPopover(Pad(12, 10, 12, 10, Col({FixedHeight(14, title), VGap(6), FixedHeight(40, tiles)})), anchor, width,

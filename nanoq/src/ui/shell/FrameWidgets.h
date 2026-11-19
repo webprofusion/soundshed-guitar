@@ -277,11 +277,11 @@ class SceneChip final : public Pressable
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
         const auto b = FaceRect(ctx.bounds, cnv);
-        const el::color fill =
-            mActive ? mTheme.Accent().opacity(0.12f)
-                    : mTheme.Pick(el::rgba(38, 38, 46, mHover ? 230 : 153), mHover ? mTheme.Elevated() : mTheme.Card());
+        const el::color fill = mActive ? mTheme.Accent().opacity(0.12f)
+                                       : mTheme.DarkOr(el::rgba(38, 38, 46, mHover ? 230 : 153),
+                                                       mHover ? mTheme.Elevated() : mTheme.Card());
         const el::color line =
-            mActive ? mTheme.Accent().opacity(0.55f) : mTheme.Pick(el::rgba(38, 38, 48, 178), mTheme.Border());
+            mActive ? mTheme.Accent().opacity(0.55f) : mTheme.DarkOr(el::rgba(38, 38, 48, 178), mTheme.Border());
         const el::color ink = mActive ? mTheme.Accent() : (mHover ? mTheme.TextSecondary() : mTheme.TextMuted());
         cnv.fill_style(fill);
         cnv.fill_round_rect(b, 9.0f);
@@ -441,7 +441,7 @@ class AbButton final : public Pressable
 
         if (mActive)
         {
-            cnv.fill_style(mTheme.Pick(el::rgba(79, 51, 42, 255), mTheme.AccentTint()));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(79, 51, 42, 255), mTheme.AccentTint()));
             cnv.fill_round_rect(b, 4.0f);
             cnv.stroke_style(mTheme.Accent().opacity(0.62f));
             cnv.line_width(1.0f);
@@ -495,19 +495,19 @@ class RoundAdd final : public Pressable
         {
             auto state = cnv.new_state();
             cycfi::artist::canvas::linear_gradient fill{el::point{c.x, c.y - r}, el::point{c.x, c.y + r}};
-            fill.add_color_stop(0.0f, mTheme.Pick(mHover ? el::rgba(78, 78, 90, 255) : el::rgba(58, 58, 68, 255),
-                                                  mHover ? mTheme.Input() : mTheme.Elevated()));
-            fill.add_color_stop(1.0f, mTheme.Pick(el::rgba(32, 32, 42, 255), mTheme.Card()));
+            fill.add_color_stop(0.0f, mTheme.DarkOr(mHover ? el::rgba(78, 78, 90, 255) : el::rgba(58, 58, 68, 255),
+                                                    mHover ? mTheme.Input() : mTheme.Elevated()));
+            fill.add_color_stop(1.0f, mTheme.Surface());
             cnv.fill_style(fill);
             cnv.add_circle(cycfi::artist::circle(c, r));
             cnv.fill();
         }
-        cnv.stroke_style(mHover ? mTheme.Accent() : mTheme.Pick(el::rgba(74, 74, 88, 255), mTheme.BorderStrong()));
+        cnv.stroke_style(mHover ? mTheme.Accent() : mTheme.ButtonBorder());
         cnv.line_width(1.7f);
         cnv.add_circle(cycfi::artist::circle(c, r));
         cnv.stroke();
         const float arm = mSize * 0.2f;
-        cnv.stroke_style(mHover ? mTheme.Text() : mTheme.Pick(el::rgba(200, 200, 216, 255), mTheme.TextSecondary()));
+        cnv.stroke_style(mHover ? mTheme.Text() : mTheme.TextSecondary());
         cnv.line_width(2.0f);
         cnv.begin_path();
         cnv.move_to(c.x - arm, c.y);

@@ -242,7 +242,7 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
         if (heading)
         {
             cnv.fill_style(
-                mTheme.Pick(el::rgba(255, 255, 255, mHover ? 14 : 8), mTheme.Text().opacity(mHover ? 0.08f : 0.05f)));
+                mTheme.DarkOr(el::rgba(255, 255, 255, mHover ? 14 : 8), mTheme.Text().opacity(mHover ? 0.08f : 0.05f)));
             cnv.fill_round_rect(b.inset(0.0f, 2.0f), 6.0f);
             mIcons.Draw(cnv, icon.empty() ? "ui-chevron-right" : icon,
                         el::rect{b.left + 10.0f, b.top + 9.0f, b.left + 22.0f, b.top + 21.0f}, mTheme.TextSecondary());
@@ -268,7 +268,7 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
                 const auto font = Font(Weight::SemiBold).size(9.5f);
                 const float w = el::measure_text(cnv, note, font).x + 14.0f;
                 const el::rect pill{b.right - 12.0f - w, b.top + 7.0f, b.right - 12.0f, b.bottom - 7.0f};
-                cnv.fill_style(mTheme.Pick(el::rgba(255, 255, 255, 22), mTheme.Panel()));
+                cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 22), mTheme.Panel()));
                 cnv.fill_round_rect(pill, 8.0f);
                 FillText(cnv, note, font, mTheme.TextSecondary(), pill, HAlign::Centre);
             }
@@ -283,8 +283,8 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
 
         const auto face = b.inset(0.0f, 2.0f);
         cnv.fill_style(selected ? mTheme.Accent().opacity(0.22f).level(0.8f)
-                                : mTheme.Pick(el::rgba(255, 255, 255, mHover ? 14 : 7),
-                                              mHover ? mTheme.Elevated() : mTheme.Card()));
+                                : mTheme.DarkOr(el::rgba(255, 255, 255, mHover ? 14 : 7),
+                                                mHover ? mTheme.Elevated() : mTheme.Card()));
         cnv.fill_round_rect(face, 6.0f);
 
         if (selected)
@@ -365,10 +365,10 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
             const float w = el::measure_text(cnv, button, font).x + 22.0f;
             mButton = el::rect{right - w, face.top + (face.height() - 26.0f) * 0.5f, right,
                                face.top + (face.height() + 26.0f) * 0.5f};
-            cnv.fill_style(mTheme.Pick(mHoverButton ? el::rgba(72, 72, 86, 255) : el::rgba(48, 48, 58, 255),
-                                       mHoverButton ? mTheme.Input() : mTheme.Elevated()));
+            cnv.fill_style(mTheme.DarkOr(mHoverButton ? el::rgba(72, 72, 86, 255) : el::rgba(48, 48, 58, 255),
+                                         mHoverButton ? mTheme.Input() : mTheme.Elevated()));
             cnv.fill_round_rect(mButton, 6.0f);
-            cnv.stroke_style(mTheme.Pick(el::rgba(255, 255, 255, 30), mTheme.BorderStrong()));
+            cnv.stroke_style(mTheme.DarkOr(el::rgba(255, 255, 255, 30), mTheme.BorderStrong()));
             cnv.stroke_round_rect(mButton.inset(0.5f, 0.5f), 6.0f);
             FillText(cnv, button, font, mTheme.Ink(), mButton, HAlign::Centre);
             right = mButton.left - 10.0f;

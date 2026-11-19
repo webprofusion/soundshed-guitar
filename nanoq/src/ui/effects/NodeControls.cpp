@@ -113,7 +113,7 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
     // The row the web UI draws (.resource-slot-row): the slot's name in small capitals, previous,
     // the loaded resource (a tap opens the library, where Browse is too), next, and clear.
     auto heading = std::make_shared<Text>(mTheme, Upper(label), 9.0f, Weight::SemiBold);
-    heading->Colour(mTheme.Pick(el::rgba(220, 227, 243, 173), mTheme.TextSecondary())).Fixed(true);
+    heading->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 173), mTheme.TextSecondary())).Fixed(true);
 
     // Previous and next wrap round the library; with nothing loaded they start at either end.
     auto step = [this, nodeId, resourceType, resourceIndex](int delta) {
@@ -175,7 +175,7 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
     // over the row, which takes the card's width.
     if (stacked)
     {
-        heading->Colour(mTheme.Pick(el::rgba(220, 227, 243, 200), mTheme.TextSecondary()));
+        heading->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 200), mTheme.TextSecondary()));
         // Touch sizes: the row's buttons and field are hit over 36 px (EffectPage.cpp StackedSlot).
         return Col({FixedHeight(16, heading), VGap(6), FixedHeight(metrics::Touch() ? 36 : 26, controls)});
     }

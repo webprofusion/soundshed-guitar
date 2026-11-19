@@ -24,7 +24,7 @@ constexpr float kPadRadius = 19.0f;
 /// The green of the pad playing (.performance-setlist-pad.is-active) and its CURRENT.
 el::color CurrentInk(const Theme& theme)
 {
-    return theme.Pick(el::rgba(143, 196, 143, 240), theme.Success());
+    return theme.DarkOr(el::rgba(143, 196, 143, 240), theme.Success());
 }
 
 /// One pad (.performance-setlist-pad): its number in a chip at the top, the preset's name large
@@ -110,8 +110,8 @@ class PerformancePad final : public Pressable
 
             if (mState == State::Current)
             {
-                face.add_color_stop(0.0f, mTheme.Pick(el::rgba(60, 88, 66, 255), mTheme.Success().opacity(0.3f)));
-                face.add_color_stop(1.0f, mTheme.Pick(el::rgba(37, 50, 42, 255), mTheme.Success().opacity(0.16f)));
+                face.add_color_stop(0.0f, mTheme.DarkOr(el::rgba(60, 88, 66, 255), mTheme.Success().opacity(0.3f)));
+                face.add_color_stop(1.0f, mTheme.DarkOr(el::rgba(37, 50, 42, 255), mTheme.Success().opacity(0.16f)));
             }
             else
             {
@@ -165,7 +165,7 @@ class PerformancePad final : public Pressable
         {
             auto state = cnv.new_state();
             cnv.shadow_style(el::point{0.0f, 2.0f}, 8.0f, el::rgba(0, 0, 0, light ? 30 : 128));
-            cnv.fill_style(mTheme.Pick(el::rgba(69, 43, 36, 255), mTheme.AccentTint()));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(69, 43, 36, 255), mTheme.AccentTint()));
             cnv.fill_round_rect(save, save.height() * 0.5f);
         }
 

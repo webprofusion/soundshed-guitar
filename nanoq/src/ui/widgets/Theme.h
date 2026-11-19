@@ -191,6 +191,49 @@ class Theme
         return Argb(T().toggleBg);
     }
 
+    /// A raised surface, the web UI's --bg-surface: a chain block's lower half, a frame's well.
+    [[nodiscard]] el::color Surface() const noexcept
+    {
+        return Argb(T().bgSurface);
+    }
+
+    // A button's face and outline (--button-bg, --button-border).
+    [[nodiscard]] el::color ButtonBg() const noexcept
+    {
+        return Argb(T().buttonBg);
+    }
+
+    [[nodiscard]] el::color ButtonBorder() const noexcept
+    {
+        return Argb(T().buttonBorder);
+    }
+
+    // The effect panel's title and its values (--effect-shell-title-ink, --effect-shell-value-ink).
+    [[nodiscard]] el::color EffectTitleInk() const noexcept
+    {
+        return Argb(T().effectShellTitleInk);
+    }
+
+    [[nodiscard]] el::color EffectValueInk() const noexcept
+    {
+        return Argb(T().effectShellValueInk);
+    }
+
+    /// The Scale Guide's colours (the web UI's --sg-* properties, core/ui/css/scale-guide.css).
+    struct ScaleGuideColours
+    {
+        el::color surface, fret, nut, capo, openSlot, dotFill, dotEdge, dotText, dimFill, dimText, boxLine, boxDot,
+            boxText;
+    };
+
+    [[nodiscard]] ScaleGuideColours ScaleGuide() const noexcept
+    {
+        const auto& t = T();
+        return {Argb(t.sgSurface), Argb(t.sgFret),    Argb(t.sgNut),     Argb(t.sgCapo),    Argb(t.sgOpenSlot),
+                Argb(t.sgDotFill), Argb(t.sgDotEdge), Argb(t.sgDotText), Argb(t.sgDimFill), Argb(t.sgDimText),
+                Argb(t.sgBoxLine), Argb(t.sgBoxDot),  Argb(t.sgBoxText)};
+    }
+
     // A dialog's colours (the web UI's --modal-*): its body, the raised header and footer bands,
     // the outline and the rules, and its three weights of text.
     [[nodiscard]] el::color ModalBg() const noexcept
@@ -245,8 +288,16 @@ class Theme
         return IsLight() ? Text() : TextOnDark();
     }
 
-    /// `dark` (a colour measured from the dark web UI) on the dark themes, and on the light one
-    /// `light`, the token the web UI's light theme draws that part with.
+    /// `dark` on the Dark theme, a colour measured from the Dark web UI for a part no token carries
+    /// yet; on every other theme `token`, that theme's own colour for the part. Vintage, Stage and
+    /// High Gain draw in their palettes this way instead of in Dark's colours.
+    [[nodiscard]] el::color DarkOr(el::color dark, el::color token) const noexcept
+    {
+        return mInfo->tokens == &guitarfx::uiclient::theme::kDark ? dark : token;
+    }
+
+    /// `dark` on the dark themes and `light` on the light ones: for shades no theme colours (a
+    /// plot's backdrop, the shading over a picture, the fretboard's wood).
     [[nodiscard]] el::color Pick(el::color dark, el::color light) const noexcept
     {
         return IsLight() ? light : dark;

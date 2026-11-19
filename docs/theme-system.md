@@ -104,6 +104,22 @@ goes up: colour literals in a component sheet outside a `var(--token, fallback)`
 naming a `.theme-*` class outside `css/themes/`, and declarations in each skin sheet. When a
 count goes down, re-pin with `npm run check:theme-ratchet -- --update`.
 
+## In the native UI (Nano Q)
+
+Nano Q draws every theme in its own colours from `ThemeTokens.generated.h`, through
+`nanoq/src/ui/widgets/Theme.h`. To draw a part as the web UI does, add the custom property it
+uses to `TOKENS` in `tools/gen-native-theme.mjs`, regenerate, and read it with an accessor.
+Two stop-gaps remain for parts no token carries yet:
+
+- `DarkOr(dark, token)`: a colour measured from the Dark web UI on Dark, and the theme's own
+  token on every other theme. Each of these is a part to give a token, then a plain accessor.
+- `Pick(dark, light)`: a pair of shades by light or dark (a plot's backdrop, the shading over a
+  picture, the fretboard's wood), for colours no theme changes.
+
+Skins (pictures, gradients, textures) stay web-only. The manifest's `fonts` reach the header
+(`ThemeInfo::uiFont`, `titleFont`), but Nano Q still sets every theme in Inter: Archivo and
+Oswald need static TTF cuts in `core/nativeui/fonts` first, and the web copies are WOFF2.
+
 ## Usage
 
 ### Switching Themes (TypeScript)

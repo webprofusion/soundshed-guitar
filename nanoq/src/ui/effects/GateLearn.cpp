@@ -489,7 +489,7 @@ void Shell::OpenGlobalGate(el::rect anchor)
     // The header (.flyout-settings-header): the title and the gate's on/off.
     const auto heading = [this](const std::string& text, float size) {
         auto t = std::make_shared<Text>(mTheme, Upper(text), size, Weight::SemiBold);
-        t->Colour(mTheme.Pick(el::rgba(220, 227, 243, 200), mTheme.TextSecondary()));
+        t->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 200), mTheme.TextSecondary()));
         return t;
     };
     auto enabled = std::make_shared<ToggleSwitch>(mTheme);

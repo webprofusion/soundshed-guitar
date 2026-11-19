@@ -67,7 +67,7 @@ class SectionTab final : public Pressable
         if (mStyle == Style::Account)
         {
             const auto pill = b.inset(0.0f, std::max(0.0f, (b.height() - 25.0f) * 0.5f));
-            cnv.fill_style(mTheme.Pick(el::rgba(40, 40, 47, 255), mTheme.Card()).level(mHover ? 1.15f : 1.0f));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(40, 40, 47, 255), mTheme.Card()).level(mHover ? 1.15f : 1.0f));
             cnv.fill_round_rect(pill, pill.height() * 0.5f);
             cnv.stroke_style(mTheme.Border());
             cnv.line_width(1.0f);

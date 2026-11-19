@@ -68,7 +68,7 @@ class CategoryRow final : public Pressable
         const float w = std::max(18.0f, el::measure_text(cnv, countText, countFont).x + 10.0f);
         const el::rect pill{b.right - 8.0f - w, cy - 8.0f, b.right - 8.0f, cy + 8.0f};
         cnv.fill_style(mActive ? mTheme.Accent().opacity(0.35f)
-                               : mTheme.Pick(el::rgba(255, 255, 255, 18), mTheme.Text().opacity(0.07f)));
+                               : mTheme.DarkOr(el::rgba(255, 255, 255, 18), mTheme.Text().opacity(0.07f)));
         cnv.fill_round_rect(pill, 8.0f);
         FillText(cnv, countText, countFont, mTheme.TextSecondary(), pill, HAlign::Centre);
     }
@@ -125,11 +125,11 @@ class EffectRow final : public Pressable
     {
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
-        cnv.fill_style(mTheme.Pick(mHover ? el::rgba(40, 40, 50, 255) : el::rgba(30, 30, 38, 255),
-                                   mHover ? mTheme.Elevated() : mTheme.Card()));
+        cnv.fill_style(mTheme.DarkOr(mHover ? el::rgba(40, 40, 50, 255) : el::rgba(30, 30, 38, 255),
+                                     mHover ? mTheme.Elevated() : mTheme.Card()));
         cnv.fill_round_rect(b, 6.0f);
         cnv.stroke_style(mCurrent ? mTheme.Accent().opacity(0.6f)
-                                  : mTheme.Pick(el::rgba(255, 255, 255, mHover ? 28 : 14), mTheme.Border()));
+                                  : mTheme.DarkOr(el::rgba(255, 255, 255, mHover ? 28 : 14), mTheme.Border()));
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 6.0f);
 

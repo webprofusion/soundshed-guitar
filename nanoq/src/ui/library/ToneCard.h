@@ -177,7 +177,7 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
             cnv.begin_path();
             cnv.add_round_rect(b, kRadius);
             cnv.clip();
-            cnv.fill_style(mTheme.Pick(el::rgba(30, 30, 38, 255), mTheme.Card()));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(30, 30, 38, 255), mTheme.Card()));
             cnv.fill_rect(b);
 
             if (picture)
@@ -199,11 +199,11 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
                 cnv.fill_rect(face);
             }
 
-            cnv.fill_style(mTheme.Pick(el::rgba(20, 20, 26, 255), mTheme.Card()));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(20, 20, 26, 255), mTheme.Card()));
             cnv.fill_rect(el::rect{b.left, face.bottom, b.right, b.bottom});
         }
-        cnv.stroke_style(mTheme.Pick(mHover ? el::rgba(255, 255, 255, 40) : el::rgba(255, 255, 255, 18),
-                                     mHover ? mTheme.BorderStrong() : mTheme.Border()));
+        cnv.stroke_style(mTheme.DarkOr(mHover ? el::rgba(255, 255, 255, 40) : el::rgba(255, 255, 255, 18),
+                                       mHover ? mTheme.BorderStrong() : mTheme.Border()));
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b, kRadius);
 
@@ -220,7 +220,7 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
 
         y += 3.0f;
 
-        const auto chipFill = mTheme.Pick(el::rgba(255, 255, 255, 22), mTheme.Panel());
+        const auto chipFill = mTheme.DarkOr(el::rgba(255, 255, 255, 22), mTheme.Panel());
 
         if (!lines.empty())
         {
@@ -281,7 +281,7 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
                     }
 
                     tx += DrawChip(cnv, tag, tx, y, mTheme.TextSecondary(),
-                                   mTheme.Pick(el::rgba(255, 255, 255, 14), mTheme.Panel())) +
+                                   mTheme.DarkOr(el::rgba(255, 255, 255, 14), mTheme.Panel())) +
                           4.0f;
                 }
             }
@@ -303,7 +303,7 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
             }
             else
             {
-                cnv.fill_style(mTheme.Pick(el::rgba(255, 255, 255, 30), mTheme.Text().opacity(0.12f)));
+                cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 30), mTheme.Text().opacity(0.12f)));
                 cnv.add_circle(artist::circle(c, 8.0f));
                 cnv.fill();
                 FillText(cnv, mTone.creatorName.substr(0, 1), Font(Weight::SemiBold).size(9.0f), mTheme.Ink(),
@@ -332,7 +332,7 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
             cnv.begin_path();
             cnv.add_round_rect(b, kRadius);
             cnv.clip();
-            cnv.fill_style(mTheme.Pick(el::rgba(30, 30, 38, 255), mTheme.Card()));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(30, 30, 38, 255), mTheme.Card()));
             cnv.fill_rect(b);
 
             if (picture)
@@ -343,8 +343,8 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
             }
         }
 
-        cnv.stroke_style(mTheme.Pick(mHover ? el::rgba(255, 255, 255, 40) : el::rgba(255, 255, 255, 14),
-                                     mHover ? mTheme.BorderStrong() : mTheme.Border()));
+        cnv.stroke_style(mTheme.DarkOr(mHover ? el::rgba(255, 255, 255, 40) : el::rgba(255, 255, 255, 14),
+                                       mHover ? mTheme.BorderStrong() : mTheme.Border()));
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b, kRadius);
 
@@ -368,7 +368,7 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
         const float titleWidth = MeasureTextWidth(title, titleFont);
         FillText(cnv, title, titleFont, mTheme.Ink(), el::rect{x, cy - 9.0f, x + titleWidth + 2.0f, cy + 9.0f},
                  HAlign::Left);
-        const auto chipFill = mTheme.Pick(el::rgba(255, 255, 255, 22), mTheme.Panel());
+        const auto chipFill = mTheme.DarkOr(el::rgba(255, 255, 255, 22), mTheme.Panel());
         const float chipX = x + titleWidth + 10.0f;
 
         if (mTone.IsPack())
@@ -392,12 +392,12 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
             const auto& a = actions[i];
             const bool hover = static_cast<int>(i) == mHoverAction && a.enabled;
             el::color fill = a.primary ? mTheme.Accent().level(hover ? 1.08f : 0.95f)
-                                       : mTheme.Pick(el::rgba(255, 255, 255, hover ? 34 : 18),
-                                                     mTheme.Text().opacity(hover ? 0.12f : 0.06f));
+                                       : mTheme.DarkOr(el::rgba(255, 255, 255, hover ? 34 : 18),
+                                                       mTheme.Text().opacity(hover ? 0.12f : 0.06f));
 
             if (!a.enabled)
             {
-                fill = mTheme.Pick(el::rgba(255, 255, 255, 10), mTheme.Text().opacity(0.04f));
+                fill = mTheme.DarkOr(el::rgba(255, 255, 255, 10), mTheme.Text().opacity(0.04f));
             }
 
             cnv.fill_style(fill);

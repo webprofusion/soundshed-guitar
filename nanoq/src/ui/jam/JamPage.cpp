@@ -158,7 +158,7 @@ class VideoCard final : public el::element, public Focusable, public TapTarget
             cnv.begin_path();
             cnv.add_round_rect(b, kRadius);
             cnv.clip();
-            cnv.fill_style(mTheme.Pick(el::rgba(26, 26, 33, 255), mTheme.Card()));
+            cnv.fill_style(mTheme.DarkOr(el::rgba(26, 26, 33, 255), mTheme.Card()));
             cnv.fill_rect(b);
             cnv.fill_style(el::rgba(0, 0, 0, 255));
             cnv.fill_rect(art);
@@ -174,8 +174,8 @@ class VideoCard final : public el::element, public Focusable, public TapTarget
                 cnv.fill_rect(art);
             }
         }
-        cnv.stroke_style(mTheme.Pick(mHover ? el::rgba(255, 255, 255, 40) : el::rgba(255, 255, 255, 18),
-                                     mHover ? mTheme.BorderStrong() : mTheme.Border()));
+        cnv.stroke_style(mTheme.DarkOr(mHover ? el::rgba(255, 255, 255, 40) : el::rgba(255, 255, 255, 18),
+                                       mHover ? mTheme.BorderStrong() : mTheme.Border()));
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b, kRadius);
 
@@ -207,7 +207,7 @@ class VideoCard final : public el::element, public Focusable, public TapTarget
         const auto channel = Ellipsize(cnv, mVideo.channelTitle, chipFont, w - 12.0f);
         const float cw = el::measure_text(cnv, channel, chipFont).x + 12.0f;
         const el::rect chip{x, b.bottom - 24.0f, x + cw, b.bottom - 8.0f};
-        cnv.fill_style(mTheme.Pick(el::rgba(255, 255, 255, 18), mTheme.Panel()));
+        cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 18), mTheme.Panel()));
         cnv.fill_round_rect(chip, 8.0f);
         FillText(cnv, channel, chipFont, mTheme.TextSecondary(), chip, HAlign::Centre);
 

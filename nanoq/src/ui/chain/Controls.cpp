@@ -75,7 +75,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     const float titleSize = metrics::Readable(9.0f);
     const float headHeight = touch ? 36.0f : 12.0f;
     const float belowHeight = touch ? 36.0f : 16.0f;
-    const auto titleInk = mTheme.Pick(el::rgba(201, 209, 225, 200), mTheme.TextSecondary());
+    const auto titleInk = mTheme.DarkOr(el::rgba(201, 209, 225, 200), mTheme.TextSecondary());
 
     // A cell of the strip: its label (with a switch beside it for a stage that turns off) over a
     // knob and its value, and, for the input, its mode under that.

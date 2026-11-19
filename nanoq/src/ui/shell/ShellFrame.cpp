@@ -340,7 +340,7 @@ Ptr Shell::BuildScenes()
         }
 
         tray->push_back(HGap(2));
-        const auto trayColour = mTheme.Pick(el::rgba(24, 24, 30, 184), mTheme.Text().opacity(0.06f));
+        const auto trayColour = mTheme.DarkOr(el::rgba(24, 24, 30, 184), mTheme.Text().opacity(0.06f));
 
         if (touch)
         {
@@ -383,8 +383,8 @@ std::shared_ptr<IconButton> Shell::BuildThemeButton()
         for (const auto& theme : guitarfx::uiclient::theme::kThemes)
         {
             const std::string id(theme.id);
-            items.push_back(
-                {std::string(theme.label), mState.theme == id, false, [this, id] { mSession.Commands().SetTheme(id); }});
+            items.push_back({std::string(theme.label), mState.theme == id, false,
+                             [this, id] { mSession.Commands().SetTheme(id); }});
         }
 
         OpenDropdown(t->Bounds(), std::move(items), 150.0f);
@@ -424,9 +424,7 @@ Ptr Shell::BuildHistoryControls()
     b->onClick = [this] { SetChainSlot(Slot::B); };
     a->Enabled(seeded);
     b->Enabled(seeded);
-    auto ab =
-        Over(PadXY(2, 2, Row({a, HGap(2), b})),
-             el::share(Surface(mTheme.Bar(), mTheme.Pick(el::rgba(58, 58, 72, 255), mTheme.BorderStrong()), 6.0f)));
+    auto ab = Over(PadXY(2, 2, Row({a, HGap(2), b})), el::share(Surface(mTheme.Bar(), mTheme.ModalRule(), 6.0f)));
     auto copy = ToolButton(mTheme, mIcons, "ui-swap", [this] { CopyChainSlot(); }, 26.0f, 15.0f);
     copy->Disabled(!seeded);
 
@@ -452,8 +450,7 @@ Ptr Shell::BuildHistoryControls()
         // pair's box as ever.
         a->FaceAt(1.0f);
         b->FaceAt(0.0f);
-        auto box =
-            el::share(Surface(mTheme.Bar(), mTheme.Pick(el::rgba(58, 58, 72, 255), mTheme.BorderStrong()), 6.0f));
+        auto box = el::share(Surface(mTheme.Bar(), mTheme.ModalRule(), 6.0f));
         auto pair = Over(Tight({a, HGap(2), b}), Centred(FixedWidth(54, FixedHeight(25, box))));
         return Tight({undo, redo, pair, copy});
     }

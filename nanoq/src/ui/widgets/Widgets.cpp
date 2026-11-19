@@ -453,7 +453,7 @@ void MeterBar::draw(const el::context& ctx)
         for (int i = 0; i < kSegments; ++i)
         {
             const el::rect seg{cx - 6.0f, b.bottom - (i + 1) * h + 1.0f, cx + 6.0f, b.bottom - i * h - 1.0f};
-            el::color colour = mTheme.Pick(el::rgba(46, 46, 56, 255), mTheme.KnobRingTrack());
+            el::color colour = mTheme.DarkOr(el::rgba(46, 46, 56, 255), mTheme.KnobRingTrack());
 
             if (i < lit)
             {
