@@ -84,7 +84,6 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
                         Ptr below = nullptr) -> Ptr {
         auto knob = std::make_shared<ParamKnob>(mTheme, "");
         knob->AccessName(info.name);
-        knob->DefaultPosition(guitarfx::uiclient::ParamValueToPosition(info, info.defaultValue));
         knob->onChange = [info, write, format, k = knob.get()](double position) {
             const double v =
                 guitarfx::uiclient::SnapParamValue(info, guitarfx::uiclient::ParamPositionToValue(info, position));

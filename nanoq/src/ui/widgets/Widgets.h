@@ -309,12 +309,6 @@ class ParamKnob : public el::element, public Drawn, public Focusable
         mValueText = std::move(valueText);
     }
 
-    /// Where the knob's marker sits when at rest (0..1), drawn as a tick: the default value.
-    void DefaultPosition(double normalised)
-    {
-        mDefault = normalised;
-    }
-
     /// Just the knob, this wide, with no name over it or value under it: a settings flyout's
     /// row, which has its label and value beside it.
     ParamKnob& Bare(float diameter)
@@ -368,7 +362,6 @@ class ParamKnob : public el::element, public Drawn, public Focusable
     std::string mName;
     std::string mValueText;
     double mValue = 0.0;
-    double mDefault = 0.0;
     float mBare = 0.0f; // the diameter of a bare knob; 0 for the named one
     bool mLarge = false;
     float mCellWidth = 0.0f; // 0: the knob's own cell width

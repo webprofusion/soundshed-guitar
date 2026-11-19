@@ -70,7 +70,7 @@ Ptr Shell::BuildFlyoutParamRows(const std::vector<EffectParamInfo>& params, cons
         else
         {
             auto knob = std::make_shared<ParamKnob>(mTheme, info.name);
-            knob->Bare(30.0f).DefaultPosition(pf::ParamValueToPosition(info, info.defaultValue));
+            knob->Bare(30.0f);
             knob->onChange = [info, apply = binding.apply](double position) {
                 apply(info.key, pf::SnapParamValue(info, pf::ParamPositionToValue(info, position)), true);
             };

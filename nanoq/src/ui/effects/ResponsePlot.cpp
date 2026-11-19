@@ -2,6 +2,7 @@
 
 #include "ui/effects/ResponsePlot.h"
 
+#include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/TextDraw.h"
 
 #include <algorithm>
@@ -65,9 +66,33 @@ el::view_limits ResponsePlot::limits(const el::basic_context&) const
     return {{200.0f, 100.0f}, {el::full_extent, el::full_extent}};
 }
 
+namespace
+{
+// The card's header line and the gap under it (.eq-visualizer-header, the card's flex gap).
+constexpr float kCardHeader = 12.0f;
+constexpr float kCardGap = 6.0f;
+} // namespace
+
+float ResponsePlot::CardHeight(const Theme& theme, float plotHeight)
+{
+    return 2.0f * theme.Controls().cardPadding + kCardHeader + kCardGap + plotHeight;
+}
+
+el::rect ResponsePlot::Well(const el::rect& bounds) const
+{
+    if (!mCard)
+    {
+        return bounds;
+    }
+
+    const float pad = mTheme.Controls().cardPadding;
+    return {bounds.left + pad, bounds.top + pad + kCardHeader + kCardGap, bounds.right - pad, bounds.bottom - pad};
+}
+
 el::rect ResponsePlot::Plot(const el::rect& bounds) const
 {
-    return {bounds.left + kPadding, bounds.top + kPadding, bounds.right - kPadding, bounds.bottom - kPadding};
+    const auto well = Well(bounds);
+    return {well.left + kPadding, well.top + kPadding, well.right - kPadding, well.bottom - kPadding};
 }
 
 float ResponsePlot::FreqToX(const el::rect& plot, double freq) const
@@ -133,10 +158,24 @@ void ResponsePlot::draw(const el::context& ctx)
     const auto b = ctx.bounds;
     const auto plot = Plot(b);
 
-    // The well the plot sits in.
-    cnv.fill_style(mTheme.Pick(el::rgba(0, 0, 0, 70), el::rgba(255, 255, 255, 120)));
-    cnv.add_round_rect(b, 6.0f);
-    cnv.fill();
+    // The card, its header, and the well the plot sits in, as the theme draws them; without a
+    // card (the EQ dialog's plot), a plain well.
+    if (mCard)
+    {
+        const auto& skin = mTheme.Controls();
+        DrawControlBox(cnv, b.inset(0.5f, 0.5f), skin.card);
+        const float pad = skin.cardPadding;
+        const el::rect header{b.left + pad, b.top + pad, b.right - pad, b.top + pad + kCardHeader};
+        DrawControlText(cnv, mCardTitle, skin.cardTitle, header, HAlign::Left);
+        DrawControlText(cnv, mCardRange, skin.cardRange, header, HAlign::Right);
+        DrawControlBox(cnv, Well(b), skin.plot);
+    }
+    else
+    {
+        cnv.fill_style(mTheme.Pick(el::rgba(0, 0, 0, 70), el::rgba(255, 255, 255, 120)));
+        cnv.add_round_rect(b, 6.0f);
+        cnv.fill();
+    }
 
     // The grid: a line every grid step in level, and at the usual frequencies.
     cnv.stroke_style(mTheme.PlotGrid());

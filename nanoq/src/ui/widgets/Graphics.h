@@ -118,8 +118,9 @@ class RemoteImages
 /// Draws `image` as large as fits `bounds` (contain), centred, with its aspect kept.
 void DrawImageFitted(artist::canvas& cnv, const artist::image& image, el::rect bounds);
 
-/// Draws `image` to fill `bounds` (cover), centred, cropping what overflows.
-void DrawImageCovering(artist::canvas& cnv, const artist::image& image, el::rect bounds);
+/// Draws `image` to fill `bounds` (cover), cropping what overflows: centred, or placed down it by
+/// `alignY` (0 its top, as CSS's object-position: top).
+void DrawImageCovering(artist::canvas& cnv, const artist::image& image, el::rect bounds, float alignY = 0.5f);
 
 /// Strokes a rounded rectangle dashed, as CSS's `border-style: dashed`, in the stroke style and
 /// width already set: `dash` drawn and `gap` left out, all the way round.

@@ -65,6 +65,19 @@ class ResponsePlot : public el::element, public Drawn
         return *this;
     }
 
+    /// Drawn in the web UI's plot card (.eq-visualizer), as the theme draws it: its box, with
+    /// `title` over the plot's left and `range` over its right.
+    ResponsePlot& Card(std::string title, std::string range)
+    {
+        mCardTitle = std::move(title);
+        mCardRange = std::move(range);
+        mCard = true;
+        return *this;
+    }
+
+    /// The height a card takes around a plot `plotHeight` high, for the theme's padding.
+    [[nodiscard]] static float CardHeight(const Theme& theme, float plotHeight);
+
     /// The engine's curve; nothing draws no curve (an effect without one, or none yet).
     void SetCurve(std::optional<guitarfx::uiclient::ResponseCurve> curve)
     {
@@ -120,7 +133,13 @@ class ResponsePlot : public el::element, public Drawn
     void DrawHandles(cycfi::artist::canvas& cnv, const el::rect& plot) const;
     void Report(int band, bool commit);
 
+    /// The plot's well: the bounds, or inside the card under its header.
+    [[nodiscard]] el::rect Well(const el::rect& bounds) const;
+
     const Theme& mTheme;
+    bool mCard = false;
+    std::string mCardTitle;
+    std::string mCardRange;
     double mMinDb = -18.0;
     double mMaxDb = 18.0;
     double mGridStepDb = 9.0;

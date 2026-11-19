@@ -10,6 +10,10 @@
   custom properties as the browser does (the cascade in link order, `:root` values resolved at
   `:root`, a variant over its base palette, component tokens' fallbacks, `color-mix()`);
   `npm run check:native-theme` fails when the header is out of date
+- `tools/capture-native-controls.mjs` → `core/src/uiclient/ThemeControls.generated.h` — each
+  theme's effect-editor controls (knob, switch, tabs, group box, labels, plot card) as a headless
+  browser computes them from the CSS, drawn by `nanoq/src/ui/widgets/ControlSkin.h`;
+  `npm run check:native-controls` fails when the header is out of date
 - `core/ui/css/variables.css` — Base/default tokens (`:root`) shared by every theme
 - `core/ui/css/themes/<theme>.css` and `<theme>-skin.css` — every theme is two sheets: its
   **palette** (nothing but its colour tokens, on its class; the native UI reads these too) and its
@@ -116,9 +120,21 @@ Two stop-gaps remain for parts no token carries yet:
 - `Pick(dark, light)`: a pair of shades by light or dark (a plot's backdrop, the shading over a
   picture, the fretboard's wood), for colours no theme changes.
 
-Skins (pictures, gradients, textures) stay web-only. The manifest's `fonts` reach the header
-(`ThemeInfo::uiFont`, `titleFont`), but Nano Q still sets every theme in Inter: Archivo and
-Oswald need static TTF cuts in `core/nativeui/fonts` first, and the web copies are WOFF2.
+The effect editor's controls carry over whole, skin rules included. `tools/capture-native-controls.mjs`
+lays the effect panel's markup out in a headless Chrome or Edge with every stylesheet the page
+links, reads the computed styles under each theme, and writes `ThemeControls.generated.h`: the
+knob (face, ring band, picture, pointer, tick), the switch on and off, the tabs, a group's box, a
+control's label and value, the panel, the artwork panel, and the plot card (`.eq-visualizer`) the
+EQ curve, a cabinet's and a pickup's response and the IR alignment sit in. Nano Q draws them in
+`nanoq/src/ui/widgets/ControlSkin.h` (`Theme::Controls()`), the knob pictures from the UI's
+assets. So a theme's knob or switch changes in its CSS only; rerun the tool after. Its `--check`
+(`npm run check:native-controls`, in `verify` and CI) reads the styles again and fails when the
+header no longer matches, so a CSS edit that moves no control passes untouched.
+
+Other skins (backdrop pictures, textures, the panel's grain) stay web-only. The manifest's `fonts`
+reach the header (`ThemeInfo::uiFont`, `titleFont`), but Nano Q still sets every theme in Inter:
+Archivo and Oswald need static TTF cuts in `core/nativeui/fonts` first, and the web copies are
+WOFF2.
 
 ## Usage
 
@@ -263,9 +279,11 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 3. Capture its flyout picture: `node tools/theme-thumbnails/capture.mjs <ws>` redoes them all
    (see "Choosing a theme").
 
-4. Run `npm run build` and `node tools/gen-native-theme.mjs`. The native UI (Nano Q) then lists
-   the theme and draws it in its own colours (a variant's palette over its base's). Any palette
-   change needs the header regenerated too; `npm run verify` says so.
+4. Run `npm run build`, `node tools/gen-native-theme.mjs` and
+   `node tools/capture-native-controls.mjs`. The native UI (Nano Q) then lists the theme and
+   draws it in its own colours (a variant's palette over its base's) and its own knobs,
+   switches and cards. Any palette or control change needs the headers regenerated too;
+   `npm run verify` says so.
 
 > Base/default token values live in `css/variables.css` (`:root`). A theme sets component
 > tokens in its palette where it differs; what tokens cannot carry (pictures, gradients,

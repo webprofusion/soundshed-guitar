@@ -4,6 +4,7 @@
 // header lights, an architecture badge, the stage's backdrop, and a probe for where something drew.
 
 #include "ui/Drawn.h"
+#include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
 #include "ui/widgets/Widgets.h"
@@ -153,36 +154,15 @@ class InsetBox final : public el::element
     void draw(const el::context& ctx) override
     {
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds.inset(0.5f, 0.5f);
-        const bool light = mTheme.IsLight();
-        {
-            auto state = cnv.new_state();
-            cycfi::artist::canvas::linear_gradient fill{b.top_left(), b.bottom_left()};
-            fill.add_color_stop(0.0f, light ? el::rgba(0, 0, 0, 14) : el::rgba(4, 6, 11, 158));
-            fill.add_color_stop(1.0f, light ? el::rgba(0, 0, 0, 8) : el::rgba(9, 11, 18, 107));
-            cnv.fill_style(fill);
-            cnv.fill_round_rect(b, 10.0f);
-            // The inset shade along the top edge.
-            cycfi::artist::canvas::linear_gradient shade{b.top_left(), el::point{b.left, b.top + 6.0f}};
-            shade.add_color_stop(0.0f, el::rgba(0, 0, 0, light ? 20 : 90));
-            shade.add_color_stop(1.0f, el::rgba(0, 0, 0, 0));
-            cnv.fill_style(shade);
-            cnv.fill_round_rect(b, 10.0f);
-        }
-        cnv.stroke_style(light ? el::rgba(0, 0, 0, 30) : el::rgba(0, 0, 0, 107));
-        cnv.line_width(1.0f);
-        cnv.stroke_round_rect(b, 10.0f);
-        cnv.stroke_style(el::rgba(255, 255, 255, light ? 60 : 13));
-        cnv.begin_path();
-        cnv.move_to(b.left + 10.0f, b.bottom + 0.5f);
-        cnv.line_to(b.right - 10.0f, b.bottom + 0.5f);
-        cnv.stroke();
+        // The web UI's .node-param-group-block and its title, as the theme draws them.
+        const auto& skin = mTheme.Controls();
+        DrawControlBox(cnv, ctx.bounds.inset(0.5f, 0.5f), skin.group);
 
         if (!mTitle.empty())
         {
-            FillText(cnv, mTitle, Font(Weight::SemiBold).size(10.5f),
-                     light ? mTheme.TextSecondary() : el::rgba(220, 227, 243, 200),
-                     el::rect{b.left, b.top + 6.0f, b.right, b.top + 20.0f}, HAlign::Centre);
+            DrawControlText(cnv, mTitle, skin.groupTitle,
+                            el::rect{ctx.bounds.left, ctx.bounds.top + 6.0f, ctx.bounds.right, ctx.bounds.top + 20.0f},
+                            HAlign::Centre, skin.groupTitle.size + 0.5f);
         }
     }
 

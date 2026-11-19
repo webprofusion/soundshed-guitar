@@ -3,6 +3,7 @@
 
 #include "ui/widgets/Widgets.h"
 
+#include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
 #include "ui/widgets/LongPress.h"
@@ -296,9 +297,6 @@ constexpr float kLargeNameHeight = 13.0f;
 constexpr float kLargeValueHeight = 15.0f;
 constexpr float kLargeDiameter = 40.0f;
 constexpr float kKnobDragPixels = 200.0f;
-// A 270 degree sweep, open at the bottom: 7 o'clock round to 5 o'clock.
-constexpr float kKnobStart = 3.14159265f * 0.75f;
-constexpr float kKnobSweep = 3.14159265f * 1.5f;
 } // namespace
 
 ParamKnob::ParamKnob(const Theme& theme, std::string name) : mTheme(theme), mName(std::move(name))
@@ -323,97 +321,27 @@ void ParamKnob::draw(const el::context& ctx)
     NoteDrawn(ctx);
     auto& cnv = ctx.canvas;
     const auto b = ctx.bounds;
-    const bool light = mTheme.IsLight();
-    // The web UI's .node-param-label and .node-param-value.
-    const auto labelFont = Font(Weight::SemiBold).size(metrics::Readable(mLarge ? 10.0f : 9.0f));
-    const auto valueFont = Font(Weight::SemiBold).size(mLarge ? 12.0f : 10.0f);
+    // The web UI's .node-param-label and .node-param-value, in the theme's ink, case and spacing:
+    // the effect editor's a size up, the control bar's value a size down.
+    const auto& skin = mTheme.Controls();
+    const float labelSize = metrics::Readable(skin.label.size + (mLarge ? 1.0f : 0.0f));
+    const float valueSize = skin.value.size + (mLarge ? 1.0f : -1.0f);
+    const auto valueFont = ControlFont(skin.value, valueSize);
     const float nameHeight = mLarge ? kLargeNameHeight : kKnobNameHeight;
     const float valueHeight = mLarge ? kLargeValueHeight : kKnobValueHeight;
-    const el::color labelInk = light ? mTheme.TextSecondary() : el::rgba(201, 209, 225, 184);
-    const el::color valueInk = light ? mTheme.Text() : el::rgba(231, 236, 246, 194);
 
     const auto nameBounds = el::rect{b.left, b.top, b.right, b.top + nameHeight};
 
     if (mBare <= 0.0f)
     {
-        FillText(cnv, Ellipsize(cnv, Upper(mName), labelFont, nameBounds.width() + 6.0f), labelFont, labelInk,
-                 nameBounds, Text::Align::Centre);
+        DrawControlText(cnv, mName, skin.label, nameBounds, HAlign::Centre, labelSize);
     }
 
     const float diameter = mBare > 0.0f ? mBare : (mLarge ? kLargeDiameter : kKnobDiameter);
     const float cx = (b.left + b.right) * 0.5f;
     const float cy = mBare > 0.0f ? (b.top + b.bottom) * 0.5f : nameBounds.bottom + 2.0f + diameter * 0.5f;
-    const float r = diameter * 0.5f;
     const float v = static_cast<float>(std::clamp(mValue, 0.0, 1.0));
-
-    // The ring: a faint track all the way round, and the travel over it, shading from the ring's
-    // start colour into its end colour as the web UI's conic gradient does (from the left end, or
-    // from the centre of a bipolar control: the default sitting at the middle).
-    constexpr float kArcWidth = 3.0f;
-    const float arcR = r - kArcWidth * 0.5f;
-    {
-        auto state = cnv.new_state();
-        cnv.line_width(kArcWidth);
-        cnv.stroke_style(mTheme.KnobRingTrack());
-        cnv.begin_path();
-        cnv.arc(cx, cy, arcR, 0.0f, 2.0f * 3.14159265f);
-        cnv.stroke();
-
-        const float from = (mDefault > 0.4 && mDefault < 0.6) ? static_cast<float>(mDefault) : 0.0f;
-        const float lo = std::min(from, v);
-        const float hi = std::max(from, v);
-
-        if (hi - lo > 0.002f)
-        {
-            const auto start = mTheme.KnobRingStart(), end = mTheme.KnobRingEnd();
-            constexpr int kSteps = 24;
-
-            for (int i = 0; i < kSteps; ++i)
-            {
-                const float t0 = lo + (hi - lo) * static_cast<float>(i) / kSteps;
-                const float t1 = lo + (hi - lo) * static_cast<float>(i + 1) / kSteps;
-                // The shade follows the position on the dial, not the slice of travel drawn.
-                const float mix = std::clamp(t1 / std::max(0.001f, hi), 0.0f, 1.0f);
-                cnv.stroke_style(el::color{start.red + (end.red - start.red) * mix,
-                                           start.green + (end.green - start.green) * mix,
-                                           start.blue + (end.blue - start.blue) * mix, 1.0f});
-                cnv.begin_path();
-                cnv.arc(cx, cy, arcR, kKnobStart + kKnobSweep * t0, kKnobStart + kKnobSweep * t1 + 0.01f);
-                cnv.stroke();
-            }
-        }
-    }
-
-    // The cap: a dark dome inside the ring, with a white pointer.
-    const float capR = r - kArcWidth - 1.5f;
-    {
-        auto state = cnv.new_state();
-        cycfi::artist::canvas::radial_gradient dome{el::point{cx, cy - capR * 0.4f}, 0.0f, el::point{cx, cy}, capR};
-        const auto top = light ? el::rgba(250, 250, 252, 255) : el::rgba(58, 58, 68, 255);
-        const auto bottom = light ? el::rgba(214, 216, 224, 255) : el::rgba(22, 22, 28, 255);
-        dome.add_color_stop(0.0f, (mDragging || mHover) ? top.level(1.15f) : top);
-        dome.add_color_stop(1.0f, bottom);
-        cnv.fill_style(dome);
-        cnv.add_circle(cycfi::artist::circle(el::point{cx, cy}, capR));
-        cnv.fill();
-    }
-    cnv.stroke_style(light ? el::rgba(0, 0, 0, 40) : el::rgba(0, 0, 0, 140));
-    cnv.line_width(1.0f);
-    cnv.add_circle(cycfi::artist::circle(el::point{cx, cy}, capR));
-    cnv.stroke();
-
-    const float angle = kKnobStart + kKnobSweep * v;
-    const float c = std::cos(angle), s = std::sin(angle);
-    {
-        auto state = cnv.new_state();
-        cnv.stroke_style(light ? mTheme.Text() : el::rgba(240, 240, 248, 255));
-        cnv.line_width(2.0f);
-        cnv.line_cap(canvas::round);
-        cnv.begin_path();
-        cnv.move_to(cx + c * capR * 0.40f, cy + s * capR * 0.40f);
-        cnv.line_to(cx + c * capR * 0.85f, cy + s * capR * 0.85f);
-        cnv.stroke();
-    }
+    DrawKnob(cnv, mTheme, el::point{cx, cy}, diameter, v);
 
     if (mBare > 0.0f)
     {
@@ -427,8 +355,7 @@ void ParamKnob::draw(const el::context& ctx)
     }
 
     const auto valueBounds = el::rect{b.left, b.bottom - valueHeight, b.right, b.bottom};
-    FillText(cnv, Ellipsize(cnv, mValueText, valueFont, valueBounds.width() + 6.0f), valueFont, valueInk, valueBounds,
-             Text::Align::Centre);
+    DrawControlText(cnv, mValueText, skin.value, valueBounds, HAlign::Centre, valueSize);
 }
 
 el::rect ParamKnob::ValueBox(const el::rect& b) const

@@ -102,7 +102,6 @@ void Shell::OpenMetronome()
     // ── Volume, time signature, sound and pan ──
     auto volume = std::make_shared<ParamKnob>(mTheme, "Volume");
     volume->AccessName("Click volume");
-    volume->DefaultPosition((kDefaultVolumeDb - kMinVolumeDb) / (kMaxVolumeDb - kMinVolumeDb));
     volume->onChange = [&commands, volume](double v) {
         const double db = std::round((kMinVolumeDb + v * (kMaxVolumeDb - kMinVolumeDb)) * 10.0) / 10.0;
         volume->SetValueText(Fixed(db, 1) + " dB");
@@ -111,7 +110,6 @@ void Shell::OpenMetronome()
     volume->onReset = [&commands] { commands.SetMetronomeVolume(kDefaultVolumeDb); };
 
     auto pan = std::make_shared<ParamKnob>(mTheme, "Pan");
-    pan->DefaultPosition(0.5);
     pan->onChange = [&commands, pan](double v) {
         const double value = std::round((v * 2.0 - 1.0) * 100.0) / 100.0;
         pan->SetValueText(PanText(value));

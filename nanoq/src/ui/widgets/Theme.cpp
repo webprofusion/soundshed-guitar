@@ -1,5 +1,7 @@
 #include "ui/widgets/Theme.h"
 
+#include "ui/widgets/Graphics.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -24,6 +26,11 @@ el::color Mix(el::color a, el::color b, float t)
 void Theme::Set(const std::string& name)
 {
     mInfo = &guitarfx::uiclient::theme::FindTheme(name);
+}
+
+std::shared_ptr<cycfi::artist::image> Theme::Picture(std::string_view relativePath) const
+{
+    return mImages != nullptr && !relativePath.empty() ? mImages->Find(std::string(relativePath)) : nullptr;
 }
 
 el::color Theme::AccentFill() const noexcept

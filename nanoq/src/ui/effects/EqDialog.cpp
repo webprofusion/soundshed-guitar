@@ -91,7 +91,6 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
 
             const auto info = *it;
             auto knob = std::make_shared<ParamKnob>(mTheme, suffix);
-            knob->DefaultPosition(guitarfx::uiclient::ParamValueToPosition(info, info.defaultValue));
             knob->onChange = [info, key, write, resync, k = knob.get()](double position) {
                 const double v =
                     guitarfx::uiclient::SnapParamValue(info, guitarfx::uiclient::ParamPositionToValue(info, position));

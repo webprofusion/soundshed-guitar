@@ -10,7 +10,8 @@
  *
  * Plain data, with no imports, so Node reads this file as it is (its type annotations are stripped).
  * Adding a theme: an entry here, its sheets under css/themes/, its flyout picture
- * (tools/theme-thumbnails/capture.mjs), then `npm run build` and `node tools/gen-native-theme.mjs`.
+ * (tools/theme-thumbnails/capture.mjs), then `npm run build`, `node tools/gen-native-theme.mjs` and
+ * `node tools/capture-native-controls.mjs` (its controls for the native UI).
  */
 
 export type ThemeScheme = 'light' | 'dark';

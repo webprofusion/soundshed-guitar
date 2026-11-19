@@ -108,44 +108,22 @@ class EffectPanel final : public el::element
     {
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
-        const bool light = mTheme.IsLight();
+        // The web UI's .default-effect-shell as the theme draws it, washed at the top with the
+        // effect's colour on the dark themes.
+        DrawControlBox(cnv, b, mTheme.Controls().shell);
+
+        if (!mTheme.IsLight())
         {
             auto state = cnv.new_state();
-            cnv.shadow_style(el::point{0.0f, 18.0f}, 28.0f, el::rgba(0, 0, 0, light ? 40 : 128));
-            cnv.fill_style(light ? mTheme.Card() : el::rgba(10, 11, 14, 255));
-            cnv.begin_path();
-            cnv.add_round_rect(b, 0.0f);
-            cnv.fill();
-        }
-
-        if (!light)
-        {
-            auto state = cnv.new_state();
-            artist::canvas::linear_gradient face{b.top_left(), el::point{b.left + b.height() * 0.36f, b.bottom}};
-            face.add_color_stop(0.0f, el::rgba(26, 28, 33, 245));
-            face.add_color_stop(1.0f, el::rgba(10, 11, 14, 245));
-            cnv.fill_style(face);
-            cnv.fill_rect(b);
-
             artist::canvas::linear_gradient wash{b.top_left(), b.bottom_left()};
             wash.add_color_stop(0.0f, mTint.opacity(0.12f));
             wash.add_color_stop(std::min(1.0f, 60.0f / std::max(1.0f, b.height())), mTint.opacity(0.02f));
             wash.add_color_stop(1.0f, mTint.opacity(0.0f));
             cnv.fill_style(wash);
-            cnv.fill_rect(b);
+            cnv.begin_path();
+            cnv.add_round_rect(b, mTheme.Controls().shell.radius);
+            cnv.fill();
         }
-
-        cnv.stroke_style(el::rgba(255, 255, 255, light ? 120 : 20));
-        cnv.line_width(1.0f);
-        cnv.begin_path();
-        cnv.move_to(b.left, b.top + 0.5f);
-        cnv.line_to(b.right, b.top + 0.5f);
-        cnv.stroke();
-        cnv.stroke_style(el::rgba(0, 0, 0, light ? 40 : 148));
-        cnv.begin_path();
-        cnv.move_to(b.left, b.bottom - 0.5f);
-        cnv.line_to(b.right, b.bottom - 0.5f);
-        cnv.stroke();
     }
 
   private:
@@ -209,16 +187,23 @@ class ArtworkPanel final : public el::element
             image = mStock;
         }
 
-        auto state = cnv.new_state();
-        cnv.begin_path();
-        cnv.add_round_rect(b, 10.0f);
-        cnv.clip();
-        cnv.fill_style(mTheme.DarkOr(el::rgba(10, 12, 18, 255), mTheme.Card()));
-        cnv.fill_rect(b);
+        // The web UI's equipment panel: its box as the theme draws it, the picture filling it from
+        // the top (object-fit: cover), and the shade over the picture's foot that settles it in.
+        const auto& box = mTheme.Controls().art;
+        DrawControlBox(cnv, b, box);
 
         if (image)
         {
-            DrawImageFitted(cnv, *image, b.inset(8.0f, 8.0f));
+            auto state = cnv.new_state();
+            cnv.begin_path();
+            cnv.add_round_rect(b, box.radius);
+            cnv.clip();
+            DrawImageCovering(cnv, *image, b, 0.0f);
+            artist::canvas::linear_gradient foot{b.top_left(), b.bottom_left()};
+            foot.add_color_stop(0.55f, el::rgba(8, 10, 16, 0));
+            foot.add_color_stop(1.0f, el::rgba(8, 10, 16, 87));
+            cnv.fill_style(foot);
+            cnv.fill_rect(b);
         }
     }
 
@@ -374,10 +359,11 @@ Ptr Shell::BuildEffectPage()
         customControls && std::any_of(layout->controls.begin(), layout->controls.end(),
                                       [](const LayoutControl& c) { return IsLayoutResourceControl(c); });
 
-    // Split (the full layout, the compact frame's split), the editor is centred under the chain,
-    // no wider than the web UI's panel, in what the chain and the bar under it leave.
+    // Split (the full layout, the compact frame's split), the editor is centred under the chain in
+    // what the chain and the bar under it leave: as wide as its controls, as the web UI's panel,
+    // never under half the stage nor past it.
     const bool split = PlayStageShown();
-    const float stageWidth = split ? std::min(StageWidth(), 900.0f) : StageWidth();
+    const float stageWidth = StageWidth();
     const float stageHeight = split ? StageHeight() - mChainAreaHeight - 10.0f : StageHeight();
 
     // ── Which controls: this tab's, and only those whose condition holds ──
@@ -434,6 +420,14 @@ Ptr Shell::BuildEffectPage()
         return n != nullptr ? NodeParamValue(*n, info) : info.defaultValue;
     };
 
+    // A knob's or switch's cell: as wide as its label, as the web UI's group sizes to it, and
+    // never under the usual cell.
+    const auto cellFor = [this](const std::string& name) {
+        const auto& label = mTheme.Controls().label;
+        return std::max(kCellWidth,
+                        std::ceil(MeasureControlText(name, label, metrics::Readable(label.size + 1.0f))) + 4.0f);
+    };
+
     for (const auto& info : params)
     {
         // A group gathers every control of its name, where they are apart in the list too
@@ -475,8 +469,7 @@ Ptr Shell::BuildEffectPage()
                 });
             auto label = std::make_shared<Text>(mTheme, Upper(NameInGroup(info.name, info.group)),
                                                 metrics::Readable(9.0f), Weight::SemiBold);
-            label->Colour(mTheme.DarkOr(el::rgba(201, 209, 225, 184), mTheme.TextSecondary()))
-                .Alignment(Text::Align::Centre);
+            label->Colour(Theme::Argb(mTheme.Controls().label.colour)).Alignment(Text::Align::Centre);
             // Touch sizes: the chip is hit over 36 px.
             const bool touch = metrics::Touch();
             target.cells.emplace_back(
@@ -506,7 +499,7 @@ Ptr Shell::BuildEffectPage()
                 NoteChainEdit();
                 Mark(kValues | kPage);
             };
-            target.cells.emplace_back(kCellWidth, toggle);
+            target.cells.emplace_back(cellFor(NameInGroup(info.name, info.group)), toggle);
         }
         else
         {
@@ -514,7 +507,7 @@ Ptr Shell::BuildEffectPage()
             // UI's Mode knobs are.
             auto knob = std::make_shared<ParamKnob>(mTheme, NameInGroup(info.name, info.group));
             knob->AccessName(info.name);
-            knob->Large(true).DefaultPosition(ParamValueToPosition(info, info.defaultValue));
+            knob->Large(true);
             knob->onMenu = menu;
             mLive.Bind(
                 knob, [valueOf, info] { return valueOf(info); },
@@ -567,7 +560,9 @@ Ptr Shell::BuildEffectPage()
                 };
             }
 
-            target.cells.emplace_back(kCellWidth, knob);
+            const float cell = cellFor(NameInGroup(info.name, info.group));
+            knob->CellWidth(cell);
+            target.cells.emplace_back(cell, knob);
         }
     }
 
@@ -625,8 +620,7 @@ Ptr Shell::BuildEffectPage()
                     std::make_shared<InsetBox>(mTheme, g.title));
     };
 
-    // The panel's width: the model slots take the whole stage; otherwise as wide as its groups,
-    // and never under the web UI's minimum.
+    // The panel's width: as wide as its groups (see panelWidth below).
     float groupsWidth = 0.0f;
 
     for (const auto& g : groups)
@@ -662,6 +656,7 @@ Ptr Shell::BuildEffectPage()
     const float artRoom = hasArt ? kArtWidth + kArtGap : 0.0f;
 
     const float maxPanel = std::max(kPanelMinWidth, stageWidth - 20.0f);
+    const float minPanel = split ? std::clamp((stageWidth - 20.0f) * 0.5f, kPanelMinWidth, maxPanel) : kPanelMinWidth;
     // The live sections (the analyzer, the spatial panner) want the room too.
     const bool wideSection = !boundary && (node->type == guitarfx::EffectGuids::kInputAnalyzer ||
                                            node->type == guitarfx::EffectGuids::kSpatial3D);
@@ -669,11 +664,13 @@ Ptr Shell::BuildEffectPage()
     const bool layoutGrows = layout != nullptr && layout->scaling && layout->scaling->mode != "fixed" &&
                              layout->scaling->maxScale && *layout->scaling->maxScale > 1.0;
     const float layoutWidth = layout != nullptr ? static_cast<float>(std::round(layout->dimensions.width)) : 0.0f;
+    // The model slots take the stage when it is narrow (compact); split, half of it is room for
+    // their stacked rows, so they size as any other panel.
     const float panelWidth =
-        (hasSlots || hasPlugin || wideSection || layoutGrows)
+        ((hasSlots && !split) || hasPlugin || wideSection || layoutGrows)
             ? maxPanel
-            : std::clamp(std::max(groupsWidth + artRoom, layoutWidth) + 2.0f * (kPanelPad + kSectionPad),
-                         kPanelMinWidth, maxPanel);
+            : std::clamp(std::max(groupsWidth + artRoom, layoutWidth) + 2.0f * (kPanelPad + kSectionPad), minPanel,
+                         maxPanel);
     const float sectionInner = panelWidth - 2.0f * (kPanelPad + kSectionPad) - artRoom;
 
     // ── Header ──
@@ -966,15 +963,16 @@ Ptr Shell::BuildEffectPage()
     {
         // Touch sizes give the tabs a 40 px row to be hit in.
         const float tabRow = metrics::Touch() ? 40.0f : 28.0f;
-        addToSection(Col({FixedHeight(tabRow, Row({t, Stretch()})),
-                          FixedHeight(1, Fill(mTheme.Border(), std::make_shared<el::element>()))}),
-                     tabRow + 1.0f);
+        addToSection(
+            Col({FixedHeight(tabRow, Row({t, Stretch()})),
+                 FixedHeight(1, Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>()))}),
+            tabRow + 1.0f);
     }
 
     // An EQ's curve over its input's spectrum, above its knobs, as the web UI shows it.
     if (!boundary && IsEqPlotType(node->type))
     {
-        addToSection(MakeEqPlot(NodeEqPlotSource(*node), false), 170.0f);
+        addToSection(MakeEqPlot(NodeEqPlotSource(*node), false), ResponsePlot::CardHeight(mTheme, 140.0f));
     }
 
     if (node->type == guitarfx::EffectGuids::kCabSimple)
@@ -987,9 +985,13 @@ Ptr Shell::BuildEffectPage()
         addToSection(BuildPickupDesignLines(), 36.0f);
     }
 
+    // In the web UI's plot card, as the theme draws it.
     if (const float h = IrAlignmentHeight(*node); h > 0.0f && !boundary)
     {
-        addToSection(BuildIrAlignment(*node), h);
+        const float pad = mTheme.Controls().cardPadding;
+        addToSection(Over(Pad(pad, pad, pad, pad, BuildIrAlignment(*node)),
+                          std::make_shared<SkinBox>(mTheme, &ControlSkin::card)),
+                     h + 2.0f * pad);
     }
 
     if (!boundary)
@@ -1111,8 +1113,8 @@ Ptr Shell::BuildEffectPage()
     // ── The panel ──
     const float sectionBox = std::max(sectionHeight + 2.0f * kSectionPad, hasArt ? kArtMinHeight : 0.0f);
     const float panelHeight = kPanelPad + kHeaderHeight + 10.0f + sectionBox + kPanelPad;
-    Ptr sectionElement =
-        Over(Pad(kSectionPad, kSectionPad, kSectionPad, kSectionPad, Col(section)), std::make_shared<InsetBox>(mTheme));
+    Ptr sectionElement = Over(Pad(kSectionPad, kSectionPad, kSectionPad, kSectionPad, Col(section)),
+                              std::make_shared<SkinBox>(mTheme, &ControlSkin::section));
 
     if (hasArt)
     {

@@ -1,0 +1,97 @@
+#pragma once
+
+// The effect editor's controls as each theme draws them in the web UI (a knob's face, pointer and
+// picture, a switch, a group's box, letter-spaced labels): read from its CSS by
+// tools/capture-native-controls.mjs into ThemeControls.generated.h, and drawn here.
+
+#include "ui/widgets/TextDraw.h"
+#include "ui/widgets/Theme.h"
+#include "uiclient/ThemeControls.generated.h"
+
+#include <string>
+
+namespace nanoq::ui
+{
+using guitarfx::uiclient::theme::ControlBox;
+using guitarfx::uiclient::theme::ControlSkin;
+using guitarfx::uiclient::theme::ControlText;
+using guitarfx::uiclient::theme::KnobSkin;
+using guitarfx::uiclient::theme::SwitchSkin;
+
+/// Draws `r` as the web UI draws the box: its drop shadow and hard ring outside, its background
+/// top to bottom, its inset lines along the top and bottom edges, then its border. Lengths
+/// (border, ring, shadow) are multiplied by `scale`; `radius` replaces the box's own when not
+/// negative (the web's 50% is a circle: half the shorter side).
+void DrawControlBox(cycfi::artist::canvas& cnv, el::rect r, const ControlBox& box, float scale = 1.0f,
+                    float radius = -1.0f);
+
+/// The face for `text` at `size` (its own size when 0): Inter at the nearest weight Nano draws.
+[[nodiscard]] el::font_descr ControlFont(const ControlText& text, float size = 0.0f);
+
+/// The width of `text` in `font` with `tracking` ems between its letters.
+[[nodiscard]] float TrackedWidth(cycfi::artist::canvas& cnv, const std::string& text, const el::font_descr& font,
+                                 float size, float tracking);
+
+/// The width `text` takes in its skin's face, case and letter spacing at `size` (its own when
+/// 0), measured off screen: for sizing a cell before it is drawn. UI thread.
+[[nodiscard]] float MeasureControlText(const std::string& text, const ControlText& skin, float size = 0.0f);
+
+/// One line of `text` in its skin's colour, case and letter spacing, at `size` (its own when 0),
+/// cut with an ellipsis to fit `bounds` and placed across it by `align`.
+void DrawControlText(cycfi::artist::canvas& cnv, std::string text, const ControlText& skin, el::rect bounds,
+                     HAlign align, float size = 0.0f);
+
+/// The same, in `colour` in place of the skin's.
+void DrawControlText(cycfi::artist::canvas& cnv, std::string text, const ControlText& skin, el::color colour,
+                     el::rect bounds, HAlign align, float size = 0.0f);
+
+/// A knob `diameter` across at `centre`, as the theme draws it: the value ring round its edge
+/// (filled from its start to `value`, 0..1 of its 270 degree sweep, as the web UI's conic ring),
+/// its face (flat, a radial gradient or the theme's picture), the still tick under it and the
+/// pointer that turns.
+void DrawKnob(cycfi::artist::canvas& cnv, const Theme& theme, el::point centre, float diameter, float value);
+
+/// A switch in `track` (the web's 36 by 20 slot, scaled to it), `on` from 0 (off) to 1 (on): the
+/// slot and thumb blend between the two states as it slides.
+void DrawSwitch(cycfi::artist::canvas& cnv, el::rect track, const ControlSkin& skin, float on, bool hover);
+
+/// A box in one of the theme's control styles (`which`: the plot card, the controls' section),
+/// as an element to lay behind content.
+class SkinBox final : public el::element
+{
+  public:
+    SkinBox(const Theme& theme, ControlBox ControlSkin::* which) : mTheme(theme), mWhich(which)
+    {
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        DrawControlBox(ctx.canvas, ctx.bounds.inset(0.5f, 0.5f), mTheme.Controls().*mWhich);
+    }
+
+  private:
+    const Theme& mTheme;
+    ControlBox ControlSkin::* mWhich;
+};
+
+/// A line of text in one of the theme's control styles (`which`: a card's title), as an element.
+class SkinText final : public el::element
+{
+  public:
+    SkinText(const Theme& theme, std::string text, ControlText ControlSkin::* which, HAlign align = HAlign::Left)
+        : mTheme(theme), mText(std::move(text)), mWhich(which), mAlign(align)
+    {
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        DrawControlText(ctx.canvas, mText, mTheme.Controls().*mWhich, ctx.bounds, mAlign);
+    }
+
+  private:
+    const Theme& mTheme;
+    std::string mText;
+    ControlText ControlSkin::* mWhich;
+    HAlign mAlign;
+};
+} // namespace nanoq::ui

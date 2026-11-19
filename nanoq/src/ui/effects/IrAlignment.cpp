@@ -19,6 +19,7 @@
 
 #include "dsp/EffectGuids.h"
 #include "presets/PresetTypesJson.h"
+#include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/TextDraw.h"
 #include "uiclient/Analysis.h"
 #include "util/PathEncoding.h"
@@ -185,11 +186,10 @@ std::pair<double, double> WaveView(const IrAlignment& analysis, double offsetMs)
     return {std::min(analysis.onsetAMs, startB) - 0.5, std::max(4.0, std::abs(startB - analysis.onsetAMs) + 3.5)};
 }
 
+// The plot's well, as the theme draws it (.eq-curve-canvas).
 void Well(canvas& cnv, const Theme& theme, const el::rect& b)
 {
-    cnv.fill_style(theme.Pick(el::rgba(0, 0, 0, 70), el::rgba(255, 255, 255, 120)));
-    cnv.add_round_rect(b, 6.0f);
-    cnv.fill();
+    DrawControlBox(cnv, b, theme.Controls().plot);
 }
 
 void DashedVLine(canvas& cnv, float x, float top, float bottom)
@@ -582,8 +582,8 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node)
         t->Colour(colour);
         return t;
     };
-    auto title = std::make_shared<Text>(mTheme, panel.single ? "IR RESPONSE" : "ALIGNMENT", 9.0f, Weight::SemiBold);
-    title->Colour(mTheme.TextSecondary());
+    auto title =
+        std::make_shared<SkinText>(mTheme, panel.single ? "IR Response" : "Alignment", &ControlSkin::cardTitle);
     auto status = text(11.0f, mTheme.TextSecondary());
     status->Alignment(Text::Align::Right);
     panel.status = status;

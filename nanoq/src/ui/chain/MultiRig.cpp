@@ -143,7 +143,6 @@ Ptr Shell::BuildInlineMixer()
     const auto knob = [this](const char* name, std::function<double()> position, std::function<void(double)> onChange,
                              std::function<std::string(double)> format, double defaultPosition) {
         auto k = std::make_shared<ParamKnob>(mTheme, name);
-        k->DefaultPosition(defaultPosition);
         k->onChange = [onChange, format, raw = k.get()](double p) {
             raw->SetValueText(format(p));
             onChange(p);

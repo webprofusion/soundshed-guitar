@@ -4,17 +4,20 @@
 // Nano uses, so a theme looks the same in every product), as Elements colours, plus the
 // measurements the views share.
 
+#include "uiclient/ThemeControls.generated.h"
 #include "uiclient/ThemeTokens.generated.h"
 
 #include <elements.hpp>
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <string_view>
 
 namespace nanoq::ui
 {
 namespace el = cycfi::elements;
+class Images;
 
 /// The active theme's colours. Any theme the web UI lists (core/ui/ts/themes.ts); an unknown
 /// name is dark, as the web UI normalises it.
@@ -219,6 +222,23 @@ class Theme
         return Argb(T().effectShellValueInk);
     }
 
+    /// How the theme draws the effect editor's controls: a knob's face, pointer and picture, a
+    /// switch, the tabs, a group's box, a control's label and value (ControlSkin.h draws them).
+    [[nodiscard]] const guitarfx::uiclient::theme::ControlSkin& Controls() const noexcept
+    {
+        return guitarfx::uiclient::theme::FindControlSkin(mInfo->id);
+    }
+
+    /// The artwork the controls draw (a theme's knob picture), from the shell's image cache; null
+    /// until the shell gives it one, or when the picture is missing.
+    [[nodiscard]] std::shared_ptr<cycfi::artist::image> Picture(std::string_view relativePath) const;
+
+    /// Where Picture reads from: the shell's cache, for its lifetime (null to let go of it).
+    void UseImages(Images* images) noexcept
+    {
+        mImages = images;
+    }
+
     /// The Scale Guide's colours (the web UI's --sg-* properties, core/ui/css/scale-guide.css).
     struct ScaleGuideColours
     {
@@ -312,6 +332,7 @@ class Theme
     }
 
     const guitarfx::uiclient::theme::ThemeInfo* mInfo = &guitarfx::uiclient::theme::FindTheme("dark");
+    Images* mImages = nullptr;
 };
 
 /// Text weights Nano draws in: Inter's static cuts.

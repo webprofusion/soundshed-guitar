@@ -22,6 +22,8 @@ on:
       - "tools/gen-native-theme.mjs"
       - "tools/theme-css.mjs"
       - "core/src/uiclient/ThemeTokens.generated.h"
+      - "tools/capture-native-controls.mjs"
+      - "core/src/uiclient/ThemeControls.generated.h"
       - "core/src/dsp/effects/PickupSensing.generated.h"
       - "core/src/dsp/EffectGuids.h"
       - ".github/workflows/ui-checks.yml"
@@ -36,6 +38,8 @@ on:
       - "tools/gen-native-theme.mjs"
       - "tools/theme-css.mjs"
       - "core/src/uiclient/ThemeTokens.generated.h"
+      - "tools/capture-native-controls.mjs"
+      - "core/src/uiclient/ThemeControls.generated.h"
       - "core/src/dsp/effects/PickupSensing.generated.h"
       - "core/src/dsp/EffectGuids.h"
       - ".github/workflows/ui-checks.yml"
@@ -108,3 +112,8 @@ jobs:
       # Nano Q draws with the themes' colours resolved from the CSS; the header must match it.
       - name: Native theme tokens
         run: npm run check:native-theme
+
+      # ... and its controls (knobs, switches, tabs, cards) as the browser computes them from the
+      # CSS; the header records the CSS it was read from (rerun tools/capture-native-controls.mjs).
+      - name: Native control styles
+        run: npm run check:native-controls

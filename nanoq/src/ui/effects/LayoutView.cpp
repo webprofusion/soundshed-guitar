@@ -152,7 +152,7 @@ Inks InksFor(const Theme& theme, const std::string& containerTheme)
         return {el::rgba(201, 209, 225, 210), el::rgba(160, 168, 186, 230), el::rgba(238, 242, 255, 255)};
     }
 
-    return {theme.DarkOr(el::rgba(201, 209, 225, 184), theme.TextSecondary()), theme.TextMuted(), theme.Text()};
+    return {Theme::Argb(theme.Controls().label.colour), theme.TextMuted(), theme.Text()};
 }
 
 void DrawImageInto(artist::canvas& cnv, const artist::image& image, el::rect box, const std::string& fit)

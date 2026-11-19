@@ -779,7 +779,7 @@ void DrawImageFitted(artist::canvas& cnv, const artist::image& image, el::rect b
     cnv.draw(image, el::rect{x, y, x + w, y + h});
 }
 
-void DrawImageCovering(artist::canvas& cnv, const artist::image& image, el::rect bounds)
+void DrawImageCovering(artist::canvas& cnv, const artist::image& image, el::rect bounds, float alignY)
 {
     const auto size = image.size();
 
@@ -798,7 +798,7 @@ void DrawImageCovering(artist::canvas& cnv, const artist::image& image, el::rect
         w = size.y * aspect;
     }
 
-    const float x = (size.x - w) * 0.5f, y = (size.y - h) * 0.5f;
+    const float x = (size.x - w) * 0.5f, y = (size.y - h) * std::clamp(alignY, 0.0f, 1.0f);
     cnv.draw(image, el::rect{x, y, x + w, y + h}, bounds);
 }
 

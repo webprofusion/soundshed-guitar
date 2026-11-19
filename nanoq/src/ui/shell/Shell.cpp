@@ -27,6 +27,7 @@ Shell::Shell(UiSession& session)
     mPresentation = guitarfx::uiclient::EffectPresentation::Load(session.Link().AssetRoot() / "ui" / "data" /
                                                                  "effect-presentation.json");
     AddShellIcons(mIcons);
+    mTheme.UseImages(&mImages); // a theme's knob picture
     ApplyElementsTheme();
     BuildRoot();
     Subscribe();
@@ -61,6 +62,7 @@ Shell::Shell(UiSession& session)
 Shell::~Shell()
 {
     *mAlive = false;
+    mTheme.UseImages(nullptr);
 
     if (mKeyboard)
     {

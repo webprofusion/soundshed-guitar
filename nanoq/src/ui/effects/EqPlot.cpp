@@ -80,17 +80,35 @@ Ptr Shell::MakeEqPlot(EqPlotSource source, bool overlay)
 
     // The web UI's EQ plots: +-18 dB, a line every 9 dB. A cabinet lifts its low resonance by up
     // to ~15 dB and rolls the top off by far more, so its axis leans low.
+    // In the effect editor, each in the web UI's card with its title and range over it.
     if (source.effectType == guids::kCabSimple)
     {
         plot->Range(-36.0, 18.0, 12.0);
+
+        if (!overlay)
+        {
+            plot->Card("Cabinet Response", "+18 / -36 dB");
+        }
     }
     else if (source.effectType == guids::kPickupMatch)
     {
         plot->Range(-24.0, 24.0, 12.0); // measured pickups differ by up to ~25 dB
+
+        if (!overlay)
+        {
+            plot->Card("Pickup Conversion", "\xC2\xB1"
+                                            "24 dB");
+        }
     }
     else
     {
         plot->Range(-18.0, 18.0, 9.0);
+
+        if (!overlay)
+        {
+            plot->Card("EQ Curve", "\xC2\xB1"
+                                   "18 dB");
+        }
     }
 
     auto& slot = overlay ? mOverlayPlot : mEffectPlot;
