@@ -8,11 +8,15 @@
 - `tools/gen-native-theme.mjs` → `core/src/uiclient/ThemeTokens.generated.h` — the themes and their
   colours for the native UI (Nano Q)
 - `core/ui/css/variables.css` — Base/default tokens (`:root`) shared by every theme
+- `core/ui/css/themes/<theme>.css` and `<theme>-skin.css` — every theme is two sheets: its
+  **palette** (nothing but its colour tokens, on its class; the native UI reads these too) and its
+  **skin** (everything else in its look: component rules, pictures, textures, type, shape). See
+  "Palette and skin" below
 - `core/ui/css/themes/light.css` — `.theme-light` token overrides
 - `core/ui/css/themes/dark.css` — `.theme-dark` token overrides (primary theme)
 - `core/ui/css/themes/classic.css` — `.theme-classic` (vintage) token overrides
-- `core/ui/css/themes/studio.css`, `studio-controls.css` — `.theme-studio`, the light theme drawn as current hardware
-- `core/ui/css/themes/studio-2003.css`, `studio-2003-controls.css` — `.theme-studio-2003`, the light theme drawn as used hardware
+- `core/ui/css/themes/studio.css` — `.theme-studio`, the light theme drawn as current hardware
+- `core/ui/css/themes/studio-2003.css` — `.theme-studio-2003`, the light theme drawn as used hardware
 - `core/ui/images/themes/studio/`, `studio-2003/` — each one's rendered knob and textures (and 2003's screws)
 - `tools/studio-theme-assets/studio.py`, `studio_2003.py` — the Blender scripts that render them
 - `core/ui/css/themes/stage.css` — `.theme-stage`, the dark theme as a rig on a stage
@@ -45,6 +49,16 @@ GuitarFX uses a CSS variable-based theme system with seven active themes (light,
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, a worn steel case, brushed rails and screws |
 
 Legacy persisted values (`default`, `gritty`) are normalized to `dark` (`LEGACY_THEME_NAMES` in `themes.ts`), in the web UI and the native one alike.
+
+## Palette and skin
+
+A theme's `<theme>.css` holds only blocks on the theme's own class (`.theme-stage { … }`) that
+declare only custom properties: its palette. `<theme>-skin.css` holds the rest, and loads right
+after it (`ts/themes.ts` lists both; `index.html` links them in that order). The split matters
+because the palette is all that crosses to the native UI (`tools/gen-native-theme.mjs` reads it)
+and all a new palette-only theme needs; a skin is web-only decoration. `tests/themes.test.ts`
+fails if a palette sheet holds anything else. When a skin rule only sets a colour, prefer a
+token the component reads (with a `:root` default) set in the palette.
 
 ## Usage
 
@@ -237,13 +251,13 @@ Both keep the same grey-green LCD for the preset name and tempo, and LED ladders
 They are variants of light rather than palettes of their own, so `THEME_BODY_CLASSES` puts
 **both** `theme-light` and the theme's class (`theme-studio` or `theme-studio-2003`) on the
 body. Every `.theme-light` rule across the stylesheets keeps matching, and the studio sheets
-(linked after `light.css` and `grain.css`) only restyle what makes it hardware. A new
+(linked after light's and `grain.css`) only restyle what makes it hardware. A new
 light-only rule therefore reaches both; check it there too. The two classes never appear
 together, and each theme's `--studio-*` tokens are defined on its own class, so the two sets
 of sheets do not see each other.
 
-- `studio.css` / `studio-2003.css` hold the tokens and the surfaces; the `-controls.css` sheet
-  beside each holds the knobs, switches, keys, LCD and meters.
+- `studio.css` / `studio-2003.css` hold the tokens; `studio-skin.css` / `studio-2003-skin.css`
+  draw the surfaces, then the knobs, switches, keys, LCD and meters.
 - Each theme assumes one light: Studio's is straight above and a touch to the left (shadows
   fall down, wide and soft); Studio 2003's is above and to the left (shadows down and right,
   tighter). The rendered images use the same light, so keep new shadows consistent with it.
@@ -262,7 +276,7 @@ of sheets do not see each other.
 
 Stage does on the dark side what the studio themes do on the light side: `THEME_BODY_CLASSES`
 gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still applies and
-`stage.css` (linked after the studio sheets) only restyles what makes it Stage.
+`stage.css` and `stage-skin.css` (linked after dark's and `grain.css`) only restyle what makes it Stage.
 
 - Neutral charcoal with no blue in it: near-black bars, panels a step lighter, hairline edges,
   and the radius scale (`--radius-sm` … `--radius-2xl`) cut to 2–6px, so corners are nearly square.
@@ -271,7 +285,7 @@ gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still
   and switches that are on are lit with it, and knobs draw their value arc in it.
 - Flat chain blocks: a grey cap with a hairline edge; the category colour stays on the icon.
 - Type is the grotesque Archivo (a Latin-subset variable woff2 in `css/fonts/`, declared in
-  `stage.css`): weight 500 throughout, 700 for legends, block names and values, 800 for tabs
+  `stage-skin.css`): weight 500 throughout, 700 for legends, block names and values, 800 for tabs
   and titles. It is about Inter's width, so labels that fit in dark still fit.
 - The play page (`#panel-visualizer`) shows `images/themes/stage/stage.jpg`, a dim room with a
   slatted wall and a plank floor under one warm spotlight, anchored to the bottom so the pool of
@@ -282,13 +296,13 @@ gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still
   `-- preview <file>` makes a quick small one to judge framing and light). Keep it dim: text
   around the panel has to read over any part of it.
 - The dark theme hard-codes a few blue-grey colours in component sheets (the effect panel's
-  legends, resource keys, the chain's add keys); `stage.css` restates those neutral. A new
+  legends, resource keys, the chain's add keys); `stage-skin.css` restates those neutral. A new
   hard-coded colour in a dark-only rule needs checking here too.
 
 ## High Gain: the Dark Theme as a High-Gain Amp Head
 
 High Gain is built on dark the same way as Stage (`theme-dark` plus `theme-high-gain` on the
-body; `high-gain.css` loads after `stage.css`). It takes the look shared by the amp sims made
+body; its `high-gain.css` palette and `high-gain-skin.css` load after dark's). It takes the look shared by the amp sims made
 for metalcore, deathcore and djent: everything black, one hot light source, metal hardware.
 
 - Black with a little cold in it and no blue. The top bar and the footer are black diamond
@@ -312,7 +326,7 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
   labels) for the whole UI, and the blackletter Grenze Gotisch only for titles (the effect
   panel's name, dialog and flyout headings), scaled by `font-size-adjust` so each keeps its
   own size. Both are Latin-subset variable woff2 files in `css/fonts/` (the CSP allows only
-  local fonts), declared in `high-gain.css` and used only by this theme.
+  local fonts), declared in `high-gain-skin.css` and used only by this theme.
 - The images are generated: `blender -b --factory-startup -P tools/high-gain-theme-assets/high_gain.py
   -- [knob] [textures] [grille]` (`grille preview <file>` for a quick, small one). The knob uses
   `studio_2003.py`'s scene helpers; the plate and tolex are numpy height fields shaded in the

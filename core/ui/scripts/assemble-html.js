@@ -26,7 +26,7 @@
  *
  * And the themes' stylesheets, from ts/themes.ts: <!--#theme-palettes--> becomes the
  * sheets of the themes that are their own palette, <!--#theme-variants--> those of
- * the themes built on one, each theme's in its own order.
+ * the themes built on one, each theme's palette and then its skin.
  */
 
 const crypto = require('crypto');
@@ -175,7 +175,7 @@ function applyModulePreloads(html, modules = collectModuleGraph()) {
  * puts between the two markers.
  */
 function themeStylesheets(themes = loadThemes().THEMES) {
-  const hrefs = (list) => list.flatMap((theme) => theme.sheets.map((sheet) => `css/${sheet}`));
+  const hrefs = (list) => list.flatMap((theme) => [theme.palette, ...theme.skin].map((sheet) => `css/${sheet}`));
   return {
     palettes: hrefs(themes.filter((theme) => theme.base === theme.id)),
     variants: hrefs(themes.filter((theme) => theme.base !== theme.id)),

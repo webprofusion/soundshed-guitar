@@ -28,8 +28,8 @@
  * The defaults live in variables.css and are the dark theme's values, so dark
  * needs no override here — only the two themes that genuinely differ do. They
  * sit in this file rather than in themes/*.css (where --eq-curve-* lives)
- * because the whole waveform component is already here, and themes/light.css
- * is a thousand lines of component overrides that should not keep growing.
+ * because the whole waveform component is already here, and a theme's
+ * component overrides belong in tokens rather than in its skin sheet.
  * This file is linked after variables.css, so these win on source order at
  * equal specificity.
  */

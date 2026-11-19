@@ -1,0 +1,361 @@
+/* ===== Vintage Theme: skin =====
+ * Everything in the theme's look that is not one of its colour tokens: component rules, and any
+ * pictures, textures, type and shape. Only the web UI draws these. The palette (the tokens) and
+ * the theme's description are in classic.css, which loads first (ts/themes.ts).
+ */
+
+body.theme-classic {
+  background-color: #2a1f15;
+}
+
+.theme-classic select {
+  color-scheme: light;
+}
+
+.theme-classic select option,
+.theme-classic select optgroup {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.theme-classic .footer-bpm-panel {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-panel), #fff 5%) 0%, var(--bg-panel) 100%);
+  border-color: var(--border-dark-light);
+  box-shadow: 0 8px 18px rgba(45, 29, 18, 0.24);
+}
+
+.theme-classic .footer-bpm-field input {
+  border-color: var(--border-dark-medium);
+  background: color-mix(in srgb, var(--bg-dark-secondary), #fff 6%);
+  color: var(--text-dark-primary);
+}
+
+/* ===== From settings.css ===== */
+.theme-classic .settings-row select,
+.theme-classic .settings-section select {
+  color-scheme: light;
+}
+
+.theme-classic .equipment-library-filters select {
+  color-scheme: light;
+}
+
+/* ===== From modals.css ===== */
+.theme-classic .save-preset-modal .form-group select {
+  color-scheme: light;
+}
+
+.theme-classic .save-preset-modal .form-group select option,
+.theme-classic .save-preset-modal .form-group select optgroup {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+/* ===== From amp.css ===== */
+.theme-classic .effect-visualization::before {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.theme-classic .effect-visualization::after {
+  opacity: var(--effect-visual-icon-opacity, 0.08);
+}
+
+.theme-classic .effect-visualization-overlay {
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .effect-visualization-placeholder p {
+  color: var(--text-dark-tertiary);
+}
+
+/* ===== From fx-library.css ===== */
+.theme-classic .fx-selector-panel,
+.theme-classic .fx-flyout {
+  background: #2a1f15;
+  border-top-color: #5a5048;
+  border-bottom-color: #5a5048;
+}
+
+.theme-classic .fx-selector-header,
+.theme-classic .fx-flyout-header {
+  background: #3d2f25;
+  border-bottom-color: #5a5048;
+  box-shadow: inset 0 1px 0 rgba(245, 241, 232, 0.08);
+}
+
+.theme-classic .fx-selector-categories {
+  background: #1f1815;
+  border-right-color: #5a5048;
+}
+
+.theme-classic .fx-selector-search {
+  border-bottom-color: #5a5048;
+}
+
+.theme-classic .fx-selector-search input {
+  background: #1f1815;
+  border-color: #5a5048;
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .fx-selector-search input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(240, 160, 16, 0.2);
+}
+
+.theme-classic .fx-category:hover {
+  background: rgba(245, 241, 232, 0.08);
+}
+
+.theme-classic .fx-category.active {
+  background: rgba(240, 160, 16, 0.15);
+}
+
+.theme-classic .fx-category-count {
+  background: rgba(245, 241, 232, 0.12);
+  color: var(--text-dark-tertiary);
+}
+
+.theme-classic .fx-item {
+  background: #3d2f25;
+  border-color: #5a5048;
+  box-shadow: inset 0 1px 0 rgba(245, 241, 232, 0.08);
+}
+
+.theme-classic .fx-item:hover {
+  background: #4a403a;
+  border-color: #6b5f4f;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.theme-classic .fx-item-type {
+  color: var(--text-dark-muted);
+}
+
+/* ===== From navigation.css ===== */
+.theme-classic .icon-bar {
+  background: #3d2f25;
+  border-bottom: 1px solid #5a5048;
+  box-shadow:
+    inset 0 1px 0 rgba(245, 241, 232, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.theme-classic .icon-btn {
+  background: transparent;
+  border: 1px solid rgba(107, 95, 79, 0.5);
+  color: var(--text-dark-secondary);
+  box-shadow: inset 0 1px 0 rgba(245, 241, 232, 0.08);
+}
+
+.theme-classic .icon-btn:hover {
+  background: rgba(245, 241, 232, 0.08);
+  border-color: rgba(107, 95, 79, 0.8);
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .icon-btn.active {
+  background: rgba(240, 160, 16, 0.18);
+  border-color: rgba(240, 160, 16, 0.7);
+  color: var(--text-dark-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(245, 241, 232, 0.1),
+    0 0 0 1px rgba(240, 160, 16, 0.15);
+}
+
+.theme-classic .control-bar {
+  background: #4a403a;
+  border-bottom: 1px solid #5a5048;
+  box-shadow:
+    inset 0 1px 0 rgba(245, 241, 232, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+.theme-classic .preset-selector {
+  background: rgba(61, 47, 37, 0.85);
+  border-color: #5a5048;
+  box-shadow: inset 0 1px 0 rgba(245, 241, 232, 0.08);
+}
+
+.theme-classic .preset-chooser-label {
+  background: #3d2f25;
+  color: var(--text-dark-primary);
+  border-color: #5a5048;
+}
+
+.theme-classic .preset-chooser-label:hover {
+  background: #4a403a;
+}
+
+.theme-classic .preset-favorite {
+  background: rgba(61, 47, 37, 0.9);
+  border-color: rgba(107, 95, 79, 0.4);
+}
+
+.theme-classic .preset-selector-status {
+  border-color: rgba(107, 95, 79, 0.3);
+  background: rgba(61, 47, 37, 0.4);
+}
+
+.theme-classic .preset-toolbar-separator {
+  background: rgba(188, 138, 91, 0.28);
+}
+
+.theme-classic .preset-extra-actions-menu {
+  background: rgba(61, 47, 37, 0.95);
+  border-color: rgba(107, 95, 79, 0.4);
+}
+
+.theme-classic .preset-extra-action-item {
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .preset-extra-action-item:hover {
+  background: rgba(245, 241, 232, 0.08);
+  border-color: rgba(107, 95, 79, 0.3);
+}
+
+.theme-classic .preset-action-btn {
+  color: var(--text-dark-tertiary);
+}
+
+.theme-classic .preset-action-btn:hover {
+  background: rgba(245, 241, 232, 0.08);
+  border-color: rgba(240, 160, 16, 0.6);
+  color: var(--text-dark-primary);
+}
+
+/* Classic theme nav bar */
+.theme-classic .nav-tab {
+  color: rgba(255, 234, 196, 0.6) !important;
+}
+
+.theme-classic .nav-tab:hover {
+  color: rgba(255, 244, 220, 0.9) !important;
+}
+
+.theme-classic .nav-tab.active {
+  color: var(--color-accent) !important;
+  border-bottom-color: var(--color-accent) !important;
+}
+
+.theme-classic .nav-settings-btn {
+  border-color: rgba(188, 138, 91, 0.35) !important;
+  color: rgba(255, 234, 196, 0.6) !important;
+}
+
+/* ===== From signal-path.css ===== */
+.theme-classic .node-param-tabs {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.theme-classic .node-param-tab {
+  color: var(--text-dark-tertiary);
+}
+
+.theme-classic .node-param-tab.is-active {
+  background: transparent;
+  color: var(--color-accent);
+}
+
+.theme-classic .default-effect-shell {
+  border-color: rgba(245, 241, 232, 0.12);
+  background: #3d2f25;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.theme-classic .default-effect-shell-equipment-panel {
+  border-color: rgba(245, 241, 232, 0.12);
+  background: #1f1815;
+  box-shadow: none;
+}
+
+.theme-classic .default-effect-shell-title {
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .default-effect-shell-subtitle,
+.theme-classic .default-effect-shell .node-param-label,
+.theme-classic .default-effect-shell .node-param-group-title,
+.theme-classic .default-effect-shell .eq-visualizer-header,
+.theme-classic .default-effect-shell .mixer-inputs-header,
+.theme-classic .default-effect-shell .node-resource-selector > label {
+  color: rgba(249, 228, 187, 0.68);
+}
+
+.theme-classic .default-effect-shell-chip,
+.theme-classic .default-effect-shell .resource-picker-btn,
+.theme-classic .default-effect-shell .resource-clear-btn,
+.theme-classic .default-effect-shell .resource-browse-btn,
+.theme-classic .default-effect-shell .blend-open-btn {
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .default-effect-shell .default-effect-section {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.theme-classic .default-effect-shell .eq-visualizer {
+  background: #2a1f15;
+}
+
+.theme-classic .default-effect-shell.neural-model-effect .node-param-tabs {
+  margin-top: 4px;
+}
+
+.theme-classic .default-effect-shell .plugin-host-load-error {
+  background: rgba(46, 29, 13, 0.82);
+  border-color: rgba(236, 171, 72, 0.5);
+  color: var(--text-dark-primary);
+}
+
+.theme-classic .default-effect-shell .plugin-host-load-error-detail {
+  color: var(--text-dark-tertiary);
+}
+
+.theme-classic .node-param-group-title {
+  color: var(--text-dark-secondary);
+}
+
+.theme-classic .eq-visualizer {
+  background: #2a1f15;
+}
+
+.theme-classic .eq-visualizer-header {
+  color: var(--text-dark-muted);
+}
+
+.theme-classic .eq-curve-canvas {
+  background: rgba(31, 24, 21, 0.9);
+}
+
+.theme-classic .node-param-label {
+  color: var(--text-dark-muted);
+}
+
+.theme-classic .default-effect-shell .plugin-host-list {
+  background: rgba(24, 22, 18, 0.55);
+  border-color: rgba(150, 130, 90, 0.3);
+}
+
+.theme-classic .default-effect-shell .plugin-host-item.is-selected {
+  background: rgba(150, 130, 90, 0.25);
+  border-color: rgba(196, 168, 110, 0.6);
+}
+
+/* Theme-classic controls inside a custom backdrop */
+.custom-layout-backdrop.theme-classic .resource-picker-btn,
+.custom-layout-backdrop.theme-classic .resource-clear-btn,
+.custom-layout-backdrop.theme-classic .resource-browse-btn,
+.custom-layout-backdrop.theme-classic .node-param-group-block,
+.custom-layout-backdrop.theme-classic .eq-visualizer,
+.custom-layout-backdrop.theme-classic .mixer-inputs-section,
+.custom-layout-backdrop.theme-classic .node-resource-selector {
+  border-color: rgba(245, 241, 232, 0.12);
+  background: rgba(61, 47, 37, 0.8);
+  color: var(--text-dark-primary);
+}

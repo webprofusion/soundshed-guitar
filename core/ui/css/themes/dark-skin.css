@@ -1,0 +1,116 @@
+/* ===== Dark Theme: skin =====
+ * Everything in the theme's look that is not one of its colour tokens: component rules, and any
+ * pictures, textures, type and shape. Only the web UI draws these. The palette (the tokens) and
+ * the theme's description are in dark.css, which loads first (ts/themes.ts).
+ */
+
+.theme-dark input[type="text"],
+.theme-dark input[type="password"],
+.theme-dark input[type="number"],
+.theme-dark input[type="search"],
+.theme-dark input[type="email"],
+.theme-dark input[type="url"],
+.theme-dark textarea,
+.theme-dark select {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-color: var(--border-dark);
+  color-scheme: dark;
+}
+
+.theme-dark input[type="text"]::placeholder,
+.theme-dark input[type="password"]::placeholder,
+.theme-dark input[type="number"]::placeholder,
+.theme-dark input[type="search"]::placeholder,
+.theme-dark input[type="email"]::placeholder,
+.theme-dark input[type="url"]::placeholder,
+.theme-dark textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.theme-dark select option,
+.theme-dark select optgroup {
+  /* Use a solid token; native option lists often ignore gradients. */
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+/* ===== From tone-sharing.css ===== */
+.theme-dark .tone-sharing-pack-hero .tone-sharing-card-item-title {
+  text-shadow: 0 1px 7px rgba(0, 0, 0, 0.45);
+}
+
+/* ===== From settings.css ===== */
+.theme-dark .settings-row select,
+.theme-dark .settings-section select {
+  color-scheme: dark;
+}
+
+.theme-dark .equipment-library-filters select {
+  color-scheme: dark;
+}
+
+/* ===== From modals.css ===== */
+.theme-dark .save-preset-modal .form-group select {
+  color-scheme: dark;
+}
+
+.theme-dark .save-preset-modal .form-group select option,
+.theme-dark .save-preset-modal .form-group select optgroup {
+  background: var(--bg-dark-secondary);
+  color: var(--text-primary);
+}
+
+/* ===== From navigation.css ===== */
+/* ===== Theme-specific nav bar overrides ===== */
+/* Dark theme nav bar */
+.theme-dark .icon-bar {
+  background: var(--bg-secondary);
+  border-bottom-color: var(--border-dark);
+}
+
+.theme-dark .nav-tab {
+  color: var(--text-muted) !important;
+}
+
+.theme-dark .nav-tab:hover {
+  color: var(--text-secondary) !important;
+}
+
+.theme-dark .nav-tab.active {
+  color: var(--color-accent) !important;
+  border-bottom-color: var(--color-accent) !important;
+}
+
+.theme-dark .nav-settings-btn {
+  border-color: var(--border-dark-light) !important;
+  color: var(--text-muted) !important;
+}
+
+/* ===== From signal-path.css ===== */
+.theme-dark .default-effect-shell {
+  border-color: rgba(104, 112, 128, 0.22);
+  background:
+    linear-gradient(180deg, rgba(58, 14, 20, 0.12) 0%, rgba(8, 9, 12, 0.04) 18%, rgba(3, 4, 6, 0.02) 100%),
+    linear-gradient(160deg, rgba(26, 28, 33, 0.96) 0%, rgba(10, 11, 15, 0.98) 44%, rgba(2, 3, 5, 1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.58),
+    0 28px 55px rgba(0, 0, 0, 0.5);
+}
+
+/* The node's side wall is dark anodised aluminium: a bright chamfer under the face, then
+   bands that darken toward the strip, so the edge reads as machined metal rather than a
+   shadow. Solid offset shadows draw the bands; nodes.css documents the other tokens. */
+.theme-dark .signal-node {
+  --node-raised:
+    inset 0 1px 0 var(--node-edge-light),
+    inset 0 -1px 0 rgb(0 0 0 / 0.2),
+    0 1px 0 #70747d,
+    0 2px 0 #565961,
+    0 3px 0 #4a4d55,
+    0 4px 0 #3e4047,
+    0 5px 0 rgb(0 0 0 / 0.6),
+    0 8px 12px color-mix(in srgb, var(--node-shadow) 55%, transparent),
+    0 20px 40px -10px var(--node-shadow);
+}

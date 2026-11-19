@@ -30,10 +30,15 @@ export interface ThemeDefinition {
   /** The classes it puts on <body>, the base's first. */
   classes: readonly string[];
   /**
-   * Its stylesheets under css/, in cascade order: the palette (tokens) first, then the skin
-   * (pictures, textures, type and shape), which only the web UI draws.
+   * Its palette, under css/: one sheet of nothing but the theme's colour tokens, set on its class.
+   * The native UI (Nano Q) reads it too.
    */
-  sheets: readonly string[];
+  palette: string;
+  /**
+   * Its skin, under css/, loaded after the palette: everything else in its look (component rules,
+   * pictures, textures, type and shape), which only the web UI draws.
+   */
+  skin: readonly string[];
   /** Type faces the theme uses in place of Inter, by family name (css/fonts/). */
   fonts?: { readonly ui?: string; readonly title?: string };
 }
@@ -45,7 +50,8 @@ export const THEMES = [
     base: 'light',
     scheme: 'light',
     classes: ['theme-light'],
-    sheets: ['themes/light.css'],
+    palette: 'themes/light.css',
+    skin: ['themes/light-skin.css'],
   },
   {
     id: 'dark',
@@ -53,7 +59,8 @@ export const THEMES = [
     base: 'dark',
     scheme: 'dark',
     classes: ['theme-dark'],
-    sheets: ['themes/dark.css'],
+    palette: 'themes/dark.css',
+    skin: ['themes/dark-skin.css'],
   },
   {
     id: 'classic',
@@ -61,7 +68,8 @@ export const THEMES = [
     base: 'classic',
     scheme: 'dark',
     classes: ['theme-classic'],
-    sheets: ['themes/classic.css'],
+    palette: 'themes/classic.css',
+    skin: ['themes/classic-skin.css'],
   },
   {
     id: 'stage',
@@ -69,7 +77,8 @@ export const THEMES = [
     base: 'dark',
     scheme: 'dark',
     classes: ['theme-dark', 'theme-stage'],
-    sheets: ['themes/stage.css'],
+    palette: 'themes/stage.css',
+    skin: ['themes/stage-skin.css'],
     fonts: { ui: 'Archivo' },
   },
   {
@@ -78,7 +87,8 @@ export const THEMES = [
     base: 'dark',
     scheme: 'dark',
     classes: ['theme-dark', 'theme-high-gain'],
-    sheets: ['themes/high-gain.css'],
+    palette: 'themes/high-gain.css',
+    skin: ['themes/high-gain-skin.css'],
     fonts: { ui: 'Oswald', title: 'Grenze Gotisch' },
   },
   {
@@ -87,7 +97,8 @@ export const THEMES = [
     base: 'light',
     scheme: 'light',
     classes: ['theme-light', 'theme-studio'],
-    sheets: ['themes/studio.css', 'themes/studio-controls.css'],
+    palette: 'themes/studio.css',
+    skin: ['themes/studio-skin.css'],
   },
   {
     id: 'studio-2003',
@@ -95,7 +106,8 @@ export const THEMES = [
     base: 'light',
     scheme: 'light',
     classes: ['theme-light', 'theme-studio-2003'],
-    sheets: ['themes/studio-2003.css', 'themes/studio-2003-controls.css'],
+    palette: 'themes/studio-2003.css',
+    skin: ['themes/studio-2003-skin.css'],
   },
 ] as const satisfies readonly ThemeDefinition[];
 

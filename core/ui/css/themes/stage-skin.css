@@ -1,0 +1,453 @@
+/* ===== Stage Theme: skin =====
+ * Everything in the theme's look that is not one of its colour tokens: component rules, and any
+ * pictures, textures, type and shape. Only the web UI draws these. The palette (the tokens) and
+ * the theme's description are in stage.css, which loads first (ts/themes.ts).
+ */
+
+/* SIL OFL, a latin subset, licence beside it in css/fonts. A browser fetches a face only when
+   something uses it, so the other themes never load it. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/Archivo-VariableFont_wght.latin.woff2") format("woff2");
+}
+
+/* Flat surfaces: the film grain the dark theme lays over its bars goes. */
+body.theme-stage .film-grain {
+  background-image: none;
+}
+
+body.theme-stage {
+  background: var(--bg-primary);
+}
+
+/* ===== Type: a heavy grotesque =====
+ * Archivo is about Inter's width, so what fits today still fits; it is set a step heavier
+ * throughout, and much heavier for names and legends, with figures of one width so values
+ * don't jitter as they change. Form controls don't inherit the page font on their own. */
+body.theme-stage {
+  font-family: var(--stage-font-ui);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+body.theme-stage :where(button, input, select, textarea, optgroup) {
+  font-family: inherit;
+}
+
+.theme-stage .nav-tab {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.theme-stage :is(.knob-label, .control-stack-label, .toggle-label, .node-param-label) {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.theme-stage :is(.node-name, .knob-value, .node-param-value, .preset-chooser-label) {
+  font-weight: 700;
+}
+
+.theme-stage :is(.default-effect-shell-title, .modal-header h3, .fx-selector-title, .fx-flyout-title, .flyout-settings-title) {
+  font-weight: 800;
+  letter-spacing: -0.005em;
+}
+
+/* ===== The bars: near black, split by hairlines ===== */
+body.theme-stage .icon-bar {
+  background: var(--stage-bar);
+  border-bottom: 1px solid #0b0b0b;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* dark.css marks its nav colours !important; these have to as well. */
+.theme-stage .nav-tab {
+  color: #9c9c9c !important;
+}
+
+.theme-stage .nav-tab:hover {
+  color: #e2e2e2 !important;
+}
+
+.theme-stage .nav-tab.active {
+  color: var(--stage-amber) !important;
+  border-bottom-color: var(--stage-amber) !important;
+}
+
+.theme-stage .nav-settings-btn {
+  border-color: var(--stage-hairline) !important;
+  color: #a8a8a8 !important;
+}
+
+body.theme-stage .control-bar {
+  background: var(--stage-bar-raised);
+  border-bottom: 1px solid #0b0b0b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.theme-stage .control-stack-label,
+.theme-stage .toggle-label,
+.theme-stage .knob-label {
+  color: #b4b4b4;
+}
+
+body.theme-stage .footer-bar {
+  --footer-fg: #a8a8a8;
+  --footer-fg-strong: #eeeeee;
+  --footer-divider: #2e2e2e;
+  --footer-field-bg: #141414;
+  --footer-field-border: #3a3a3a;
+  --footer-field-border-hover: #5a5a5a;
+  --footer-on-bg: color-mix(in srgb, var(--stage-amber) 16%, #141414);
+
+  background: var(--stage-bar);
+  border-top: 1px solid #0b0b0b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* ===== The chain: a dark strip with flat blocks strung along a line ===== */
+body.theme-stage .signal-path-bar {
+  background: #121212;
+  border-bottom: 1px solid #0a0a0a;
+}
+
+.theme-stage .signal-path-resize-handle {
+  background: #121212;
+  border-top-color: #1e1e1e;
+}
+
+.theme-stage .signal-path-nodes {
+  --signal-route-main: #4c4c4c;
+  --signal-route-surface: #121212;
+}
+
+/* Each block is a flat grey cap with a hairline edge; its category colour stays on the
+   icon only. The shared shape keeps its size, so nothing in the chain moves. */
+.theme-stage .signal-node {
+  --node-accent-border: #464646;
+  --node-raised:
+    inset 0 1px 0 var(--node-edge-light),
+    0 1px 0 rgb(0 0 0 / 0.7),
+    0 4px 10px -2px rgb(0 0 0 / 0.55);
+  border-radius: 3px;
+  background: linear-gradient(180deg, #353535 0%, #2c2c2c 100%);
+}
+
+.theme-stage .signal-node:hover {
+  border-color: #6a6a6a;
+}
+
+.theme-stage .node-name {
+  color: #e8e8e8;
+}
+
+.theme-stage .node-type {
+  color: #9e9e9e;
+}
+
+/* Selected: the block is lit amber and its legend goes dark on it. */
+.theme-stage .signal-node.selected {
+  border-color: var(--stage-amber);
+  background: linear-gradient(180deg, #f6b14d 0%, #eea232 100%);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 0 18px -2px rgb(242 167 59 / 0.35),
+    var(--node-raised);
+}
+
+.theme-stage .signal-node:focus:not(.selected) {
+  border-color: #8a8a8a;
+  box-shadow: var(--node-raised);
+}
+
+.theme-stage .signal-node:focus-visible {
+  outline: 2px solid var(--stage-amber);
+  outline-offset: 2px;
+}
+
+.theme-stage .signal-node.selected .node-name,
+.theme-stage .signal-node.selected .node-label,
+.theme-stage .signal-node.selected .node-type {
+  color: var(--stage-on-amber);
+}
+
+.theme-stage .signal-node.selected .node-icon {
+  color: var(--stage-on-amber);
+}
+
+.theme-stage .signal-node.selected:not(.has-thumb) .node-icon {
+  background: rgb(0 0 0 / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.18);
+}
+
+.theme-stage .signal-node.selected .node-icon .fx-effect-icon {
+  filter: none;
+}
+
+.theme-stage .signal-node.selected .node-architecture-badge {
+  color: var(--stage-on-amber);
+  border-color: rgb(0 0 0 / 0.35);
+  background: rgb(0 0 0 / 0.1);
+}
+
+.theme-stage .parallel-branches {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: #2e2e2e;
+}
+
+/* ===== The play page: the effect on a stage ===== */
+/* The floor is anchored to the bottom so the pool of light sits under the effect, and the
+   edges are taken down further so the text round the panel always reads. */
+body.theme-stage #panel-visualizer {
+  background:
+    linear-gradient(180deg, rgba(10, 10, 10, 0.7) 0%, rgba(10, 10, 10, 0) 26%),
+    radial-gradient(130% 100% at 50% 70%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.55) 100%),
+    url("../../images/themes/stage/stage.jpg") center bottom / cover no-repeat,
+    #0e0c0a;
+}
+
+.theme-stage .effect-visualization {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* The effect's panel floats over the stage: a charcoal card, a hairline, a long shadow. */
+.theme-stage .default-effect-shell,
+.theme-stage .effect-visualization .node-params-panel {
+  border: 1px solid var(--stage-hairline);
+  border-radius: 4px;
+  background: var(--stage-card);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 50px rgba(0, 0, 0, 0.6);
+}
+
+.theme-stage .default-effect-shell .default-effect-section {
+  border: 1px solid #303030;
+  border-radius: 3px;
+  background: #1a1a1a;
+  box-shadow: none;
+}
+
+.theme-stage .default-effect-shell-equipment-panel {
+  border-radius: 3px;
+  border-color: #303030;
+}
+
+.theme-stage .default-effect-shell-equipment-image {
+  border-radius: 2px;
+}
+
+.theme-stage .default-effect-shell-title {
+  color: #f2f2f2;
+}
+
+.theme-stage .default-effect-shell .node-param-tabs,
+.theme-stage .node-param-tabs {
+  background: transparent;
+  border-bottom-color: #333333;
+}
+
+.theme-stage .eq-visualizer,
+.theme-stage .eq-curve-canvas {
+  background: #141414;
+}
+
+/* ===== Pop-ups, lists and dialogs ===== */
+.theme-stage .modal-content,
+.theme-stage .fx-flyout,
+.theme-stage .fx-selector-panel {
+  border-color: var(--stage-hairline);
+}
+
+.theme-stage .fx-selector-header,
+.theme-stage .fx-flyout-header,
+.theme-stage .modal-header {
+  background: var(--modal-bg-raised);
+  border-bottom: 1px solid #333333;
+}
+
+.theme-stage .fx-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+  box-shadow: none;
+}
+
+.theme-stage .fx-item:hover {
+  border-color: #5a5a5a;
+  background: #313131;
+}
+
+.theme-stage .notification-toast {
+  background: var(--bg-elevated);
+  border-color: var(--stage-hairline);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ===== Knobs: a black disc inside a thin amber arc =====
+ * The arc is the base knob's conic ring (css/controls.css) in amber on a grey track; the
+ * disc sits close inside it, with no halo, so the arc reads as a thin line round it. A
+ * custom layout's own knob art is left alone. */
+.theme-stage .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal)::before {
+  inset: 3px;
+  border: 2px solid #0e0e0e;
+  background: radial-gradient(circle at 50% 35%, #262626 0%, #141414 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.theme-stage .knob-value,
+.theme-stage .node-param-value {
+  color: #f0f0f0;
+}
+
+/* ===== Keys: flat caps with a hairline edge ===== */
+.theme-stage .btn,
+.theme-stage .preset-action-btn,
+.theme-stage .preset-nav-btn,
+.theme-stage .eq-icon-btn,
+.theme-stage .default-effect-shell-chip,
+.theme-stage .effect-visualization-toolbar-btn,
+.theme-stage .resource-nav-btn {
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+/* Latched on: an amber outline and legend, as a selected option. */
+.theme-stage .btn.active,
+.theme-stage .eq-icon-btn.active,
+.theme-stage .effect-visualization-toolbar-btn.is-active {
+  border-color: var(--stage-amber) !important;
+  background: color-mix(in srgb, var(--stage-amber) 10%, #262626) !important;
+  color: var(--stage-amber) !important;
+}
+
+/* The primary key is lit: amber with a dark legend. */
+.theme-stage .btn-primary,
+.theme-stage .preset-action-btn-primary {
+  border-color: var(--stage-amber) !important;
+  background: var(--stage-amber) !important;
+  color: var(--stage-on-amber) !important;
+  box-shadow: none;
+}
+
+.theme-stage .btn-primary:hover,
+.theme-stage .preset-action-btn-primary:hover {
+  border-color: var(--color-accent-hover) !important;
+  background: var(--color-accent-hover) !important;
+  color: var(--stage-on-amber) !important;
+}
+
+.theme-stage .btn-primary svg,
+.theme-stage .preset-action-btn-primary svg {
+  color: var(--stage-on-amber);
+}
+
+/* ===== Switches: a dark slot, amber when on ===== */
+.theme-stage .toggle-slider {
+  background: #333333;
+  border-color: #464646;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.theme-stage .toggle-slider:before {
+  background: #d8d8d8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.theme-stage .toggle-switch input:checked + .toggle-slider {
+  background: var(--stage-amber);
+  border-color: var(--stage-amber);
+  box-shadow: none;
+}
+
+.theme-stage .toggle-switch input:checked + .toggle-slider:before {
+  background: #1d1a16;
+}
+
+.theme-stage .default-effect-shell-toggle:not(.bypassed) {
+  border-color: var(--stage-amber);
+  background: var(--stage-amber);
+  color: var(--stage-on-amber);
+}
+
+/* ===== The preset name and tempo: black fields with white type ===== */
+.theme-stage .preset-selector {
+  border: 1px solid var(--stage-hairline);
+  border-radius: 3px;
+  background: #121212;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.theme-stage .preset-chooser-label,
+.theme-stage .preset-chooser-label:hover {
+  color: #f4f4f4;
+}
+
+.theme-stage .preset-favorite {
+  border-right-color: #2e2e2e;
+}
+
+body.theme-stage .footer-bar .bpm-display {
+  border: 1px solid var(--stage-hairline);
+  border-radius: 3px;
+  background: #121212;
+  color: #f4f4f4;
+}
+
+.theme-stage .default-effect-shell-subtitle,
+.theme-stage .default-effect-shell .node-resource-selector > label,
+.theme-stage .default-effect-shell .node-param-label,
+.theme-stage .default-effect-shell .node-param-group-title {
+  color: #a8a8a8;
+}
+
+.theme-stage .default-effect-shell-chip-presets {
+  border-color: var(--stage-hairline);
+  background: #161616;
+  color: #eeeeee;
+}
+
+.theme-stage .default-effect-shell-equipment-panel {
+  background: #101010;
+}
+
+.theme-stage .default-effect-shell .resource-nav-btn,
+.theme-stage .custom-layout-resource-selector .resource-nav-btn,
+.theme-stage .default-effect-shell .resource-picker-btn,
+.theme-stage .default-effect-shell .resource-clear-btn,
+.theme-stage .default-effect-shell .resource-browse-btn,
+.theme-stage .default-effect-shell .blend-open-btn {
+  border-color: #464646;
+  background: #303030;
+  box-shadow: none;
+}
+
+.theme-stage .default-effect-shell .resource-nav-btn:hover,
+.theme-stage .custom-layout-resource-selector .resource-nav-btn:hover,
+.theme-stage .default-effect-shell .resource-picker-btn:hover,
+.theme-stage .default-effect-shell .resource-clear-btn:hover,
+.theme-stage .default-effect-shell .resource-browse-btn:hover,
+.theme-stage .default-effect-shell .blend-open-btn:hover {
+  border-color: #6a6a6a;
+  background: #3a3a3a;
+}
+
+/* The chain's round add keys. */
+.theme-stage .signal-add-btn,
+.theme-stage .signal-path-add-menu-trigger {
+  border-color: #4a4a4a;
+  background: #2c2c2c;
+  box-shadow: none;
+}
+
+.theme-stage .signal-add-btn:hover,
+.theme-stage .signal-path-add-menu-trigger:hover,
+.theme-stage .signal-path-add-menu-trigger[aria-expanded="true"] {
+  border-color: var(--stage-amber);
+  background: var(--stage-amber);
+  color: var(--stage-on-amber);
+  box-shadow: none;
+}

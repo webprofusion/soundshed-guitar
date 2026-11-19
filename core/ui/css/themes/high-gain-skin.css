@@ -1,0 +1,589 @@
+/* ===== High Gain Theme: skin =====
+ * Everything in the theme's look that is not one of its colour tokens: component rules, and any
+ * pictures, textures, type and shape. Only the web UI draws these. The palette (the tokens) and
+ * the theme's description are in high-gain.css, which loads first (ts/themes.ts).
+ */
+
+/* Both fonts are SIL OFL, latin subsets, licences beside them in css/fonts. A browser fetches a
+   face only when something uses it, so the other themes never load these. */
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url("../fonts/Oswald-VariableFont_wght.latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Grenze Gotisch";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/GrenzeGotisch-VariableFont_wght.latin.woff2") format("woff2");
+}
+
+/* The textures below replace the dark theme's film grain on the same bars. */
+body.theme-high-gain .film-grain {
+  background-image: none;
+}
+
+body.theme-high-gain {
+  background: var(--bg-primary);
+}
+
+/* ===== Type: heavy and condensed, blackletter for titles =====
+ * Oswald runs narrower than Inter at the same size, so nothing that fits today overflows; it
+ * is set a step heavier, tracked open a little, with figures of one width so values don't
+ * jitter as they change. Form controls don't inherit the page font on their own. */
+body.theme-high-gain {
+  font-family: var(--hg-font-ui);
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  font-variant-numeric: tabular-nums;
+}
+
+body.theme-high-gain :where(button, input, select, textarea, optgroup) {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+.theme-high-gain .nav-tab {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.theme-high-gain :is(.knob-label, .control-stack-label, .toggle-label, .node-name, .node-param-label) {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.theme-high-gain :is(.knob-value, .node-param-value) {
+  font-weight: 600;
+}
+
+/* Titles in blackletter: mixed case (blackletter capitals in a row don't read), and scaled up
+   to a sans-serif's x-height, as its letters are small for their size. font-size-adjust keeps
+   each title's own size as the base. */
+.theme-high-gain :is(.default-effect-shell-title, .modal-header h3, .fx-selector-title, .fx-flyout-title, .flyout-settings-title) {
+  font-family: var(--hg-font-title);
+  font-weight: 700;
+  font-size-adjust: 0.54;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+/* ===== The bars: diamond plate top and bottom, tolex between ===== */
+body.theme-high-gain .icon-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(0, 0, 0, 0.25) 100%),
+    var(--hg-plate) 0 0 / 256px 256px repeat,
+    #141518;
+  border-bottom: 1px solid #000000;
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* dark.css marks its nav colours !important; these have to as well. */
+.theme-high-gain .nav-tab {
+  color: #a0a1a7 !important;
+}
+
+.theme-high-gain .nav-tab:hover {
+  color: #ececee !important;
+}
+
+.theme-high-gain .nav-tab.active {
+  color: var(--hg-red-hot) !important;
+  border-bottom-color: var(--hg-red) !important;
+  text-shadow: 0 0 10px var(--hg-glow);
+}
+
+.theme-high-gain .nav-settings-btn {
+  border-color: var(--hg-hairline) !important;
+  color: #a8a9ae !important;
+}
+
+body.theme-high-gain .control-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(0, 0, 0, 0.18) 100%),
+    var(--hg-tolex) 0 0 / 256px 256px repeat,
+    #111214;
+  border-bottom: 1px solid #000000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.theme-high-gain .control-stack-label,
+.theme-high-gain .toggle-label,
+.theme-high-gain .knob-label {
+  color: #b6b7bc;
+}
+
+body.theme-high-gain .footer-bar {
+  --footer-fg: #a6a7ad;
+  --footer-fg-strong: #ededef;
+  --footer-divider: #2a2b2f;
+  --footer-field-bg: #0c0d0f;
+  --footer-field-border: #36373b;
+  --footer-field-border-hover: #56575c;
+  --footer-on-bg: color-mix(in srgb, var(--hg-red) 18%, #0c0d0f);
+
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(255, 255, 255, 0.02) 100%),
+    var(--hg-plate) 0 0 / 256px 256px repeat,
+    #141518;
+  border-top: 1px solid #000000;
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+/* ===== The chain: a tolex strip with black blocks strung along a line ===== */
+body.theme-high-gain .signal-path-bar {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.15) 100%),
+    var(--hg-tolex) 0 0 / 256px 256px repeat,
+    #0d0e10;
+  border-bottom: 1px solid #000000;
+}
+
+.theme-high-gain .signal-path-resize-handle {
+  background: #0d0e10;
+  border-top-color: #1c1d20;
+}
+
+.theme-high-gain .signal-path-nodes {
+  --signal-route-main: #4a4b51;
+  --signal-route-surface: #0d0e10;
+}
+
+/* Each block is black anodised metal with a bright machined top edge; its category colour
+   stays on its edge and icon. The shared shape keeps its size, so nothing in the chain moves. */
+.theme-high-gain .signal-node {
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(180deg, #24252a 0%, #18191c 100%);
+}
+
+.theme-high-gain .signal-node:hover {
+  border-color: #6a6b72;
+}
+
+.theme-high-gain .node-name {
+  color: #ececee;
+}
+
+.theme-high-gain .node-type {
+  color: #9fa0a7;
+}
+
+/* Selected: lit from inside, like a valve. The face stays black, its edge and name glow red. */
+.theme-high-gain .signal-node.selected {
+  border-color: var(--hg-red-hot);
+  background:
+    radial-gradient(120% 90% at 50% 110%, rgb(255 52 32 / 0.28) 0%, rgb(255 52 32 / 0) 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(180deg, #26262a 0%, #19191c 100%);
+  box-shadow:
+    0 0 0 1px rgb(255 52 32 / 0.55),
+    0 0 18px -2px var(--hg-glow),
+    var(--node-raised);
+}
+
+.theme-high-gain .signal-node.selected .node-name {
+  color: #ffffff;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+.theme-high-gain .signal-node:focus:not(.selected) {
+  border-color: #8a8b92;
+  box-shadow: var(--node-raised);
+}
+
+.theme-high-gain .signal-node:focus-visible {
+  outline: 2px solid var(--hg-red-hot);
+  outline-offset: 2px;
+}
+
+.theme-high-gain .parallel-branches {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: #2a2b2f;
+}
+
+/* ===== The play page: the effect in front of the grille ===== */
+/* The valves glow behind the lower half of the grille; the top is taken down further, and
+   the edges, so the text round the panel always reads. */
+body.theme-high-gain #panel-visualizer {
+  background:
+    linear-gradient(180deg, rgba(8, 8, 9, 0.75) 0%, rgba(8, 8, 9, 0) 30%),
+    radial-gradient(140% 110% at 50% 75%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 100%),
+    url("../../images/themes/high-gain/grille.jpg") center bottom / cover no-repeat,
+    #080809;
+}
+
+.theme-high-gain .effect-visualization {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* The stage's tint (its ::before) covers the whole grille, not just the stage's 400px floor,
+   so the grille has no seam halfway down. The card keeps its own height. The id keeps this
+   ahead of the compact layout's `min-height: 0`. */
+body.theme-high-gain #panel-visualizer .effect-visualization {
+  min-height: 100%;
+}
+
+/* The effect's panel is the amp's front panel: near-black, a machined top edge, a long shadow. */
+.theme-high-gain .default-effect-shell,
+.theme-high-gain .effect-visualization .node-params-panel {
+  border: 1px solid #000000;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 120px),
+    var(--hg-card);
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 18px 50px rgba(0, 0, 0, 0.7);
+}
+
+.theme-high-gain .default-effect-shell .default-effect-section {
+  border: 1px solid #000000;
+  border-radius: 3px;
+  background: #121315;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.theme-high-gain .default-effect-shell-equipment-panel {
+  border-radius: 3px;
+  border-color: #000000;
+  background: #0b0b0d;
+}
+
+.theme-high-gain .default-effect-shell-equipment-image {
+  border-radius: 2px;
+}
+
+.theme-high-gain .default-effect-shell-title {
+  color: #f4f4f5;
+}
+
+.theme-high-gain .default-effect-shell .node-param-tabs,
+.theme-high-gain .node-param-tabs {
+  background: transparent;
+  border-bottom-color: #2c2d31;
+}
+
+.theme-high-gain .eq-visualizer,
+.theme-high-gain .eq-curve-canvas {
+  background: #0d0e10;
+}
+
+/* ===== Pop-ups, lists and dialogs ===== */
+.theme-high-gain .modal-content,
+.theme-high-gain .fx-flyout,
+.theme-high-gain .fx-selector-panel {
+  border-color: var(--hg-hairline);
+}
+
+.theme-high-gain .fx-selector-header,
+.theme-high-gain .fx-flyout-header,
+.theme-high-gain .modal-header {
+  background: var(--modal-bg-raised);
+  border-bottom: 1px solid #2c2d31;
+}
+
+.theme-high-gain .fx-item {
+  background: linear-gradient(180deg, #232428 0%, #1c1d20 100%);
+  border-color: #000000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.theme-high-gain .fx-item:hover {
+  border-color: var(--hg-red);
+  background: linear-gradient(180deg, #2a2b30 0%, #212226 100%);
+}
+
+.theme-high-gain .notification-toast {
+  background: var(--bg-elevated);
+  border-color: var(--hg-hairline);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ===== Knobs: a black knurled knob inside a thin red arc =====
+ * The arc is the base knob's conic ring (css/controls.css) running dark red to bright red;
+ * the knob (images/themes/high-gain/knob.png: a gunmetal cap on a black knurled body, its
+ * shadow baked in, 1.15 skirt diameters across) sits inside it on a black disc. The body is
+ * still and only the white pointer line turns, so the highlights stay where the light is.
+ * Everything is in percentages of the knob, so every size gets the same drawing. A custom
+ * layout's own knob art (an image, or the Pedal, Amp and Minimal styles) is left alone. */
+.theme-high-gain .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal)::before {
+  inset: 10.5%;
+  border: 0;
+  background:
+    url("../../images/themes/high-gain/knob.png") center / 100% 100% no-repeat,
+    radial-gradient(circle, #0b0b0c 0%, #0b0b0c 70%, #050506 100%);
+  box-shadow: 0 0 0 1.5px #000000;
+}
+
+/* The pointer: a white line engraved across the cap, from near its centre to the knob's
+   edge. The image spans 79% of the knob (inset 10.5%), the knob's top is 0.8/1.15 of the
+   image's half-width, so the line runs from 4% to 25% out from the centre. */
+.theme-high-gain .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal) .knob-indicator {
+  top: 25%;
+  width: 5%;
+  min-width: 2px;
+  height: 21%;
+  border-radius: 99px;
+  background: #f4f4f4;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  transform-origin: 50% 119%; /* (50% - 25%) / 21% */
+}
+
+.theme-high-gain .knob::after {
+  background: #45464b;
+}
+
+.theme-high-gain .knob-value,
+.theme-high-gain .node-param-value {
+  color: #f0f0f2;
+}
+
+/* ===== Keys: black anodised caps with a lit top edge ===== */
+.theme-high-gain .btn,
+.theme-high-gain .preset-action-btn,
+.theme-high-gain .preset-nav-btn,
+.theme-high-gain .eq-icon-btn,
+.theme-high-gain .default-effect-shell-chip,
+.theme-high-gain .effect-visualization-toolbar-btn,
+.theme-high-gain .resource-nav-btn {
+  border-color: #000000;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.theme-high-gain .btn:hover,
+.theme-high-gain .preset-action-btn:hover,
+.theme-high-gain .preset-nav-btn:hover,
+.theme-high-gain .eq-icon-btn:hover,
+.theme-high-gain .default-effect-shell-chip:hover,
+.theme-high-gain .effect-visualization-toolbar-btn:hover,
+.theme-high-gain .resource-nav-btn:hover {
+  border-color: #000000;
+  background: linear-gradient(180deg, #35363c 0%, #24252a 100%);
+}
+
+/* Latched on: the legend lights red, as an LED behind the key. */
+.theme-high-gain .btn.active,
+.theme-high-gain .eq-icon-btn.active,
+.theme-high-gain .effect-visualization-toolbar-btn.is-active {
+  border-color: rgb(255 52 32 / 0.6) !important;
+  background: linear-gradient(180deg, #1c1d20 0%, #222327 100%) !important;
+  color: var(--hg-red-hot) !important;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.6),
+    inset 0 0 10px rgb(255 52 32 / 0.18),
+    0 0 8px -1px rgb(255 52 32 / 0.35) !important;
+  text-shadow: 0 0 6px rgb(255 52 32 / 0.6);
+}
+
+/* The primary key is lit red with a white legend. */
+.theme-high-gain .btn-primary,
+.theme-high-gain .preset-action-btn-primary {
+  border-color: var(--hg-red-deep) !important;
+  background: linear-gradient(180deg, #f0323a 0%, #c9161f 100%) !important;
+  color: #ffffff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 12px -2px var(--hg-glow);
+}
+
+.theme-high-gain .btn-primary:hover,
+.theme-high-gain .preset-action-btn-primary:hover {
+  border-color: var(--hg-red-deep) !important;
+  background: linear-gradient(180deg, #ff4a50 0%, #d81f28 100%) !important;
+  color: #ffffff !important;
+}
+
+.theme-high-gain .btn-primary svg,
+.theme-high-gain .preset-action-btn-primary svg {
+  color: #ffffff;
+}
+
+/* ===== Switches: a black slot, red when on ===== */
+.theme-high-gain .toggle-slider {
+  background: #0c0d0f;
+  border-color: #000000;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* The thumb is a chrome cap. */
+.theme-high-gain .toggle-slider:before {
+  background: linear-gradient(180deg, #e8e8ea 0%, #9c9da3 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.theme-high-gain .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, #c9161f 0%, #ef2b33 100%);
+  border-color: var(--hg-red-deep);
+  box-shadow:
+    inset 0 1px 3px rgba(80, 0, 0, 0.5),
+    0 0 10px -2px var(--hg-glow);
+}
+
+.theme-high-gain .default-effect-shell-toggle:not(.bypassed) {
+  border-color: var(--hg-red-deep);
+  background: linear-gradient(180deg, #ef2b33 0%, #c9161f 100%);
+  color: #ffffff;
+  box-shadow: 0 0 12px -2px var(--hg-glow);
+}
+
+/* ===== The preset name and tempo: a black display with red LED type ===== */
+.theme-high-gain .preset-selector,
+body.theme-high-gain .footer-bar .bpm-display {
+  border: 1px solid #000000;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 45%),
+    radial-gradient(120% 140% at 50% 50%, #170708 0%, #070708 70%);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--hg-red-hot);
+}
+
+.theme-high-gain .preset-chooser-label,
+.theme-high-gain .preset-chooser-label:hover {
+  color: var(--hg-red-hot);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+.theme-high-gain .preset-favorite {
+  border-right-color: #2a1416;
+}
+
+.theme-high-gain .preset-selector-status {
+  background: rgb(255 52 32 / 0.14);
+  color: var(--hg-red-hot);
+}
+
+body.theme-high-gain .footer-bar .bpm-display {
+  font-weight: 700;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+/* ===== Meters: LED ladders behind a black window ===== */
+.theme-high-gain .vu-segments {
+  --vu-seg-off: #24252a;
+  padding: 3px;
+  width: 20px;
+  box-sizing: border-box;
+  border-radius: 3px;
+  background: #050506;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 0 1px #000000,
+    0 1px 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* The window's padding moves the ladder, so the peak tick moves with it. */
+.theme-high-gain .vu-peak-hold {
+  left: 3px;
+  margin-top: 3px;
+}
+
+.theme-high-gain .default-effect-shell-subtitle,
+.theme-high-gain .default-effect-shell .node-resource-selector > label,
+.theme-high-gain .default-effect-shell .node-param-label,
+.theme-high-gain .default-effect-shell .node-param-group-title {
+  color: #a9aab0;
+}
+
+.theme-high-gain .default-effect-shell .node-param-group-title {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.theme-high-gain .default-effect-shell-chip-presets {
+  border-color: #000000;
+  background: #0c0d0f;
+  color: #ededef;
+}
+
+.theme-high-gain .default-effect-shell .resource-nav-btn,
+.theme-high-gain .custom-layout-resource-selector .resource-nav-btn,
+.theme-high-gain .default-effect-shell .resource-picker-btn,
+.theme-high-gain .default-effect-shell .resource-clear-btn,
+.theme-high-gain .default-effect-shell .resource-browse-btn,
+.theme-high-gain .default-effect-shell .blend-open-btn {
+  border-color: #000000;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+.theme-high-gain .default-effect-shell .resource-nav-btn:hover,
+.theme-high-gain .custom-layout-resource-selector .resource-nav-btn:hover,
+.theme-high-gain .default-effect-shell .resource-picker-btn:hover,
+.theme-high-gain .default-effect-shell .resource-clear-btn:hover,
+.theme-high-gain .default-effect-shell .resource-browse-btn:hover,
+.theme-high-gain .default-effect-shell .blend-open-btn:hover {
+  border-color: #000000;
+  background: linear-gradient(180deg, #35363c 0%, #24252a 100%);
+}
+
+/* The chain's round add keys. */
+.theme-high-gain .signal-add-btn,
+.theme-high-gain .signal-path-add-menu-trigger {
+  border-color: #000000;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+.theme-high-gain .signal-add-btn:hover,
+.theme-high-gain .signal-path-add-menu-trigger:hover,
+.theme-high-gain .signal-path-add-menu-trigger[aria-expanded="true"] {
+  border-color: var(--hg-red-deep);
+  background: linear-gradient(180deg, #ef2b33 0%, #c9161f 100%);
+  color: #ffffff;
+  box-shadow: 0 0 10px -2px var(--hg-glow);
+}
+
+/* ===== Fields: recessed black ===== */
+.theme-high-gain select,
+.theme-high-gain input[type="text"],
+.theme-high-gain input[type="search"],
+.theme-high-gain input[type="number"],
+.theme-high-gain textarea {
+  border-color: #000000;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* The model and IR name: a recessed black field. The base mixes the accent into a blue-grey,
+   which turns maroon under red; the red stays for its edge on hover. */
+.theme-high-gain .resource-picker-label,
+.theme-high-gain .default-effect-shell .resource-picker-label {
+  border-color: #000000;
+  background: var(--bg-input);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.theme-high-gain .resource-picker-label:hover,
+.theme-high-gain .default-effect-shell .resource-picker-label:hover {
+  border-color: var(--hg-red);
+  background: #121315;
+}

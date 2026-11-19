@@ -84,7 +84,7 @@ const paletteName = (id) => `k${id.replace(/(^|-)(\w)/g, (_, __, c) => c.toUpper
 /** The palettes: the themes that are their own base, each with its sheet and class. */
 const THEMES = MANIFEST.THEMES.filter((theme) => theme.base === theme.id).map((theme) => [
   paletteName(theme.id),
-  theme.sheets[0],
+  theme.palette,
   `.${theme.classes[0]}`,
 ]);
 
