@@ -1,10 +1,13 @@
-# Per-user sync: your content on every device
+# Per-user sync: presets, setlists and installed packs on every device
 
-Goal: a user can sign in and choose to sync their own content (presets, setlists, blends, layouts,
-settings and so on) between their devices: desktop standalone and plugins, iOS, Android, Nano Q and
-the Linux kiosk. Sync is opt-in on each device, and the user picks which kinds of content sync.
-Nothing changes for anyone who never turns it on, including people already signed in for Tone
-Sharing.
+Goal: a user can sign in and choose to sync their **presets** (with the models, IRs and other
+resources they use, and those resources' metadata), their **setlists** and their **installed
+packs** between their devices: desktop standalone and plugins, iOS, Android, Nano Q and the Linux
+kiosk. Sync is opt-in on each device, and the user picks which of the three sync. Nothing changes
+for anyone who never turns it on, including people already signed in for Tone Sharing.
+
+Nothing else syncs: no settings, layouts, MIDI mappings, riffs, loops or practice tabs. The design
+leaves room to add categories later (see "Adding a category").
 
 Written 2026-11-15 against 9bc9cc50. Server internals (storage, quotas, cost) are in the private
 repo: `soundshed-guitar-private/docs/plans/2026-11-15-user-sync-server.md`.
@@ -13,233 +16,243 @@ repo: `soundshed-guitar-private/docs/plans/2026-11-15-user-sync-server.md`.
 
 | Area | What exists | What sync needs |
 | --- | --- | --- |
-| **Local store** | One SQLite file (`data/v1/soundshed.db`) shared by the standalone and every plugin instance. Table `items(type, id, json, updated_at ms)`. Types: `preset`, `composite`, `resource`, `blend`, `custom-effect`, `riff`, `layout`, `setlist`, `effect-preset`, `effect-layout`, `automation-slot`, `practice-tab`, `setting`, and singleton `document` rows. User preset ids are `user-<uuid>`, so ids are already unique across devices. | `Remove` deletes the row, so deletes leave no trace. `ReplaceAll` rewrites a whole type, so `updated_at` moves for rows that didn't change. Several collections are one `document` row (`preset-folders`, `setlists`, `preset-favorites`, `preset-ratings`, `effect-presets`, `riff-library`, `looper-projects`, `automation`), so two devices editing different entries would overwrite each other if the row synced whole. |
-| **Cross-instance sync** | The `shared-sync-state` version and a 2 s `PollSharedSyncState()` poll; editors catch up at `uiReady` (`CatchUpWithSharedStore`); `MergeAppSettingsChangedInStore` merges settings by key. | Remote changes can arrive through the same path: write the store, bump the version. A plugin instance with a closed editor still hears nothing until its editor opens. |
-| **Files** | Model and IR files under `resources/`, module `.wasm` under `custom-effects/`, riff and looper audio under `riff-library/` and `loops/`. Library rows keep `ResourceRef.source` (Tone3000 id and the like) and `metadata.contentHash` (nam/ir-content-v1, abfcba38). | Most models came from Tone3000 and can be fetched again from their source rather than uploaded. Only files with no public source need upload. `LibraryResource.hash` is 64-bit FNV-1a; uploads need SHA-256. |
-| **Account** | Email-code sign-in (`/v1/auth/start`, `/verify`), a 30-day session in the `toneSharing.sessionId` setting, sent as `x-session-id`. The session is an "account setting" and never goes into DAW projects (f4dd3bc9). Per-account feature gates (`user_features`). | A session that silently expires would silently stop sync. A per-device credential the user can see and revoke is better than reusing the browser-style session. |
-| **Network in the engine** | `core/src/net/Http.h` (WinHTTP, curl, Apple) with worker threads and cancel tokens; `uiclient::ToneService` already talks to the API from C++. | Sync runs in the engine, so the web UI and Nano Q get it for free. |
-| **Missing content** | Presets whose model is missing show the Choose-a-model empty state and a re-download prompt (2ce2ab48, 72cdc0f5). | A preset that syncs before its model lands is already handled. |
-
-Settings are the hard part. Of the ~98 setting keys, some are personal (theme, metronome, favorites,
-pads, Scale Guide progressions), some describe this machine (interface calibration, input mode and
-dual mono, multi-core, `nativeUi.scale`, `uiBounds`, folder browser roots, `app.instanceId`,
-`lastPresetId`), and some are credentials that must never leave the device (`tone3000.apiKey`,
-`toneSharing.sessionId`, `jam.youtubeApiKey`).
+| **Presets** | `items` rows of type `preset` in the shared SQLite store (`data/v1/soundshed.db`, used by the standalone and every plugin instance), `updated_at` in ms. User preset ids are `user-<uuid>`, so they are unique across devices. Factory presets come from the factory archives and have the same ids everywhere. | `Remove` deletes the row and leaves no trace; deletes must be detected. Some presets are over 1 MB. |
+| **Resources** | `resource` rows (`<type>:<id>`) with name, tags, category, `metadata` (provider, `contentHash` nam/ir-content-v1), `filePath`, and a 64-bit FNV-1a `hash`. Tone3000 ids look like `tone3000:849585` and local ones like `local:<name>:<hash>`, so ids are stable across devices. Presets refer to resources through `ResourceRef` (with `source`, 2ce2ab48). | Files are on disk under `resources/`. Most came from Tone3000 and can be fetched again; only files with no public source need upload, and uploads need SHA-256. `filePath` is device-only. |
+| **Setlists** | One `document` row `setlists`: `{activeSetlistId, bankSize, cursorIndex, setlists: [{id, name, bank, slots: [{presetId}]}]}`. | Sync each setlist as its own item. `activeSetlistId` and `cursorIndex` say where this rig is in the gig and stay on the device. |
+| **Installed packs** | The `toneSharing.installedPacks` setting: one entry per pack with `id`, `packId`, `title`, `presetIds`, `presetItems` (preset id → Tone Sharing item), `presetSignatures` (the preset's signature at install), `resources`, `blends`. Installs put presets under **new random ids** (`PluginControllerArchiveInstall.cpp`, `GenerateGuidV4String`) in a `tone-sharing::<packId>` folder. | Installing the same pack on two devices gives two sets of ids, so a setlist built on one device points at presets the other doesn't have. This is the main thing to fix (below). |
+| **Cross-instance sync** | The `shared-sync-state` version and a 2 s poll; closed editors catch up at `uiReady` (`CatchUpWithSharedStore`). | Remote changes come in through the same path: write the store, bump the version. |
+| **Account** | Email-code sign-in, a 30-day session in `toneSharing.sessionId`, sent as `x-session-id`; per-account feature gates (`user_features`). | A per-device credential the user can see and revoke, so an expired session doesn't silently stop sync. |
+| **Network in the engine** | `core/src/net/Http.h` (WinHTTP, curl, Apple); `uiclient::ToneService` already calls the API from C++. | Sync runs in the engine, so the web UI and Nano Q both get it. |
+| **Missing content** | Presets whose model is missing show the Choose-a-model empty state and a re-download prompt (2ce2ab48, 72cdc0f5). | A preset that arrives before its model is already handled. |
 
 ## What the user sees
 
 **Settings > Account & Sync** (web UI and Nano Q):
 
 1. **Sign in** with the existing email code. Signing in does not start sync.
-2. **Sync this device** switch, off by default. Turning it on names the device ("Studio PC",
-   suggested from the OS host name) and asks how to start when the cloud already has content:
-   - *Merge* (default): keep everything from both sides; same-id items take the newer one, and
-     differing copies of user content are both kept (see Conflicts).
-   - *Use the cloud copy*: this device's synced categories are replaced (a local backup is taken
-     first, as `backups/` already does for migrations).
+2. **Sync this device**, off by default. Turning it on names the device ("Studio PC", suggested from
+   the host name) and, when the cloud already has content, asks how to start:
+   - *Merge* (default): keep everything from both sides; differing copies of the same preset or
+     setlist are both kept (see Conflicts).
+   - *Use the cloud copy*: this device's synced presets and setlists are replaced, after a local
+     backup.
    - *Use this device*: the cloud is replaced with this device's content.
-3. **What to sync**, one checkbox per category, each with an item count and size:
+3. **What to sync**, three checkboxes, each with a count and size:
+   - **Presets**, with the resources they use. A sub-option, **Upload my own model and IR files**
+     (off by default), uploads files that have no public source (decision S2).
+   - **Setlists**
+   - **Installed packs**: other devices install the same packs from Tone Sharing.
+4. **Status**: last synced, pending changes, plain-language errors ("Signed out on the server. Sign
+   in again to resume sync."), and a footer icon for syncing, synced, paused or failing.
+5. **Devices**: name, platform, last sync; **Remove** revokes that device.
+6. **Pause sync**, **Stop syncing** (keeps local content), **Delete my cloud data** (confirmed),
+   **Download my data** (a zip).
 
-   | Category | Default | Contents |
-   | --- | --- | --- |
-   | Presets | on | user presets and their scenes, preset folders, favorites and ratings (factory presets don't sync; their favorites and ratings do) |
-   | Setlists | on | setlists |
-   | Installed packs | on | the list of installed Tone Sharing packs; other devices offer to install them rather than copying their presets |
-   | Blends and effect presets | on | blends, per-effect presets |
-   | Layouts | on | custom layouts and per-effect layout choices |
-   | Custom and composite effects | on | composite definitions, Custom Effect entries and their `.wasm` |
-   | Models and IRs | on (references only) | library entries, tags, favorites and categories. Files with a public source are downloaded again on each device. A second checkbox, **Upload my own files**, off by default, uploads files that have no public source. |
-   | Preferences | on | personal settings (theme, metronome, pads, MIDI setlist out, Scale Guide, Practice Tool loops, feature toggles) |
-   | MIDI and automation | off | MIDI mappings and automation slots; off because controllers differ between rigs |
-   | Riffs and loops | off | riff library and looper projects with their audio |
-   | Practice tabs | off | imported tab files and their sync points |
+Plugin instances share the store, so the switch is per machine: turning sync on in the standalone
+turns it on in every plugin on that machine.
 
-   Device settings (calibration, input mode, audio and window state) and credentials never sync,
-   and are not offered.
-4. **Status**: last synced, pending changes, errors in plain words ("Signed out on the server.
-   Sign in again to resume sync."). A small icon in the footer shows syncing, synced, paused or
-   failing.
-5. **Devices**: each device with its name, platform and last sync; **Remove** revokes its
-   credential, and that device stops syncing and says why.
-6. **Pause sync** on this device; **Stop syncing** (keeps the local content, removes this device);
-   **Delete my cloud data** (every category, every device, confirmed); **Download my data** (a
-   zip of what the cloud holds).
+## What syncs, exactly
 
-Unticking a category stops sending and receiving it on this device. If no other device still syncs
-it, the user is asked whether to keep or delete the cloud copy.
+### Presets
 
-Plugin instances share the store, so the setting is per machine, not per instance: turning sync on
-in the standalone turns it on in every plugin on that machine.
+Every user preset (not factory presets, and not unmodified pack presets, which come from the pack).
+Each preset carries its **dependencies**, worked out from its graph when it is sent:
+
+- **Resources** it uses (NAM models, IRs, and any other resource type a node points at): their
+  library metadata (name, type, tags, category, description, provider, source ref, `contentHash`,
+  size, SHA-256), never `filePath`.
+- **Blends** it uses, since a blend node without its blend doesn't sound the same. Pack installs
+  already treat blends as part of a preset (`installedPacks[].blends`). Confirmed by Chris on
+  2026-11-16.
+
+Composites and Custom Effects that a preset uses are not synced in v1; the preset shows them as
+missing on the other device, as it would for a preset shared without them (decision S3).
+
+Only resources a synced preset uses are synced. The rest of the user's library (models and IRs no
+synced preset points at) stays on the device in v1; full library sync may be offered later (see
+"Adding a category later"). A resource or blend stays in the cloud while any synced preset uses it. Sync never deletes a local
+file: if a preset is deleted on one device, its models stay in the other devices' libraries.
+
+### Setlists
+
+Each setlist as its own item: id, name, bank, slots. `activeSetlistId` and `cursorIndex` stay on
+the device. A slot can point at a user preset, a factory preset or a pack preset; the pack id fix
+below keeps the last kind working across devices. A slot whose preset isn't on this device (for
+example a factory preset from a newer app version) shows as missing rather than being dropped.
+
+### Installed packs
+
+Each `installedPacks` entry as its own item, keyed by its `id`. When an entry arrives, the device
+offers to install that pack ("2 packs installed on Studio PC. Install them here?"), and installs it
+**with the preset ids from the entry**. Removing a pack on one device removes it on the others.
+
+### Pack presets keep one id on every device
+
+Today an install mints new ids, so the fix has two parts:
+
+1. `installPresetArchives` takes an optional map from the archive's preset key to the id to use.
+   Sync passes the ids from the synced entry, so the second device's pack presets get the same ids
+   as the first, and setlists that point at them work.
+2. New installs mint ids that depend only on the pack and the archive's preset (a name-based UUID
+   of `packId` + preset key), so two devices that install the same pack before ever syncing still
+   agree.
+
+A pack preset the user has edited is no longer the pack's: its signature differs from
+`presetSignatures`. It then syncs as an ordinary preset under the same id, and wins over the pack's
+copy on the other device. Reinstalling or updating the pack doesn't overwrite it without asking, as
+today.
 
 ## How it works
 
 ### One sync agent per machine
 
-The standalone and N plugin instances share one store, so only one process syncs at a time. A
-lease in the `meta` table (`sync.lease.owner` = `app.instanceId` + pid, `sync.lease.expires`),
-taken and renewed every 30 s inside a store transaction, picks the agent. If the holder exits or
-hangs, another process takes over when the lease lapses. The agent runs on its own thread, never
-the message or audio thread, so it also works in a plugin with its editor closed.
+The standalone and every plugin instance share one store, so one process syncs at a time. A lease
+in the `meta` table (`sync.lease.owner` = `app.instanceId` + pid, `sync.lease.expires`), taken and
+renewed every 30 s in a store transaction, picks it; when the holder exits or hangs another process
+takes over once the lease lapses. The agent has its own thread, never the message or audio thread,
+so it also runs in a plugin whose editor is closed. After writing remote changes it bumps the
+shared-sync version once per batch, and every instance reloads through the existing path.
 
-After it writes remote changes into the store, the agent bumps the shared-sync version once per
-batch. Every instance then reloads through the existing path, and editors that were closed catch
-up at `uiReady`.
+### Change tracking without touching every save path
 
-### Change tracking without touching every write site
-
-A new local table records what the cloud last saw for each item:
+A new table records what the cloud last saw for each synced item:
 
 ```sql
 CREATE TABLE sync_state (
-  type TEXT NOT NULL, id TEXT NOT NULL,
-  synced_hash TEXT NOT NULL,   -- SHA-256 of the canonical JSON last sent or received
-  server_rev INTEGER NOT NULL, -- the server's revision of that version
+  type TEXT NOT NULL, id TEXT NOT NULL, -- preset, resource, blend, setlist, pack
+  synced_hash TEXT NOT NULL,            -- SHA-256 of the canonical JSON last sent or received
+  server_rev INTEGER NOT NULL,
   PRIMARY KEY (type, id)) WITHOUT ROWID;
 ```
 
-The agent finds local changes by scanning the synced types and comparing each row's hash with
-`synced_hash`: a different hash is an edit, a `sync_state` row with no item is a delete. About
-1,500 rows on a large profile, so a scan is cheap, and it is triggered by `MaxUpdatedAt()` moving
-(plus a slow timer). This is correct whatever wrote the row, `ReplaceAll` included, and needs no
-hooks in the dozens of save paths. Device-only fields inside an item (for example a resource's
-`filePath`) are left out of the canonical JSON.
+The agent scans presets, the `setlists` document and the `installedPacks` setting when
+`MaxUpdatedAt()` moves (and on a slow timer), and compares each item's hash with `synced_hash`:
+a different hash is an edit, a `sync_state` row with no local item is a delete. Several hundred
+rows on a big profile, so the scan is cheap, and it's correct whatever wrote the row. Device-only
+fields are left out of the canonical JSON before hashing.
 
-### Document rows become entries
+Setlists and installed packs are one row each locally, so a small adapter splits them into
+per-entry items on the way out and merges entries back on the way in, leaving the device-only
+fields alone.
 
-The collection documents sync entry by entry, not as one row. Each gets a small adapter that
-splits the document into virtual items (`preset-folder:<id>`, `setlist:<id>`,
-`preset-favorite:<presetId>`, …) and writes merged entries back. The item types `preset-folder`,
-`preset-favorite` and `preset-rating` already exist in `JsonStore.h`; finishing that move for
-folders, favorites and ratings is cleaner than an adapter and is step 1 of phase 0.
+### Protocol
 
-Settings sync key by key as `setting:<key>`, filtered through one list, `SyncedSettingCategory(key)`,
-next to `IsAccountSettingKey` and `IsInstanceOwnedSettingKey`. A key that isn't listed doesn't sync,
-so a new setting is device-local until someone decides otherwise.
+The server keeps an ordered log per user; each accepted change gets the next revision number.
 
-### The protocol
+- `POST /v1/sync/devices` with a session: registers the device and returns a revocable device
+  token, used for everything after.
+- `GET /v1/sync/changes?since=<rev>&categories=presets,setlists,packs`: upserts and tombstones
+  after `rev`, paged.
+- `POST /v1/sync/changes`: a batch of `{type, id, baseRev, hash, json | deleted}`. An item is
+  accepted if `baseRev` is the server's current revision for it, else returned as a conflict with
+  the server's version.
+- `PUT/GET /v1/sync/blobs/<sha256>`: large preset JSON (over 64 KB) and uploaded model/IR files.
 
-The server keeps, per user, an ordered log: every accepted change gets the next revision number.
+A cycle is pull and apply, push with base revisions, resolve conflicts. A preset is pushed after
+its resources and blends in the same batch, so the receiving side never sees a preset whose
+dependencies the server doesn't have.
 
-- `POST /v1/sync/devices` with a session: registers this device, returns a device token
-  (long-lived, revocable, shown in Devices). The agent uses only the device token from then on,
-  stored like the other account settings.
-- `GET /v1/sync/changes?since=<rev>&categories=…`: changes after `rev` (upserts and tombstones), in
-  pages, with the newest revision.
-- `POST /v1/sync/changes`: a batch of `{type, id, baseRev, hash, json | deleted}`. Each item is
-  accepted if `baseRev` is the server's current revision for that item; otherwise it is returned as
-  a conflict with the server's version.
-- `PUT/GET /v1/sync/blobs/<sha256>`: file content, for files the user chose to upload.
-- `GET /v1/sync/notify` (WebSocket, later): "your log moved", so devices pull at once rather than on
-  the next timer.
-
-A cycle: pull since the last revision and apply, then push local changes with their base revisions,
-then resolve conflicts. Items over 64 KB (some presets reach 1 MB) go as blobs, with the item
-holding the hash.
-
-Tombstones are kept 180 days. A device that hasn't synced for longer gets a full reconcile:
-it lists the server's live items and hashes, and the user's start choice (merge by default) decides.
+Tombstones are kept 180 days. A device away longer does a full reconcile: it lists the server's
+live items and hashes, and the user's start choice decides (merge by default).
 
 ### Conflicts
 
-- **User content** (presets, setlists, blends, layouts, composites): if both sides changed the same
-  item, the server copy wins under its id and the local version is kept as a new item,
-  "My Crunch (Laptop, 15 Nov)", and the status shows "1 conflict kept as a copy". Nobody loses an
-  edit.
-- **Small values** (settings, favorites, ratings, folder membership): the newer change wins.
-- **Delete vs edit**: the edit wins and the item comes back.
-- **The active preset**: an incoming change never replaces the sound mid-play. If the active preset
-  changed on another device, the library is updated and the preset bar offers "Updated on Studio
-  PC. Load it?"; with unsaved edits here, those edits become the conflict copy when saved.
+- **Presets and setlists** changed on both sides: the server copy keeps the id, and the local
+  version is saved as a new item, "My Crunch (Laptop, 15 Nov)". Status shows "1 conflict kept as a
+  copy". Nobody loses an edit.
+- **Resource metadata** (a renamed model, new tags): the newer change wins.
+- **Delete against edit**: the edit wins and the item comes back.
+- **Installed packs**: install against remove, the install wins.
+- **The active preset**: an incoming change never replaces the sound mid-play. The library updates
+  and the preset bar offers "Updated on Studio PC. Load it?"; unsaved edits here become the
+  conflict copy when saved.
 
-### Models, IRs and other files
+### Getting a preset's files onto the device
 
-For each synced library entry, the agent on the receiving device:
+For each resource a synced preset needs, the receiving agent:
 
-1. Keeps the local file if one with the same content hash is already in the library.
-2. Otherwise fetches it from its source (Tone3000 by id, falling back to the content-hash lookup),
-   through the existing import path and the throttled proxy rules. These are user-requested
-   downloads on the user's own device, one at a time.
-3. Otherwise, if the sending device uploaded it, downloads the blob.
-4. Otherwise leaves a "not on this device" entry; presets using it show the existing missing-model
+1. Uses a library file with the same content hash if there is one, and merges the metadata into
+   that entry.
+2. Otherwise fetches it from its source (Tone3000 by id, then the content-hash lookup) through the
+   existing import path and the throttled proxy rules, one at a time.
+3. Otherwise downloads the uploaded blob, if the sending device uploaded it.
+4. Otherwise adds the library entry as "not on this device"; the preset shows the existing missing
    state with "Find on Tone3000" and "Choose a file".
 
-Downloads are lazy by default: the library entry arrives at once, the file is fetched when a preset
-needs it or the user opens the library. A "Download all now" button covers going offline. Mobile
-asks before large downloads on a metered connection.
+Downloads happen when the preset is first loaded or the library is opened, with a "Download all
+now" button for going offline. Mobile asks before large downloads on a metered connection. Pack
+installs fetch their models the way installs already do.
 
-Uploads use SHA-256 and a per-user quota. The server stores each user's blobs privately; it never
-shares a blob between users, even with the same hash.
+Uploads use SHA-256 and a per-user quota. Blobs are private to the user; the server never serves
+one user's upload to another, even with the same hash.
 
 ### Security and privacy
 
-- TLS to the API; the server stores content at rest encrypted by the platform. No end-to-end
-  encryption in v1 (decision S4).
-- Device tokens are scoped to `/v1/sync/*`, hashed on the server, revoked from Devices or on sign
-  out. Signing out on one device removes it from sync and leaves its local content.
-- The agent never sends credentials, device-only settings or file paths. A test checks every
-  outgoing item against the deny list.
-- Content from the server is untrusted input: items go through the same validation as an import
-  (preset schema, layout size cap, composite cycle check, wasm module cap) before they are written.
+- TLS to the API, content encrypted at rest by the platform, no end-to-end encryption in v1.
+- Device tokens are scoped to `/v1/sync/*`, hashed on the server, revoked from Devices or at sign
+  out. Signing out leaves local content in place.
+- Nothing but presets, their resource metadata and blends, setlists and pack entries leaves the
+  device. No settings, paths or credentials; a test checks every outgoing item against that.
+- Content from the server is untrusted: presets, blends and setlists go through the same checks as
+  an import before they are written.
 
 ## Build order
 
-**Phase 0: local groundwork (no network).** Move folders, favorites and ratings onto their item
-types. `sync_state` table and migration. Category registry, `SyncedSettingCategory`, canonical JSON
-and hashing, the change scanner, document adapters. Tests: scanner finds edits, deletes and
-`ReplaceAll` no-ops; deny list; adapters round-trip.
+**Phase 0: local groundwork, no network.** Deterministic pack preset ids and the id map on
+`installPresetArchives`. `sync_state` and its migration. Canonical JSON and hashing, the change
+scanner, the dependency walk (preset → resources, blends), the setlist and pack adapters, the
+"pack preset was edited" check. Tests: edits, deletes and no-op rewrites are found; device-only
+fields never leave; the same pack installed twice gets the same ids.
 
-**Phase 1: server.** Device registration, change log, push with conflicts, tombstones, blobs,
-quotas, delete-all and export. Gated per account with a `user_features` row (`sync`), as the Tone
-Builder is, so it can run on a few accounts first.
+**Phase 1: server.** Devices and tokens, change log, conflicts, tombstones, blobs, quota, export,
+delete-all. Gated per account with a `user_features` row (`sync`), like the Tone Builder.
 
-**Phase 2: engine agent, small content.** Lease, worker thread, pull/push, apply and shared-sync
-bump, conflict copies, active-preset notice. Categories: presets, setlists, installed packs, blends
-and effect presets, layouts, preferences. Tests drive two stores (and two processes for the lease)
-against a fake transport; engine tests must call `test::SetSettingsEnvRoot`.
+**Phase 2: engine agent.** Lease, worker thread, pull/push, apply and the shared-sync bump,
+conflict copies, the active-preset notice, pack install offers. Two stores (and two processes for
+the lease) against a fake transport; engine tests call `test::SetSettingsEnvRoot`.
 
-**Phase 3: UI.** Account & Sync in the web UI and Nano Q, the start choice, category checklist with
-sizes, devices, status icon, plain-language errors.
+**Phase 3: UI.** Account & Sync in the web UI and Nano Q, the start choice, the three checkboxes,
+devices, status icon, errors, the pack install prompt.
 
-**Phase 4: files.** Library entries by reference, fetch from source, lazy download, then
-**Upload my own files** with the quota; Custom Effect `.wasm`.
+**Phase 4: files.** Fetch from source on first use, Download all, then Upload my own files with the
+quota.
 
-**Phase 5: optional and large.** MIDI and automation, riffs and looper projects, practice tabs; live
-notify over WebSocket.
-
-**Phase 6: before general release.** Load test the change log, a full-reconcile test after a
-long absence, account deletion removes everything, privacy policy text, a support view of a user's
-sync state.
+**Phase 5: before general release.** Load test, full reconcile after a long absence, delete-all and
+account deletion remove everything, privacy policy text, a support view of a user's sync state.
 
 ## Testing it live
 
-Two throwaway profiles (`APPDATA` pointed at temp folders, see the Tones traps) signed in to a test
-account on preview staging, never the real profile: sign-out and "Use the cloud copy" are
-destructive there. Check: a preset edited on A appears on B; a delete; a conflict produces a copy;
-a plugin with its editor closed picks up a change on opening; a model with a Tone3000 source is
-re-downloaded, a local-only one appears as missing until uploaded; removing B from Devices stops
-it.
+Two throwaway profiles (`APPDATA` pointed at temp folders, see the Tones traps), signed in to a
+test account on preview staging, never the real profile: sign-out and "Use the cloud copy" are
+destructive there. Check: a preset edited on A appears on B with its models; a delete; a conflict
+gives a copy; a pack installed on A is offered on B and a setlist slot pointing at one of its
+presets works on B; an edited pack preset syncs; a plugin with a closed editor picks up a change on
+opening; a local-only model shows as missing until uploaded; removing B from Devices stops it.
+
+## Adding a category later
+
+A category is a list of item types, an adapter if it lives in a document row, and a checkbox.
+**Full resource library** sync is a planned future option: every library entry rather than only
+those presets use, which reuses the same resource items, fetch-from-source path and blob uploads,
+so it is mostly a different selection rule plus quota. Preset folders, favorites and ratings,
+layouts and personal settings are other likely ones; settings
+would need an allow list (`SyncedSettingCategory`) beside `IsAccountSettingKey`, because many keys
+describe the machine (calibration, input mode, window state) and some are credentials.
 
 ## Decisions to make first
 
-**S1. Free storage and limits.** How much upload space each user gets (proposal: JSON content is
-free and effectively unlimited; uploaded files 1 GB, 100 MB per file), and whether a paid tier
-raises it. Riffs and loops are what fill it.
+**S1. Storage.** Upload space per user (proposal: preset JSON free; uploaded files 1 GB, 100 MB per
+file), and whether a paid tier raises it.
 
-**S2. Default categories.** The table above turns on everything small and leaves MIDI, audio and
-tabs off. Confirm, or start with presets and setlists only.
+**S2. Uploading model and IR files.** Offer Upload my own files at all, or sync only references and
+leave files with no public source to the user.
 
-**S3. Conflict policy.** Keep-both copies for user content, newest-wins for small values (above),
-or newest-wins everywhere (simpler, loses edits).
+**S3. Other preset dependencies.** Composites and Custom Effects used by a preset: leave them
+missing in v1 (proposed), or sync them as dependencies too (the `.wasm` needs the module checks on
+arrival).
 
-**S4. End-to-end encryption.** Off in v1 (server can help with support and export; content is not
-very sensitive), or on (no server-side recovery, harder web access later).
+**S4. Preset folders, favorites and ratings.** Left out as asked. Synced presets then arrive at the
+top level of the other device's library (pack presets still go into their pack folder). Confirm, or
+count folders as part of a preset.
 
-**S5. Uploading user model files.** Allow uploads of files with no public source, or sync only
-references and leave such files to the user. Hosting third-party captures privately per user is
-the question.
-
-**S6. Pack-installed presets.** Sync the pack list and reinstall from Tone Sharing (proposed), or
-sync the installed presets as ordinary presets (works for packs that are later unpublished).
-
-**S7. Sign-in on plugin-only installs.** A user who only runs the plugin in a DAW signs in from the
-plugin editor; confirm that's acceptable, since every DAW on the machine then syncs too.
+**S5. Conflict policy.** Keep both copies of a preset or setlist (proposed), or newest wins.
