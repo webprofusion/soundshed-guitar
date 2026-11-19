@@ -479,8 +479,9 @@ follows the list below is the original design; what exists is:
   change.
 - **Icons** are the existing SVGs, rendered with `juce::Drawable`. Phase 0 checks that JUCE's
   SVG subset handles them.
-- **Theme:** `tools/gen-native-theme.mjs` turns `css/variables.css` and
-  `css/themes/{light,dark,classic}.css` into `ThemeTokens.generated.h`, and CI fails on drift.
+- **Theme:** `tools/gen-native-theme.mjs` turns `css/variables.css`, every theme's palette
+  (`core/ui/ts/themes.ts`) and the component tokens into `ThemeTokens.generated.h`, and CI fails
+  on drift.
   The theme choice is the shared `theme` setting.
 - **Font:** static cuts of the web UI's Inter in `core/nativeui/fonts` (JUCE cannot choose a
   variable font's weight), copied beside the app as `resources/ui/fonts`; Nano Q ships the same

@@ -57,6 +57,23 @@ struct ThemeTokens
     std::uint32_t modalText;                 // --modal-text
     std::uint32_t modalTextSecondary;        // --modal-text-secondary
     std::uint32_t modalTextMuted;            // --modal-text-muted
+    std::uint32_t buttonBg;                  // --button-bg
+    std::uint32_t buttonBorder;              // --button-border
+    std::uint32_t effectShellTitleInk;       // --effect-shell-title-ink
+    std::uint32_t effectShellValueInk;       // --effect-shell-value-ink
+    std::uint32_t sgSurface;                 // --sg-surface
+    std::uint32_t sgFret;                    // --sg-fret
+    std::uint32_t sgNut;                     // --sg-nut
+    std::uint32_t sgCapo;                    // --sg-capo
+    std::uint32_t sgOpenSlot;                // --sg-open-slot
+    std::uint32_t sgDotFill;                 // --sg-dot-fill
+    std::uint32_t sgDotEdge;                 // --sg-dot-edge
+    std::uint32_t sgDotText;                 // --sg-dot-text
+    std::uint32_t sgDimFill;                 // --sg-dim-fill
+    std::uint32_t sgDimText;                 // --sg-dim-text
+    std::uint32_t sgBoxLine;                 // --sg-box-line
+    std::uint32_t sgBoxDot;                  // --sg-box-dot
+    std::uint32_t sgBoxText;                 // --sg-box-text
 };
 
 inline constexpr ThemeTokens kLight{
@@ -106,6 +123,23 @@ inline constexpr ThemeTokens kLight{
     0xff12171f, // modalText
     0xff3c434e, // modalTextSecondary
     0xff4f5662, // modalTextMuted
+    0xffeff1f8, // buttonBg
+    0xffb6bdcd, // buttonBorder
+    0xff243044, // effectShellTitleInk
+    0xeb2d3d5a, // effectShellValueInk
+    0x06141822, // sgSurface
+    0xff8a8c92, // sgFret
+    0xfffbf8f0, // sgNut
+    0x8c282a32, // sgCapo
+    0x14141822, // sgOpenSlot
+    0xffffffff, // sgDotFill
+    0xff4a4e57, // sgDotEdge
+    0xff16181d, // sgDotText
+    0xffd4ccbf, // sgDimFill
+    0xff6d6558, // sgDimText
+    0x99282c38, // sgBoxLine
+    0xff22252c, // sgBoxDot
+    0xffffffff, // sgBoxText
 };
 
 inline constexpr ThemeTokens kDark{
@@ -155,6 +189,23 @@ inline constexpr ThemeTokens kDark{
     0xfff0f0f8, // modalText
     0xffd0d0e0, // modalTextSecondary
     0xffb0b0c0, // modalTextMuted
+    0xff3a3a44, // buttonBg
+    0xff4a4a58, // buttonBorder
+    0xffeef2ff, // effectShellTitleInk
+    0xc2e7ecf6, // effectShellValueInk
+    0x06ffffff, // sgSurface
+    0xff8d9097, // sgFret
+    0xffe6e0cf, // sgNut
+    0x6bd6d8e0, // sgCapo
+    0x12ffffff, // sgOpenSlot
+    0xff121720, // sgDotFill
+    0xffc8ccd6, // sgDotEdge
+    0xfff2f3f7, // sgDotText
+    0xff3a3f49, // sgDimFill
+    0xffaab0bc, // sgDimText
+    0x8cdce0ec, // sgBoxLine
+    0xffe6e6ee, // sgBoxDot
+    0xff15151a, // sgBoxText
 };
 
 inline constexpr ThemeTokens kClassic{
@@ -204,27 +255,310 @@ inline constexpr ThemeTokens kClassic{
     0xfff5f1e8, // modalText
     0xffe0dcd2, // modalTextSecondary
     0xffb8ad9f, // modalTextMuted
+    0xff4a403a, // buttonBg
+    0xff6b5f4f, // buttonBorder
+    0xfff5f1e8, // effectShellTitleInk
+    0xc2e7ecf6, // effectShellValueInk
+    0x06ffffff, // sgSurface
+    0xff8d9097, // sgFret
+    0xffe6e0cf, // sgNut
+    0x6bd6d8e0, // sgCapo
+    0x12ffffff, // sgOpenSlot
+    0xff121720, // sgDotFill
+    0xffc8ccd6, // sgDotEdge
+    0xfff2f3f7, // sgDotText
+    0xff3a3f49, // sgDimFill
+    0xffaab0bc, // sgDimText
+    0x8cdce0ec, // sgBoxLine
+    0xffe6e6ee, // sgBoxDot
+    0xff15151a, // sgBoxText
+};
+
+inline constexpr ThemeTokens kStage{
+    0xfff2a73b, // accent
+    0xfff7b95c, // accentHover
+    0xffc9851f, // accentDark
+    0xff68b868, // success
+    0xff6888a8, // info
+    0xffc86868, // error
+    0xffd63031, // warning
+    0xff141414, // bgPrimary
+    0xff1c1c1c, // bgSecondary
+    0xff222222, // bgTertiary
+    0xff282828, // bgSurface
+    0xff2e2e2e, // bgElevated
+    0xff1f1f1f, // bgPanel
+    0xff2a2a2a, // bgCard
+    0xff161616, // bgInput
+    0xff121212, // bgHeader
+    0xff1a1a1a, // bgFooter
+    0xffeeeeee, // textPrimary
+    0xffcfcfcf, // textSecondary
+    0xffaeaeae, // textTertiary
+    0xffa2a2a2, // textMuted
+    0xfff2f2f2, // textOnDark
+    0xff333333, // borderLight
+    0xff2c2c2c, // borderMedium
+    0xff242424, // borderStrong
+    0xff303030, // controlBg
+    0xff151515, // controlKnobBg
+    0xff050505, // controlBorder
+    0xfff2f2f2, // controlIndicator
+    0xfff2a73b, // knobRingStart
+    0xfff2a73b, // knobRingEnd
+    0xff3a3a3a, // knobRingTrack
+    0xff3a3a3a, // toggleBg
+    0x12ffffff, // eqCurveGrid
+    0xf2f2a73b, // eqCurveResponse
+    0xe6ffffff, // eqCurveHandleStroke
+    0x29dcdcdc, // eqCurveSpectrumFillTop
+    0x05dcdcdc, // eqCurveSpectrumFillBottom
+    0x4de6e6e6, // eqCurveSpectrumLine
+    0xff1e1e1e, // modalBg
+    0xff262626, // modalBgRaised
+    0xff3c3c3c, // modalBorder
+    0xff333333, // modalBorderMedium
+    0xfff0f0f0, // modalText
+    0xffd0d0d0, // modalTextSecondary
+    0xffababab, // modalTextMuted
+    0xff303030, // buttonBg
+    0xff424242, // buttonBorder
+    0xfff2f2f2, // effectShellTitleInk
+    0xc2e7ecf6, // effectShellValueInk
+    0x06ffffff, // sgSurface
+    0xff8d9097, // sgFret
+    0xffe6e0cf, // sgNut
+    0x6bd6d8e0, // sgCapo
+    0x12ffffff, // sgOpenSlot
+    0xff121720, // sgDotFill
+    0xffc8ccd6, // sgDotEdge
+    0xfff2f3f7, // sgDotText
+    0xff3a3f49, // sgDimFill
+    0xffaab0bc, // sgDimText
+    0x8cdce0ec, // sgBoxLine
+    0xffe6e6ee, // sgBoxDot
+    0xff15151a, // sgBoxText
+};
+
+inline constexpr ThemeTokens kHighGain{
+    0xffff4a3d, // accent
+    0xffff6a5e, // accentHover
+    0xffc01820, // accentDark
+    0xff68b868, // success
+    0xff6888a8, // info
+    0xffc86868, // error
+    0xffd63031, // warning
+    0xff0f1012, // bgPrimary
+    0xff151619, // bgSecondary
+    0xff1a1b1e, // bgTertiary
+    0xff202124, // bgSurface
+    0xff26272b, // bgElevated
+    0xff18191c, // bgPanel
+    0xff1f2023, // bgCard
+    0xff0c0d0f, // bgInput
+    0xff0d0e10, // bgHeader
+    0xff121315, // bgFooter
+    0xffededef, // textPrimary
+    0xffcacbd0, // textSecondary
+    0xffabacb2, // textTertiary
+    0xff9fa0a7, // textMuted
+    0xfff1f1f3, // textOnDark
+    0xff313236, // borderLight
+    0xff2a2b2f, // borderMedium
+    0xff222326, // borderStrong
+    0xff2a2b2f, // controlBg
+    0xff111214, // controlKnobBg
+    0xff000000, // controlBorder
+    0xfff4f4f4, // controlIndicator
+    0xffb5141b, // knobRingStart
+    0xffff4a3d, // knobRingEnd
+    0xff2c2d31, // knobRingTrack
+    0xff2e2f33, // toggleBg
+    0x0fffffff, // eqCurveGrid
+    0xf2ff4a3d, // eqCurveResponse
+    0xe6ffffff, // eqCurveHandleStroke
+    0x26d7d7dc, // eqCurveSpectrumFillTop
+    0x05d7d7dc, // eqCurveSpectrumFillBottom
+    0x47e1e1e6, // eqCurveSpectrumLine
+    0xff17181b, // modalBg
+    0xff1f2023, // modalBgRaised
+    0xff36373b, // modalBorder
+    0xff2e2f33, // modalBorderMedium
+    0xfff0f0f2, // modalText
+    0xffcfd0d4, // modalTextSecondary
+    0xffa9aab0, // modalTextMuted
+    0xff26272b, // buttonBg
+    0xff0a0a0b, // buttonBorder
+    0xfff4f4f5, // effectShellTitleInk
+    0xc2e7ecf6, // effectShellValueInk
+    0x06ffffff, // sgSurface
+    0xff8d9097, // sgFret
+    0xffe6e0cf, // sgNut
+    0x6bd6d8e0, // sgCapo
+    0x12ffffff, // sgOpenSlot
+    0xff121720, // sgDotFill
+    0xffc8ccd6, // sgDotEdge
+    0xfff2f3f7, // sgDotText
+    0xff3a3f49, // sgDimFill
+    0xffaab0bc, // sgDimText
+    0x8cdce0ec, // sgBoxLine
+    0xffe6e6ee, // sgBoxDot
+    0xff15151a, // sgBoxText
+};
+
+inline constexpr ThemeTokens kStudio{
+    0xffd4501c, // accent
+    0xffe25e28, // accentHover
+    0xffa43b10, // accentDark
+    0xff68b868, // success
+    0xff6888a8, // info
+    0xffc86868, // error
+    0xffd63031, // warning
+    0xffebebe8, // bgPrimary
+    0xffeeeeeb, // bgSecondary
+    0xffe3e3df, // bgTertiary
+    0xfff8f8f6, // bgSurface
+    0xfffbfbfa, // bgElevated
+    0xffe6e6e2, // bgPanel
+    0xfffafaf8, // bgCard
+    0xfffdfdfc, // bgInput
+    0xff3a3a40, // bgHeader
+    0xffeeeeeb, // bgFooter
+    0xff17181a, // textPrimary
+    0xff333539, // textSecondary
+    0xff44474b, // textTertiary
+    0xff52555a, // textMuted
+    0xffe0e0f0, // textOnDark
+    0xffd9d9d4, // borderLight
+    0xffc8c8c3, // borderMedium
+    0xffaaaaa5, // borderStrong
+    0xfff7f7f4, // controlBg
+    0xffecebe8, // controlKnobBg
+    0xffb4b4af, // controlBorder
+    0xff2a2c30, // controlIndicator
+    0xffcf4c1a, // knobRingStart
+    0xffee7a44, // knobRingEnd
+    0x1f1e2024, // knobRingTrack
+    0xffd0d0cb, // toggleBg
+    0x1a17181a, // eqCurveGrid
+    0xf2d4501c, // eqCurveResponse
+    0xcc17181a, // eqCurveHandleStroke
+    0x2e3c3e42, // eqCurveSpectrumFillTop
+    0x053c3e42, // eqCurveSpectrumFillBottom
+    0x5c3c3e42, // eqCurveSpectrumLine
+    0xfff8f8f6, // modalBg
+    0xfffdfdfc, // modalBgRaised
+    0xffd0d0cb, // modalBorder
+    0xffbdbdb8, // modalBorderMedium
+    0xff17181a, // modalText
+    0xff333539, // modalTextSecondary
+    0xff52555a, // modalTextMuted
+    0xfffafaf8, // buttonBg
+    0xffb4b4af, // buttonBorder
+    0xff1d1e21, // effectShellTitleInk
+    0xff333539, // effectShellValueInk
+    0x06141822, // sgSurface
+    0xff8a8c92, // sgFret
+    0xfffbf8f0, // sgNut
+    0x8c282a32, // sgCapo
+    0x14141822, // sgOpenSlot
+    0xffffffff, // sgDotFill
+    0xff4a4e57, // sgDotEdge
+    0xff16181d, // sgDotText
+    0xffd4ccbf, // sgDimFill
+    0xff6d6558, // sgDimText
+    0x99282c38, // sgBoxLine
+    0xff22252c, // sgBoxDot
+    0xffffffff, // sgBoxText
+};
+
+inline constexpr ThemeTokens kStudio2003{
+    0xffa83c16, // accent
+    0xffbd4a1e, // accentHover
+    0xff8a2f10, // accentDark
+    0xff68b868, // success
+    0xff6888a8, // info
+    0xffc86868, // error
+    0xffd63031, // warning
+    0xffc9c8c3, // bgPrimary
+    0xffcdccc7, // bgSecondary
+    0xffbfbdb7, // bgTertiary
+    0xffd6d5d0, // bgSurface
+    0xffdfded9, // bgElevated
+    0xffbcbab4, // bgPanel
+    0xffdad9d4, // bgCard
+    0xffe8e7e2, // bgInput
+    0xff3a3a40, // bgHeader
+    0xffcdccc7, // bgFooter
+    0xff1b1a18, // textPrimary
+    0xff363431, // textSecondary
+    0xff42403b, // textTertiary
+    0xff4a4741, // textMuted
+    0xffe0e0f0, // textOnDark
+    0xffb2b0aa, // borderLight
+    0xffa09e97, // borderMedium
+    0xff8a8881, // borderStrong
+    0xffdfded9, // controlBg
+    0xff2a2a2c, // controlKnobBg
+    0xff18181a, // controlBorder
+    0xfff6f3ea, // controlIndicator
+    0xffb8431a, // knobRingStart
+    0xffee7a2c, // knobRingEnd
+    0x33362e1e, // knobRingTrack
+    0xff3a3833, // toggleBg
+    0x241d1b17, // eqCurveGrid
+    0xf5a83c16, // eqCurveResponse
+    0xd91d1b17, // eqCurveHandleStroke
+    0x38423e36, // eqCurveSpectrumFillTop
+    0x08463e2c, // eqCurveSpectrumFillBottom
+    0x66463e2c, // eqCurveSpectrumLine
+    0xffd1d0cb, // modalBg
+    0xffdad9d4, // modalBgRaised
+    0xffa09e97, // modalBorder
+    0xff8a8881, // modalBorderMedium
+    0xff1b1a18, // modalText
+    0xff363431, // modalTextSecondary
+    0xff4a4741, // modalTextMuted
+    0xffdfded9, // buttonBg
+    0xff8a8881, // buttonBorder
+    0xff2a2824, // effectShellTitleInk
+    0xff363431, // effectShellValueInk
+    0x06141822, // sgSurface
+    0xff8a8c92, // sgFret
+    0xfffbf8f0, // sgNut
+    0x8c282a32, // sgCapo
+    0x14141822, // sgOpenSlot
+    0xffffffff, // sgDotFill
+    0xff4a4e57, // sgDotEdge
+    0xff16181d, // sgDotText
+    0xffd4ccbf, // sgDimFill
+    0xff6d6558, // sgDimText
+    0x99282c38, // sgBoxLine
+    0xff22252c, // sgBoxDot
+    0xffffffff, // sgBoxText
 };
 
 /// A theme of the web UI (core/ui/ts/themes.ts): its stored name, the name pickers show, whether
-/// it is dark, and the palette it draws with.
+/// it is dark, its colours, and the faces its text and its titles are set in.
 struct ThemeInfo
 {
     std::string_view id;
     std::string_view label;
     bool dark;
     const ThemeTokens* tokens;
+    std::string_view uiFont;
+    std::string_view titleFont;
 };
 
 /// Every theme, in the order the pickers list them.
 inline constexpr ThemeInfo kThemes[] = {
-    {"light", "Light", false, &kLight},
-    {"dark", "Dark", true, &kDark},
-    {"classic", "Vintage", true, &kClassic},
-    {"stage", "Stage", true, &kDark},
-    {"high-gain", "High Gain", true, &kDark},
-    {"studio", "Studio", false, &kLight},
-    {"studio-2003", "Studio 2003", false, &kLight},
+    {"light", "Light", false, &kLight, "Inter", "Inter"},
+    {"dark", "Dark", true, &kDark, "Inter", "Inter"},
+    {"classic", "Vintage", true, &kClassic, "Inter", "Inter"},
+    {"stage", "Stage", true, &kStage, "Archivo", "Archivo"},
+    {"high-gain", "High Gain", true, &kHighGain, "Oswald", "Grenze Gotisch"},
+    {"studio", "Studio", false, &kStudio, "Inter", "Inter"},
+    {"studio-2003", "Studio 2003", false, &kStudio2003, "Inter", "Inter"},
 };
 
 /// The theme stored as `name`. A name earlier builds stored is the theme it became; any other is

@@ -5,8 +5,11 @@
   dark, body classes, stylesheets and type faces. Everything below reads it
 - `core/ui/ts/theme-switcher.ts` — puts the chosen theme's classes on the body and stores the choice
 - `core/ui/scripts/assemble-html.js` — writes each theme's stylesheets into `index.html`
-- `tools/gen-native-theme.mjs` → `core/src/uiclient/ThemeTokens.generated.h` — the themes and their
-  colours for the native UI (Nano Q)
+- `tools/gen-native-theme.mjs` → `core/src/uiclient/ThemeTokens.generated.h` — the themes, their
+  colours and type faces for the native UI (Nano Q). `tools/theme-css.mjs` resolves each theme's
+  custom properties as the browser does (the cascade in link order, `:root` values resolved at
+  `:root`, a variant over its base palette, component tokens' fallbacks, `color-mix()`);
+  `npm run check:native-theme` fails when the header is out of date
 - `core/ui/css/variables.css` — Base/default tokens (`:root`) shared by every theme
 - `core/ui/css/themes/<theme>.css` and `<theme>-skin.css` — every theme is two sheets: its
   **palette** (nothing but its colour tokens, on its class; the native UI reads these too) and its
@@ -245,7 +248,8 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
    (see "Choosing a theme").
 
 4. Run `npm run build` and `node tools/gen-native-theme.mjs`. The native UI (Nano Q) then lists
-   the theme and draws it in its palette's colours.
+   the theme and draws it in its own colours (a variant's palette over its base's). Any palette
+   change needs the header regenerated too; `npm run verify` says so.
 
 > Base/default token values live in `css/variables.css` (`:root`). A theme sets component
 > tokens in its palette where it differs; what tokens cannot carry (pictures, gradients,

@@ -3,13 +3,14 @@
  * The web UI's theme colours, for Soundshed Nano Q's native UI.
  *
  * Soundshed Guitar draws its themes from CSS custom properties: the defaults on :root in
- * core/ui/css/variables.css, overridden per palette (light, dark, classic) in
- * core/ui/css/themes/<theme>.css. Nano Q cannot read CSS, so this resolves the tokens it uses
- * for each palette - following var() references, and taking a gradient's first stop - and
- * writes them as ARGB constants to core/src/uiclient/ThemeTokens.generated.h, which
- * Nano Q draws with. It also writes the list of themes there, from core/ui/ts/themes.ts, so
- * the native code knows every theme's name, label and light or dark; a theme built on a
- * palette draws with that palette's colours.
+ * core/ui/css/variables.css, each theme's palette sheet (core/ui/css/themes/<theme>.css, on
+ * top of its base palette for a variant such as Stage), and component tokens that fall back to
+ * their component sheet's base look. Nano Q cannot read CSS, so this resolves the tokens it uses
+ * for every theme as the browser does (tools/theme-css.mjs: the cascade, var() and its
+ * fallbacks, color-mix(), a gradient's first stop) and writes them as ARGB constants to
+ * core/src/uiclient/ThemeTokens.generated.h, which Nano Q draws with. It also writes the list
+ * of themes there, from core/ui/ts/themes.ts: every theme's name, label, light or dark, colours
+ * and type faces.
  * Both products then change colour together, and the theme a user picks in either applies
  * to both (it is the shared "theme" app setting).
  *
@@ -22,11 +23,17 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { linkedSheets, loadThemeCss, parseColour, toArgb } from './theme-css.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CSS = path.join(ROOT, 'core', 'ui', 'css');
+const UI = path.join(ROOT, 'core', 'ui');
 const OUT = path.join(ROOT, 'core', 'src', 'uiclient', 'ThemeTokens.generated.h');
-const { loadThemes } = createRequire(import.meta.url)(path.join(ROOT, 'core', 'ui', 'scripts', 'themes-manifest.js'));
-const MANIFEST = loadThemes();
+const require = createRequire(import.meta.url);
+const MANIFEST = require(path.join(UI, 'scripts', 'themes-manifest.js')).loadThemes();
+const { applyThemeStylesheets } = require(path.join(UI, 'scripts', 'assemble-html.js'));
+const CSS = loadThemeCss(path.join(UI, 'css'), linkedSheets(UI, applyThemeStylesheets), MANIFEST.THEMES);
+/** The face a theme's text is set in when its manifest entry names none (core/ui/css/base.css). */
+const DEFAULT_FONT = 'Inter';
 
 // C++ field -> the CSS custom properties it reads, first one defined wins.
 const TOKENS = [
@@ -76,66 +83,52 @@ const TOKENS = [
   ['modalText', ['--modal-text']],
   ['modalTextSecondary', ['--modal-text-secondary']],
   ['modalTextMuted', ['--modal-text-muted']],
+  // Parts Nano Q draws as the web UI does (component tokens and the parts' own properties).
+  ['buttonBg', ['--button-bg']],
+  ['buttonBorder', ['--button-border']],
+  ['effectShellTitleInk', ['--effect-shell-title-ink']],
+  ['effectShellValueInk', ['--effect-shell-value-ink']],
+  // The Scale Guide's fretboard and diagrams (core/ui/css/scale-guide.css).
+  ['sgSurface', ['--sg-surface']],
+  ['sgFret', ['--sg-fret']],
+  ['sgNut', ['--sg-nut']],
+  ['sgCapo', ['--sg-capo']],
+  ['sgOpenSlot', ['--sg-open-slot']],
+  ['sgDotFill', ['--sg-dot-fill']],
+  ['sgDotEdge', ['--sg-dot-edge']],
+  ['sgDotText', ['--sg-dot-text']],
+  ['sgDimFill', ['--sg-dim-fill']],
+  ['sgDimText', ['--sg-dim-text']],
+  ['sgBoxLine', ['--sg-box-line']],
+  ['sgBoxDot', ['--sg-box-dot']],
+  ['sgBoxText', ['--sg-box-text']],
 ];
+
+for (const [field] of TOKENS) {
+  if (TOKENS.filter(([other]) => other === field).length > 1) throw new Error(`TOKENS lists ${field} twice`);
+}
 
 /** The C++ name of a palette's tokens: kLight for "light". */
 const paletteName = (id) => `k${id.replace(/(^|-)(\w)/g, (_, __, c) => c.toUpperCase())}`;
 
-/** The palettes: the themes that are their own base, each with its sheet and class. */
-const THEMES = MANIFEST.THEMES.filter((theme) => theme.base === theme.id).map((theme) => [
-  paletteName(theme.id),
-  theme.palette,
-  `.${theme.classes[0]}`,
-]);
-
 const cppString = (text) => JSON.stringify(text);
 
-/** The custom properties declared in the first `selector { ... }` block of a stylesheet. */
-function readBlock(file, selector) {
-  const text = fs.readFileSync(path.join(CSS, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-  const start = text.search(new RegExp(`(^|\\n)\\s*${selector.replace('.', '\\.')}\\s*\\{`));
-  if (start < 0) throw new Error(`${file}: no ${selector} block`);
-  const open = text.indexOf('{', start);
-  const close = text.indexOf('}', open);
-  const vars = new Map();
-  for (const m of text.slice(open + 1, close).matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) vars.set(m[1], m[2].trim());
-  return vars;
-}
-
-function resolve(value, vars, depth = 0) {
-  if (depth > 10) throw new Error(`var() loop resolving ${value}`);
-  return value.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)/g, (_, name, fallback) => {
-    if (vars.has(name)) return resolve(vars.get(name), vars, depth + 1);
-    if (fallback) return resolve(fallback.trim(), vars, depth + 1);
-    throw new Error(`undefined ${name}`);
-  });
-}
-
-function toArgb(value) {
-  let v = value.trim();
-  const gradient = v.match(/gradient\([^,]+,\s*(#[0-9a-f]{3,8}|rgba?\([^)]*\))/i);
-  if (gradient) v = gradient[1];
-  const mix = v.match(/color-mix\(in \w+,\s*(#[0-9a-f]{3,8}|rgba?\([^)]*\))/i);
-  if (mix) v = mix[1];
-  let m = v.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (m) {
-    const hex = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
-    return (0xff000000 | parseInt(hex, 16)) >>> 0;
+/** A token's colour under a theme, as 0xAARRGGBB. */
+function tokenArgb(theme, props) {
+  for (const prop of props) {
+    const value = CSS.value(theme.id, prop);
+    if (value === undefined) continue;
+    try {
+      return toArgb(parseColour(value));
+    } catch (err) {
+      throw new Error(`${theme.id}: ${prop}: ${err.message}`);
+    }
   }
-  m = v.match(/^rgba?\(([^)]*)\)$/i);
-  if (m) {
-    const parts = m[1].split(/[\s,/]+/).filter(Boolean);
-    const [r, g, b] = parts.slice(0, 3).map(Number);
-    let a = parts.length > 3 ? parts[3] : '1';
-    a = a.endsWith('%') ? Number(a.slice(0, -1)) / 100 : Number(a);
-    return ((Math.round(a * 255) << 24) | (r << 16) | (g << 8) | b) >>> 0;
-  }
-  throw new Error(`not a colour: ${value}`);
+  throw new Error(`${theme.id}: none of ${props.join(', ')} defined`);
 }
 
 function generate() {
   const declWidth = Math.max(...TOKENS.map(([field]) => `std::uint32_t ${field};`.length));
-  const base = readBlock('variables.css', ':root');
   const lines = [
     '// Generated by tools/gen-native-theme.mjs from core/ui/css and core/ui/ts/themes.ts - do not edit by hand.',
     '// Regenerate with: node tools/gen-native-theme.mjs',
@@ -155,33 +148,31 @@ function generate() {
     '};',
     '',
   ];
-  for (const [name, file, selector] of THEMES) {
-    const vars = new Map([...base, ...readBlock(file, selector)]);
-    const values = TOKENS.map(([field, props]) => {
-      const prop = props.find((p) => vars.has(p));
-      if (!prop) throw new Error(`${name}: none of ${props.join(', ')} defined`);
-      return `0x${toArgb(resolve(vars.get(prop), vars)).toString(16).padStart(8, '0')}`;
-    });
-    lines.push(`inline constexpr ThemeTokens ${name}{`);
+  for (const theme of MANIFEST.THEMES) {
+    const values = TOKENS.map(([, props]) => `0x${tokenArgb(theme, props).toString(16).padStart(8, '0')}`);
+    lines.push(`inline constexpr ThemeTokens ${paletteName(theme.id)}{`);
     TOKENS.forEach(([field], i) => lines.push(`    ${values[i]}, // ${field}`));
     lines.push('};', '');
   }
   lines.push(
     '/// A theme of the web UI (core/ui/ts/themes.ts): its stored name, the name pickers show, whether',
-    '/// it is dark, and the palette it draws with.',
+    '/// it is dark, its colours, and the faces its text and its titles are set in.',
     'struct ThemeInfo',
     '{',
     '    std::string_view id;',
     '    std::string_view label;',
     '    bool dark;',
     '    const ThemeTokens* tokens;',
+    '    std::string_view uiFont;',
+    '    std::string_view titleFont;',
     '};',
     '',
     '/// Every theme, in the order the pickers list them.',
     'inline constexpr ThemeInfo kThemes[] = {',
     ...MANIFEST.THEMES.map(
       (theme) =>
-        `    {${cppString(theme.id)}, ${cppString(theme.label)}, ${theme.scheme === 'dark'}, &${paletteName(theme.base)}},`,
+        `    {${cppString(theme.id)}, ${cppString(theme.label)}, ${theme.scheme === 'dark'}, &${paletteName(theme.id)}, ` +
+        `${cppString(theme.fonts?.ui ?? DEFAULT_FONT)}, ${cppString(theme.fonts?.title ?? theme.fonts?.ui ?? DEFAULT_FONT)}},`,
     ),
     '};',
     '',
