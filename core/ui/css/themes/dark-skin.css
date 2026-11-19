@@ -66,20 +66,6 @@
 /* Dark theme nav bar */
 .theme-dark .icon-bar {
   background: var(--bg-secondary);
-  border-bottom-color: var(--border-dark);
-}
-
-.theme-dark .nav-tab {
-  color: var(--text-muted) !important;
-}
-
-.theme-dark .nav-tab:hover {
-  color: var(--text-secondary) !important;
-}
-
-.theme-dark .nav-tab.active {
-  color: var(--color-accent) !important;
-  border-bottom-color: var(--color-accent) !important;
 }
 
 .theme-dark .nav-settings-btn {

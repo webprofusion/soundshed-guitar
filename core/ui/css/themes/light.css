@@ -135,6 +135,36 @@
     inset 0 2px 5px rgba(37, 44, 61, 0.14),
     inset 0 1px 1px rgba(37, 44, 61, 0.1),
     0 1px 0 rgba(255, 255, 255, 0.7);
+
+  /* Component tokens: read by the component sheets, which fall back to the base look. */
+  --effect-shell-title-ink: #243044;
+  --effect-shell-subtitle-ink: rgba(69, 83, 110, 0.72);
+  --eq-visualizer-bg: var(--panel-inset-bg);
+  --eq-visualizer-border: var(--panel-inset-border);
+  --eq-canvas-bg: var(--bg-tertiary);
+  --toast-bg: var(--bg-card);
+  --toast-ink: var(--text-primary);
+  --toast-border: var(--border-light);
+  --toolbar-btn-bg: var(--bg-elevated);
+  --toolbar-btn-border: var(--border-medium);
+  --add-trigger-border: var(--border-medium);
+  --add-trigger-bg: var(--bg-elevated);
+  --add-trigger-ink: var(--text-primary);
+  --preset-display-bg: var(--bg-input);
+  --preset-display-border: var(--border-medium);
+  --preset-name-ink-hover: var(--text-primary);
+  --preset-status-bg: rgba(0, 0, 0, 0.06);
+  --parallel-bg: rgba(128, 148, 180, 0.04);
+  --parallel-border: color-mix(in srgb, var(--border-light) 70%, transparent);
+  --effect-panel-bg: var(--bg-card);
+  --effect-shell-value-ink: rgba(45, 61, 90, 0.92);
+  --resource-key-bg: color-mix(in srgb, var(--color-accent) 5%, var(--bg-elevated));
+  --param-group-title-ink: var(--text-secondary);
+  --eq-visualizer-header-ink: var(--text-muted);
+  --effect-shell-warning-bg: rgba(255, 247, 232, 0.9);
+  --effect-shell-warning-ink: #463015;
+  --effect-overlay-ink: var(--text-secondary);
+  --effect-placeholder-ink: var(--text-muted);
 }
 
 /* ===== From signal-path.css ===== */

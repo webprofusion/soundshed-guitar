@@ -129,7 +129,7 @@ html:not([data-density="compact"]) #panel-visualizer {
   justify-content: center;
   padding: 24px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--effect-overlay-ink, rgba(255, 255, 255, 0.85));
   transition: opacity 0.2s ease;
   z-index: 1;
 }
@@ -152,7 +152,7 @@ html:not([data-density="compact"]) #panel-visualizer {
 .effect-visualization-placeholder p {
   margin: 0;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--effect-placeholder-ink, rgba(255, 255, 255, 0.7));
 }
 
 /* Amp Knobs Row */

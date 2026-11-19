@@ -143,14 +143,6 @@
   opacity: var(--effect-visual-icon-opacity, 0.05);
 }
 
-.theme-light .effect-visualization-overlay {
-  color: var(--text-secondary);
-}
-
-.theme-light .effect-visualization-placeholder p {
-  color: var(--text-muted);
-}
-
 /* ===== From jam.css ===== */
 .theme-light .jam-search-row input {
   border-color: var(--border-medium);
@@ -224,8 +216,6 @@
 
 /* ===== From navigation.css ===== */
 .theme-light .preset-selector {
-  background: var(--bg-input);
-  border-color: var(--border-medium);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -258,18 +248,11 @@
 }
 
 .theme-light .preset-chooser-label {
-  background: transparent;
   color: var(--text-primary);
   border: none;
 }
 
-.theme-light .preset-chooser-label:hover {
-  color: var(--text-primary);
-  background: transparent;
-}
-
 .theme-light .preset-favorite {
-  background: transparent;
   border: none;
   border-right: 1px solid var(--border-light);
   color: var(--text-secondary);
@@ -281,7 +264,6 @@
 
 .theme-light .preset-selector-status {
   border: none;
-  background: rgba(0, 0, 0, 0.06);
   color: var(--text-muted);
 }
 
@@ -298,9 +280,6 @@
 }
 
 .theme-light .signal-path-add-menu-trigger {
-  border-color: var(--border-medium);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
   box-shadow: 0 2px 8px rgba(17, 19, 24, 0.14);
 }
 
@@ -342,7 +321,6 @@
 
 .theme-light .effect-visualization .node-params-panel {
   border-color: var(--border-light);
-  background: var(--bg-card);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
@@ -352,11 +330,6 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
-.theme-light .default-effect-shell-title {
-  color: #243044;
-}
-
-.theme-light .default-effect-shell-subtitle,
 .theme-light .default-effect-shell .node-param-label,
 .theme-light .default-effect-shell .node-param-group-title,
 .theme-light .default-effect-shell .eq-visualizer-header,
@@ -381,11 +354,18 @@
   border-color: var(--border-light);
 }
 
-.theme-light .resource-picker-label,
 .theme-light .default-effect-shell .resource-picker-label,
 .theme-light .custom-layout-backdrop .resource-picker-label,
 .custom-layout-backdrop.theme-light .resource-picker-label {
   background: color-mix(in srgb, var(--color-accent) 5%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--color-accent) 38%, var(--border-medium));
+  color: var(--text-primary);
+  box-shadow:
+    0 1px 2px rgba(17, 19, 24, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.theme-light .resource-picker-label {
   border-color: color-mix(in srgb, var(--color-accent) 38%, var(--border-medium));
   color: var(--text-primary);
   box-shadow:
@@ -432,9 +412,7 @@
 }
 
 .theme-light .default-effect-shell .plugin-host-load-error {
-  background: rgba(255, 247, 232, 0.9);
   border-color: rgba(180, 83, 9, 0.34);
-  color: #463015;
 }
 
 .theme-light .default-effect-shell-inline-note {
@@ -447,14 +425,11 @@
   color: rgba(78, 55, 23, 0.82);
 }
 
-.theme-light .effect-visualization .node-param-value,
-.theme-light .default-effect-shell .node-param-value {
+.theme-light .effect-visualization .node-param-value {
   color: rgba(45, 61, 90, 0.92);
 }
 
 .theme-light .effect-visualization-toolbar-btn {
-  background: var(--bg-elevated);
-  border-color: var(--border-medium);
   color: var(--text-secondary);
   box-shadow:
     0 1px 2px rgba(17, 19, 24, 0.06),
@@ -510,23 +485,6 @@
   color: rgba(69, 83, 110, 0.72);
 }
 
-.theme-light .node-param-group-title {
-  color: var(--text-secondary);
-}
-
-.theme-light .eq-visualizer {
-  background: var(--panel-inset-bg);
-  border-color: var(--panel-inset-border);
-}
-
-.theme-light .eq-visualizer-header {
-  color: var(--text-muted);
-}
-
-.theme-light .eq-curve-canvas {
-  background: var(--bg-tertiary);
-}
-
 .theme-light .node-param-label {
   color: var(--text-muted);
 }
@@ -534,11 +492,6 @@
 .theme-light .parallel-split,
 .theme-light .parallel-join {
   background: transparent;
-}
-
-.theme-light .parallel-branches {
-  background: rgba(128, 148, 180, 0.04);
-  border-color: color-mix(in srgb, var(--border-light) 70%, transparent);
 }
 
 .theme-light .parallel-branch {
@@ -625,9 +578,6 @@
 
 /* ===== Notification Toast ===== */
 .theme-light .notification-toast {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border-color: var(--border-light);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 

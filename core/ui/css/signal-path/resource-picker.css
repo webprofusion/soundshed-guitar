@@ -13,7 +13,7 @@
   padding: 6px 8px 6px 10px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-accent) 10%, #3a3a4a99);
+  background: var(--resource-key-bg, color-mix(in srgb, var(--color-accent) 10%, #3a3a4a99));
   color: var(--text-dark-primary);
   font: inherit;
   font-size: 12px;

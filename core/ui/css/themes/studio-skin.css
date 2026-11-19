@@ -131,11 +131,6 @@ body.theme-studio .main-content {
   box-shadow: none;
 }
 
-.theme-studio .default-effect-shell-title {
-  color: var(--studio-ink);
-}
-
-.theme-studio .default-effect-shell-subtitle,
 .theme-studio .default-effect-shell .node-param-label,
 .theme-studio .default-effect-shell .node-param-group-title,
 .theme-studio .default-effect-shell .eq-visualizer-header,
@@ -149,8 +144,7 @@ body.theme-studio .main-content {
   color: var(--text-muted);
 }
 
-.theme-studio .effect-visualization .node-param-value,
-.theme-studio .default-effect-shell .node-param-value {
+.theme-studio .effect-visualization .node-param-value {
   color: var(--text-secondary);
 }
 
@@ -179,11 +173,6 @@ body.theme-studio .main-content {
   background: transparent;
   border-bottom-color: rgba(28, 28, 24, 0.12);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
-}
-
-.theme-studio .eq-visualizer,
-.theme-studio .eq-curve-canvas {
-  background: #f1f1ee;
 }
 
 /* ===== Pop-ups, lists and dialogs: the same plastic ===== */
@@ -226,8 +215,6 @@ body.theme-studio .modal-content {
 }
 
 .theme-studio .notification-toast {
-  background: var(--bg-elevated);
-  border-color: var(--border-medium);
   box-shadow: var(--shadow-lg);
 }
 
@@ -235,11 +222,6 @@ body.theme-studio .modal-content {
 .theme-studio .signal-path-add-menu-options button:focus-visible,
 .theme-studio .default-effect-shell .plugin-host-item:hover {
   background: rgba(212, 80, 28, 0.07);
-}
-
-.theme-studio .parallel-branches {
-  background: rgba(28, 28, 24, 0.035);
-  border-color: rgba(28, 28, 24, 0.1);
 }
 
 .theme-studio .parallel-branch {
@@ -368,14 +350,29 @@ body.theme-studio .modal-content {
 .theme-studio .input-vu-meter-dropdown-trigger,
 .theme-studio .gate-settings-trigger,
 .theme-studio .output-quick-mute-btn,
-.theme-studio .output-status-trigger,
-.theme-studio .signal-path-add-menu-trigger {
+.theme-studio .output-status-trigger {
   --studio-key-wall: #cfcfca;
   border: 1px solid rgba(28, 28, 24, 0.16) !important;
   background:
     radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 70%),
     linear-gradient(180deg, #fbfbf9 0%, #f0f0ec 100%) !important;
   color: var(--studio-ink) !important;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 2px rgba(28, 28, 24, 0.04),
+    0 2px 0 var(--studio-key-wall),
+    0 3px 0 rgba(28, 28, 24, 0.16),
+    0 4px 6px rgba(28, 28, 24, 0.1),
+    0 8px 14px -4px rgba(28, 28, 24, 0.14);
+  transition: translate 0.06s ease, box-shadow 0.06s ease;
+}
+
+.theme-studio .signal-path-add-menu-trigger {
+  --studio-key-wall: #cfcfca;
+  border: 1px solid rgba(28, 28, 24, 0.16) !important;
+  background:
+    radial-gradient(140% 90% at 50% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #fbfbf9 0%, #f0f0ec 100%) !important;
   box-shadow:
     inset 0 1px 0 #ffffff,
     inset 0 -2px 2px rgba(28, 28, 24, 0.04),
@@ -505,9 +502,15 @@ html:not([data-density="compact"]) body.theme-studio .preset-selector-row {
   margin-top: 8px;
 }
 
-.theme-studio .preset-chooser-label,
-.theme-studio .preset-chooser-label:hover {
+.theme-studio .preset-chooser-label {
   color: var(--studio-lcd-ink);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  /* Each segment throws a faint shadow on the reflector behind the glass. */
+  text-shadow: 1px 1px 0 rgba(20, 30, 10, 0.2);
+}
+
+.theme-studio .preset-chooser-label:hover {
   font-weight: 700;
   letter-spacing: 0.04em;
   /* Each segment throws a faint shadow on the reflector behind the glass. */
@@ -520,7 +523,6 @@ html:not([data-density="compact"]) body.theme-studio .preset-selector-row {
 }
 
 .theme-studio .preset-selector-status {
-  background: rgba(20, 30, 10, 0.16);
   color: var(--studio-lcd-ink);
 }
 
@@ -567,10 +569,16 @@ body.theme-studio .footer-bar .bpm-display {
     0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-.theme-studio .resource-picker-label,
 .theme-studio .default-effect-shell .resource-picker-label {
   border-color: rgba(28, 28, 24, 0.18);
   background: var(--bg-input);
+  box-shadow:
+    inset 0 1px 2px rgba(28, 28, 24, 0.1),
+    0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.theme-studio .resource-picker-label {
+  border-color: rgba(28, 28, 24, 0.18);
   box-shadow:
     inset 0 1px 2px rgba(28, 28, 24, 0.1),
     0 1px 0 rgba(255, 255, 255, 0.8);

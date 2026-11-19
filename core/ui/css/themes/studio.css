@@ -160,4 +160,19 @@
   --node-shadow: rgb(28 28 24 / 0.2);
 
   --window-border: #a6a6a1;
+
+  /* Component tokens: read by the component sheets, which fall back to the base look. */
+  --effect-shell-title-ink: var(--studio-ink);
+  --effect-shell-subtitle-ink: var(--text-muted);
+  --eq-visualizer-bg: #f1f1ee;
+  --eq-canvas-bg: #f1f1ee;
+  --toast-bg: var(--bg-elevated);
+  --toast-border: var(--border-medium);
+  --add-trigger-ink: var(--studio-ink);
+  --preset-name-ink-hover: var(--studio-lcd-ink);
+  --preset-status-bg: rgba(20, 30, 10, 0.16);
+  --parallel-bg: rgba(28, 28, 24, 0.035);
+  --parallel-border: rgba(28, 28, 24, 0.1);
+  --effect-shell-value-ink: var(--text-secondary);
+  --resource-key-bg: var(--bg-input);
 }

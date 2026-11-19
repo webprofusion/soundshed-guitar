@@ -15,7 +15,7 @@
     calc(20px + var(--ssg-safe-left));
   height: calc(36px + var(--ssg-safe-top));
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-dark);
+  border-bottom: 1px solid var(--icon-bar-rule, var(--border-dark));
   flex-shrink: 0;
 }
 
@@ -60,18 +60,18 @@ html[data-window-chrome="custom"] .app-title {
   font-size: 11px !important;
   font-weight: 700 !important;
   letter-spacing: 0.10em !important;
-  color: var(--text-muted) !important;
+  color: var(--nav-tab-ink, var(--text-muted)) !important;
   transition: color 0.15s ease, border-color 0.15s ease !important;
 }
 
 .nav-tab:hover {
-  color: var(--text-primary) !important;
+  color: var(--nav-tab-ink-hover, var(--text-primary)) !important;
   background: transparent !important;
 }
 
 .nav-tab.active {
-  color: var(--color-accent) !important;
-  border-bottom-color: var(--color-accent) !important;
+  color: var(--nav-tab-active-ink, var(--color-accent)) !important;
+  border-bottom-color: var(--nav-tab-active-line, var(--color-accent)) !important;
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -450,7 +450,6 @@ html[data-window-chrome="custom"] .app-title {
     justify-self: stretch;
   }
 
-
 }
 
 @media (max-width: 980px) {
@@ -463,8 +462,5 @@ html[data-window-chrome="custom"] .app-title {
   .control-bar-controls-panel.is-active {
     flex-wrap: nowrap;
   }
-
-
-
 
 }

@@ -94,3 +94,7 @@ jobs:
 
       - name: Every stylesheet is linked
         run: node scripts/check-stylesheets.js
+
+      # Themes restyle through tokens; literal colours and per-theme rules may only shrink.
+      - name: Theme ratchet
+        run: npm run check:theme-ratchet

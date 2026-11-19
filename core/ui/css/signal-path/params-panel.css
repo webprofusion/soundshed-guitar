@@ -13,7 +13,7 @@
   overflow: visible;
   margin: 0 auto;
   border-radius: 14px;
-  background: rgba(28, 28, 38, 0);
+  background: var(--effect-panel-bg, rgba(28, 28, 38, 0));
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   /* No backdrop-filter: the stage behind is plain, and the peak meter inside
      changes 20+ times a second, so a blur here re-rendered the region every
@@ -112,7 +112,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: normal;
-  color: #eef2ff;
+  color: var(--effect-shell-title-ink, #eef2ff);
 }
 
 .default-effect-shell-subtitle {
@@ -125,7 +125,7 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(198, 206, 225, 0.68);
+  color: var(--effect-shell-subtitle-ink, rgba(198, 206, 225, 0.68));
 }
 
 .default-effect-shell-subtitle-text {
@@ -614,7 +614,7 @@
 }
 
 .default-effect-shell .node-param-value {
-  color: rgba(231, 236, 246, 0.76);
+  color: var(--effect-shell-value-ink, rgba(231, 236, 246, 0.76));
   font-size: 11px;
   font-weight: 600;
 }
@@ -767,8 +767,8 @@
   padding: 9px 11px;
   border: 1px solid rgba(245, 158, 11, 0.42);
   border-radius: var(--radius-lg);
-  background: rgba(38, 28, 15, 0.72);
-  color: rgba(255, 245, 230, 0.92);
+  background: var(--effect-shell-warning-bg, rgba(38, 28, 15, 0.72));
+  color: var(--effect-shell-warning-ink, rgba(255, 245, 230, 0.92));
   overflow: hidden;
 }
 

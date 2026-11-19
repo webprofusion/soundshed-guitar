@@ -1,0 +1,271 @@
+{
+  "advanced-panel.css": {
+    "literals": 2,
+    "themeSelectors": 0
+  },
+  "amp.css": {
+    "literals": 18,
+    "themeSelectors": 0
+  },
+  "audio-device-settings.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "base.css": {
+    "literals": 10,
+    "themeSelectors": 0
+  },
+  "compact/overlays.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "compact/shell.css": {
+    "literals": 2,
+    "themeSelectors": 0
+  },
+  "components.css": {
+    "literals": 2,
+    "themeSelectors": 0
+  },
+  "controls.css": {
+    "literals": 20,
+    "themeSelectors": 0
+  },
+  "custom-background.css": {
+    "literals": 2,
+    "themeSelectors": 1
+  },
+  "dsp-status.css": {
+    "literals": 18,
+    "themeSelectors": 0
+  },
+  "footer.css": {
+    "literals": 2,
+    "themeSelectors": 2
+  },
+  "fx-library.css": {
+    "literals": 3,
+    "themeSelectors": 0
+  },
+  "gate-learn.css": {
+    "literals": 4,
+    "themeSelectors": 0
+  },
+  "gate-settings.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "grain.css": {
+    "literals": 0,
+    "themeSelectors": 3
+  },
+  "input-mode.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "jam.css": {
+    "literals": 54,
+    "themeSelectors": 0
+  },
+  "layout-designer.css": {
+    "literals": 6,
+    "themeSelectors": 0
+  },
+  "layout-image-picker.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "looper.css": {
+    "literals": 8,
+    "themeSelectors": 1
+  },
+  "modals/eq.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "modals/metronome.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "modals/midi-automation.css": {
+    "literals": 10,
+    "themeSelectors": 0
+  },
+  "modals/resource-browser.css": {
+    "literals": 2,
+    "themeSelectors": 0
+  },
+  "modals/save-preset.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "modals/shell.css": {
+    "literals": 17,
+    "themeSelectors": 0
+  },
+  "modals/tuner.css": {
+    "literals": 3,
+    "themeSelectors": 0
+  },
+  "multiband.css": {
+    "literals": 26,
+    "themeSelectors": 2
+  },
+  "navigation.css": {
+    "literals": 5,
+    "themeSelectors": 0
+  },
+  "performance-pads.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "practice-tool-tab.css": {
+    "literals": 11,
+    "themeSelectors": 0
+  },
+  "practice-tool.css": {
+    "literals": 46,
+    "themeSelectors": 1
+  },
+  "preset-library/folder-pack.css": {
+    "literals": 2,
+    "themeSelectors": 0
+  },
+  "preset-library/library.css": {
+    "literals": 8,
+    "themeSelectors": 0
+  },
+  "preset-library/toolbar.css": {
+    "literals": 18,
+    "themeSelectors": 1
+  },
+  "scale-guide.css": {
+    "literals": 52,
+    "themeSelectors": 1
+  },
+  "settings.css": {
+    "literals": 10,
+    "themeSelectors": 0
+  },
+  "signal-path/add-menu.css": {
+    "literals": 4,
+    "themeSelectors": 0
+  },
+  "signal-path/bar.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "signal-path/blend.css": {
+    "literals": 17,
+    "themeSelectors": 3
+  },
+  "signal-path/cards.css": {
+    "literals": 19,
+    "themeSelectors": 0
+  },
+  "signal-path/chain.css": {
+    "literals": 14,
+    "themeSelectors": 0
+  },
+  "signal-path/connections.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "signal-path/custom-layouts.css": {
+    "literals": 10,
+    "themeSelectors": 0
+  },
+  "signal-path/effect-presets.css": {
+    "literals": 19,
+    "themeSelectors": 0
+  },
+  "signal-path/enum-picker.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "signal-path/ir-alignment.css": {
+    "literals": 6,
+    "themeSelectors": 1
+  },
+  "signal-path/ir-slot-list.css": {
+    "literals": 1,
+    "themeSelectors": 0
+  },
+  "signal-path/mixer.css": {
+    "literals": 17,
+    "themeSelectors": 0
+  },
+  "signal-path/nodes.css": {
+    "literals": 52,
+    "themeSelectors": 0
+  },
+  "signal-path/parallel.css": {
+    "literals": 9,
+    "themeSelectors": 0
+  },
+  "signal-path/params-panel.css": {
+    "literals": 91,
+    "themeSelectors": 0
+  },
+  "signal-path/plugin-list.css": {
+    "literals": 21,
+    "themeSelectors": 0
+  },
+  "signal-path/resource-picker.css": {
+    "literals": 1,
+    "themeSelectors": 3
+  },
+  "signal-path/resource-slots.css": {
+    "literals": 40,
+    "themeSelectors": 0
+  },
+  "splash.css": {
+    "literals": 3,
+    "themeSelectors": 0
+  },
+  "theme-flyout.css": {
+    "literals": 1,
+    "themeSelectors": 17
+  },
+  "themes/classic-skin.css": {
+    "skinRules": 105
+  },
+  "themes/dark-skin.css": {
+    "skinRules": 20
+  },
+  "themes/high-gain-skin.css": {
+    "skinRules": 199
+  },
+  "themes/light-skin.css": {
+    "skinRules": 205
+  },
+  "themes/stage-skin.css": {
+    "skinRules": 152
+  },
+  "themes/studio-2003-skin.css": {
+    "skinRules": 170
+  },
+  "themes/studio-skin.css": {
+    "skinRules": 173
+  },
+  "tone-sharing.css": {
+    "literals": 39,
+    "themeSelectors": 0
+  },
+  "tones.css": {
+    "literals": 7,
+    "themeSelectors": 0
+  },
+  "variables.css": {
+    "literals": 158,
+    "themeSelectors": 0
+  },
+  "vu-meter.css": {
+    "literals": 7,
+    "themeSelectors": 0
+  },
+  "waveform.css": {
+    "literals": 30,
+    "themeSelectors": 2
+  }
+}

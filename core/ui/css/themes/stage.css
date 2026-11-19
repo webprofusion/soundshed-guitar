@@ -173,6 +173,26 @@
   --stage-bar: #1b1b1b;
   --stage-bar-raised: #222222;
   --stage-card: rgb(30 30 30 / 0.94);
+
+  /* Component tokens: read by the component sheets, which fall back to the base look. */
+  --nav-tab-ink: #9c9c9c;
+  --nav-tab-ink-hover: #e2e2e2;
+  --nav-tab-active-ink: var(--stage-amber);
+  --nav-tab-active-line: var(--stage-amber);
+  --effect-shell-title-ink: #f2f2f2;
+  --effect-shell-subtitle-ink: #a8a8a8;
+  --eq-visualizer-bg: #141414;
+  --eq-canvas-bg: #141414;
+  --fx-header-bg: var(--modal-bg-raised);
+  --toast-bg: var(--bg-elevated);
+  --toast-border: var(--stage-hairline);
+  --add-trigger-border: #4a4a4a;
+  --add-trigger-bg: #2c2c2c;
+  --preset-display-bg: #121212;
+  --preset-name-ink-hover: #f4f4f4;
+  --parallel-bg: rgba(255, 255, 255, 0.02);
+  --parallel-border: #2e2e2e;
+  --effect-panel-bg: var(--stage-card);
 }
 
 /* ===== The effect panel's own colours, without the dark theme's blue in them ===== */

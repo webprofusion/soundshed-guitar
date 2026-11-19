@@ -85,17 +85,8 @@ body.theme-high-gain .icon-bar {
 }
 
 /* dark.css marks its nav colours !important; these have to as well. */
-.theme-high-gain .nav-tab {
-  color: #a0a1a7 !important;
-}
-
-.theme-high-gain .nav-tab:hover {
-  color: #ececee !important;
-}
 
 .theme-high-gain .nav-tab.active {
-  color: var(--hg-red-hot) !important;
-  border-bottom-color: var(--hg-red) !important;
   text-shadow: 0 0 10px var(--hg-glow);
 }
 
@@ -204,11 +195,6 @@ body.theme-high-gain .signal-path-bar {
   outline-offset: 2px;
 }
 
-.theme-high-gain .parallel-branches {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: #2a2b2f;
-}
-
 /* ===== The play page: the effect in front of the grille ===== */
 /* The valves glow behind the lower half of the grille; the top is taken down further, and
    the edges, so the text round the panel always reads. */
@@ -265,19 +251,10 @@ body.theme-high-gain #panel-visualizer .effect-visualization {
   border-radius: 2px;
 }
 
-.theme-high-gain .default-effect-shell-title {
-  color: #f4f4f5;
-}
-
 .theme-high-gain .default-effect-shell .node-param-tabs,
 .theme-high-gain .node-param-tabs {
   background: transparent;
   border-bottom-color: #2c2d31;
-}
-
-.theme-high-gain .eq-visualizer,
-.theme-high-gain .eq-curve-canvas {
-  background: #0d0e10;
 }
 
 /* ===== Pop-ups, lists and dialogs ===== */
@@ -287,10 +264,16 @@ body.theme-high-gain #panel-visualizer .effect-visualization {
   border-color: var(--hg-hairline);
 }
 
-.theme-high-gain .fx-selector-header,
-.theme-high-gain .fx-flyout-header,
 .theme-high-gain .modal-header {
   background: var(--modal-bg-raised);
+  border-bottom: 1px solid #2c2d31;
+}
+
+.theme-high-gain .fx-flyout-header {
+  border-bottom: 1px solid #2c2d31;
+}
+
+.theme-high-gain .fx-selector-header {
   border-bottom: 1px solid #2c2d31;
 }
 
@@ -306,8 +289,6 @@ body.theme-high-gain #panel-visualizer .effect-visualization {
 }
 
 .theme-high-gain .notification-toast {
-  background: var(--bg-elevated);
-  border-color: var(--hg-hairline);
   box-shadow: var(--shadow-lg);
 }
 
@@ -356,9 +337,16 @@ body.theme-high-gain #panel-visualizer .effect-visualization {
 .theme-high-gain .preset-nav-btn,
 .theme-high-gain .eq-icon-btn,
 .theme-high-gain .default-effect-shell-chip,
-.theme-high-gain .effect-visualization-toolbar-btn,
 .theme-high-gain .resource-nav-btn {
   border-color: #000000;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow:
+    inset 0 1px 0 var(--hg-chrome-edge),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.theme-high-gain .effect-visualization-toolbar-btn {
   border-radius: 3px;
   background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
   box-shadow:
@@ -461,9 +449,14 @@ body.theme-high-gain .footer-bar .bpm-display {
   color: var(--hg-red-hot);
 }
 
-.theme-high-gain .preset-chooser-label,
-.theme-high-gain .preset-chooser-label:hover {
+.theme-high-gain .preset-chooser-label {
   color: var(--hg-red-hot);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
+}
+
+.theme-high-gain .preset-chooser-label:hover {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-shadow: 0 0 8px rgb(255 52 32 / 0.55);
@@ -474,7 +467,6 @@ body.theme-high-gain .footer-bar .bpm-display {
 }
 
 .theme-high-gain .preset-selector-status {
-  background: rgb(255 52 32 / 0.14);
   color: var(--hg-red-hot);
 }
 
@@ -503,7 +495,6 @@ body.theme-high-gain .footer-bar .bpm-display {
   margin-top: 3px;
 }
 
-.theme-high-gain .default-effect-shell-subtitle,
 .theme-high-gain .default-effect-shell .node-resource-selector > label,
 .theme-high-gain .default-effect-shell .node-param-label,
 .theme-high-gain .default-effect-shell .node-param-group-title {
@@ -543,9 +534,13 @@ body.theme-high-gain .footer-bar .bpm-display {
 }
 
 /* The chain's round add keys. */
-.theme-high-gain .signal-add-btn,
-.theme-high-gain .signal-path-add-menu-trigger {
+.theme-high-gain .signal-add-btn {
   border-color: #000000;
+  background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
+  box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
+}
+
+.theme-high-gain .signal-path-add-menu-trigger {
   background: linear-gradient(180deg, #2b2c31 0%, #1c1d20 100%);
   box-shadow: inset 0 1px 0 var(--hg-chrome-edge);
 }
@@ -573,10 +568,16 @@ body.theme-high-gain .footer-bar .bpm-display {
 
 /* The model and IR name: a recessed black field. The base mixes the accent into a blue-grey,
    which turns maroon under red; the red stays for its edge on hover. */
-.theme-high-gain .resource-picker-label,
 .theme-high-gain .default-effect-shell .resource-picker-label {
   border-color: #000000;
   background: var(--bg-input);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.theme-high-gain .resource-picker-label {
+  border-color: #000000;
   box-shadow:
     inset 0 1px 3px rgba(0, 0, 0, 0.8),
     0 1px 0 rgba(255, 255, 255, 0.05);

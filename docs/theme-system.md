@@ -57,8 +57,49 @@ declare only custom properties: its palette. `<theme>-skin.css` holds the rest, 
 after it (`ts/themes.ts` lists both; `index.html` links them in that order). The split matters
 because the palette is all that crosses to the native UI (`tools/gen-native-theme.mjs` reads it)
 and all a new palette-only theme needs; a skin is web-only decoration. `tests/themes.test.ts`
-fails if a palette sheet holds anything else. When a skin rule only sets a colour, prefer a
-token the component reads (with a `:root` default) set in the palette.
+fails if a palette sheet holds anything else. When a skin rule only sets a colour, use a
+component token instead (next section).
+
+## Component tokens
+
+Tokens come in two tiers. The global ones (`--bg-primary`, `--text-primary`,
+`--color-accent`, ...) are defined in `css/variables.css` and every palette. Component tokens
+name one part of one component, and a component sheet reads them with its own base look as the
+fallback, so `:root` never has to define them:
+
+```css
+/* navigation.css */
+.nav-tab { color: var(--nav-tab-ink, var(--text-muted)); }
+
+/* themes/stage.css: only the themes that differ set it */
+.theme-stage { --nav-tab-ink: #9c9c9c; }
+```
+
+A theme that looks like the base sets nothing; a variant inherits its base palette's value. The
+`--node-*` tokens of the signal chain work the same way. Today's component tokens, by sheet:
+
+| Sheet | Tokens |
+|---|---|
+| `navigation.css` | `--nav-tab-ink`, `--nav-tab-ink-hover`, `--nav-tab-active-ink`, `--nav-tab-active-line`, `--icon-bar-rule` |
+| `signal-path/params-panel.css` | `--effect-panel-bg`, `--effect-shell-title-ink`, `--effect-shell-subtitle-ink`, `--effect-shell-value-ink`, `--effect-shell-warning-bg`, `--effect-shell-warning-ink` |
+| `signal-path/resource-slots.css` | `--eq-visualizer-bg`, `--eq-visualizer-border`, `--eq-visualizer-header-ink`, `--eq-canvas-bg`, `--toolbar-btn-bg`, `--toolbar-btn-border`, `--param-group-title-ink` |
+| `preset-library/toolbar.css` | `--preset-display-bg`, `--preset-display-border`, `--preset-name-bg`, `--preset-name-bg-hover`, `--preset-name-ink-hover`, `--preset-favorite-bg`, `--preset-status-bg` |
+| `fx-library.css` | `--fx-panel-bg`, `--fx-header-bg`, `--fx-header-rule` |
+| `signal-path/nodes.css` | `--add-trigger-bg`, `--add-trigger-border`, `--add-trigger-ink` |
+| `signal-path/parallel.css` | `--parallel-bg`, `--parallel-border` |
+| `signal-path/resource-picker.css` | `--resource-key-bg` |
+| `base.css` | `--toast-bg`, `--toast-ink`, `--toast-border` |
+| `amp.css` | `--effect-overlay-ink`, `--effect-placeholder-ink` |
+
+What stays in a skin: pictures, gradients and textures (the studio plates, the high-gain tolex),
+fonts and shapes, and colours a theme sets on a more specific selector than the component's own
+rule (turning those into tokens would change which rule wins elsewhere, so each needs a look).
+
+**The ratchet.** `npm run check:theme-ratchet` (part of `npm run verify` and the UI checks
+workflow) pins three counts per sheet in `scripts/theme-ratchet-baseline.json`, and fails if one
+goes up: colour literals in a component sheet outside a `var(--token, fallback)`, selectors
+naming a `.theme-*` class outside `css/themes/`, and declarations in each skin sheet. When a
+count goes down, re-pin with `npm run check:theme-ratchet -- --update`.
 
 ## Usage
 
@@ -195,7 +236,7 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 
 2. Add an entry to `ts/themes.ts`: its `id`, `label`, the palette it builds on (`base`, itself
    for a new palette), `scheme` (light or dark), its body `classes` (the base's first), its
-   `sheets` in cascade order, and any `fonts`. The pickers, the body classes, the `<link>`s in
+   `palette` and `skin` sheets, and any `fonts`. The pickers, the body classes, the `<link>`s in
    `index.html` (written at the template's `<!--#theme-palettes-->` / `<!--#theme-variants-->`
    markers) and the native theme list all follow from it. A name earlier builds stored goes in
    `LEGACY_THEME_NAMES`.
@@ -206,10 +247,10 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 4. Run `npm run build` and `node tools/gen-native-theme.mjs`. The native UI (Nano Q) then lists
    the theme and draws it in its palette's colours.
 
-> Base/default token values live in `css/variables.css` (`:root`). Theme files
-> also own theme-specific component styling selectors (for example
-> `.theme-classic .footer-*` and per-theme scrollbar/input treatments), so
-> `base.css` stays theme-agnostic.
+> Base/default token values live in `css/variables.css` (`:root`). A theme sets component
+> tokens in its palette where it differs; what tokens cannot carry (pictures, gradients,
+> per-theme scrollbar and input treatments) goes in its skin sheet, so `base.css` stays
+> theme-agnostic.
 
 ## Signal Chain Nodes
 

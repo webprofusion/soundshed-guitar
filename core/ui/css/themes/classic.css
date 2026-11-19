@@ -182,4 +182,27 @@
     inset 0 2px 6px rgba(0, 0, 0, 0.5),
     inset 0 1px 1px rgba(0, 0, 0, 0.4),
     0 1px 0 rgba(255, 236, 200, 0.07);
+
+  /* Component tokens: read by the component sheets, which fall back to the base look. */
+  --nav-tab-ink: rgba(255, 234, 196, 0.6);
+  --nav-tab-ink-hover: rgba(255, 244, 220, 0.9);
+  --effect-shell-title-ink: var(--text-dark-primary);
+  --effect-shell-subtitle-ink: rgba(249, 228, 187, 0.68);
+  --eq-visualizer-bg: #2a1f15;
+  --eq-canvas-bg: rgba(31, 24, 21, 0.9);
+  --fx-panel-bg: #2a1f15;
+  --fx-header-bg: #3d2f25;
+  --fx-header-rule: #5a5048;
+  --preset-display-bg: rgba(61, 47, 37, 0.85);
+  --preset-display-border: #5a5048;
+  --preset-name-bg: #3d2f25;
+  --preset-name-bg-hover: #4a403a;
+  --preset-favorite-bg: rgba(61, 47, 37, 0.9);
+  --preset-status-bg: rgba(61, 47, 37, 0.4);
+  --param-group-title-ink: var(--text-dark-secondary);
+  --eq-visualizer-header-ink: var(--text-dark-muted);
+  --effect-shell-warning-bg: rgba(46, 29, 13, 0.82);
+  --effect-shell-warning-ink: var(--text-dark-primary);
+  --effect-overlay-ink: var(--text-dark-primary);
+  --effect-placeholder-ink: var(--text-dark-tertiary);
 }

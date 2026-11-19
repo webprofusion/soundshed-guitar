@@ -66,10 +66,10 @@ body.signal-path-resizing * {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 2px solid #4a4a58;
+  border: 2px solid var(--add-trigger-border, #4a4a58);
   border-radius: 50%;
-  background: linear-gradient(180deg, #3a3a44 0%, var(--bg-dark-surface) 100%);
-  color: var(--text-secondary);
+  background: var(--add-trigger-bg, linear-gradient(180deg, #3a3a44 0%, var(--bg-dark-surface) 100%));
+  color: var(--add-trigger-ink, var(--text-secondary));
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
   font-size: 16px;
   line-height: 1;

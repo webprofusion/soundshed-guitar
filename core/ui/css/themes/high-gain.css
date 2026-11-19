@@ -181,6 +181,26 @@
   --hg-card: rgb(17 18 20 / 0.95);
   --hg-plate: url("../../images/themes/high-gain/plate.jpg");
   --hg-tolex: url("../../images/themes/high-gain/tolex.jpg");
+
+  /* Component tokens: read by the component sheets, which fall back to the base look. */
+  --nav-tab-ink: #a0a1a7;
+  --nav-tab-ink-hover: #ececee;
+  --nav-tab-active-ink: var(--hg-red-hot);
+  --nav-tab-active-line: var(--hg-red);
+  --effect-shell-title-ink: #f4f4f5;
+  --effect-shell-subtitle-ink: #a9aab0;
+  --eq-visualizer-bg: #0d0e10;
+  --eq-canvas-bg: #0d0e10;
+  --fx-header-bg: var(--modal-bg-raised);
+  --toast-bg: var(--bg-elevated);
+  --toast-border: var(--hg-hairline);
+  --toolbar-btn-border: #000000;
+  --add-trigger-border: #000000;
+  --preset-name-ink-hover: var(--hg-red-hot);
+  --preset-status-bg: rgb(255 52 32 / 0.14);
+  --parallel-bg: rgba(255, 255, 255, 0.02);
+  --parallel-border: #2a2b2f;
+  --resource-key-bg: var(--bg-input);
 }
 
 /* ===== The effect panel's own colours, without the dark theme's blue in them ===== */
