@@ -1,60 +1,46 @@
 /**
  * Theme Switcher
- * Manages switching between the light, dark, vintage, stage, high gain and the two studio themes
+ * Puts the chosen theme's classes on <body> and stores the choice. The themes themselves are
+ * listed in ./themes.ts.
  */
 
-export type ThemeName = 'light' | 'dark' | 'classic' | 'stage' | 'high-gain' | 'studio' | 'studio-2003';
+import { DEFAULT_THEME, LEGACY_THEME_NAMES, THEMES, type ThemeName } from './themes.js';
+
+export type { ThemeName } from './themes.js';
 
 /** Every theme, in the order the pickers list them, with the name each one shows. */
-export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'classic', label: 'Vintage' },
-  { value: 'stage', label: 'Stage' },
-  { value: 'high-gain', label: 'High Gain' },
-  { value: 'studio', label: 'Studio' },
-  { value: 'studio-2003', label: 'Studio 2003' },
-];
+export const THEME_OPTIONS: ReadonlyArray<{ value: ThemeName; label: string }> = THEMES.map((theme) => ({
+  value: theme.id,
+  label: theme.label,
+}));
 
-const THEME_LIST: ThemeName[] = THEME_OPTIONS.map((option) => option.value);
-const LEGACY_THEME_MAP: Record<string, ThemeName> = {
-  default: 'dark',
-  gritty: 'dark',
-};
+const THEME_LIST: ThemeName[] = THEMES.map((theme) => theme.id);
 
 /**
- * The body classes a theme switches on. The two studio themes are the light theme drawn as
- * hardware: each keeps `theme-light`, so the light rules across the stylesheets still apply,
- * and adds its own class for its stylesheets to build on (css/themes/studio.css, a clean
- * current unit; css/themes/studio-2003.css, a used one). Stage is the same on the dark side:
- * it keeps `theme-dark` and adds `theme-stage` (css/themes/stage.css), and so does High Gain,
- * the dark theme drawn as a high-gain amp head (css/themes/high-gain.css).
+ * The body classes a theme switches on. A theme built on another keeps that one's class (Stage and
+ * High Gain keep `theme-dark`, the studio themes `theme-light`), so its rules still apply, and adds
+ * its own for its stylesheets to build on.
  */
-const THEME_BODY_CLASSES: Record<ThemeName, string[]> = {
-  light: ['theme-light'],
-  dark: ['theme-dark'],
-  classic: ['theme-classic'],
-  stage: ['theme-dark', 'theme-stage'],
-  'high-gain': ['theme-dark', 'theme-high-gain'],
-  studio: ['theme-light', 'theme-studio'],
-  'studio-2003': ['theme-light', 'theme-studio-2003'],
-};
+const THEME_BODY_CLASSES = Object.fromEntries(THEMES.map((theme) => [theme.id, [...theme.classes]])) as Record<
+  ThemeName,
+  string[]
+>;
 
 const ALL_THEME_BODY_CLASSES = [...new Set(Object.values(THEME_BODY_CLASSES).flat())];
 
 /** A stored or received theme name as one this build knows; anything else is dark. */
 export function normalizeThemeName(theme: unknown): ThemeName {
   if (typeof theme !== 'string') {
-    return 'dark';
+    return DEFAULT_THEME;
   }
   if (THEME_LIST.includes(theme as ThemeName)) {
     return theme as ThemeName;
   }
-  return LEGACY_THEME_MAP[theme] ?? 'dark';
+  return LEGACY_THEME_NAMES[theme] ?? DEFAULT_THEME;
 }
 
 export class ThemeSwitcher {
-  private currentTheme: ThemeName = 'dark';
+  private currentTheme: ThemeName = DEFAULT_THEME;
   private body: HTMLElement;
 
   constructor() {

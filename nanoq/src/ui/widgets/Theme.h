@@ -10,26 +10,28 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 
 namespace nanoq::ui
 {
 namespace el = cycfi::elements;
 
-/// The active theme's colours. "light", "dark" or "classic"; anything else is dark, as the
-/// web UI normalises it.
+/// The active theme's colours. Any theme the web UI lists (core/ui/ts/themes.ts); an unknown
+/// name is dark, as the web UI normalises it.
 class Theme
 {
   public:
     void Set(const std::string& name);
 
-    [[nodiscard]] const std::string& Name() const noexcept
+    [[nodiscard]] std::string_view Name() const noexcept
     {
-        return mName;
+        return mInfo->id;
     }
 
+    /// The light themes: Light and the two Studio themes.
     [[nodiscard]] bool IsLight() const noexcept
     {
-        return mName == "light";
+        return !mInfo->dark;
     }
 
     [[nodiscard]] static el::color Argb(std::uint32_t value) noexcept
@@ -255,11 +257,10 @@ class Theme
 
     [[nodiscard]] const Tokens& T() const noexcept
     {
-        return *mTokens;
+        return *mInfo->tokens;
     }
 
-    std::string mName = "dark";
-    const Tokens* mTokens = &guitarfx::uiclient::theme::kDark;
+    const guitarfx::uiclient::theme::ThemeInfo* mInfo = &guitarfx::uiclient::theme::FindTheme("dark");
 };
 
 /// Text weights Nano draws in: Inter's static cuts.

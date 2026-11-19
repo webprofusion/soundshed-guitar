@@ -374,21 +374,17 @@ Ptr Shell::BuildScenes()
 std::shared_ptr<IconButton> Shell::BuildThemeButton()
 {
     auto themeButton = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    const std::string themeName = mState.theme == "light" ? "Light" : mState.theme == "classic" ? "Classic" : "Dark";
+    const std::string themeName(guitarfx::uiclient::theme::FindTheme(mState.theme).label);
     themeButton->Size(84, 28).Label(themeName, 11.0f).Caret(true);
     themeButton->onClick = [this, t = themeButton.get()] {
         std::vector<MenuItem> items;
 
-        // A plain array and no structured binding: MSVC 19.52 rejects the braced range and the
-        // binding's capture here.
-        static const std::pair<const char*, const char*> kChoices[] = {
-            {"dark", "Dark"}, {"light", "Light"}, {"classic", "Classic"}};
-
-        for (const auto& choice : kChoices)
+        // Every theme the web UI lists, in its order.
+        for (const auto& theme : guitarfx::uiclient::theme::kThemes)
         {
-            const std::string id = choice.first;
+            const std::string id(theme.id);
             items.push_back(
-                {choice.second, mState.theme == id, false, [this, id] { mSession.Commands().SetTheme(id); }});
+                {std::string(theme.label), mState.theme == id, false, [this, id] { mSession.Commands().SetTheme(id); }});
         }
 
         OpenDropdown(t->Bounds(), std::move(items), 150.0f);

@@ -23,14 +23,21 @@
  * template's <!--#modulepreloads--> marker becomes a <link rel="modulepreload">
  * for every module dist/main.js reaches through static imports. Run it after tsc,
  * as `npm run build` does; with no dist/main.js the marker is left empty.
+ *
+ * And the themes' stylesheets, from ts/themes.ts: <!--#theme-palettes--> becomes the
+ * sheets of the themes that are their own palette, <!--#theme-variants--> those of
+ * the themes built on one, each theme's in its own order.
  */
 
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { loadThemes } = require('./themes-manifest.js');
 
 const CSP_HASHES_PLACEHOLDER = '{{CSP_INLINE_SCRIPT_HASHES}}';
 const MODULE_PRELOADS_MARKER = '<!--#modulepreloads-->';
+const THEME_PALETTES_MARKER = '<!--#theme-palettes-->';
+const THEME_VARIANTS_MARKER = '<!--#theme-variants-->';
 
 const ROOT = __dirname.replace(/[\\/]scripts$/, '');
 const COMPONENTS_DIR = path.join(ROOT, 'ui-components');
@@ -162,11 +169,32 @@ function applyModulePreloads(html, modules = collectModuleGraph()) {
   return html.replace(MODULE_PRELOADS_MARKER, () => links);
 }
 
+/**
+ * The stylesheet hrefs (relative to the UI root) of the themes in ts/themes.ts: the palettes',
+ * which load first, and the variants', which load after them and after whatever the template
+ * puts between the two markers.
+ */
+function themeStylesheets(themes = loadThemes().THEMES) {
+  const hrefs = (list) => list.flatMap((theme) => theme.sheets.map((sheet) => `css/${sheet}`));
+  return {
+    palettes: hrefs(themes.filter((theme) => theme.base === theme.id)),
+    variants: hrefs(themes.filter((theme) => theme.base !== theme.id)),
+  };
+}
+
+/** Replaces the template's theme markers with a <link> per theme stylesheet. */
+function applyThemeStylesheets(html, sheets = themeStylesheets()) {
+  const links = (hrefs) => hrefs.map((href) => `<link rel="stylesheet" href="${href}" />`).join('\n  ');
+  return html
+    .replace(THEME_PALETTES_MARKER, () => links(sheets.palettes))
+    .replace(THEME_VARIANTS_MARKER, () => links(sheets.variants));
+}
+
 /** The finished index.html text, from the template. */
 function assembleHtml() {
   const inputPath = findTemplate();
   const template = fs.readFileSync(inputPath, 'utf8');
-  return { inputPath, template, html: applyCspScriptHashes(applyModulePreloads(processIncludes(template))) };
+  return { inputPath, template, html: applyCspScriptHashes(applyModulePreloads(applyThemeStylesheets(processIncludes(template)))) };
 }
 
 function main() {
@@ -182,11 +210,15 @@ module.exports = {
   assembleHtml,
   applyCspScriptHashes,
   applyModulePreloads,
+  applyThemeStylesheets,
+  themeStylesheets,
   collectModuleGraph,
   inlineScriptHash,
   staticImportSpecifiers,
   CSP_HASHES_PLACEHOLDER,
   MODULE_PRELOADS_MARKER,
+  THEME_PALETTES_MARKER,
+  THEME_VARIANTS_MARKER,
 };
 
 if (require.main === module) {

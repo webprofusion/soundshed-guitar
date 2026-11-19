@@ -1,7 +1,12 @@
 # Theme System
 
 ## Key Files
-- `core/ui/ts/theme-switcher.ts` — Core theme management logic
+- `core/ui/ts/themes.ts` — **the list of themes**: each one's name, label, base palette, light or
+  dark, body classes, stylesheets and type faces. Everything below reads it
+- `core/ui/ts/theme-switcher.ts` — puts the chosen theme's classes on the body and stores the choice
+- `core/ui/scripts/assemble-html.js` — writes each theme's stylesheets into `index.html`
+- `tools/gen-native-theme.mjs` → `core/src/uiclient/ThemeTokens.generated.h` — the themes and their
+  colours for the native UI (Nano Q)
 - `core/ui/css/variables.css` — Base/default tokens (`:root`) shared by every theme
 - `core/ui/css/themes/light.css` — `.theme-light` token overrides
 - `core/ui/css/themes/dark.css` — `.theme-dark` token overrides (primary theme)
@@ -39,7 +44,7 @@ GuitarFX uses a CSS variable-based theme system with seven active themes (light,
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, all moulded plastic, chunky 3D keys, soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, a worn steel case, brushed rails and screws |
 
-Legacy persisted values (`default`, `gritty`) are normalized to `dark` in `theme-switcher.ts` for backward compatibility.
+Legacy persisted values (`default`, `gritty`) are normalized to `dark` (`LEGACY_THEME_NAMES` in `themes.ts`), in the web UI and the native one alike.
 
 ## Usage
 
@@ -163,7 +168,8 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 
 ## Adding a New Theme
 
-1. Create `css/themes/yourtheme.css` with the theme's token overrides:
+1. Create `css/themes/yourtheme.css` with the theme's token overrides (for a variant, the
+   overrides on top of its base palette, under its own class):
    ```css
    .theme-yourtheme {
      --color-accent: #your-accent;
@@ -173,19 +179,18 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
    }
    ```
 
-2. Link it in `index.template.html` alongside the other `css/themes/*.css` files.
+2. Add an entry to `ts/themes.ts`: its `id`, `label`, the palette it builds on (`base`, itself
+   for a new palette), `scheme` (light or dark), its body `classes` (the base's first), its
+   `sheets` in cascade order, and any `fonts`. The pickers, the body classes, the `<link>`s in
+   `index.html` (written at the template's `<!--#theme-palettes-->` / `<!--#theme-variants-->`
+   markers) and the native theme list all follow from it. A name earlier builds stored goes in
+   `LEGACY_THEME_NAMES`.
 
-3. Update `theme-switcher.ts`:
-   - add the theme to `ThemeName`, to `THEME_OPTIONS` (which fills the theme pickers and the
-     cycle order) and to `THEME_BODY_CLASSES`
-   - remove/adjust any relevant legacy mapping in `LEGACY_THEME_MAP`
-   - capture its flyout picture: `node tools/theme-thumbnails/capture.mjs <ws>` redoes them all
-     (see "Choosing a theme")
+3. Capture its flyout picture: `node tools/theme-thumbnails/capture.mjs <ws>` redoes them all
+   (see "Choosing a theme").
 
-4. The native UI (`core/src/uiclient`, Nano Q) has its own palettes and shows dark for a name it
-   does not know. If the new theme is a variant of one it has, map it there (`NormalizeTheme`
-   in `UiClientPresetHandlers.cpp` and the `theme` handler in `UiClientLibraryHandlers.cpp`),
-   as both studio themes map to light. Stage and High Gain need no mapping: the native UI shows them as dark.
+4. Run `npm run build` and `node tools/gen-native-theme.mjs`. The native UI (Nano Q) then lists
+   the theme and draws it in its palette's colours.
 
 > Base/default token values live in `css/variables.css` (`:root`). Theme files
 > also own theme-specific component styling selectors (for example

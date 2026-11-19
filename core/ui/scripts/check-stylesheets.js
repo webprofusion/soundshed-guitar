@@ -6,13 +6,16 @@
  * index.template.html, and CSS is not part of the CMake dependency glob. So a
  * new file that nobody links fails *silently* — the app builds, boots, and
  * renders one panel unstyled. This catches that, and the reverse: a <link>
- * pointing at a file that no longer exists.
+ * pointing at a file that no longer exists. The themes' sheets are not <link>s in the
+ * template but entries in ts/themes.ts, which the HTML assembler writes in; they count
+ * as linked too.
  *
  *   node scripts/check-stylesheets.js
  */
 
 const fs = require('fs');
 const path = require('path');
+const { themeStylesheets } = require('./assemble-html.js');
 
 const ROOT = __dirname.replace(/[\\/]scripts$/, '');
 const CSS_DIR = path.join(ROOT, 'css');
@@ -36,6 +39,8 @@ function linkedStylesheets() {
   const re = /<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["']|<link\b[^>]*href=["']([^"']+)["'][^>]*rel=["']stylesheet["']/gi;
   let match;
   while ((match = re.exec(html))) hrefs.add(match[1] ?? match[2]);
+  const themes = themeStylesheets();
+  for (const href of [...themes.palettes, ...themes.variants]) hrefs.add(href);
   return hrefs;
 }
 

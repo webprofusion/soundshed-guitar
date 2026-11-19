@@ -189,20 +189,12 @@
   <link rel="stylesheet" href="css/scale-guide-listen.css" />
   <link rel="stylesheet" href="css/scale-guide-arpeggio.css" />
   <link rel="stylesheet" href="css/waveform.css" />
-  <link rel="stylesheet" href="css/themes/light.css" />
-  <link rel="stylesheet" href="css/themes/dark.css" />
-  <link rel="stylesheet" href="css/themes/classic.css" />
+  <!-- The themes' stylesheets, written in from ts/themes.ts by scripts/assemble-html.js:
+       first the palettes (light, dark, vintage), then grain.css, then the themes built on a
+       palette (the body carries both classes), which replace grain.css's texture. -->
+  <!--#theme-palettes-->
   <link rel="stylesheet" href="css/grain.css" />
-  <!-- The studio themes build on the light theme (the body carries both classes), so they
-       load after light.css, and after grain.css, whose texture they replace with their own. -->
-  <link rel="stylesheet" href="css/themes/studio.css" />
-  <link rel="stylesheet" href="css/themes/studio-controls.css" />
-  <link rel="stylesheet" href="css/themes/studio-2003.css" />
-  <link rel="stylesheet" href="css/themes/studio-2003-controls.css" />
-  <!-- Stage builds on the dark theme the same way, and also replaces grain.css's texture. -->
-  <link rel="stylesheet" href="css/themes/stage.css" />
-  <!-- High Gain too: the dark theme as a high-gain amp head. -->
-  <link rel="stylesheet" href="css/themes/high-gain.css" />
+  <!--#theme-variants-->
   <!-- The player's own effect-panel background replaces any theme's backdrop, so it
        comes after them all (ts/visualizerBackground.ts). -->
   <link rel="stylesheet" href="css/custom-background.css" />

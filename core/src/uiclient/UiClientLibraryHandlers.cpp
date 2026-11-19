@@ -6,6 +6,7 @@
 #include "uiclient/UiClient.h"
 #include "uiclient/ResourceThumbnails.h"
 #include "uiclient/UiClientParsing.h"
+#include "uiclient/ThemeTokens.generated.h"
 
 #include "presets/PresetTypesJson.h"
 
@@ -227,10 +228,7 @@ void UiClient::RegisterLibraryHandlers()
     });
 
     On("theme", [this](const nlohmann::json& m) {
-        const auto theme = m.value("theme", "dark");
-        // The web UI's studio themes are its light theme drawn as hardware; here they are light.
-        const bool studio = theme == "studio" || theme == "studio-2003";
-        mState.theme = theme == "light" || theme == "classic" ? theme : (studio ? "light" : "dark");
+        mState.theme = std::string(theme::FindTheme(m.value("theme", "dark")).id);
         Notify(Topic::Session);
     });
 

@@ -23,9 +23,7 @@ el::color Mix(el::color a, el::color b, float t)
 
 void Theme::Set(const std::string& name)
 {
-    using namespace guitarfx::uiclient::theme;
-    mName = name == "light" || name == "classic" ? name : std::string("dark");
-    mTokens = mName == "light" ? &kLight : (mName == "classic" ? &kClassic : &kDark);
+    mInfo = &guitarfx::uiclient::theme::FindTheme(name);
 }
 
 el::color Theme::AccentFill() const noexcept

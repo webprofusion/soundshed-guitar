@@ -4,6 +4,7 @@
 
 #include "uiclient/Automation.h"
 #include "uiclient/Riffs.h"
+#include "uiclient/ThemeTokens.generated.h"
 #include "uiclient/UiClient.h"
 #include "uiclient/UiClientParsing.h"
 
@@ -17,21 +18,11 @@ namespace guitarfx::uiclient
 {
 namespace
 {
+/// A stored theme name as one this build knows (core/ui/ts/themes.ts), as theme-switcher.ts
+/// normalises it: an earlier build's name becomes the theme it is now, anything else dark.
 std::string NormalizeTheme(const std::string& theme)
 {
-    // Legacy persisted values, normalised as theme-switcher.ts does.
-    if (theme == "light" || theme == "classic")
-    {
-        return theme;
-    }
-
-    // The web UI's studio themes are its light theme drawn as hardware; here they are light.
-    if (theme == "studio" || theme == "studio-2003")
-    {
-        return "light";
-    }
-
-    return "dark";
+    return std::string(theme::FindTheme(theme).id);
 }
 } // namespace
 
