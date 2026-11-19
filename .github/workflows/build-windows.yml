@@ -107,9 +107,31 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: core/ui/package-lock.json
 
-      - name: Install Typescript
-        run: npm install -g typescript
+      - name: Resolve build paths
+        id: build_paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $simd = switch ('${{ matrix.avx }}') { 'noavx' { 'sse2' } 'avx' { 'avx' } default { 'avx2' } }
+          $buildDir = "juce/Builds-${{ matrix.arch }}-$simd"
+
+          if ('${{ matrix.arch }}' -eq 'x64' -and $simd -eq 'avx2') {
+            $buildDir = 'juce/Builds'
+          }
+
+          "build_dir=$buildDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "artefacts_dir=$buildDir/SoundshedGuitar_artefacts/Release" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Cache CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.build_paths.outputs.build_dir }}/_deps
+          key: windows-deps-${{ runner.os }}-${{ matrix.arch }}-${{ matrix.avx }}-${{ hashFiles('juce/CMakeLists.txt', 'core/CMakeLists.txt', 'core/cmake/**', 'juce/cmake/**') }}
+          restore-keys: |
+            windows-deps-${{ runner.os }}-${{ matrix.arch }}-${{ matrix.avx }}-
 
       - name: Build Windows installer
         shell: pwsh
@@ -131,7 +153,7 @@ jobs:
         # The validate-arm64ec job below loads the arm64 leg's ARM64EC plugins.
         if: ${{ matrix.arch == 'x64' }}
         shell: pwsh
-        run: node tools/validate-plugins.mjs --config Release
+        run: node tools/validate-plugins.mjs --config Release --artefacts '${{ steps.build_paths.outputs.artefacts_dir }}'
 
       - name: Upload ARM64EC plugins for validation
         if: ${{ matrix.arch == 'arm64' }}

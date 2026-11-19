@@ -3,6 +3,17 @@
 #define ProductName GetEnv('PRODUCT_NAME')
 #define Publisher GetEnv('COMPANY_NAME')
 #define TargetArch GetEnv('GUITARFX_WINDOWS_ARCH')
+#define BuildDir GetEnv('GUITARFX_WINDOWS_BUILD_DIR')
+#define Arm64EcBuildDir GetEnv('GUITARFX_WINDOWS_ARM64EC_BUILD_DIR')
+#if BuildDir == ""
+  #define BuildDir "..\Builds"
+#endif
+#if Arm64EcBuildDir == ""
+  #define Arm64EcBuildDir "..\builds-arm64ec"
+#endif
+#define ArtefactsDir BuildDir + "\" + ProjectName + "_artefacts\Release"
+#define Arm64EcArtefactsDir Arm64EcBuildDir + "\" + ProjectName + "_artefacts\Release"
+#define UiStageDir BuildDir + "\ui-stage"
 ; build_windows.bat exports the resolved architecture; keep x64 as a fallback for standalone packaging outside that script.
 #if TargetArch == ""
   #define TargetArch "x64"
@@ -38,7 +49,7 @@ ArchitecturesAllowed=x64compatible
 #endif
 AppName={#ProductName}
 OutputBaseFilename={#ProductName}-{#Version}-Windows
-SetupIconFile="..\Builds\{#ProjectName}_artefacts\JuceLibraryCode\icon.ico"
+SetupIconFile="{#BuildDir}\{#ProjectName}_artefacts\JuceLibraryCode\icon.ico"
 UninstallDisplayIcon="{code:GetStandaloneExePath}"
 AppCopyright=Copyright (C) {#Year} {#Publisher}
 AppPublisher={#Publisher}
@@ -71,17 +82,17 @@ Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: 
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
-Source: "..\Builds\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\*"; DestDir: "{code:GetVst3Dir}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
-Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; Flags: ignoreversion; Components: clap
-Source: "..\Builds\{#ProjectName}_artefacts\Release\CLAP\resources\*"; DestDir: "{code:GetClapResourcesDir}"; Excludes: node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: clap
-Source: "..\Builds\{#ProjectName}_artefacts\Release\Standalone\*"; DestDir: "{code:GetStandaloneDir}"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: standalone
+Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\*"; DestDir: "{code:GetVst3Dir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "{#ArtefactsDir}\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; Flags: ignoreversion; Components: clap
+Source: "{#ArtefactsDir}\Standalone\*"; DestDir: "{code:GetStandaloneDir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: standalone
+Source: "{#UiStageDir}\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui"; Excludes: assets\amps\*,*\assets\amps\*,assets\ir\*,*\assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone or vst3 or clap
 #if TargetArch == "ARM64"
 ; The ARM64EC plugins, beside the native ARM64 ones above. A host loads the one built for its own
 ; kind of process: REAPER's Windows ARM build is ARM64EC and cannot load an ARM64 plugin, and a
 ; native ARM64 host cannot load an ARM64EC one. A VST3 bundle has a folder per architecture. A CLAP
 ; is one file, so there are two, sharing the resources folder; each host skips the one it cannot load.
-Source: "..\builds-arm64ec\{#ProjectName}_artefacts\Release\VST3\{#ProductName}.vst3\Contents\arm64ec-win\*"; DestDir: "{code:GetVst3Dir}\Contents\arm64ec-win"; Excludes: *.ilk,node_modules\*,*\node_modules\*,ts\*,*\ts\*,Testing\*,*\Testing\*,tests\*,*\tests\*,assets\amps\*,assets\ir\*; Flags: ignoreversion recursesubdirs; Components: vst3
-Source: "..\builds-arm64ec\{#ProjectName}_artefacts\Release\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; DestName: "{#ProductName} (ARM64EC).clap"; Flags: ignoreversion; Components: clap
+Source: "{#Arm64EcArtefactsDir}\VST3\{#ProductName}.vst3\Contents\arm64ec-win\*"; DestDir: "{code:GetVst3Dir}\Contents\arm64ec-win"; Excludes: *.ilk; Flags: ignoreversion recursesubdirs; Components: vst3
+Source: "{#Arm64EcArtefactsDir}\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; DestName: "{#ProductName} (ARM64EC).clap"; Flags: ignoreversion; Components: clap
 #endif
 
 

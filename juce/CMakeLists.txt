@@ -579,32 +579,59 @@ endif()
 # into the Standalone artefact directory after every build.
 set(_UI_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../core/ui")
 
-# ── Build TypeScript UI bundle before copying resources ──────────────────
-# Runs "npm run build" in core/ui so dist/ is always fresh.
-find_program(_NPM_EXECUTABLE npm)
-if(_NPM_EXECUTABLE)
-    add_custom_target(SoundshedBuildTypeScript
-        COMMAND "${_NPM_EXECUTABLE}" run build
-        WORKING_DIRECTORY "${_UI_SRC_DIR}"
-        COMMENT "Building TypeScript UI bundle (core/ui)"
-    )
-else()
-    message(WARNING "npm not found – TypeScript UI bundle will not be rebuilt automatically")
-endif()
-
 # The parts of core/ui the iOS app ships (the same list as android/app/build.gradle.kts).
 set(GUITARFX_IOS_UI_DIRS dist css images data assets metronome ui-components presets demo)
+
+# Desktop Windows builds stage the runtime UI once, then each plugin target copies
+# that clean tree into its local artifact. Development-only node_modules, TypeScript,
+# and tests never enter the staging directory.
+if(WIN32)
+    set(_UI_STAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/ui-stage")
+    set(_UI_STAGE_STAMP "${CMAKE_CURRENT_BINARY_DIR}/ui-stage.stamp")
+    set(_UI_STAGE_COMMANDS)
+
+    foreach(_dir IN LISTS GUITARFX_IOS_UI_DIRS)
+        list(APPEND _UI_STAGE_COMMANDS
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${_UI_SRC_DIR}/${_dir}" "${_UI_STAGE_DIR}/${_dir}")
+        file(GLOB_RECURSE _UI_STAGE_INPUTS_${_dir} CONFIGURE_DEPENDS
+            LIST_DIRECTORIES false
+            "${_UI_SRC_DIR}/${_dir}/*")
+        list(APPEND _UI_STAGE_INPUTS ${_UI_STAGE_INPUTS_${_dir}})
+    endforeach()
+
+    list(APPEND _UI_STAGE_INPUTS
+        "${_UI_SRC_DIR}/index.html"
+        "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js")
+    add_custom_command(
+        OUTPUT "${_UI_STAGE_STAMP}"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${_UI_STAGE_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_UI_STAGE_DIR}"
+        ${_UI_STAGE_COMMANDS}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_UI_SRC_DIR}/index.html" "${_UI_STAGE_DIR}/index.html"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js" "${_UI_STAGE_DIR}/build-flags.js"
+        COMMAND ${CMAKE_COMMAND}
+            -DUI_STAGE_DIR=${_UI_STAGE_DIR}
+            -DUI_STAGE_STAMP=${_UI_STAGE_STAMP}
+            -P "${CMAKE_CURRENT_LIST_DIR}/cmake/WriteUiStageStamp.cmake"
+        DEPENDS
+            ${_UI_STAGE_INPUTS}
+            "${CMAKE_CURRENT_LIST_DIR}/cmake/WriteUiStageStamp.cmake"
+            "${CMAKE_CURRENT_LIST_DIR}/cmake/SyncUiResources.cmake"
+        COMMENT "Staging runtime UI resources"
+        VERBATIM)
+    add_custom_target(SoundshedStageUiResources DEPENDS "${_UI_STAGE_STAMP}")
+
+    if(TARGET SoundshedGuitarCoreUiBuild)
+        add_dependencies(SoundshedStageUiResources SoundshedGuitarCoreUiBuild)
+    endif()
+endif()
 
 # Helper: create a post-build step that copies the runtime UI bundle for a
 # given JUCE format target.
 function(soundshed_copy_ui_resources FORMAT_TARGET)
     if(NOT TARGET ${FORMAT_TARGET})
         return()
-    endif()
-
-    # Ensure TypeScript is compiled before this target links
-    if(TARGET SoundshedBuildTypeScript)
-        add_dependencies(${FORMAT_TARGET} SoundshedBuildTypeScript)
     endif()
 
     if(IOS)
@@ -634,6 +661,16 @@ function(soundshed_copy_ui_resources FORMAT_TARGET)
             ${_copy_commands}
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_UI_SRC_DIR}/index.html" "${_dst_base}/index.html"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_GUITARFX_GENERATED_UI_DIR}/build-flags.js" "${_dst_base}/build-flags.js"
+        )
+    elseif(WIN32)
+        add_dependencies(${FORMAT_TARGET} SoundshedStageUiResources)
+        add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD
+            COMMENT "Checking staged UI resources for ${FORMAT_TARGET}"
+            COMMAND ${CMAKE_COMMAND}
+                -DUI_STAGE_DIR=${_UI_STAGE_DIR}
+                -DUI_DESTINATION_DIR=${_dst_base}
+                -DUI_STAGE_STAMP=${_UI_STAGE_STAMP}
+                -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/cmake/SyncUiResources.cmake"
         )
     else()
         add_custom_command(TARGET ${FORMAT_TARGET} POST_BUILD

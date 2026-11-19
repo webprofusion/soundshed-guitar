@@ -2,27 +2,27 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 :: ---------------------------------------------------------------------------
-:: Full release build: JUCE Standalone + VST3, then installer
+:: Full release build: JUCE Standalone + VST3 + CLAP, then installer
 :: Run from the workspace root.
-:: Usage: build_windows.bat [x86|x64|arm64] [--simd=avx2|avx|sse2]
+:: Usage: build_windows.bat [x86|x64|arm64] [--simd=avx2|avx|sse2] [--refresh-deps]
 ::   --simd=avx2  (default) /arch:AVX2 - Intel Haswell 2013+, AMD Excavator 2015+
 ::   --simd=avx   /arch:AVX  - Intel Sandy Bridge / AMD Bulldozer 2011+; keeps
 ::                every 256-bit kernel in core/src/dsp/simd/SimdMath.h
 ::   --simd=sse2  no /arch: flag - CPUs with no AVX at all
 ::   --no-avx2 is an alias for --simd=avx, --no-avx an alias for --simd=sse2
+::   --refresh-deps forces npm ci; otherwise an unchanged lockfile reuses node_modules
 ::
-:: arm64 builds the plugins twice: native ARM64 in juce\Builds with the Standalone,
-:: and ARM64EC in juce\builds-arm64ec. An ARM64EC host (REAPER's Windows ARM build
-:: is one) cannot load a native ARM64 plugin, nor a native ARM64 host an ARM64EC
-:: one, so the installer ships both.
+:: arm64 builds the plugins twice: native ARM64 in a variant-specific build
+:: directory with the Standalone, and ARM64EC in juce\builds-arm64ec. An ARM64EC
+:: host (REAPER's Windows ARM build is one) cannot load a native ARM64 plugin,
+:: nor a native ARM64 host an ARM64EC one, so the installer ships both.
 :: ---------------------------------------------------------------------------
 
 set "WORKSPACE_ROOT=%~dp0"
-set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\Builds"
-set "JUCE_BUILDS_ARM64EC=%WORKSPACE_ROOT%juce\builds-arm64ec"
 set "INSTALLER_SCRIPT=%WORKSPACE_ROOT%juce\packaging\build-installer.bat"
 set "UI_DIR=%WORKSPACE_ROOT%core\ui"
 set "CORE_SIMD_LEVEL=avx2"
+set "REFRESH_DEPS="
 
 :parse_args
 if "%~1"=="" goto :args_done
@@ -34,6 +34,11 @@ if /I "%~1"=="--no-avx" (
 )
 if /I "%~1"=="--no-avx2" (
     set "CORE_SIMD_LEVEL=avx"
+    shift
+    goto :parse_args
+)
+if /I "%~1"=="--refresh-deps" (
+    set "REFRESH_DEPS=1"
     shift
     goto :parse_args
 )
@@ -51,7 +56,7 @@ if not defined ARCH_INPUT (
     goto :parse_args
 )
 echo ERROR: Too many arguments.
-echo Usage: %~nx0 [x86^|x64^|arm64] [--simd=avx2^|avx^|sse2]
+echo Usage: %~nx0 [x86^|x64^|arm64] [--simd=avx2^|avx^|sse2] [--refresh-deps]
 exit /b 1
 
 :args_done
@@ -99,8 +104,17 @@ if not defined ARCH (
     echo ERROR: Unsupported Windows architecture "%ARCH_INPUT%". Expected one of: x86, x64, arm64.
     exit /b 1
 )
+
+:: Keep the existing default directory for tools that expect juce\Builds.
+:: Other architecture/SIMD combinations get independent trees so switching
+:: variants does not invalidate and recompile a previously built configuration.
+set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\Builds-%ARCH_LABEL%-%CORE_SIMD_LEVEL%"
+if /I "%ARCH_LABEL%"=="x64" if /I "%CORE_SIMD_LEVEL%"=="avx2" set "JUCE_BUILDS=%WORKSPACE_ROOT%juce\Builds"
+set "JUCE_BUILDS_ARM64EC=%WORKSPACE_ROOT%juce\builds-arm64ec"
 :: Export the resolved platform for Inno Setup architecture/install path selection.
 set "GUITARFX_WINDOWS_ARCH=%ARCH%"
+set "GUITARFX_WINDOWS_BUILD_DIR=%JUCE_BUILDS%"
+set "GUITARFX_WINDOWS_ARM64EC_BUILD_DIR=%JUCE_BUILDS_ARM64EC%"
 if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
     set "CMAKE_GENERATOR=%GUITARFX_WINDOWS_CMAKE_GENERATOR%"
 ) else (
@@ -109,7 +123,7 @@ if defined GUITARFX_WINDOWS_CMAKE_GENERATOR (
 
 for /f %%I in ('powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"') do set "BUILD_START_MS=%%I"
 
-echo [0/5] Configuring CMake...
+echo [0/4] Configuring CMake...
 echo       Generator: %CMAKE_GENERATOR%
 echo       Architecture: %ARCH_LABEL% ^(CMake platform: %ARCH%^)
 echo       SIMD baseline: %CORE_SIMD_LEVEL%
@@ -124,71 +138,56 @@ echo CMake configure succeeded.
 echo.
 
 :: --- Build UI ---------------------------------------------------------------
-echo [1/5] Building UI ^(npm ci ^&^& npm run build^)...
+echo [1/4] Preparing UI dependencies...
 pushd "%UI_DIR%"
-call npm ci
-if !ERRORLEVEL! neq 0 (
-    echo ERROR: npm ci failed.
-    popd
-    goto :fail
+set "NPM_LOCK_HASH="
+for /f "skip=1 tokens=1" %%H in ('certutil -hashfile package-lock.json SHA256 2^>nul') do (
+    if not defined NPM_LOCK_HASH set "NPM_LOCK_HASH=%%H"
 )
-call npm run build
-if !ERRORLEVEL! neq 0 (
-    echo ERROR: UI build failed.
-    popd
-    goto :fail
+
+set "NPM_LOCK_MARKER=node_modules\.soundshed-package-lock.sha256"
+set "CACHED_NPM_LOCK_HASH="
+if not defined REFRESH_DEPS if exist "!NPM_LOCK_MARKER!" (
+    set /p "CACHED_NPM_LOCK_HASH="<"!NPM_LOCK_MARKER!"
+)
+
+if not defined REFRESH_DEPS if defined NPM_LOCK_HASH if "!NPM_LOCK_HASH!"=="!CACHED_NPM_LOCK_HASH!" (
+    echo UI dependencies are unchanged; skipping npm ci.
+) else (
+    call npm ci
+    if !ERRORLEVEL! neq 0 (
+        echo ERROR: npm ci failed.
+        popd
+        goto :fail
+    )
+    >"!NPM_LOCK_MARKER!" echo(!NPM_LOCK_HASH!
 )
 popd
-echo UI build succeeded.
+echo UI dependencies are ready. CMake will build the bundle once from its stamp dependency.
 echo.
 
-:: --- Build Standalone -------------------------------------------------------
-echo [2/5] Building Standalone (Release)...
-cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_Standalone --parallel
+:: --- Build desktop formats --------------------------------------------------
+echo [2/4] Building Standalone, VST3 and CLAP (Release)...
+cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_Standalone SoundshedGuitar_VST3 SoundshedGuitar_CLAP --parallel
 if !ERRORLEVEL! neq 0 (
-    echo ERROR: Standalone build failed.
+    echo ERROR: Desktop format build failed.
     goto :fail
 )
-echo Standalone build succeeded.
-echo.
-
-:: --- Build VST3 -------------------------------------------------------------
-echo [3/5] Building VST3 (Release)...
-cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_VST3 --parallel
-if !ERRORLEVEL! neq 0 (
-    echo ERROR: VST3 build failed.
-    goto :fail
-)
-echo VST3 build succeeded.
-echo.
-
-:: --- Build CLAP -------------------------------------------------------------
-echo [4/5] Building CLAP (Release)...
-cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_CLAP --parallel
-if !ERRORLEVEL! neq 0 (
-    echo ERROR: CLAP build failed.
-    goto :fail
-)
-echo CLAP build succeeded.
+echo Desktop format builds succeeded.
 echo.
 
 :: --- Build the ARM64EC plugins (arm64 only) ---------------------------------
 if /I not "%ARCH%"=="ARM64" goto :arm64ec_done
 
-echo [4b/5] Configuring and building the ARM64EC plugins (Release)...
+echo [3/4] Configuring and building the ARM64EC plugins (Release)...
 cmake -G "%CMAKE_GENERATOR%" -A ARM64EC -S juce -B "%JUCE_BUILDS_ARM64EC%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: ARM64EC CMake configure failed.
     goto :fail
 )
-cmake --build "%JUCE_BUILDS_ARM64EC%" --config Release --target SoundshedGuitar_VST3 --parallel
+cmake --build "%JUCE_BUILDS_ARM64EC%" --config Release --target SoundshedGuitar_VST3 SoundshedGuitar_CLAP --parallel
 if !ERRORLEVEL! neq 0 (
-    echo ERROR: ARM64EC VST3 build failed.
-    goto :fail
-)
-cmake --build "%JUCE_BUILDS_ARM64EC%" --config Release --target SoundshedGuitar_CLAP --parallel
-if !ERRORLEVEL! neq 0 (
-    echo ERROR: ARM64EC CLAP build failed.
+    echo ERROR: ARM64EC plugin build failed.
     goto :fail
 )
 echo ARM64EC plugin builds succeeded.
@@ -197,7 +196,7 @@ echo.
 :arm64ec_done
 
 :: --- Build Installer --------------------------------------------------------
-echo [5/5] Building installer...
+echo [4/4] Building installer...
 call "%INSTALLER_SCRIPT%"
 if !ERRORLEVEL! neq 0 (
     echo ERROR: Installer build failed.

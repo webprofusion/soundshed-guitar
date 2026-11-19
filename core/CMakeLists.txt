@@ -963,7 +963,7 @@ if(GUITARFX_CORE_BUILD_WEB_UI AND NPM_EXECUTABLE)
         "${GUITARFX_CORE_ROOT}/ui/tsconfig.json"
         "${GUITARFX_CORE_ROOT}/ui/package.json"
         "${GUITARFX_CORE_ROOT}/ui/scripts/*.js"
-        "${GUITARFX_CORE_ROOT}/ui/index*.html"
+        "${GUITARFX_CORE_ROOT}/ui/index.template.html"
         "${GUITARFX_CORE_ROOT}/ui/ui-components/**/*")
     set(_UI_STAMP "${CMAKE_CURRENT_BINARY_DIR}/ui_build.stamp")
 

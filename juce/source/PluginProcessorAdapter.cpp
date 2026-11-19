@@ -1639,6 +1639,18 @@ std::filesystem::path PluginProcessorAdapter::locateAssetsRoot() const
         candidates.push_back(exeDir / "Resources");
     }
 
+#if JUCE_WINDOWS
+    const auto commonDataDir = juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
+                                   .getChildFile(PRODUCT_NAME_WITHOUT_VERSION);
+    const auto sharedResources = soundshed::toStdPath(commonDataDir.getChildFile("resources"));
+
+    if (!sharedResources.empty())
+    {
+        candidates.push_back(sharedResources);
+    }
+
+#endif
+
     return guitarfx::ui::ResolveResourceRoot(candidates);
 }
 

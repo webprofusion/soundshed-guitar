@@ -29,6 +29,16 @@ If `JUCE/` is still missing (some clones do not have gitlink entries for the sub
  
 Build release
  
+`build_windows.bat` is the complete Windows release entry point. It configures CMake,
+reuses installed npm dependencies when `package-lock.json` is unchanged, builds the
+TypeScript UI from CMake's stamp dependency once, builds all requested plugin formats
+together, and then packages the installer. Pass `--refresh-deps` to force `npm ci`.
+
+The standard x64/AVX2 build uses `juce\Builds` so existing development and validation
+tools keep working. Other SIMD baselines and architectures use separate directories
+such as `juce\Builds-x64-avx`, `juce\Builds-x64-sse2`, and `juce\Builds-arm64-avx2`.
+This prevents switching variants from invalidating the previous build tree.
+
 `cmake --build juce/builds-x64 --config Release --target SoundshedGuitar_Standalone --parallel`
 `cmake --build juce/builds-arm64 --config Release --target SoundshedGuitar_Standalone --parallel`
 `cmake --build juce/builds-arm64ec --config Release --target SoundshedGuitar_Standalone --parallel`
@@ -39,4 +49,9 @@ Build release
 
  Find exe output in 
  `builds-x64\SoundshedGuitar_artefacts\Release`
+
+The Windows installer packages one runtime-only UI/resource tree under
+`%ProgramData%\Soundshed Guitar\resources`. Standalone, VST3 and CLAP all resolve this
+shared tree after checking their executable-local development layout. Build artifacts
+still carry a clean local copy for plugin validation.
 
