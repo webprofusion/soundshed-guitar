@@ -18,7 +18,7 @@ const THEME_LIST: ThemeName[] = THEMES.map((theme) => theme.id);
 
 /**
  * The body classes a theme switches on. A theme built on another keeps that one's class (Stage and
- * High Gain keep `theme-dark`, the studio themes `theme-light`), so its rules still apply, and adds
+ * Eleven keep `theme-dark`, the studio themes `theme-light`), so its rules still apply, and adds
  * its own for its stylesheets to build on.
  */
 const THEME_BODY_CLASSES = Object.fromEntries(THEMES.map((theme) => [theme.id, [...theme.classes]])) as Record<

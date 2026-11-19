@@ -7,6 +7,7 @@
 // (folders, setlists, ratings), answered with the new state.
 
 #include "ui/shell/Shell.h"
+#include "ui/widgets/ControlSkin.h"
 #include "uiclient/FeatureFlags.h"
 
 #include "uiclient/PresetBrowse.h"
@@ -547,6 +548,7 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
         return Col({FixedHeight(48, PadXY(0, 4, Row(toolbar))), body});
     }
 
-    return Fill(mTheme.Background(), Pad(16, 8, 16, 8, Col({tabs, FixedHeight(48, PadXY(0, 4, Row(toolbar))), body})));
+    return Dressed(mTheme, mTheme.Background(), &Backdrops::main,
+                   Pad(16, 8, 16, 8, Col({tabs, FixedHeight(48, PadXY(0, 4, Row(toolbar))), body})));
 }
 } // namespace nanoq::ui

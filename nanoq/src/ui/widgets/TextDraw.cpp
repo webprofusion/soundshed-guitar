@@ -13,6 +13,10 @@ namespace artist = cycfi::artist;
 
 std::string Ellipsize(artist::canvas& cnv, const std::string& text, const el::font_descr& font, float width)
 {
+    // A box sized to the text's own width comes back from layout as right - left, which can
+    // round below the measured width (7.758 becomes 7.7579994), so a hair over still fits.
+    width += 0.01f;
+
     if (text.empty() || el::measure_text(cnv, text, font).x <= width)
     {
         return text;

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace nanoq::ui
 {
@@ -93,9 +94,168 @@ void InsetLine(canvas& cnv, el::rect r, float radius, float dy, el::color colour
     cnv.fill_style(colour);
     cnv.fill();
 }
-} // namespace
 
-void DrawControlBox(canvas& cnv, el::rect r, const ControlBox& box, float scale, float radius)
+constexpr float kPi = 3.14159265358979f;
+
+// A length along an axis `extent` long: pixels, per cent of it, or -1 for auto.
+float LengthOf(float value, int unit, float extent)
+{
+    return unit == 0 ? value : unit == 1 ? value * 0.01f * extent : -1.0f;
+}
+
+// A stop's place along a gradient `length` long, 0 to 1.
+float StopAt(const guitarfx::uiclient::theme::BackdropStop& stop, float length)
+{
+    return std::clamp(stop.px ? (length > 0.0f ? stop.at / length : 0.0f) : stop.at, 0.0f, 1.0f);
+}
+
+void DrawPicture(canvas& cnv, const Theme& theme, el::rect r, const BackdropLayer& layer)
+{
+    const auto image = theme.Picture(layer.image);
+
+    if (!image)
+    {
+        return;
+    }
+
+    const auto natural = image->size();
+
+    if (natural.x <= 0.0f || natural.y <= 0.0f)
+    {
+        return;
+    }
+
+    const float boxW = r.width(), boxH = r.height();
+    float w = 0.0f, h = 0.0f;
+
+    if (layer.sizeMode == 1 || layer.sizeMode == 2)
+    {
+        const float sx = boxW / natural.x, sy = boxH / natural.y;
+        const float s = layer.sizeMode == 1 ? std::max(sx, sy) : std::min(sx, sy);
+        w = natural.x * s;
+        h = natural.y * s;
+    }
+    else
+    {
+        w = LengthOf(layer.width, layer.widthUnit, boxW);
+        h = LengthOf(layer.height, layer.heightUnit, boxH);
+
+        if (w < 0.0f && h < 0.0f)
+        {
+            w = natural.x;
+            h = natural.y;
+        }
+        else if (w < 0.0f)
+        {
+            w = h * natural.x / natural.y;
+        }
+        else if (h < 0.0f)
+        {
+            h = w * natural.y / natural.x;
+        }
+    }
+
+    if (w < 0.5f || h < 0.5f)
+    {
+        return;
+    }
+
+    const float x0 = r.left + layer.placeX * (boxW - w) + layer.offsetX;
+    const float y0 = r.top + layer.placeY * (boxH - h) + layer.offsetY;
+
+    // Tiles only where they can be seen: the box, within what is being redrawn.
+    const auto seen = artist::intersection(r, cnv.clip_extent());
+
+    if (seen.width() <= 0.0f || seen.height() <= 0.0f)
+    {
+        return;
+    }
+
+    const float firstX = layer.repeatX ? x0 - std::ceil((x0 - seen.left) / w) * w : x0;
+    const float firstY = layer.repeatY ? y0 - std::ceil((y0 - seen.top) / h) * h : y0;
+    const float lastX = layer.repeatX ? seen.right : x0 + 0.5f * w;
+    const float lastY = layer.repeatY ? seen.bottom : y0 + 0.5f * h;
+
+    for (float y = firstY; y < lastY; y += h)
+    {
+        for (float x = firstX; x < lastX; x += w)
+        {
+            cnv.draw(*image, el::rect{x, y, x + w, y + h});
+        }
+    }
+}
+
+void DrawLinear(canvas& cnv, el::rect r, const BackdropLayer& layer)
+{
+    // CSS's gradient line: through the centre at the angle (0 up, 90 right, 180 down), as long
+    // as the box's corners reach along it.
+    const float a = layer.angle * kPi / 180.0f;
+    const float dx = std::sin(a), dy = -std::cos(a);
+    const float length = std::abs(r.width() * dx) + std::abs(r.height() * dy);
+    const auto c = artist::center_point(r);
+    canvas::linear_gradient fill{el::point{c.x - dx * length * 0.5f, c.y - dy * length * 0.5f},
+                                 el::point{c.x + dx * length * 0.5f, c.y + dy * length * 0.5f}};
+
+    for (int i = 0; i < layer.stopCount; ++i)
+    {
+        fill.add_color_stop(StopAt(layer.stops[i], length), Argb(layer.stops[i].colour));
+    }
+
+    cnv.fill_style(fill);
+    cnv.fill_rect(r);
+}
+
+void DrawRadial(canvas& cnv, el::rect r, const BackdropLayer& layer)
+{
+    // An ellipse: the gradient drawn round a unit circle, stretched to the radii.
+    const float cx = r.left + layer.placeX * r.width() + layer.offsetX;
+    const float cy = r.top + layer.placeY * r.height() + layer.offsetY;
+    const float rx = LengthOf(layer.width, layer.widthUnit, r.width());
+    const float ry = LengthOf(layer.height, layer.heightUnit, r.height());
+
+    if (rx <= 0.0f || ry <= 0.0f)
+    {
+        return;
+    }
+
+    auto state = cnv.new_state();
+    cnv.translate(cx, cy);
+    cnv.scale(rx, ry);
+    canvas::radial_gradient fill{el::point{0.0f, 0.0f}, 0.0f, el::point{0.0f, 0.0f}, 1.0f};
+
+    for (int i = 0; i < layer.stopCount; ++i)
+    {
+        fill.add_color_stop(StopAt(layer.stops[i], rx), Argb(layer.stops[i].colour));
+    }
+
+    cnv.fill_style(fill);
+    cnv.fill_rect(el::rect{(r.left - cx) / rx, (r.top - cy) / ry, (r.right - cx) / rx, (r.bottom - cy) / ry});
+}
+
+void DrawLayers(canvas& cnv, const Theme& theme, el::rect r, const SurfaceBackdrop& backdrop)
+{
+    // CSS lists the topmost layer first.
+    for (int i = backdrop.count - 1; i >= 0; --i)
+    {
+        const auto& layer = backdrop.layers[i];
+
+        if (layer.kind == 0)
+        {
+            DrawPicture(cnv, theme, r, layer);
+        }
+        else if (layer.kind == 1)
+        {
+            DrawLinear(cnv, r, layer);
+        }
+        else if (layer.kind == 2)
+        {
+            DrawRadial(cnv, r, layer);
+        }
+    }
+}
+
+void DrawBox(canvas& cnv, el::rect r, const ControlBox& box, float scale, float radius,
+             const std::function<void(float)>& fillWith)
 {
     const float rad = radius >= 0.0f ? radius : box.radius * scale;
     const float ring = box.ring * scale;
@@ -118,7 +278,11 @@ void DrawControlBox(canvas& cnv, el::rect r, const ControlBox& box, float scale,
         cnv.fill();
     }
 
-    if (Visible(box.fillTop) || Visible(box.fillBottom))
+    if (fillWith)
+    {
+        fillWith(rad);
+    }
+    else if (Visible(box.fillTop) || Visible(box.fillBottom))
     {
         auto state = cnv.new_state();
 
@@ -159,11 +323,58 @@ void DrawControlBox(canvas& cnv, el::rect r, const ControlBox& box, float scale,
         cnv.stroke();
     }
 }
+} // namespace
+
+void DrawControlBox(canvas& cnv, el::rect r, const ControlBox& box, float scale, float radius)
+{
+    DrawBox(cnv, r, box, scale, radius, {});
+}
+
+void DrawControlBox(canvas& cnv, const Theme& theme, el::rect r, const ControlBox& box, const SurfaceBackdrop& fill,
+                    float scale, float radius)
+{
+    if (fill.count == 0)
+    {
+        DrawBox(cnv, r, box, scale, radius, {});
+        return;
+    }
+
+    DrawBox(cnv, r, box, scale, radius, [&](float rad) { DrawBackdrop(cnv, theme, r, fill, true, rad); });
+}
+
+void DrawBackdrop(canvas& cnv, const Theme& theme, el::rect r, const SurfaceBackdrop& backdrop, bool withColour,
+                  float radius)
+{
+    if (backdrop.count == 0 && !(withColour && Visible(backdrop.colour)))
+    {
+        return;
+    }
+
+    auto state = cnv.new_state();
+    cnv.begin_path();
+    AddShape(cnv, r, radius);
+    cnv.clip();
+
+    if (withColour && Visible(backdrop.colour))
+    {
+        cnv.fill_style(Argb(backdrop.colour));
+        cnv.fill_rect(r);
+    }
+
+    DrawLayers(cnv, theme, r, backdrop);
+}
+
+void BackdropBox::draw(const el::context& ctx)
+{
+    auto& cnv = ctx.canvas;
+    cnv.fill_style(mColour);
+    cnv.fill_rect(ctx.bounds);
+    DrawBackdrop(cnv, mTheme, ctx.bounds, mTheme.Controls().backdrops.*mWhich, false);
+}
 
 el::font_descr ControlFont(const ControlText& text, float size)
 {
-    const auto weight = text.weight >= 600 ? Weight::SemiBold : text.weight >= 500 ? Weight::Medium : Weight::Regular;
-    return Font(weight).size(size > 0.0f ? size : text.size);
+    return FaceFor(text.family, text.weight).size(size > 0.0f ? size : text.size);
 }
 
 namespace
@@ -293,7 +504,6 @@ void DrawControlText(canvas& cnv, std::string text, const ControlText& skin, el:
 namespace
 {
 // A 270 degree sweep, open at the bottom: 7 o'clock round to 5 o'clock.
-constexpr float kPi = 3.14159265f;
 constexpr float kKnobStart = kPi * 0.75f;
 constexpr float kKnobSweep = kPi * 1.5f;
 } // namespace

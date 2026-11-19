@@ -1,6 +1,6 @@
 /**
  * The player's own picture behind the play page's effect panel (#panel-visualizer), drawn in place
- * of whatever the theme puts there (Stage's stage, High Gain's grille, the plain panel colour of
+ * of whatever the theme puts there (Stage's stage, Eleven's grille, the plain panel colour of
  * the others) under every theme.
  *
  * The engine keeps the picture (controller/UiBackgroundService.h): "browseUiBackgroundImage" opens

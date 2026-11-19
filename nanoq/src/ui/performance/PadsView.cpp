@@ -8,6 +8,7 @@
 
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/Shell.h"
+#include "ui/widgets/ControlSkin.h"
 
 #include "uiclient/PresetBrowse.h"
 
@@ -669,7 +670,7 @@ Ptr Shell::BuildPadsView()
     }
 
     column.push_back(pads);
-    return Fill(mTheme.Background(), Pad(18, edge, 18, edge, Col(column)));
+    return Dressed(mTheme, mTheme.Background(), &Backdrops::main, Pad(18, edge, 18, edge, Col(column)));
 }
 
 void Shell::AssignSetlistPad(int index)

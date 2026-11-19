@@ -44,7 +44,7 @@ void Shell::ShowOverlay(Ptr panel, float width, float height)
 void Shell::ShowDialog(DialogParts parts)
 {
     // The header: the title, anything the dialog adds there, and the close cross.
-    auto title = std::make_shared<Text>(mTheme, parts.title, 16.0f, Weight::SemiBold);
+    auto title = std::make_shared<Text>(mTheme, parts.title, 16.0f, Weight::Title);
     title->Colour(mTheme.ModalText());
     auto close = std::make_shared<CloseCross>(mTheme);
     auto cancel = parts.onClose; // Esc and a tap outside do the same as the cross

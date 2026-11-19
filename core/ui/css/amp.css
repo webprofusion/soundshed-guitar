@@ -25,7 +25,7 @@
 
 /* Room between the chain and the effect panel, growing with the window's height: none below
    600px, 8px at 800px, 16px at 1000px, and no more than 24px. On the tab panel, not inside it,
-   so a theme's backdrop there (Stage, High Gain) moves down with the panel. Compact density
+   so a theme's backdrop there (Stage, Eleven) moves down with the panel. Compact density
    keeps every pixel. */
 html:not([data-density="compact"]) #panel-visualizer {
   margin-top: clamp(0px, calc(4vh - 24px), 24px);

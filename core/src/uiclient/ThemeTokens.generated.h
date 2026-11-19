@@ -556,7 +556,7 @@ inline constexpr ThemeInfo kThemes[] = {
     {"dark", "Dark", true, &kDark, "Inter", "Inter"},
     {"classic", "Vintage", true, &kClassic, "Inter", "Inter"},
     {"stage", "Stage", true, &kStage, "Archivo", "Archivo"},
-    {"high-gain", "High Gain", true, &kHighGain, "Oswald", "Grenze Gotisch"},
+    {"high-gain", "Eleven", true, &kHighGain, "Oswald", "Oswald"},
     {"studio", "Studio", false, &kStudio, "Inter", "Inter"},
     {"studio-2003", "Studio 2003", false, &kStudio2003, "Inter", "Inter"},
 };

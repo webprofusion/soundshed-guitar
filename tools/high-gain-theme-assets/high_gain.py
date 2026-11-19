@@ -1,5 +1,5 @@
 """
-Renders the High Gain theme's images: the knob, the diamond plate and tolex textures, and
+Renders the Eleven theme's images (its id is still high-gain): the knob, the diamond plate and tolex textures, and
 the play page's backdrop (a black grille with valves glowing behind it).
 
 Run it with Blender (5.x), headless, from the repo root:
@@ -9,7 +9,7 @@ Run it with Blender (5.x), headless, from the repo root:
 With no names after "--" it makes everything. "grille preview <file>" makes a quick, small,
 noisy backdrop to judge framing and light. Output goes to core/ui/images/themes/high-gain/.
 
-High Gain is the dark theme drawn as a modern high-gain amp head: black tolex, black diamond
+Eleven is the dark theme drawn as a modern high-gain amp head: black tolex, black diamond
 plate, a perforated black grille with the valves' red-orange glow showing through it, and
 chunky black knobs. The knob and backdrop are path traced; the textures are numpy height
 fields, shaded here and made to tile. The knob shares studio_2003.py's scene helpers and its

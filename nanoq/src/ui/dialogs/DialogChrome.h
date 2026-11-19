@@ -7,6 +7,7 @@
 // Shell::ShowDialog puts the pieces together.
 
 #include "ui/widgets/Buttons.h"
+#include "ui/widgets/ControlSkin.h"
 
 #include <string>
 #include <vector>
@@ -18,8 +19,9 @@ inline constexpr float kDialogHeaderHeight = 56.0f;
 inline constexpr float kDialogFooterHeight = 60.0f;
 inline constexpr float kDialogRadius = 12.0f;
 
-/// The card (.modal-content): the dialog's colour, the header band (.modal-header) with a rule
-/// under it, and the footer band (.modal-footer) with a rule over it when `footer` is not 0.
+/// The card (.modal-content): the dialog's colour and the theme's texture for it, the header
+/// band (.modal-header, with its own) with a rule under it, and the footer band (.modal-footer)
+/// with a rule over it when `footer` is not 0.
 class DialogFace final : public el::element
 {
   public:
@@ -34,6 +36,8 @@ class DialogFace final : public el::element
         const auto b = ctx.bounds;
         cnv.fill_style(mTheme.ModalBg());
         cnv.fill_round_rect(b, kDialogRadius);
+        const auto& backdrops = mTheme.Controls().backdrops;
+        DrawBackdrop(cnv, mTheme, b, backdrops.modal, false, kDialogRadius);
         {
             auto state = cnv.new_state();
             cnv.add_round_rect(b, kDialogRadius);
@@ -42,7 +46,9 @@ class DialogFace final : public el::element
 
             if (mHeader > 0.0f)
             {
-                cnv.fill_rect(el::rect{b.left, b.top, b.right, b.top + mHeader});
+                const el::rect band{b.left, b.top, b.right, b.top + mHeader};
+                cnv.fill_rect(band);
+                DrawBackdrop(cnv, mTheme, band, backdrops.modalHeader, false);
             }
 
             if (mFooter > 0.0f)

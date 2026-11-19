@@ -29,9 +29,9 @@ Soundshed Guitar uses a token-driven, multi-theme design system built on CSS cus
 - `.theme-stage` — Stage theme, applied together with `.theme-dark`: flat neutral charcoal, near-square
   corners, amber for what is selected or on, heavy grotesque type, and the effect panel floating over a
   spot-lit wooden stage
-- `.theme-high-gain` — High Gain theme, applied together with `.theme-dark`: the dark theme drawn as a
-  high-gain amp head (black diamond plate and tolex, rendered black knobs, red only for what is lit,
-  heavy condensed type with blackletter titles, and the effect panel in front of a black grille with
+- `.theme-high-gain` — Eleven theme (its id is still `high-gain`), applied together with `.theme-dark`:
+  the dark theme drawn as a high-gain amp head (black diamond plate and tolex, rendered black knobs,
+  red only for what is lit, heavy condensed type, and the effect panel in front of a black grille with
   valves glowing behind it)
 
 ### Semantic Color Roles

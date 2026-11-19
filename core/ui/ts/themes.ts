@@ -84,13 +84,13 @@ export const THEMES = [
   },
   {
     id: 'high-gain',
-    label: 'High Gain',
+    label: 'Eleven',
     base: 'dark',
     scheme: 'dark',
     classes: ['theme-dark', 'theme-high-gain'],
     palette: 'themes/high-gain.css',
     skin: ['themes/high-gain-skin.css'],
-    fonts: { ui: 'Oswald', title: 'Grenze Gotisch' },
+    fonts: { ui: 'Oswald' },
   },
   {
     id: 'studio',

@@ -6,6 +6,7 @@
 #include "ui/shell/Shell.h"
 
 #include "ui/shell/FrameParts.h"
+#include "ui/widgets/ControlSkin.h"
 
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/NodeLabels.h"
@@ -96,7 +97,7 @@ Ptr Shell::BuildRail()
     items.push_back(FixedHeight(42, Row({HGap(9), settings, Stretch()})));
     items.push_back(VGap(6));
     auto rail = Col(items);
-    return Fill(mTheme.Bar(), rail);
+    return Dressed(mTheme, mTheme.Bar(), &Backdrops::header, rail);
 }
 
 // ── The preset bar ──────────────────────────────────────────────────────────────
@@ -197,7 +198,8 @@ Ptr Shell::BuildTopBar()
         }
 
         items.insert(items.end(), {controls, HGap(6)});
-        return FixedHeight(metrics::TopBarHeight(), Fill(mTheme.Tertiary(), PadXY(0, 2, Row(items))));
+        return FixedHeight(metrics::TopBarHeight(),
+                           Dressed(mTheme, mTheme.Tertiary(), &Backdrops::controlBar, PadXY(0, 2, Row(items))));
     }
 
     std::vector<Ptr> items{HGap(15), prev, HGap(6), pill,   HGap(6), next,    HGap(10), create, HGap(4), edit,
@@ -210,7 +212,8 @@ Ptr Shell::BuildTopBar()
 
     items.insert(items.end(), {controls, HGap(6)});
     auto bar = Row(items);
-    return FixedHeight(metrics::TopBarHeight(), Fill(mTheme.Tertiary(), PadXY(0, 6, bar)));
+    return FixedHeight(metrics::TopBarHeight(),
+                       Dressed(mTheme, mTheme.Tertiary(), &Backdrops::controlBar, PadXY(0, 6, bar)));
 }
 
 int Shell::TouchBarExtras(float width, bool update)
@@ -505,7 +508,8 @@ Ptr Shell::BuildTransport()
     row.push_back(divider());
     row.push_back(options);
     row.push_back(HGap(8));
-    return FixedHeight(metrics::FooterHeight(), Fill(mTheme.Footer(), PadXY(0, touch ? 0 : 3, Row(row))));
+    return FixedHeight(metrics::FooterHeight(),
+                       Dressed(mTheme, mTheme.Footer(), &Backdrops::footer, PadXY(0, touch ? 0 : 3, Row(row))));
 }
 
 void Shell::OpenOptions(el::rect anchor)

@@ -41,7 +41,7 @@
 
 ## Overview
 
-GuitarFX uses a CSS variable-based theme system with seven active themes (light, dark, vintage/classic, stage, high gain, studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
+GuitarFX uses a CSS variable-based theme system with seven active themes (light, dark, vintage/classic, stage, eleven (id high-gain), studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
 
 ## Available Themes
 
@@ -51,7 +51,7 @@ GuitarFX uses a CSS variable-based theme system with seven active themes (light,
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Vintage | `.theme-classic` | Warm vintage browns/ambers |
 | Stage | `.theme-dark.theme-stage` | Flat charcoal with one amber accent; the effect stands on a spot-lit wooden stage |
-| High Gain | `.theme-dark.theme-high-gain` | A modern high-gain amp head: black plate and tolex, black knobs in red arcs, valves glowing behind a grille |
+| Eleven (id `high-gain`) | `.theme-dark.theme-high-gain` | A modern high-gain amp head: black plate and tolex, black knobs in red arcs, valves glowing behind a grille |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, all moulded plastic, chunky 3D keys, soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, a worn steel case, brushed rails and screws |
 
@@ -131,10 +131,29 @@ assets. So a theme's knob or switch changes in its CSS only; rerun the tool afte
 (`npm run check:native-controls`, in `verify` and CI) reads the styles again and fails when the
 header no longer matches, so a CSS edit that moves no control passes untouched.
 
-Other skins (backdrop pictures, textures, the panel's grain) stay web-only. The manifest's `fonts`
-reach the header (`ThemeInfo::uiFont`, `titleFont`), but Nano Q still sets every theme in Inter:
-Archivo and Oswald need static TTF cuts in `core/nativeui/fonts` first, and the web copies are
-WOFF2.
+The same capture reads the surfaces' backgrounds whole (`ControlSkin::backdrops`): the bars
+(`.icon-bar`, `.control-bar`, the chain's, `.footer-bar`), the page (`.main-content`), the play
+page behind the effect (`#panel-visualizer`: Stage's stage, Eleven's grille), the effect's
+shell, and a dialog and its header. Each is its colour and its layers, every picture placed,
+sized and tiled as CSS has it (the film grain, plate, tolex, casing, screws) and every linear and
+radial gradient. Nano Q lays them over its own colour for each surface (`Dressed`,
+`DrawBackdrop`); the effect's shell draws its colour and layers in place of the flattened fill.
+A layer the native side cannot draw stops the capture, so a new kind is noticed.
+
+Type carries over too. The capture reads the page's face and weight (`body`) and a title's
+(`title`, with `titleScale` for `font-size-adjust`), and Nano Q's `Font()` draws in that face:
+Regular at the page's weight (Oswald and Archivo are set at 500), Medium and SemiBold a step and
+two above, `Weight::Title` in the title face and weight (Oswald 700, Archivo 800). The faces are static
+cuts in `core/nativeui/fonts`, made from the web UI's own variable fonts by
+`node tools/gen-nano-fonts.mjs` (its `FAMILIES` table names the weights each theme draws); the
+theme fonts are kept only as WOFF2, which `tools/nano-fonts/woff2.mjs` unpacks first. Every face
+is listed with Inter after it, for any character a Latin subset lacks. A theme that adds a face
+needs its cuts made, then an entry in `kThemeFaces` (`nanoq/src/ui/widgets/Theme.cpp`); until
+then Nano Q draws it in Inter.
+
+What stays web-only: textures on surfaces Nano Q has no counterpart for (the FX selector panel),
+the stage's tint (`.effect-visualization::before`), repeating gradients, and the player's own
+effect-panel background.
 
 ## Usage
 
@@ -282,8 +301,9 @@ by `--button-bg-hover` / `--button-border-hover` tokens in `variables.css`.
 4. Run `npm run build`, `node tools/gen-native-theme.mjs` and
    `node tools/capture-native-controls.mjs`. The native UI (Nano Q) then lists the theme and
    draws it in its own colours (a variant's palette over its base's) and its own knobs,
-   switches and cards. Any palette or control change needs the headers regenerated too;
-   `npm run verify` says so.
+   switches, cards and textures. Any palette or control change needs the headers regenerated
+   too; `npm run verify` says so. A new font also needs `node tools/gen-nano-fonts.mjs` (add it
+   to `FAMILIES` there) and an entry in `kThemeFaces` in `nanoq/src/ui/widgets/Theme.cpp`.
 
 > Base/default token values live in `css/variables.css` (`:root`). A theme sets component
 > tokens in its palette where it differs; what tokens cannot carry (pictures, gradients,
@@ -378,9 +398,9 @@ gives the body `theme-dark` and `theme-stage`, so every `.theme-dark` rule still
   legends, resource keys, the chain's add keys); `stage-skin.css` restates those neutral. A new
   hard-coded colour in a dark-only rule needs checking here too.
 
-## High Gain: the Dark Theme as a High-Gain Amp Head
+## Eleven: the Dark Theme as a High-Gain Amp Head
 
-High Gain is built on dark the same way as Stage (`theme-dark` plus `theme-high-gain` on the
+Eleven (first named High Gain, which is still its id and file names) is built on dark the same way as Stage (`theme-dark` plus `theme-high-gain` on the
 body; its `high-gain.css` palette and `high-gain-skin.css` load after dark's). It takes the look shared by the amp sims made
 for metalcore, deathcore and djent: everything black, one hot light source, metal hardware.
 
@@ -401,10 +421,9 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
   panel. The panel floats over it as a near-opaque black card. The stage's tint
   (`.effect-visualization::before`) is stretched over the whole grille; at its usual 400px
   floor it stopped halfway down and left a seam.
-- Type is heavy and condensed, like a gig poster: Oswald (weight 500, bolder for tabs and
-  labels) for the whole UI, and the blackletter Grenze Gotisch only for titles (the effect
-  panel's name, dialog and flyout headings), scaled by `font-size-adjust` so each keeps its
-  own size. Both are Latin-subset variable woff2 files in `css/fonts/` (the CSP allows only
+- Type is heavy and condensed, like a gig poster: Oswald for the whole UI, at weight 500,
+  bolder for tabs and labels, and 700 for titles (the effect panel's name, dialog and flyout
+  headings). It is a Latin-subset variable woff2 file in `css/fonts/` (the CSP allows only
   local fonts), declared in `high-gain-skin.css` and used only by this theme.
 - The images are generated: `blender -b --factory-startup -P tools/high-gain-theme-assets/high_gain.py
   -- [knob] [textures] [grille]` (`grille preview <file>` for a quick, small one). The knob uses
@@ -418,7 +437,7 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
 
 Settings → UI → Effect Panel Background lets the player put their own picture behind the play
 page's effect panel (`#panel-visualizer`), in place of whatever the theme draws there: Stage's
-stage, High Gain's grille, or the plain panel of the others. It applies under every theme.
+stage, Eleven's grille, or the plain panel of the others. It applies under every theme.
 
 - **Storage.** Choose Image… sends `browseUiBackgroundImage`; the engine
   (`core/src/controller/UiBackgroundService.h`) opens a file dialog, copies the PNG, JPEG, GIF or

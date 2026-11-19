@@ -1,6 +1,6 @@
 /* ===== The player's own effect-panel background =====
  * Settings → UI → Effect Panel Background (ts/visualizerBackground.ts) puts a picture behind the
- * play page's effect panel in place of whatever the theme draws there: Stage's stage, High Gain's
+ * play page's effect panel in place of whatever the theme draws there: Stage's stage, Eleven's
  * grille, or the plain panel of the others. The body carries .has-custom-visualizer-bg while one
  * is set, with the picture in --custom-visualizer-bg and the Fade (0..0.9) in
  * --custom-visualizer-bg-fade.

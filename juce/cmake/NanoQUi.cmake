@@ -72,10 +72,9 @@ target_link_libraries(SharedCode INTERFACE SoundshedNanoQUi)
 
 # The fonts the UI draws with, where Elements looks for them: "resources" beside the binary,
 # which is where the WebView build already keeps resources/ui.
+file(GLOB _nanoq_ui_font_cuts CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../core/nativeui/fonts/*.ttf")
 set(_nanoq_ui_fonts
-    "${CMAKE_CURRENT_SOURCE_DIR}/../core/nativeui/fonts/Inter-Regular.ttf"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../core/nativeui/fonts/Inter-Medium.ttf"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../core/nativeui/fonts/Inter-SemiBold.ttf"
+    ${_nanoq_ui_font_cuts}
     "${cycfi_elements_SOURCE_DIR}/resources/fonts/OpenSans-Regular.ttf"
     "${cycfi_elements_SOURCE_DIR}/resources/fonts/elements_basic.ttf")
 foreach(_format Standalone VST3 CLAP)

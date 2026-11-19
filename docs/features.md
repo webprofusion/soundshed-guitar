@@ -536,7 +536,7 @@ CSS variable-based theming with seven built-in themes (see `docs/theme-system.md
 | Dark | `.theme-dark` | Low brightness, reduced eye strain |
 | Vintage | `.theme-classic` | Warm vintage browns/ambers |
 | Stage | `.theme-dark.theme-stage` | Flat charcoal with an amber accent; the effect stands on a spot-lit wooden stage |
-| High Gain | `.theme-dark.theme-high-gain` | A high-gain amp head: black diamond plate and tolex, black knobs, red for what is lit, valves glowing behind a grille |
+| Eleven (id `high-gain`) | `.theme-dark.theme-high-gain` | A high-gain amp head: black diamond plate and tolex, black knobs, red for what is lit, valves glowing behind a grille |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, moulded plastic with 3D keys under soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, with rendered knobs, screws and panels |
 

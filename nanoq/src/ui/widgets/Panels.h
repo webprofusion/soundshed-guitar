@@ -172,7 +172,8 @@ class InsetBox final : public el::element
 };
 
 /// A plain filled area with a soft radial highlight at its top, as the chain stage's
-/// (.signal-path-scroll's radial-gradient over --bg-secondary).
+/// (.signal-path-scroll's radial-gradient over --bg-secondary), over the theme's texture for
+/// the chain's bar.
 class StageBackdrop final : public el::element
 {
   public:
@@ -186,6 +187,7 @@ class StageBackdrop final : public el::element
         const auto b = ctx.bounds;
         cnv.fill_style(mTheme.Bar());
         cnv.fill_rect(b);
+        DrawBackdrop(cnv, mTheme, b, mTheme.Controls().backdrops.chain, false);
 
         if (mTheme.IsLight())
         {

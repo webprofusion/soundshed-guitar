@@ -310,7 +310,7 @@ class Theme
 
     /// `dark` on the Dark theme, a colour measured from the Dark web UI for a part no token carries
     /// yet; on every other theme `token`, that theme's own colour for the part. Vintage, Stage and
-    /// High Gain draw in their palettes this way instead of in Dark's colours.
+    /// Eleven draw in their palettes this way instead of in Dark's colours.
     [[nodiscard]] el::color DarkOr(el::color dark, el::color token) const noexcept
     {
         return mInfo->tokens == &guitarfx::uiclient::theme::kDark ? dark : token;
@@ -335,15 +335,32 @@ class Theme
     Images* mImages = nullptr;
 };
 
-/// Text weights Nano draws in: Inter's static cuts.
+/// Text weights Nano Q draws in, in the theme's face: Regular is the page's own weight (Inter's
+/// 400; a step heavier for the themes whose text is set heavier), Medium and SemiBold one and
+/// two steps above it. Title is the theme's face and weight for titles (an effect's name, a
+/// dialog's), drawn TitleScale() times its size.
 enum class Weight
 {
     Regular,
     Medium,
-    SemiBold
+    SemiBold,
+    Title
 };
 
+/// The face for `weight` in the theme last Set: its family (core/nativeui/fonts has its cuts,
+/// tools/gen-nano-fonts.mjs makes them) at that weight. UI thread.
 [[nodiscard]] el::font_descr Font(Weight weight = Weight::Regular);
+
+/// How much larger than its size a title is drawn (the web UI's font-size-adjust).
+[[nodiscard]] float TitleScale();
+
+/// Font(Weight::Title) at `size`, scaled by TitleScale().
+[[nodiscard]] el::font_descr TitleFont(float size);
+
+/// A family Nano Q draws for `family` (a face it ships, else Inter) at `weight` (100 to 900):
+/// Inter at its three cuts as before, a theme face at the weight asked (the platform picks
+/// the nearest cut).
+[[nodiscard]] el::font_descr FaceFor(std::string_view family, int weight);
 
 /// A fixed-pitch face, for code (a preset's JSON).
 [[nodiscard]] el::font_descr MonoFont();

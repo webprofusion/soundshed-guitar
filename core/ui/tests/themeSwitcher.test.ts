@@ -69,7 +69,7 @@ describe("themeSwitcher", () => {
     expect(themeClasses()).toEqual(["theme-dark"]);
   });
 
-  it("puts high gain on top of the dark theme, without stage's class", async () => {
+  it("puts eleven (high-gain) on top of the dark theme, without stage's class", async () => {
     const { themeSwitcher } = await loadThemeSwitcher();
     themeSwitcher.applyTheme("stage");
     themeSwitcher.applyTheme("high-gain");
@@ -105,7 +105,7 @@ describe("themeSwitcher", () => {
     expect(themeSwitcher.getThemeDisplayName("studio-2003")).toBe("Studio 2003");
     expect(themeSwitcher.getThemeDisplayName("classic")).toBe("Vintage");
     expect(themeSwitcher.getThemeDisplayName("stage")).toBe("Stage");
-    expect(themeSwitcher.getThemeDisplayName("high-gain")).toBe("High Gain");
+    expect(themeSwitcher.getThemeDisplayName("high-gain")).toBe("Eleven");
   });
 });
 

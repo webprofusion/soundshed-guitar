@@ -27,7 +27,7 @@ Text::Text(const Theme& theme, std::string text, float size, Weight weight)
 
 el::view_limits Text::limits(const el::basic_context& ctx) const
 {
-    const auto font = Font(mWeight).size(mSize);
+    const auto font = mWeight == Weight::Title ? TitleFont(mSize) : Font(mWeight).size(mSize);
     const auto size = el::measure_text(ctx.canvas, mText, font);
     const float h = std::max(size.y, mSize * 1.3f);
     return mFixed ? el::view_limits{{size.x, h}, {size.x, h}} : el::view_limits{{0.0f, h}, {el::full_extent, h}};
@@ -36,7 +36,7 @@ el::view_limits Text::limits(const el::basic_context& ctx) const
 void Text::draw(const el::context& ctx)
 {
     NoteDrawn(ctx);
-    const auto font = Font(mWeight).size(mSize);
+    const auto font = mWeight == Weight::Title ? TitleFont(mSize) : Font(mWeight).size(mSize);
     const auto shown = Ellipsize(ctx.canvas, mText, font, ctx.bounds.width());
     FillText(ctx.canvas, shown, font, mColour, ctx.bounds, mAlign);
 }

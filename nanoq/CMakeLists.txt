@@ -387,16 +387,13 @@ foreach(_src IN LISTS _nanoq_impl_sources)
     endif()
 endforeach()
 
-# Fonts Nano Q draws with. Elements finds fonts only beside the plugin. Inter's static cuts are the
-# ones Nano uses (core/nativeui/fonts, made by tools/gen-nano-fonts.mjs); Open Sans
-# stays for anything Elements draws itself.
+# Fonts Nano Q draws with. Elements finds fonts only beside the plugin. The static cuts in
+# core/nativeui/fonts (made by tools/gen-nano-fonts.mjs): Inter for every theme, and the theme fonts
+# for the themes that set them. Open Sans stays for anything Elements draws itself.
 get_property(_nanoq_elements GLOBAL PROPERTY Q_PLUG_ELEMENTS_SOURCE_DIR)
 set(_nanoq_fonts "${CMAKE_CURRENT_SOURCE_DIR}/../core/nativeui/fonts")
-set(ELEMENTS_FONTS
-    "${_nanoq_fonts}/Inter-Regular.ttf"
-    "${_nanoq_fonts}/Inter-Medium.ttf"
-    "${_nanoq_fonts}/Inter-SemiBold.ttf"
-    "${_nanoq_elements}/resources/fonts/OpenSans-Regular.ttf")
+file(GLOB _nanoq_font_cuts CONFIGURE_DEPENDS "${_nanoq_fonts}/*.ttf")
+set(ELEMENTS_FONTS ${_nanoq_font_cuts} "${_nanoq_elements}/resources/fonts/OpenSans-Regular.ttf")
 
 # The engine's runtime data: factory presets, layouts, metronome clicks and demo audio from ui/ in
 # its resource root (the web UI itself is not shipped).

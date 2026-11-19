@@ -110,7 +110,8 @@ class EffectPanel final : public el::element
         const auto b = ctx.bounds;
         // The web UI's .default-effect-shell as the theme draws it, washed at the top with the
         // effect's colour on the dark themes.
-        DrawControlBox(cnv, b, mTheme.Controls().shell);
+        const auto& skin = mTheme.Controls();
+        DrawControlBox(cnv, mTheme, b, skin.shell, skin.backdrops.shell);
 
         if (!mTheme.IsLight())
         {
@@ -131,7 +132,8 @@ class EffectPanel final : public el::element
     el::color mTint;
 };
 
-/// The stage behind the panel: the page colour, shaded darker under the panel.
+/// The stage behind the panel: the page colour and its texture, shaded darker under the panel,
+/// or the theme's own play page (#panel-visualizer: a stage, a grille).
 class EffectBackdrop final : public el::element
 {
   public:
@@ -145,6 +147,15 @@ class EffectBackdrop final : public el::element
         const auto b = ctx.bounds;
         cnv.fill_style(mTheme.Background());
         cnv.fill_rect(b);
+        const auto& backdrops = mTheme.Controls().backdrops;
+        DrawBackdrop(cnv, mTheme, b, backdrops.main, false);
+
+        // A theme that dresses the play page (a stage, a grille) shades it in its own layers.
+        if (backdrops.stage.count > 0)
+        {
+            DrawBackdrop(cnv, mTheme, b, backdrops.stage, true);
+            return;
+        }
 
         if (mTheme.IsLight())
         {
@@ -674,7 +685,7 @@ Ptr Shell::BuildEffectPage()
     const float sectionInner = panelWidth - 2.0f * (kPanelPad + kSectionPad) - artRoom;
 
     // ── Header ──
-    const auto titleFont = Font(Weight::SemiBold).size(12.5f);
+    const auto titleFont = TitleFont(12.5f);
     const std::string titleText = NodeDisplayName(mState, *node);
     std::string kind = boundary ? std::string(node->type == guitarfx::kNodeTypeInput ? "Input" : "Output")
                                 : (type != nullptr ? type->name : node->type);
@@ -821,7 +832,7 @@ Ptr Shell::BuildEffectPage()
         std::clamp(MeasureTextWidth(titleText, titleFont) + 2.0f, 40.0f, std::max(40.0f, roomForTitle));
 
     auto led = std::make_shared<HeaderLed>(node->enabled, false);
-    auto title = std::make_shared<Text>(mTheme, titleText, 12.5f, Weight::SemiBold);
+    auto title = std::make_shared<Text>(mTheme, titleText, 12.5f, Weight::Title);
     title->Colour(mTheme.EffectTitleInk());
     auto subtitle = std::make_shared<Text>(mTheme, subtitleText, metrics::Readable(9.0f, 10.0f), Weight::SemiBold);
     subtitle->Colour(mTheme.TextMuted()).Fixed(true);

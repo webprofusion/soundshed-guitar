@@ -1,4 +1,6 @@
-/* ===== High Gain Theme =====
+/* ===== Eleven Theme =====
+ * Its id, class and files keep its first name, high-gain; people see it as Eleven.
+ *
  * The dark theme drawn as a modern high-gain amp head, the look shared by the amp sims made
  * for metalcore, deathcore and djent: black tolex and black diamond plate on the bars, a
  * perforated black grille on the play page with the valves' red-orange glow showing through
@@ -10,7 +12,7 @@
  *
  * The body carries .theme-dark as well as .theme-high-gain (ts/theme-switcher.ts), so every
  * dark-theme rule in the other stylesheets still applies and the theme only restyles what
- * makes it High Gain. This file is its palette, the tokens (which the native UI reads too);
+ * makes it Eleven. This file is its palette, the tokens (which the native UI reads too);
  * high-gain-skin.css is the rest of its look. Both load after dark.css and grain.css.
  *
  * The rules of the look:
@@ -18,13 +20,11 @@
  *  - Red is light, not paint: the selected block, a latched key, a switch that is on, the
  *    value arc and the display glow red, as a valve or an LED would. Nothing else is red.
  *  - The light comes from above: hardware has a lit top edge and a shadow under it.
- *  - Type is heavy and condensed, like a gig poster: Oswald for the whole UI, and the
- *    blackletter Grenze Gotisch only for titles (the effect's name, dialog and panel headings).
+ *  - Type is heavy and condensed, like a gig poster: Oswald for the whole UI, titles included.
  */
 
 .theme-high-gain {
   --hg-font-ui: "Oswald", "Inter", system-ui, sans-serif;
-  --hg-font-title: "Grenze Gotisch", "Oswald", "Inter", serif;
 
   --color-accent: #ff4a3d;
   --color-accent-hover: #ff6a5e;

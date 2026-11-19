@@ -1,25 +1,17 @@
-/* ===== High Gain Theme: skin =====
+/* ===== Eleven Theme: skin =====
  * Everything in the theme's look that is not one of its colour tokens: component rules, and any
  * pictures, textures, type and shape. Only the web UI draws these. The palette (the tokens) and
  * the theme's description are in high-gain.css, which loads first (ts/themes.ts).
  */
 
-/* Both fonts are SIL OFL, latin subsets, licences beside them in css/fonts. A browser fetches a
-   face only when something uses it, so the other themes never load these. */
+/* SIL OFL, a latin subset, its licence beside it in css/fonts. A browser fetches a face only
+   when something uses it, so the other themes never load it. */
 @font-face {
   font-family: "Oswald";
   font-style: normal;
   font-weight: 200 700;
   font-display: swap;
   src: url("../fonts/Oswald-VariableFont_wght.latin.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Grenze Gotisch";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("../fonts/GrenzeGotisch-VariableFont_wght.latin.woff2") format("woff2");
 }
 
 /* The textures below replace the dark theme's film grain on the same bars. */
@@ -31,7 +23,7 @@ body.theme-high-gain {
   background: var(--bg-primary);
 }
 
-/* ===== Type: heavy and condensed, blackletter for titles =====
+/* ===== Type: heavy and condensed =====
  * Oswald runs narrower than Inter at the same size, so nothing that fits today overflows; it
  * is set a step heavier, tracked open a little, with figures of one width so values don't
  * jitter as they change. Form controls don't inherit the page font on their own. */
@@ -61,15 +53,10 @@ body.theme-high-gain :where(button, input, select, textarea, optgroup) {
   font-weight: 600;
 }
 
-/* Titles in blackletter: mixed case (blackletter capitals in a row don't read), and scaled up
-   to a sans-serif's x-height, as its letters are small for their size. font-size-adjust keeps
-   each title's own size as the base. */
+/* Titles in the same face at its heaviest. */
 .theme-high-gain :is(.default-effect-shell-title, .modal-header h3, .fx-selector-title, .fx-flyout-title, .flyout-settings-title) {
-  font-family: var(--hg-font-title);
   font-weight: 700;
-  font-size-adjust: 0.54;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
 /* ===== The bars: diamond plate top and bottom, tolex between ===== */

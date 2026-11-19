@@ -12,6 +12,7 @@
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/FrameParts.h"
 #include "ui/shell/Shell.h"
+#include "ui/widgets/ControlSkin.h"
 
 #include "Paths.h"
 #include "uiclient/FeatureFlags.h"
@@ -485,6 +486,6 @@ Ptr Shell::BuildSettingsPage()
 
     auto content = VScroll(mWide ? Pad(24, 20, 24, 12, Col(page))
                                  : Pad(metrics::kPagePad, metrics::kPagePadTop, 14, 12, Col(page)));
-    return Fill(mTheme.Background(), WithSectionNav(std::move(nav), content));
+    return Dressed(mTheme, mTheme.Background(), &Backdrops::main, WithSectionNav(std::move(nav), content));
 }
 } // namespace nanoq::ui

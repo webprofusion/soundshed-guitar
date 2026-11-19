@@ -9,6 +9,7 @@
 #include "ui/chain/ChainWires.h"
 #include "ui/shell/FrameParts.h"
 #include "ui/widgets/DragScroll.h"
+#include "ui/widgets/ControlSkin.h"
 
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/PresetBrowse.h"
@@ -183,7 +184,7 @@ Ptr Shell::BuildTabBar()
     }
 
     row.insert(row.end(), {Pad(0, 4, 0, 4, settings), HGap(10)});
-    return Fill(mTheme.Background(), Row(row));
+    return Dressed(mTheme, mTheme.Background(), &Backdrops::header, Row(row));
 }
 
 // ── The control bar ─────────────────────────────────────────────────────────────
@@ -324,7 +325,7 @@ Ptr Shell::BuildHeader()
                     cellsAt({cells.in, cells.gate, cells.transpose}), Stretch(), centre, Stretch(),
                     cellsAt({cells.eq, cells.doubler, cells.out}), HGap(14), meterColumn(cells.outMeter, cells.mute),
                     HGap(28)});
-    return Fill(mTheme.Tertiary(), bar);
+    return Dressed(mTheme, mTheme.Tertiary(), &Backdrops::controlBar, bar);
 }
 
 // ── The play stage ──────────────────────────────────────────────────────────────
@@ -628,6 +629,6 @@ Ptr Shell::BuildWideFooter()
     row.push_back(themeButton);
     row.push_back(HGap(12));
     // Touch sizes: the buttons are hit over the footer's whole height.
-    return Fill(mTheme.Footer(), PadXY(0, metrics::Touch() ? 0 : 8, Row(row)));
+    return Dressed(mTheme, mTheme.Footer(), &Backdrops::footer, PadXY(0, metrics::Touch() ? 0 : 8, Row(row)));
 }
 } // namespace nanoq::ui

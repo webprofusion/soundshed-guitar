@@ -1,7 +1,7 @@
 #pragma once
 
 // UiBackgroundService — the player's own picture behind the play page's effect panel, drawn in
-// place of the theme's backdrop (Stage's stage, High Gain's grille) under every theme.
+// place of the theme's backdrop (Stage's stage, Eleven's grille) under every theme.
 //
 // - "browseUiBackgroundImage" asks the host for an image file, copies it into the profile and
 //   answers "uiBackgroundImageSelected" with the URL the web UI draws it from. The UI keeps that
