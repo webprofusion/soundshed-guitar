@@ -226,6 +226,8 @@ void Shell::Rebuild()
     {
         mAppliedTheme = mState.theme;
         mTheme.Set(mState.theme);
+        // Decoded on a thread of their own while the rest is built, not by the first redraw.
+        mImages.Prefetch(mTheme.Pictures());
         ApplyElementsTheme();
         Fill(*mBgSlot, el::share(el::box(mTheme.Background())));
         mDirty |= kAll;

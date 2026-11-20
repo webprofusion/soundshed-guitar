@@ -5,9 +5,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <condition_variable>
 #include <cstdlib>
+#include <deque>
 #include <fstream>
+#include <mutex>
 #include <sstream>
+#include <thread>
 
 namespace nanoq::ui
 {
@@ -730,6 +734,117 @@ void Icons::Draw(artist::canvas& cnv, const std::string& name, el::rect bounds, 
     }
 }
 
+namespace
+{
+// The picture at `relativePath` under `folder`, or null when it is missing or cannot be decoded.
+std::shared_ptr<artist::image> LoadImage(const std::filesystem::path& folder, const std::string& relativePath)
+{
+    const auto file = folder / std::filesystem::path(relativePath);
+    std::error_code ec;
+
+    if (!std::filesystem::is_regular_file(file, ec))
+    {
+        return nullptr;
+    }
+
+    try
+    {
+        return std::make_shared<artist::image>(file);
+    }
+    catch (...)
+    {
+        return nullptr; // a backend that cannot decode it throws
+    }
+}
+} // namespace
+
+// Prefetch's thread: it decodes the queue in order into `done`, which Find takes from.
+struct Images::Decoder
+{
+    explicit Decoder(std::filesystem::path folder) : folder(std::move(folder))
+    {
+        worker = std::thread([this] { Run(); });
+    }
+
+    ~Decoder()
+    {
+        {
+            std::lock_guard lock(mutex);
+            stop = true;
+        }
+        changed.notify_all();
+        worker.join(); // at most the picture it is decoding
+    }
+
+    void Run()
+    {
+        std::unique_lock lock(mutex);
+
+        for (;;)
+        {
+            changed.wait(lock, [this] { return stop || !queue.empty(); });
+
+            if (stop)
+            {
+                return;
+            }
+
+            decoding = std::move(queue.front());
+            queue.pop_front();
+            lock.unlock();
+            auto image = LoadImage(folder, decoding);
+            lock.lock();
+            done[decoding] = std::move(image);
+            decoding.clear();
+            changed.notify_all();
+        }
+    }
+
+    // Whether `relativePath` is queued, being decoded or decoded.
+    bool Has(const std::string& relativePath) const
+    {
+        return decoding == relativePath || done.count(relativePath) != 0 ||
+               std::find(queue.begin(), queue.end(), relativePath) != queue.end();
+    }
+
+    // The decoded picture, waiting for it if it is being decoded now; false if it was not
+    // asked for or not started (dropped from the queue, for Find to decode itself).
+    bool Take(const std::string& relativePath, std::shared_ptr<artist::image>& image)
+    {
+        std::unique_lock lock(mutex);
+        changed.wait(lock, [&] { return decoding != relativePath; });
+
+        if (const auto it = done.find(relativePath); it != done.end())
+        {
+            image = std::move(it->second);
+            done.erase(it);
+            return true;
+        }
+
+        if (const auto it = std::find(queue.begin(), queue.end(), relativePath); it != queue.end())
+        {
+            queue.erase(it);
+        }
+
+        return false;
+    }
+
+    const std::filesystem::path folder;
+    std::mutex mutex;
+    std::condition_variable changed;
+    std::deque<std::string> queue;
+    std::string decoding;
+    std::map<std::string, std::shared_ptr<artist::image>> done;
+    bool stop = false;
+    std::thread worker; // last: started once the rest is made
+};
+
+Images::Images(std::filesystem::path uiFolder) : mFolder(std::move(uiFolder))
+{
+}
+
+Images::~Images() = default;
+
 std::shared_ptr<artist::image> Images::Find(const std::string& relativePath)
 {
     if (relativePath.empty())
@@ -742,25 +857,51 @@ std::shared_ptr<artist::image> Images::Find(const std::string& relativePath)
     if (it == mImages.end())
     {
         std::shared_ptr<artist::image> image;
-        const auto file = mFolder / std::filesystem::path(relativePath);
-        std::error_code ec;
 
-        if (std::filesystem::is_regular_file(file, ec))
+        if (!mDecoder || !mDecoder->Take(relativePath, image))
         {
-            try
-            {
-                image = std::make_shared<artist::image>(file);
-            }
-            catch (...)
-            {
-                image.reset(); // a backend that cannot decode it throws
-            }
+            image = LoadImage(mFolder, relativePath);
         }
 
         it = mImages.emplace(relativePath, std::move(image)).first;
     }
 
     return it->second;
+}
+
+void Images::Prefetch(const std::vector<std::string>& relativePaths)
+{
+#if defined(ARTIST_SKIA)
+    bool added = false;
+
+    for (const auto& path : relativePaths)
+    {
+        if (path.empty() || mImages.count(path) != 0)
+        {
+            continue;
+        }
+
+        if (!mDecoder)
+        {
+            mDecoder = std::make_unique<Decoder>(mFolder);
+        }
+
+        std::lock_guard lock(mDecoder->mutex);
+
+        if (!mDecoder->Has(path))
+        {
+            mDecoder->queue.push_back(path);
+            added = true;
+        }
+    }
+
+    if (added)
+    {
+        mDecoder->changed.notify_all();
+    }
+#else
+    (void)relativePaths;
+#endif
 }
 
 void DrawImageFitted(artist::canvas& cnv, const artist::image& image, el::rect bounds)

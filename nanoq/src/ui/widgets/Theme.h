@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace nanoq::ui
 {
@@ -232,6 +233,10 @@ class Theme
     /// The artwork the controls draw (a theme's knob picture), from the shell's image cache; null
     /// until the shell gives it one, or when the picture is missing.
     [[nodiscard]] std::shared_ptr<cycfi::artist::image> Picture(std::string_view relativePath) const;
+
+    /// Every picture the theme draws (its knob's, and its backgrounds'), for the shell to decode
+    /// ahead of the first redraw that needs them (Images::Prefetch).
+    [[nodiscard]] std::vector<std::string> Pictures() const;
 
     /// Where Picture reads from: the shell's cache, for its lifetime (null to let go of it).
     void UseImages(Images* images) noexcept

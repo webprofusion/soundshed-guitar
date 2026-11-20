@@ -76,20 +76,31 @@ class Icons
 };
 
 /// The artwork by path relative to the ui folder ("images/equipment/amps/full-rig-1.jpg"), each
-/// loaded the first time it is asked for.
+/// loaded the first time it is asked for, or ahead of that by Prefetch. UI thread.
 class Images
 {
   public:
-    explicit Images(std::filesystem::path uiFolder) : mFolder(std::move(uiFolder))
-    {
-    }
+    explicit Images(std::filesystem::path uiFolder);
+    ~Images();
+    Images(const Images&) = delete;
+    Images& operator=(const Images&) = delete;
 
-    /// The image, or null when the file is missing or cannot be decoded.
+    /// The image, or null when the file is missing or cannot be decoded. One Prefetch is still
+    /// decoding is waited for; one it has not started is decoded here.
     [[nodiscard]] std::shared_ptr<artist::image> Find(const std::string& relativePath);
 
+    /// Decodes these pictures on a thread of its own, so that Find has them without decoding in
+    /// the middle of a redraw (a theme's 2400-pixel backdrop takes about 100 ms on an iPad mini
+    /// 2). Only where Artist draws with Skia, whose decoders need nothing of the UI thread; a
+    /// no-op elsewhere.
+    void Prefetch(const std::vector<std::string>& relativePaths);
+
   private:
+    struct Decoder;
+
     std::filesystem::path mFolder;
     std::map<std::string, std::shared_ptr<artist::image>> mImages;
+    std::unique_ptr<Decoder> mDecoder; // started by the first Prefetch
 };
 
 /// The width `text` takes in `font`, measured on a small offscreen canvas: for laying out a row

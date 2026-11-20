@@ -199,6 +199,46 @@ went from 1,230-2,520 ms to 160-260 ms (about 85-180 ms recording the draw on th
 75-100 ms on the GPU); small redraws (a knob, a light) 7 to 45 ms. The UI looks as it did
 with Quartz. The first draws after launch still take about a second.
 
+**Profiled on the iPad mini 2** (2026-11-20, legacy release build, with a temporary sampler
+of the main thread in the host, since a current Xcode cannot profile an iOS 12 device). About 60%
+of recording a redraw was Artist's Skia backend turning each image into a new `SkImage` on every
+draw: `SkBitmap::asImage` copies a mutable bitmap's pixels, and the GPU backend then uploaded each
+new image as a new texture and made its mipmaps on the CPU, every time.
+`nanoq/patches/elements-skia-image-cache.patch` keeps one `SkImage` an image, sharing its pixels,
+dropped when they may change. Medians over a minute of use, before and after:
+
+| | Recording (CPU) | Whole redraw |
+| - | --------------- | ------------ |
+| Whole-window redraws | 118 ms → 42 ms | 183 ms → 131 ms (90th percentile 468 → 181 ms) |
+| Small redraws (a knob, a light) | 46 ms → 13 ms | 66 ms → 52 ms |
+
+What is left: drawing paths (about 40% of recording, fills more than strokes), the shadows'
+image filters (about 12%), and decoding a picture the first time it is shown (about 10%). On the
+GPU, 50-80 ms for the whole window. Making the shadows cheaper (a mask-filter blur of the shape
+instead of the drop-shadow image filter) was tried and measured no faster.
+
+**Shader compiles.** The first time Skia meets a combination of effects it writes a shader and
+has Metal build a pipeline for it, through iOS's shader compiler service (`GrCompileMtlShaderLibrary`
+and `newRenderPipelineStateWithDescriptor`, over XPC), on the main thread in the middle of a
+redraw: 0.2-1.2 s on the iPad mini 2, every launch. The host now gives Skia a persistent cache
+(`shader_cache` in `base_view.mm`): each pipeline's Metal source goes to
+`Library/Caches/skia-shaders.bin`, and a later launch precompiles them
+(`GrDirectContext::precompileShader`), one a frame while there is nothing to draw, from the first
+draw on. Metal's own cache of compiled shaders serves those compiles. The file names the Skia
+milestone, the GPU and the iOS version, and is started afresh when any of them changes.
+**Measured** (2026-11-20): a launch with all 89 of its pipelines cached precompiled them in 54 ms,
+and from then on no redraw spent more than 15 ms submitting; without the cache the same screens
+stalled 0.2-1.0 s each the first time. What remains: the first redraw or two of a launch, before
+the precompile (75-175 ms submitting), and a combination never met on that device before.
+Redraws that hold the main thread over 100 ms are logged to `nanoq.log` ("Slow redraw"), split
+into recording and submitting. The longest left are recording, 200-400 ms, the first time a
+screen is shown. In the profile, a quarter of those was decoding the theme's backdrops (2400-pixel
+JPEGs, `SkCodec` from `Theme::Picture`), and a fifth uploading pictures to the GPU. The shell now
+has `Images::Prefetch` decode the theme's pictures on a thread of their own when a theme is
+applied (Skia builds only: other backends may need the UI thread to decode); the first redraw's
+recording went from 224 to 130 ms. A 400 ms one remains on a later screen, not yet profiled; the
+chain's equipment pictures and downloaded tone pictures still decode on the UI thread.
+
 **Orientation.** The app is landscape only. In a Simulator held in portrait, iPadOS 26
 shows the landscape window scaled down and letterboxed rather than rotating it, so a
 screenshot taken that way shows a band across the middle: rotate the Simulator

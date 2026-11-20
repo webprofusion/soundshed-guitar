@@ -125,6 +125,10 @@ FetchContent_Declare(q
 # And patches/elements-x11-present.patch: on X11 Cairo draws in this process, not through the
 # server, and invalidated areas repaint apart, not as one box around them all.
 # patches/elements-x11-skia.patch does the same for Skia on X11 (NANOQ_LINUX_SKIA).
+# patches/elements-skia-image-cache.patch: Artist's Skia backend copied an image's pixels into a
+# new SkImage on every draw, which the GPU then uploaded (and made mipmaps for) every time; on the
+# iPad mini 2 that was about 60% of recording a redraw. Each image now keeps one SkImage that
+# shares its pixels.
 # An iOS build takes Artist's patch too.
 set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-input-redraws.patch
@@ -137,6 +141,9 @@ set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
     COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-x11-skia.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
+    COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-skia-image-cache.patch
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 if(NANOQ_IOS)
     # elements-log-clock.patch: Elements' quill loggers stamp messages with quill's TSC, which

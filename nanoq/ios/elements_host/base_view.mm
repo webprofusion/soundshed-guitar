@@ -51,6 +51,14 @@
 # include <ganesh/mtl/GrMtlBackendSurface.h>
 # include <ganesh/mtl/GrMtlDirectContext.h>
 # include <ganesh/mtl/GrMtlTypes.h>
+# include <ganesh/GrContextOptions.h>
+# include <SkData.h>
+# include <SkMilestone.h>
+# include <cstdio>
+# include <memory>
+# include <string>
+# include <unordered_map>
+# include <unistd.h>
 #elif !defined(ARTIST_QUARTZ_2D)
 # error The UIKit host draws with Artist's Skia or Quartz 2D backend only
 #endif
@@ -63,6 +71,150 @@ namespace ph = cycfi::elements;
 namespace fs = cycfi::fs;
 using key_map = std::map<ph::key_code, ph::key_action>;
 using cycfi::artist::canvas;
+
+// Nano Q's log (nanoq/ios/app/AppLog.h): nanoq.log in the profile, which ios-deploy can fetch
+// from an iOS 12 device whose console a current Xcode cannot show.
+namespace nanoq::ios
+{
+   void AppLog(NSString* format, ...) NS_FORMAT_FUNCTION(1, 2);
+}
+
+#if defined(ARTIST_SKIA)
+///////////////////////////////////////////////////////////////////////////////
+// Skia's Metal pipelines, kept from one launch to the next.
+//
+// The first time Skia meets a combination of effects it writes a shader for it
+// and has Metal compile it, through iOS's shader compiler service, on the main
+// thread in the middle of a redraw: on an iPad mini 2, 0.2 to 1.2 s a time.
+// Skia keeps each shader's Metal source here (its persistent cache), so a
+// later launch skips writing it, and precompiles what earlier launches met,
+// one a frame while there is nothing to draw (see on_tick), before a redraw
+// needs it; Metal's own cache of compiled shaders then serves the compile.
+//
+// One file in the app's Caches folder: a header naming the Skia milestone,
+// the GPU and the iOS version, any of which changing discards it, then each
+// pipeline's key and data, each with its length.
+namespace
+{
+   class shader_cache final : public GrContextOptions::PersistentCache
+   {
+   public:
+
+      explicit shader_cache(id<MTLDevice> device)
+      {
+         NSString* caches = NSSearchPathForDirectoriesInDomains(
+            NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+         _path = [caches stringByAppendingPathComponent : @"skia-shaders.bin"].UTF8String;
+         _header = "Soundshed Nano Q: Skia m" + std::to_string(SK_MILESTONE) + " shaders for "
+            + device.name.UTF8String + " on iOS "
+            + [UIDevice currentDevice].systemVersion.UTF8String + "\n";
+         read();
+      }
+
+      sk_sp<SkData> load(SkData const& key) override
+      {
+         auto i = _entries.find(as_string(key));
+         return i == _entries.end() ? nullptr : i->second;
+      }
+
+      void store(SkData const& key, SkData const& data, SkString const&) override
+      {
+         auto const k = as_string(key);
+         auto& entry = _entries[k];
+         entry = SkData::MakeWithCopy(data.data(), data.size());
+         append(k, *entry);
+      }
+
+      // The pipelines earlier launches stored, one at a time, to precompile.
+      bool next(sk_sp<SkData>& key, sk_sp<SkData>& data)
+      {
+         while (_next != _earlier.size())
+         {
+            auto const& k = _earlier[_next++];
+            auto i = _entries.find(k);
+            if (i == _entries.end())
+               continue;
+            key = SkData::MakeWithCopy(k.data(), k.size());
+            data = i->second;
+            return true;
+         }
+         return false;
+      }
+
+      std::size_t earlier() const { return _earlier.size(); }
+
+   private:
+
+      static std::string as_string(SkData const& d)
+      {
+         return {static_cast<char const*>(d.data()), d.size()};
+      }
+
+      static bool read_block(std::FILE* f, std::string& out)
+      {
+         uint32_t n = 0;
+         if (std::fread(&n, sizeof n, 1, f) != 1 || n > (64u << 20))
+            return false;
+         out.resize(n);
+         return n == 0 || std::fread(out.data(), 1, n, f) == n;
+      }
+
+      // The entries, up to the last whole one; anything after it (a write
+      // cut short), or a file for another Skia, GPU or iOS, is dropped.
+      void read()
+      {
+         long good = 0;
+         if (auto* f = std::fopen(_path.c_str(), "rb"))
+         {
+            std::string header(_header.size(), '\0');
+            if (std::fread(header.data(), 1, header.size(), f) == header.size() && header == _header)
+            {
+               good = long(header.size());
+               std::string key, data;
+               while (read_block(f, key) && read_block(f, data))
+               {
+                  if (!_entries.count(key))
+                     _earlier.push_back(key);
+                  _entries[key] = SkData::MakeWithCopy(data.data(), data.size());
+                  good = std::ftell(f);
+               }
+            }
+            std::fclose(f);
+         }
+         if (good == 0)
+         {
+            if (auto* f = std::fopen(_path.c_str(), "wb"))
+            {
+               std::fwrite(_header.data(), 1, _header.size(), f);
+               std::fclose(f);
+            }
+         }
+         else
+            ::truncate(_path.c_str(), good);
+      }
+
+      void append(std::string const& key, SkData const& data)
+      {
+         auto* f = std::fopen(_path.c_str(), "ab");
+         if (!f)
+            return;
+         auto const kn = uint32_t(key.size());
+         auto const dn = uint32_t(data.size());
+         std::fwrite(&kn, sizeof kn, 1, f);
+         std::fwrite(key.data(), 1, kn, f);
+         std::fwrite(&dn, sizeof dn, 1, f);
+         std::fwrite(data.data(), 1, dn, f);
+         std::fclose(f);
+      }
+
+      std::string                                        _path;
+      std::string                                        _header;
+      std::unordered_map<std::string, sk_sp<SkData>>     _entries;
+      std::vector<std::string>                           _earlier;
+      std::size_t                                        _next = 0;
+   };
+}
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Resources: the app bundle, which on iOS is flat, its resources beside the
@@ -226,6 +378,14 @@ namespace
    sk_sp<GrDirectContext>           _gr_context;
    sk_sp<SkSurface>                 _surface;
    bool                             _needs_render;
+
+   // Skia's pipelines kept between launches, and those of earlier launches
+   // precompiled so far (see shader_cache and on_tick).
+   std::unique_ptr<shader_cache>    _shaders;
+   bool                             _precompiling;
+   int                              _precompiled;
+   int                              _precompile_failed;
+   double                           _precompile_ms;
 #else
    // The window as last drawn (see drawRect:).
    CGContextRef                     _backing;
@@ -294,7 +454,16 @@ namespace
    GrMtlBackendContext backend{};
    backend.fDevice.retain((__bridge GrMTLHandle) _device);
    backend.fQueue.retain((__bridge GrMTLHandle) _queue);
-   _gr_context = GrDirectContexts::MakeMetal(backend);
+   _shaders = std::make_unique<shader_cache>(_device);
+   _precompiling = _shaders->earlier() != 0;
+   _precompiled = _precompile_failed = 0;
+   _precompile_ms = 0;
+   GrContextOptions options;
+   options.fPersistentCache = _shaders.get();
+   // The Metal source: a later launch skips writing it, and Metal's own cache
+   // has the compiled shader for the same source.
+   options.fShaderCacheStrategy = GrContextOptions::ShaderCacheStrategy::kBackendSource;
+   _gr_context = GrDirectContexts::MakeMetal(backend, options);
    if (!_gr_context)
    {
       ph::error_handler::get().on_resource_error(
@@ -359,8 +528,34 @@ namespace
 #if defined(ARTIST_SKIA)
    if (_needs_render)
       [self render];
+   else if (_precompiling && _surface)
+      [self precompile_one];
 #endif
 }
+
+#if defined(ARTIST_SKIA)
+// One of the pipelines earlier launches met, compiled now, in a frame with
+// nothing to draw, so that a redraw finds it ready (see shader_cache). From
+// the first draw on: the window comes first.
+- (void) precompile_one
+{
+   sk_sp<SkData> key, data;
+   if (!_gr_context || !_shaders->next(key, data))
+   {
+      _precompiling = false;
+      nanoq::ios::AppLog(
+         @"Skia: precompiled %d of %zu shaders from earlier launches in %.0f ms (%d failed)",
+         _precompiled, _shaders->earlier(), _precompile_ms, _precompile_failed);
+      return;
+   }
+   auto const t0 = CACurrentMediaTime();
+   if (_gr_context->precompileShader(*key, *data))
+      ++_precompiled;
+   else
+      ++_precompile_failed;
+   _precompile_ms += (CACurrentMediaTime() - t0) * 1000;
+}
+#endif
 
 // The C++ view is gone. A host may keep this UIView alive past it.
 - (void) elements_detach
@@ -502,6 +697,8 @@ namespace
 
    auto rects = std::move(_pending_rects);
    _pending_rects.clear();
+   auto const full = _pending_full || rects.size() > 8;
+   auto const t0 = CACurrentMediaTime();
    if (_pending_full)
    {
       [self draw_surface : self.bounds];
@@ -519,6 +716,7 @@ namespace
          [self draw_surface : r];
    }
    _pending_full = false;
+   auto const t1 = CACurrentMediaTime();
 
    id<CAMetalDrawable> drawable = [layer nextDrawable];
    if (!drawable)
@@ -542,6 +740,17 @@ namespace
    id<MTLCommandBuffer> present = [_queue commandBuffer];
    [present presentDrawable : drawable];
    [present commit];
+
+   // A redraw that held the main thread for long, to the log: there is no
+   // profiler for an iOS 12 device. Recording is Elements drawing into Skia;
+   // submitting is Skia sending it to Metal, where building a pipeline for
+   // the first time shows (see shader_cache).
+   auto const t2 = CACurrentMediaTime();
+   if (t2 - t0 > 0.1)
+   {
+      nanoq::ios::AppLog(@"Slow redraw (%s): recording %.0f ms, submitting %.0f ms",
+         full ? "whole window" : "part", (t1 - t0) * 1000, (t2 - t1) * 1000);
+   }
 }
 
 #else

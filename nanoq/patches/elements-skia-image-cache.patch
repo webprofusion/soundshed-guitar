@@ -1,0 +1,88 @@
+diff --git a/lib/artist/lib/impl/skia/canvas.cpp b/lib/artist/lib/impl/skia/canvas.cpp
+index 58ac031..b8d7d60 100755
+--- a/lib/artist/lib/impl/skia/canvas.cpp
++++ b/lib/artist/lib/impl/skia/canvas.cpp
+@@ -17,6 +17,7 @@
+ #include <SkData.h>
+ #include <SkImage.h>
+ #include <SkPicture.h>
++#include <SkPixelRef.h>
+ #include <SkSurface.h>
+ #include <SkCanvas.h>
+ #include <SkPath.h>
+@@ -920,10 +921,26 @@ namespace cycfi::artist
+                // part of the bitmap.
+                auto const whole = src_px.contains(
+                   SkRect::MakeIWH(that.width(), that.height()));
++               // Made once and kept (see image_impl::drawn). It shares the
++               // bitmap's pixels, where asImage would copy them, and holds a
++               // reference to them until the GPU backend has done with it.
++               auto& drawn = pic.impl()->drawn;
++               if (!drawn && that.pixelRef())
++               {
++                  drawn = SkImages::RasterFromPixmap(
++                     that.pixmap(),
++                     [](void const*, SkImages::ReleaseContext pixels)
++                     {
++                        static_cast<SkPixelRef*>(pixels)->unref();
++                     },
++                     sk_ref_sp(that.pixelRef()).release());
++               }
++               if (!drawn)
++                  return;
+                with_blend(_context, paint, [&](SkPaint const& q)
+                {
+                   _context->drawImageRect(
+-                     that.asImage(),
++                     drawn,
+                      src_px,
+                      SkRect{dest.left, dest.top, dest.right, dest.bottom},
+                      // Smoothed, as Cairo and Quartz 2D scale; Skia's
+diff --git a/lib/artist/lib/impl/skia/image.cpp b/lib/artist/lib/impl/skia/image.cpp
+index b1c1adb..046f1c2 100755
+--- a/lib/artist/lib/impl/skia/image.cpp
++++ b/lib/artist/lib/impl/skia/image.cpp
+@@ -168,6 +168,8 @@ namespace cycfi::artist
+    uint32_t* image::pixels()
+    {
+       if (!_impl) return nullptr;
++      // The caller may write them: draw from them afresh.
++      _impl->pixels_changed();
+       return reinterpret_cast<uint32_t*>(std::get<SkBitmap>(_impl->base()).getPixels());
+    }
+ 
+@@ -213,6 +215,8 @@ namespace cycfi::artist
+    offscreen_image::~offscreen_image()
+    {
+       delete _state;
++      // What was drawn into the bitmap is drawn from it afresh.
++      _image.impl()->pixels_changed();
+    }
+ 
+    canvas_impl* offscreen_image::context() const
+diff --git a/lib/artist/lib/impl/skia/opaque.hpp b/lib/artist/lib/impl/skia/opaque.hpp
+index aa3fa10..f2de41a 100644
+--- a/lib/artist/lib/impl/skia/opaque.hpp
++++ b/lib/artist/lib/impl/skia/opaque.hpp
+@@ -27,6 +27,21 @@ namespace cycfi::artist
+       base_type const&  base() const { return *this; }
+ 
+       float             scale = 1.0f;   // bitmap pixels per logical unit
++
++      // The bitmap as the SkImage canvas::draw draws, made once, sharing
++      // the bitmap's pixels. asImage copied a mutable bitmap's pixels on
++      // every draw, and each new SkImage is a new texture to the GPU
++      // backends, uploaded (and its mipmaps made) each time; one kept image
++      // is uploaded once. Dropped when the pixels may have changed:
++      // image::pixels() and offscreen_image.
++      sk_sp<SkImage>    drawn;
++
++      void pixels_changed()
++      {
++         if (auto* bitmap = std::get_if<SkBitmap>(&base()))
++            bitmap->notifyPixelsChanged();
++         drawn.reset();
++      }
+    };
+ 
+    class canvas_layer_impl

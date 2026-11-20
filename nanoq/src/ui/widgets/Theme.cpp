@@ -79,6 +79,35 @@ std::shared_ptr<cycfi::artist::image> Theme::Picture(std::string_view relativePa
     return mImages != nullptr && !relativePath.empty() ? mImages->Find(std::string(relativePath)) : nullptr;
 }
 
+std::vector<std::string> Theme::Pictures() const
+{
+    std::vector<std::string> pictures;
+    const auto add = [&](std::string_view path) {
+        if (!path.empty() && std::find(pictures.begin(), pictures.end(), path) == pictures.end())
+        {
+            pictures.emplace_back(path);
+        }
+    };
+
+    const auto& skin = Controls();
+    add(skin.knob.image);
+    const auto& b = skin.backdrops;
+
+    for (const auto* backdrop :
+         {&b.header, &b.controlBar, &b.chain, &b.main, &b.stage, &b.footer, &b.shell, &b.modal, &b.modalHeader})
+    {
+        for (int i = 0; i < backdrop->count; ++i)
+        {
+            if (backdrop->layers[i].kind == 0) // a picture, not a gradient
+            {
+                add(backdrop->layers[i].image);
+            }
+        }
+    }
+
+    return pictures;
+}
+
 el::color Theme::AccentFill() const noexcept
 {
     return IsLight() ? Accent() : Mix(Accent(), Panel(), 0.2f);
