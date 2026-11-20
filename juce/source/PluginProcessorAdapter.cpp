@@ -789,6 +789,72 @@ void PluginProcessorAdapter::reportPluginParameterEdits()
     }
 }
 
+namespace
+{
+/// The standalone's command line: the editor to choose before the first one is built.
+std::optional<bool>& launchEditorChoice()
+{
+    static std::optional<bool> choice;
+    return choice;
+}
+
+#if JUCE_WINDOWS && SOUNDSHED_NANOQ_UI
+/// A registry value from HKLM, then HKCU, in this process's own view; empty if neither has it.
+juce::String readMachineThenUserValue(const juce::String& keyAndValue,
+                                      juce::WindowsRegistry::WoW64Mode mode = juce::WindowsRegistry::WoW64_Default)
+{
+    for (const auto* root : {"HKEY_LOCAL_MACHINE\\", "HKEY_CURRENT_USER\\"})
+    {
+        const auto path = juce::String(root) + keyAndValue;
+
+        if (juce::WindowsRegistry::valueExists(path, mode))
+        {
+            return juce::WindowsRegistry::getValue(path, {}, mode);
+        }
+    }
+
+    return {};
+}
+
+/// The installer's "Use only the native UI" (juce/packaging/installer.iss, NativeUiOnly).
+bool installedNativeEditorOnly()
+{
+    static const bool only =
+        readMachineThenUserValue(juce::String(soundshed::product::installerRegistryKey) + "\\NativeUiOnly")
+            .getIntValue() != 0;
+    return only;
+}
+
+/// WebView2's runtime, found where the installer looks for it (IsWebView2RuntimeInstalled): the
+/// Evergreen runtime's version, in either registry view, machine-wide or per user.
+bool webView2RuntimeInstalled()
+{
+    static const bool installed = [] {
+        const juce::String version =
+            "SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}\\pv";
+
+        for (const auto mode : {juce::WindowsRegistry::WoW64_32bit, juce::WindowsRegistry::WoW64_64bit})
+        {
+            const auto found = readMachineThenUserValue(version, mode).trim();
+
+            if (found.isNotEmpty() && found != "0.0.0.0")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }();
+    return installed;
+}
+#endif
+} // namespace
+
+void PluginProcessorAdapter::setLaunchEditorChoice(std::optional<bool> nativeEditor)
+{
+    launchEditorChoice() = nativeEditor;
+}
+
 juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
 {
     // soundshed:// links open tone sharing.
@@ -809,6 +875,15 @@ juce::AudioProcessorEditor* PluginProcessorAdapter::createEditor()
     // Experimental: Nano Q's native UI instead of the WebView, when chosen in Settings, perhaps
     // from another instance's window since this one's was last open.
     mController.CatchUpWithSharedSettings();
+
+    // The standalone's --native-ui or --web-ui, stored as Settings' switch would store it, so it
+    // lasts and the UI shows it.
+    if (auto& choice = launchEditorChoice(); choice.has_value())
+    {
+        const nlohmann::json message{{"type", "setSetting"}, {"key", guitarfx::kNativeEditorSettingKey}, {"value", *choice}};
+        mController.HandleUIMessage(message.dump());
+        choice.reset();
+    }
 
     if (wantsNativeEditor())
     {
@@ -1422,11 +1497,26 @@ bool PluginProcessorAdapter::SupportsNativeEditor() const
 #endif
 }
 
+bool PluginProcessorAdapter::NativeEditorOnly() const
+{
+#if JUCE_WINDOWS && SOUNDSHED_NANOQ_UI
+    // Installed that way, or no WebView2 for the web UI to run in.
+    return installedNativeEditorOnly() || !webView2RuntimeInstalled();
+#else
+    return false;
+#endif
+}
+
 bool PluginProcessorAdapter::wantsNativeEditor() const
 {
     if (!SupportsNativeEditor())
     {
         return false;
+    }
+
+    if (NativeEditorOnly())
+    {
+        return true;
     }
 
     const auto& settings = mController.GetAppSettings();

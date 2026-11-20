@@ -19,4 +19,8 @@ inline constexpr int defaultWindowHeight = 900;
 /// Held for the life of the standalone app, so two copies never run at once: they would
 /// fight over the audio device, and the app-wide UI settings would go to whichever wrote last.
 inline constexpr const char* standaloneLockName = "SoundshedGuitarStandaloneApp";
+
+/// Windows: where the installer keeps its choices, under HKLM for a machine-wide install and HKCU
+/// for a per-user one (juce/packaging/installer.iss, InstallPathsRegKey: Publisher, ProductName).
+inline constexpr const char* installerRegistryKey = "Software\\Soundshed\\Soundshed Guitar\\Installer";
 } // namespace soundshed::product

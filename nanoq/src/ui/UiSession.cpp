@@ -27,7 +27,14 @@ UiSession::UiSession(UiLink& link, cycfi::elements::view& view)
             onToast(title, detail, isError);
         }
     };
-    mTones = std::make_unique<guitarfx::uiclient::ToneService>(mClient, mCommands, std::move(host));
+    auto transport = mLink.MakeHttpTransport();
+
+    if (!transport)
+    {
+        transport = guitarfx::net::MakePlatformTransport();
+    }
+
+    mTones = std::make_unique<guitarfx::uiclient::ToneService>(mClient, mCommands, std::move(host), std::move(transport));
 
     if (mDriver)
     {

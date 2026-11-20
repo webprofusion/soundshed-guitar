@@ -285,6 +285,9 @@ class Shell
     Ptr BuildChainStage();
     /// The footer's theme drop-down, in either frame.
     [[nodiscard]] std::shared_ptr<IconButton> BuildThemeButton();
+    /// Back to the web UI, where Soundshed Guitar hosts this UI (environment.nativeEditor); null
+    /// anywhere else.
+    [[nodiscard]] std::shared_ptr<IconButton> BuildStandardUiButton();
     /// Touch sizes' Auto, On or Off, in a drop-down (the Options popover, ShellFrame.cpp).
     [[nodiscard]] std::shared_ptr<IconButton> TouchControlsButton();
 

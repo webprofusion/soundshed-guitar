@@ -120,6 +120,16 @@ If you need to match CI dependencies on Ubuntu, install the JUCE Linux packages 
 ```bash
 sudo apt-get update
 sudo apt-get install libasound2-dev libx11-dev libxinerama-dev libxext-dev libfreetype6-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev ninja-build
+# The native (Nano) UI, built into every desktop build: Elements' X11 host and Cairo.
+sudo apt-get install libxrandr-dev libxcursor-dev libcairo2-dev libharfbuzz-dev libwebp-dev libfontconfig1-dev
+```
+
+The app can also draw itself with the native (Nano) UI instead of the WebView, for a desktop
+where WebKitGTK is missing or misbehaves. Start it once with `--native-ui` and it stays that way
+(the native UI's **Standard UI** button, or `--web-ui`, goes back):
+
+```bash
+/opt/Soundshed/soundshed-guitar/soundshed-guitar --native-ui
 ```
 ## Windows
 Full rebuild:

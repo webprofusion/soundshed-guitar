@@ -626,6 +626,12 @@ Ptr Shell::BuildWideFooter()
         row.push_back(HGap(8));
     }
 
+    if (auto standardUi = BuildStandardUiButton())
+    {
+        row.push_back(standardUi);
+        row.push_back(HGap(8));
+    }
+
     row.push_back(themeButton);
     row.push_back(HGap(12));
     // Touch sizes: the buttons are hit over the footer's whole height.

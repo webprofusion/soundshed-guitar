@@ -652,14 +652,31 @@ which controls development/authoring tools.
 
 **Native UI (Nano)** (`ui.nativeEditor`, `core/ui/ts/settings/nativeEditor.ts`) is an
 experimental switch under its own Experimental card, shown only when `environment.nativeEditor`
-is true: the host can build either editor (`IPluginHost::SupportsNativeEditor`; the Windows x64
-builds, where `SOUNDSHED_NANOQ_UI` is on by default). On, the JUCE app draws itself with Nano Q's
+is true: the host can build either editor (`IPluginHost::SupportsNativeEditor`; every desktop
+build, where `SOUNDSHED_NANOQ_UI` is on by default, and never iOS or Android). On, the JUCE app draws itself with Nano Q's
 native UI (`juce/source/NanoQUiEditor.*`, see [plans/nano-q-ui-in-juce.md](plans/nano-q-ui-in-juce.md))
 instead of the WebView. It is an ordinary `setSetting`; the JUCE adapter also passes the change to
 the standalone window, which swaps its editor in place with no relaunch (`MainWindow::switchEditorIfChosen`
 in `juce/source/Main.cpp`). A plugin's next editor follows the setting, so in a DAW it applies when the
-plugin window is next opened, for every instance. The native UI's Settings → Features has the same
-switch, shown under the same condition, as the way back. Nano Q's own app never shows it.
+plugin window is next opened, for every instance. The way back is in the native UI itself, under
+the same condition: a **Standard UI** button in its footer beside the theme picker (in the compact
+layout's Options popover, beside the layout), and the same switch in its Settings → Features. Nano
+Q's own app never shows either.
+
+Two more ways in, for a machine where the WebView cannot run:
+
+- **Command line** (the standalone, any desktop): `--native-ui` (or `--nano`) and `--web-ui` store
+  the setting before the first editor is built (`PluginProcessorAdapter::setLaunchEditorChoice`,
+  read in `juce/source/Main.cpp`), so the choice lasts. Meant for Linux without a working
+  WebKitGTK.
+- **Native UI only** (Windows): the installer's advanced task "Use only the native (Nano) UI"
+  writes `NativeUiOnly=1` under `Software\Soundshed\Soundshed Guitar\Installer` (HKLM, or HKCU for a
+  per-user install), and the app and plugins then build only the native UI
+  (`IPluginHost::NativeEditorOnly`, broadcast as `environment.nativeEditorOnly`). The same happens
+  when the WebView2 runtime is not installed at all. The native UI then hides the Standard UI
+  button and shows a note in place of the switch. The installer's other advanced task, "Don't
+  install the Microsoft Edge WebView2 runtime", skips only the runtime (so does Nano-only); both
+  can be passed to a silent install, `/TASKS="nativeuionly"`.
 
 ## Settings → Audio & MIDI
 

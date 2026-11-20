@@ -25,6 +25,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace juce
@@ -115,6 +116,7 @@ class PluginProcessorAdapter : public juce::AudioProcessor,
     [[nodiscard]] bool SupportsAudioDeviceSettings() const override;
     void HandleAudioDeviceRequest(const std::string& requestJson) override;
     [[nodiscard]] bool SupportsNativeEditor() const override;
+    [[nodiscard]] bool NativeEditorOnly() const override;
     void NotifyStateChanged() override;
     void NotifyDeferredStateRestored() override;
     void NotifyLatencyChanged(int latencySamples) override;
@@ -147,9 +149,15 @@ class PluginProcessorAdapter : public juce::AudioProcessor,
     void setWindowChromeHandler(WindowChromeHandler handler);
 
     // ── Editor switch (experimental) ───────────────────────────────
-    /// True when the next editor should be the native UI: built in (SupportsNativeEditor) and
-    /// chosen in Settings (guitarfx::kNativeEditorSettingKey). Message thread.
+    /// True when the next editor should be the native UI: built in (SupportsNativeEditor), and
+    /// either the only one this copy may use (NativeEditorOnly) or chosen in Settings
+    /// (guitarfx::kNativeEditorSettingKey). Message thread.
     [[nodiscard]] bool wantsNativeEditor() const;
+
+    /// The standalone's command line (--native-ui, --web-ui): the editor to choose before the
+    /// first one is built. The first createEditor stores it as the setting, as Settings would,
+    /// so it lasts. Call before the plugin holder exists.
+    static void setLaunchEditorChoice(std::optional<bool> nativeEditor);
     /// Called after either UI changes guitarfx::kNativeEditorSettingKey. The standalone app's
     /// window installs this to swap its editor in place; in a plugin nothing is installed, and
     /// the host's next editor follows the setting. Message thread only; the handler must not

@@ -682,6 +682,8 @@ struct Environment
     bool audioDeviceSettings = false;
     /// The host can build either editor and picks one by guitarfx::kNativeEditorSettingKey.
     bool nativeEditor = false;
+    /// It builds only the native UI (IPluginHost::NativeEditorOnly): no way back to the web UI.
+    bool nativeEditorOnly = false;
     std::string version;
     std::string os;
     std::string cpu;

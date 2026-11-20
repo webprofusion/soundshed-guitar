@@ -8,6 +8,7 @@
 #include "ui/shell/FrameParts.h"
 #include "ui/widgets/ControlSkin.h"
 
+#include "IPluginHost.h"
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/NodeLabels.h"
 #include "uiclient/PresetBrowse.h"
@@ -374,6 +375,22 @@ Ptr Shell::BuildScenes()
 
 // ── The chain stage ─────────────────────────────────────────────────────────────
 
+std::shared_ptr<IconButton> Shell::BuildStandardUiButton()
+{
+    // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web
+    // UI, beside Settings -> Features -> Experimental. The standalone swaps at once; a plugin's
+    // next window follows.
+    if (!mState.environment.nativeEditor || mState.environment.nativeEditorOnly)
+    {
+        return nullptr;
+    }
+
+    auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    button->Size(100, 28).Label("Standard UI", 11.0f);
+    button->onClick = [this] { mSession.Commands().SetSetting(guitarfx::kNativeEditorSettingKey, false); };
+    return button;
+}
+
 std::shared_ptr<IconButton> Shell::BuildThemeButton()
 {
     auto themeButton = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
@@ -633,6 +650,12 @@ void Shell::OpenOptions(el::rect anchor)
         auto zoom = ZoomButton();
         viewRow.push_back(HGap(8));
         viewRow.push_back(zoom);
+    }
+
+    if (auto standardUi = BuildStandardUiButton())
+    {
+        viewRow.push_back(HGap(8));
+        viewRow.push_back(standardUi);
     }
 
     viewRow.push_back(Stretch());

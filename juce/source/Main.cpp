@@ -866,6 +866,23 @@ class SoundshedGuitarApplication : public juce::JUCEApplication
 #endif
 
 #if !SOUNDSHED_MOBILE
+        // --native-ui (or --nano) opens the native UI and --web-ui the standard one, and the
+        // choice stays, as Settings' switch would keep it: a way in where the WebView cannot run
+        // (a Linux desktop without WebKitGTK, say). Read when the first editor is built.
+        const auto arguments = juce::JUCEApplicationBase::getCommandLineParameterArray();
+
+        if (arguments.contains("--native-ui") || arguments.contains("--nano"))
+        {
+            PluginProcessorAdapter::setLaunchEditorChoice(true);
+        }
+        else if (arguments.contains("--web-ui"))
+        {
+            PluginProcessorAdapter::setLaunchEditorChoice(false);
+        }
+
+#endif
+
+#if !SOUNDSHED_MOBILE
         // Before the plugin holder, whose constructor initialises the engine and opens the
         // audio device on this thread: a window now, and (Windows) the WebView's browser
         // process booting meanwhile.

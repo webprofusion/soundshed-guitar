@@ -1,12 +1,15 @@
 # Nano Q's UI in the JUCE app
 
-Status: **experimental, Windows x64 only.** Spike 2026-10-28 (see Results). Since 2026-11-19
-`SOUNDSHED_NANOQ_UI` is on by default for Windows x64 builds and builds the native UI *beside* the
-WebView editor, not in place of it: Settings → Features → Experimental → Native UI (Nano)
-(`ui.nativeEditor`) picks one, the standalone swaps its editor in place, and a plugin's next
-window follows the setting ([user-interface.md](../user-interface.md#settings--features)). The
-installer ships the fonts beside each binary, where Elements looks for them. An existing build
-tree keeps the value it cached; pass `-DSOUNDSHED_NANOQ_UI=ON` once to turn it on there.
+Status: **experimental, every desktop build.** Spike 2026-10-28 (see Results). Since 2026-11-19
+`SOUNDSHED_NANOQ_UI` builds the native UI *beside* the WebView editor, not in place of it:
+Settings → Features → Experimental → Native UI (Nano) (`ui.nativeEditor`) picks one, the
+standalone swaps its editor in place, and a plugin's next window follows the setting
+([user-interface.md](../user-interface.md#settings--features)); the native UI's footer has a
+**Standard UI** button back. Since 2026-11-20 it is on by default for every desktop build
+(Windows on any architecture, macOS, Linux), so the native UI is always there to switch to; iOS
+and Android stay on the WebView. The installer ships the fonts beside each binary, where Elements
+looks for them. An existing build tree keeps the value it cached; pass `-DSOUNDSHED_NANOQ_UI=ON`
+once to turn it on there. Only Windows x64 has been built and run; see "Other platforms".
 
 ## The question
 
@@ -50,6 +53,31 @@ loop dispatches those messages like any other window's, so nothing has to be pum
 The editor makes the Elements view a child of its peer's HWND and keeps it over the editor's area
 in physical pixels, using the sums `juce::HWNDComponent` uses. `HWNDComponent` itself cannot be
 used: it destroys the window it is handed when it lets go, and the Elements view destroys its own.
+
+### Other platforms
+
+`nanoq::ui::EmbeddedUi` takes the peer's native handle on each desktop, as QPlug's plugin view
+does (its `q_plug/src/<platform>/host_view`):
+
+- **macOS** (`EmbeddedUiCocoa.mm`): Elements' Cocoa view is added to the peer's `NSView` and
+  placed in points, counting from the top of a flipped parent and from the bottom of an unflipped
+  one. Events come through the host's own loop. The fonts go in each bundle's
+  `Contents/Resources`, which Elements searches and activates fonts from.
+- **Linux** (`EmbeddedUi.cpp`): Elements' X11 host (`ELEMENTS_HOST_UI_LIBRARY=x11`, Cairo) makes
+  a child of the peer's X11 window, found afterwards with `XQueryTree` because Elements keeps it
+  to itself, and placed with `XMoveResizeWindow`; the view hears of a resize as `ConfigureNotify`.
+  An X11 view reads a display connection of its own, which JUCE never looks at, so the editor
+  registers it with `juce::LinuxEventLoop::registerFdCallback` and runs a 60 Hz timer for the
+  views' timers (`NanoQUiEventPump`, one for all open editors). It needs x11, xcursor, xrandr,
+  cairo, cairo-xlib, cairo-ft, fontconfig, harfbuzz and libwebp: `build_linux.sh` checks for them
+  and both Linux workflows install them.
+- **HTTP**: the UI's network (tone sharing, Tone3000) uses core's platform transport, which in
+  this build is WinHTTP on Windows and nothing elsewhere (NSURLSession needs Objective-C++
+  enabled, libcurl is opt-in). So the JUCE editor hands it one built on `juce::URL` on macOS and
+  Linux (`UiLink::MakeHttpTransport`, `JuceHttpTransport`).
+
+Not built or run yet: macOS, Linux and Windows ARM64/ARM64EC. Expect the first macOS and Linux CI
+runs to need fixes.
 
 ## Build
 
@@ -125,7 +153,7 @@ zoom (no `getZoom`/`setZoom` from JUCE yet, so the zoom control is hidden).
 1. ~~Elements: a window class per binary.~~ Already so in Elements v1.0.2 (see Problems found).
 2. Run the JUCE build in DAWs (Reaper, Cubase, Studio One): focus, DPI, editor reopen, two
    instances.
-3. macOS: `EmbeddedUi` on an `NSView` parent (Elements' Cocoa host takes one), and
-   `NSViewComponent`-style placement in the editor.
+3. ~~macOS: `EmbeddedUi` on an `NSView` parent.~~ Written 2026-11-20, with Linux (X11); not yet
+   built (see "Other platforms").
 4. Zoom and the Jam tab's WebView2 in the JUCE shell.
 5. Decide the product shape: one app with a UI switch, or the JUCE build's editor replaced.

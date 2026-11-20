@@ -408,7 +408,14 @@ Ptr Shell::BuildSettingsPage()
 
         // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web
         // UI (its Settings → Features has the way here). The standalone app swaps at once.
-        if (mState.environment.nativeEditor)
+        if (mState.environment.nativeEditorOnly)
+        {
+            beginCard("Experimental");
+            describe("This copy of Soundshed Guitar uses only the native UI: it was installed that way, or "
+                     "the WebView2 runtime the standard UI needs is not installed.");
+            endCard();
+        }
+        else if (mState.environment.nativeEditor)
         {
             beginCard("Experimental");
             toggle(

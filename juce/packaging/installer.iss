@@ -26,6 +26,14 @@
   #define CommonFiles "{commoncf64}"
   #define ProgramFiles "{commonpf64}"
 #endif
+; The VST3 bundle's folder for this architecture's library.
+#if TargetArch == "Win32"
+  #define Vst3ArchDir "x86-win"
+#elif TargetArch == "ARM64"
+  #define Vst3ArchDir "arm64-win"
+#else
+  #define Vst3ArchDir "x86_64-win"
+#endif
 #define Year GetDateTimeString("yyyy","","")
 #define WebView2RuntimeUrl "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 
@@ -39,6 +47,12 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "standalone"; Description: "Standalone application"; Types: full custom; Flags: checkablealone
 Name: "vst3"; Description: "VST3 plugin"; Types: full custom; Flags: checkablealone
 Name: "clap"; Description: "CLAP plugin"; Types: custom; Flags: checkablealone
+
+; Advanced choices, off unless ticked (or passed: /TASKS="nativeuionly" or "skipwebview2" for a
+; silent install). Inno remembers them for the next install over this one.
+[Tasks]
+Name: "nativeuionly"; Description: "Use only the native (Nano) UI, with no WebView2 (experimental)"; GroupDescription: "Advanced:"; Flags: unchecked
+Name: "skipwebview2"; Description: "Don't install the Microsoft Edge WebView2 runtime"; GroupDescription: "Advanced:"; Flags: unchecked
 
 [Setup]
 #if TargetArch == "Win32"
@@ -79,18 +93,23 @@ Type: filesandordirs; Name: "{%TEMP}\SoundshedGuitarWebView2Check"
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "StandaloneDir"; ValueData: "{code:GetStandaloneDir}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "VST3Dir"; ValueData: "{code:GetVst3Dir}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "CLAPDir"; ValueData: "{code:GetClapDir}"; Flags: uninsdeletekeyifempty
+; Read by the app and the plugins (PluginProcessorAdapter::NativeEditorOnly): 1 builds only the
+; native UI and hides the way back to the WebView one. Written either way, so unticking it in a
+; later install undoes it.
+Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: dword; ValueName: "NativeUiOnly"; ValueData: "1"; Tasks: nativeuionly; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: dword; ValueName: "NativeUiOnly"; ValueData: "0"; Tasks: not nativeuionly; Flags: uninsdeletevalue
 
 ; MSVC adds a .ilk when building the plugin. Let's not include that.
 [Files]
 Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\*"; DestDir: "{code:GetVst3Dir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: vst3
 Source: "{#ArtefactsDir}\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; Flags: ignoreversion; Components: clap
 Source: "{#ArtefactsDir}\Standalone\*"; DestDir: "{code:GetStandaloneDir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: standalone
-; The experimental native UI's fonts (juce/cmake/NanoQUi.cmake; x64 builds only, hence
-; skipifsourcedoesntexist). Elements finds them only beside the binary that draws: resources\ next
-; to the exe or the VST3's library, and "<name> Resources" next to the CLAP, which keeps them out of
-; the resources folder every vendor's CLAP shares.
+; The experimental native UI's fonts (juce/cmake/NanoQUi.cmake; skipifsourcedoesntexist for a
+; build without it). Elements finds them only beside the binary that draws: resources\ next to the
+; exe or the VST3's library, and "<name> Resources" next to the CLAP, which keeps them out of the
+; resources folder every vendor's CLAP shares.
 Source: "{#ArtefactsDir}\Standalone\resources\*.ttf"; DestDir: "{code:GetStandaloneDir}\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: standalone
-Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\Contents\x86_64-win\resources\*.ttf"; DestDir: "{code:GetVst3Dir}\Contents\x86_64-win\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: vst3
+Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\Contents\{#Vst3ArchDir}\resources\*.ttf"; DestDir: "{code:GetVst3Dir}\Contents\{#Vst3ArchDir}\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: vst3
 Source: "{#ArtefactsDir}\CLAP\resources\*.ttf"; DestDir: "{code:GetClapDir}\{#ProductName} Resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
 Source: "{#UiStageDir}\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui"; Excludes: assets\amps\*,*\assets\amps\*,assets\ir\*,*\assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone or vst3 or clap
 #if TargetArch == "ARM64"
@@ -100,6 +119,8 @@ Source: "{#UiStageDir}\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui
 ; is one file, so there are two, sharing the resources folder; each host skips the one it cannot load.
 Source: "{#Arm64EcArtefactsDir}\VST3\{#ProductName}.vst3\Contents\arm64ec-win\*"; DestDir: "{code:GetVst3Dir}\Contents\arm64ec-win"; Excludes: *.ilk; Flags: ignoreversion recursesubdirs; Components: vst3
 Source: "{#Arm64EcArtefactsDir}\CLAP\{#ProductName}.clap"; DestDir: "{code:GetClapDir}"; DestName: "{#ProductName} (ARM64EC).clap"; Flags: ignoreversion; Components: clap
+; Its native UI's fonts, in the folder named after it (the arm64ec-win VST3 folder above carries its own).
+Source: "{#Arm64EcArtefactsDir}\CLAP\resources\*.ttf"; DestDir: "{code:GetClapDir}\{#ProductName} (ARM64EC) Resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
 #endif
 
 
@@ -262,7 +283,11 @@ end;
 
 function NeedsWebView2Runtime: Boolean;
 begin
-    Result := not IsWebView2RuntimeInstalled;
+    // Not wanted when the advanced choices leave it out: only the native UI, which draws without
+    // a browser, or the user installs (or deploys) the runtime themselves.
+    Result := not IsWebView2RuntimeInstalled
+        and not WizardIsTaskSelected('nativeuionly')
+        and not WizardIsTaskSelected('skipwebview2');
 end;
 
 function InstallWebView2Runtime: Boolean;
@@ -313,7 +338,7 @@ begin
     if WizardIsComponentSelected('standalone') then
     begin
         if not InstallWebView2Runtime then
-            Log('Continuing install without WebView2 runtime; standalone UI may not load until runtime is installed.');
+            Log('Continuing install without WebView2 runtime; the app and plugins will use the native UI until it is installed.');
     end;
 
     SharedUiPath := ExpandConstant('{commonappdata}\{#ProductName}\resources\ui');

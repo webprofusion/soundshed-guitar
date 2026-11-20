@@ -567,13 +567,13 @@ target_link_libraries(SharedCode
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
 # Experimental: Nano Q's native UI as a second editor beside the WebView (cmake/NanoQUi.cmake),
-# picked in Settings (PluginProcessorAdapter::wantsNativeEditor). Windows x64 only so far:
-# EmbeddedUi has no macOS or Linux parent yet, and Elements has not been built for ARM64(EC).
-set(_soundshed_nanoq_ui_default OFF)
-if(WIN32 AND NOT SSG_MOBILE AND _guitarfx_windows_target_arch MATCHES "^(x64|amd64|x86_64)$")
-    set(_soundshed_nanoq_ui_default ON)
+# picked in Settings (PluginProcessorAdapter::wantsNativeEditor). On for every desktop build, so
+# it is always there to switch to; iOS and Android stay on the WebView.
+set(_soundshed_nanoq_ui_default ON)
+if(SSG_MOBILE)
+    set(_soundshed_nanoq_ui_default OFF)
 endif()
-option(SOUNDSHED_NANOQ_UI "Build Nano Q's native UI as an experimental second editor (Windows x64)"
+option(SOUNDSHED_NANOQ_UI "Build Nano Q's native UI as an experimental second editor (desktop)"
     ${_soundshed_nanoq_ui_default})
 if(SOUNDSHED_NANOQ_UI)
     include(NanoQUi)

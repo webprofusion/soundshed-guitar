@@ -1,11 +1,122 @@
 #include "NanoQUiEditor.h"
 
+#include "net/Http.h"
 #include "ui/EmbeddedUi.h"
 #include "ui/UiLink.h"
 
 #include <mutex>
 #include <string>
 #include <vector>
+
+// ── HTTP ────────────────────────────────────────────────────────────────────
+
+#if !JUCE_WINDOWS
+/// The UI's HTTP through JUCE's URL, which the WebView build already relies on. Windows keeps
+/// the UI's own WinHTTP; macOS and Linux would otherwise have none here (core/src/net, whose
+/// NSURLSession transport needs Objective-C++ enabled and whose libcurl one is opt-in).
+class JuceHttpTransport final : public guitarfx::net::HttpTransport
+{
+  public:
+    guitarfx::net::HttpResponse Perform(const guitarfx::net::HttpRequest& request,
+                                        guitarfx::net::CancelToken& cancel) override
+    {
+        guitarfx::net::HttpResponse response;
+        const bool sendsBody = request.method != "GET";
+        juce::URL url(juce::String::fromUTF8(request.url.c_str()));
+
+        if (sendsBody)
+        {
+            url = url.withPOSTData(juce::MemoryBlock(request.body.data(), request.body.size()));
+        }
+
+        juce::String headers;
+
+        for (const auto& [name, value] : request.headers)
+        {
+            headers << juce::String::fromUTF8(name.c_str()) << ": " << juce::String::fromUTF8(value.c_str()) << "\r\n";
+        }
+
+        juce::WebInputStream stream(url, sendsBody);
+        stream.withExtraHeaders(headers)
+            .withConnectionTimeout(request.timeoutMs)
+            .withCustomRequestCommand(juce::String(request.method))
+            .withNumRedirectsToFollow(5);
+
+        if (!cancel.SetAbort([&stream] { stream.cancel(); }))
+        {
+            response.cancelled = true;
+            return response;
+        }
+
+        const bool connected = stream.connect(nullptr);
+
+        if (connected)
+        {
+            juce::MemoryOutputStream body;
+            body.writeFromInputStream(stream, -1);
+            response.body.assign(static_cast<const char*>(body.getData()), body.getDataSize());
+            response.status = stream.getStatusCode();
+
+            const auto& answer = stream.getResponseHeaders();
+
+            for (int i = 0; i < answer.size(); ++i)
+            {
+                response.headers[answer.getAllKeys()[i].toLowerCase().toStdString()] =
+                    answer.getAllValues()[i].toStdString();
+            }
+        }
+
+        cancel.ClearAbort();
+        response.cancelled = cancel.IsCancelled();
+
+        if (response.status == 0)
+        {
+            response.error = response.cancelled ? "Cancelled" : (connected ? "No answer" : "Could not connect");
+        }
+
+        return response;
+    }
+};
+#endif
+
+// ── Linux: the UI's own X11 connection ──────────────────────────────────────
+
+#if JUCE_LINUX || JUCE_BSD
+/// Elements' X11 views read a display connection of their own, which JUCE's loop never looks
+/// at (as a CLAP host is asked to, through posix-fd-support): JUCE watches it for them, and a
+/// timer runs their animations and deferred redraws. One for every editor open.
+class NanoQUiEventPump final : private juce::Timer
+{
+  public:
+    NanoQUiEventPump() : mFd(nanoq::ui::EmbeddedUi::EventFd())
+    {
+        if (mFd >= 0)
+        {
+            juce::LinuxEventLoop::registerFdCallback(mFd, [](int) { nanoq::ui::EmbeddedUi::PumpEvents(); });
+        }
+
+        startTimerHz(60);
+    }
+
+    ~NanoQUiEventPump() override
+    {
+        stopTimer();
+
+        if (mFd >= 0)
+        {
+            juce::LinuxEventLoop::unregisterFdCallback(mFd);
+        }
+    }
+
+  private:
+    void timerCallback() override
+    {
+        nanoq::ui::EmbeddedUi::PumpEvents();
+    }
+
+    int mFd = -1;
+};
+#endif
 
 // ── The engine's end ────────────────────────────────────────────────────────
 
@@ -74,6 +185,15 @@ class NanoQUiEditor::Link final : public nanoq::ui::UiLink
         return mProcessor.getController().ResolveLayoutImageFile(imageId);
     }
 
+    std::shared_ptr<guitarfx::net::HttpTransport> MakeHttpTransport() override
+    {
+#if JUCE_WINDOWS
+        return nullptr; // the UI's own WinHTTP
+#else
+        return std::make_shared<JuceHttpTransport>();
+#endif
+    }
+
   private:
     static constexpr size_t kMaxOutbox = 4096; // as Nano Q's engine
 
@@ -123,6 +243,9 @@ NanoQUiEditor::NanoQUiEditor(PluginProcessorAdapter& processor)
       mLink(std::make_unique<Link>(processor))
 {
     setOpaque(true);
+#if JUCE_LINUX || JUCE_BSD
+    mEventPump = std::make_shared<juce::SharedResourcePointer<NanoQUiEventPump>>();
+#endif
     applyInitialEditorSize();
     mPlacement = std::make_unique<Placement>(*this);
 
@@ -181,7 +304,12 @@ void NanoQUiEditor::placeChildWindow()
         return;
     }
 
+#if JUCE_MAC
+    // A Cocoa view is placed in points, as JUCE measures.
+    const auto area = mPeer->getAreaCoveredBy(*this);
+#else
     const auto area =
         (mPeer->getAreaCoveredBy(*this).toFloat() * mPeer->getPlatformScaleFactor()).getSmallestIntegerContainer();
+#endif
     mUi->Place(area.getX(), area.getY(), area.getWidth(), area.getHeight(), isShowing());
 }

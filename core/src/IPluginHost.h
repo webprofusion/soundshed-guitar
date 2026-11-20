@@ -134,6 +134,14 @@ class IPluginHost
         return false;
     }
 
+    /// True where the host builds only the native UI, whatever kNativeEditorSettingKey says: it
+    /// was installed that way, or the web UI cannot run here (no WebView2 runtime). The native
+    /// UI then hides its way back to the web UI.
+    [[nodiscard]] virtual bool NativeEditorOnly() const
+    {
+        return false;
+    }
+
     /// Notify host that plugin state has changed (marks DAW project dirty).
     virtual void NotifyStateChanged()
     {

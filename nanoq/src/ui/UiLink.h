@@ -11,9 +11,15 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+namespace guitarfx::net
+{
+class HttpTransport;
+}
 
 namespace nanoq::ui
 {
@@ -59,6 +65,14 @@ class UiLink
     [[nodiscard]] virtual std::optional<FileDialogRequest> TakeFileDialogRequest()
     {
         return std::nullopt;
+    }
+
+    /// The UI's HTTP (tone sharing, Tone3000, update checks), from a host with an HTTP stack of
+    /// its own; null for the platform's (net/Http.h MakePlatformTransport). Called once, when
+    /// the UI opens.
+    [[nodiscard]] virtual std::shared_ptr<guitarfx::net::HttpTransport> MakeHttpTransport()
+    {
+        return nullptr;
     }
 };
 } // namespace nanoq::ui
