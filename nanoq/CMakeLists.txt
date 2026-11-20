@@ -128,7 +128,10 @@ FetchContent_Declare(q
 # patches/elements-skia-image-cache.patch: Artist's Skia backend copied an image's pixels into a
 # new SkImage on every draw, which the GPU then uploaded (and made mipmaps for) every time; on the
 # iPad mini 2 that was about 60% of recording a redraw. Each image now keeps one SkImage that
-# shares its pixels.
+# shares its pixels. patches/elements-skia-fast-shadows.patch, on top of it: a shadow under a
+# filled rectangle, rounded rectangle or oval is drawn as that shape blurred by a mask filter,
+# which Skia's GPU backends blur analytically, instead of through a drop-shadow image filter, a
+# layer blurred in passes; on the iPad mini 2 that halved the main thread's time for a redraw.
 # An iOS build takes Artist's patch too.
 set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-input-redraws.patch
@@ -144,6 +147,9 @@ set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
     COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-skia-image-cache.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
+    COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-skia-fast-shadows.patch
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 if(NANOQ_IOS)
     # elements-log-clock.patch: Elements' quill loggers stamp messages with quill's TSC, which

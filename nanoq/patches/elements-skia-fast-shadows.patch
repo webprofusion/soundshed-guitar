@@ -1,0 +1,115 @@
+diff --git a/lib/artist/lib/impl/skia/canvas.cpp b/lib/artist/lib/impl/skia/canvas.cpp
+index b8d7d60..0cb9908 100755
+--- a/lib/artist/lib/impl/skia/canvas.cpp
++++ b/lib/artist/lib/impl/skia/canvas.cpp
+@@ -26,6 +26,8 @@
+ #include <effects/SkGradient.h>
+ #include <SkImageFilter.h>
+ #include <SkImageFilters.h>
++#include <SkMaskFilter.h>
++#include <SkBlurTypes.h>
+ #include <SkTextBlob.h>
+ #include <SkTypeface.h>
+ #include <SkFont.h>
+@@ -273,10 +275,101 @@ namespace cycfi::artist
+          cnv->restore();
+       }
+ 
++      // A shadow under a filled rectangle, rounded rectangle or oval, drawn
++      // as the shape itself, offset and blurred by a mask filter, before the
++      // shape. Skia's GPU backends blur those shapes analytically, straight
++      // into the target, where the drop shadow image filter (shadowed) draws
++      // the shape into a layer, blurs the layer in passes and composites it,
++      // recording a layer and a filter for each on the CPU as well.
++      // It is the same picture when the fill is opaque where the shape is
++      // (a solid color, or an opaque shader): the shadow takes the paint's
++      // alpha, as the filter would. Anything else (a stroke, a translucent
++      // shader, a blur, a blend mode other than source-over, uneven scales)
++      // returns false, and the filter does it.
++      bool draw_fast_shadow(
++         SkCanvas* cnv, canvas::canvas_state& state
++       , SkPath const& path, SkPaint const& paint)
++      {
++         if (!state.shadow_visible() || state.blur() > 0)
++            return false;
++         if (paint.getStyle() != SkPaint::kFill_Style
++            || paint.getPathEffect() || paint.getMaskFilter()
++            || paint.getColorFilter() || paint.getImageFilter())
++            return false;
++         if (paint.asBlendMode().value_or(SkBlendMode::kClear) != SkBlendMode::kSrcOver)
++            return false;
++         if (paint.getShader() && !paint.getShader()->isOpaque())
++            return false;
++         if (path.isInverseFillType())
++            return false;
++
++         SkRect rect;
++         SkRRect rrect;
++         enum { is_rect, is_rrect, is_oval } shape;
++         if (path.isRect(&rect))
++            shape = is_rect;
++         else if (path.isOval(&rect))
++            shape = is_oval;
++         else if (path.isRRect(&rrect))
++            shape = is_rrect;
++         else
++            return false;
++
++         auto base = state.get_inv_affine().invert();
++         double const base_scale =
++            std::sqrt(std::abs(base.a * base.d - base.c * base.b));
++
++         SkScalar m[6];
++         (void) cnv->getTotalMatrix().asAffine(m);
++         double det = m[0] * m[3] - m[2] * m[1];
++         if (det == 0)
++            return false;
++         double sx = std::hypot(m[0], m[1]);
++         double sy = std::hypot(m[2], m[3]);
++         // One sigma for both axes: the mask filter's is one number.
++         if (std::abs(sx - sy) > 1e-3 * std::max(sx, sy))
++            return false;
++
++         // As shadowed: the offset and blur are in the initial user space,
++         // mapped into local space.
++         auto const& sh = state.shadow();
++         double dx = base.a * sh._offset.x + base.c * sh._offset.y;
++         double dy = base.b * sh._offset.x + base.d * sh._offset.y;
++         double sigma = sh._blur / 2 * base_scale / sx;
++         double lx = (m[3] * dx - m[2] * dy) / det;
++         double ly = (m[0] * dy - m[1] * dx) / det;
++
++         auto c = sh._color;
++         float const alpha = c.alpha * (paint.getShader() ? 1.0f : paint.getAlphaf());
++         SkPaint sp;
++         sp.setAntiAlias(paint.isAntiAlias());
++         sp.setColor4f(SkColor4f{c.red, c.green, c.blue, alpha});
++         if (sigma > 0)
++            sp.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, SkScalar(sigma), true));
++
++         auto draw = [&](SkPaint const& p)
++         {
++            switch (shape)
++            {
++               case is_rect:  cnv->drawRect(rect, p); break;
++               case is_oval:  cnv->drawOval(rect, p); break;
++               case is_rrect: cnv->drawRRect(rrect, p); break;
++            }
++         };
++         cnv->save();
++         cnv->translate(SkScalar(lx), SkScalar(ly));
++         draw(sp);
++         cnv->restore();
++         draw(paint);   // the shape over it, as the filter would have drawn it
++         return true;
++      }
++
+       void draw_path(
+          SkCanvas* cnv, canvas::canvas_state& state
+        , SkPath const& path, SkPaint const& paint)
+       {
++         if (draw_fast_shadow(cnv, state, path, paint))
++            return;
+          with_blend(cnv, shadowed(cnv, state, paint), [&](SkPaint const& p)
+          {
+             cnv->drawPath(path, p);

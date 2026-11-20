@@ -214,8 +214,21 @@ dropped when they may change. Medians over a minute of use, before and after:
 
 What is left: drawing paths (about 40% of recording, fills more than strokes), the shadows'
 image filters (about 12%), and decoding a picture the first time it is shown (about 10%). On the
-GPU, 50-80 ms for the whole window. Making the shadows cheaper (a mask-filter blur of the shape
-instead of the drop-shadow image filter) was tried and measured no faster.
+GPU, 50-80 ms for the whole window.
+
+**Paths and shadows** (2026-11-20). Of the time recording paths, a third was shadows: Artist's
+Skia backend draws a shadow as a drop-shadow image filter, a layer recorded, blurred in passes and
+composited for each shape (the node cards' above all). `nanoq/patches/elements-skia-fast-shadows.patch`
+draws one under a filled rectangle, rounded rectangle or oval, with an opaque fill, as that shape
+blurred by a mask filter, which Ganesh blurs analytically; anything else keeps the filter. Measured
+by alternating the two on whole-window redraws (27 of each): recording 37 → 31 ms, and submitting
+51 → 17 ms, since the filters' layers cost most at flush; the main thread's time for a redraw about
+halved. (An earlier trial, while copying images swamped everything, could not see it.)
+A fifth of the path time was Skia's software rasteriser: with no MSAA, the GPU's triangulator
+takes an antialiased concave path of at most ten verbs, and anything longer (the inset highlight
+lines' even-odd pair of rounded boxes, the SVG icons) is drawn into a mask on the CPU. Redrawing
+the inset line as one nine-verb contour moved it to the GPU but saved about a millisecond a
+redraw, so it was left as it was.
 
 **Shader compiles.** The first time Skia meets a combination of effects it writes a shader and
 has Metal build a pipeline for it, through iOS's shader compiler service (`GrCompileMtlShaderLibrary`
