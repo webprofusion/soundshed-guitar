@@ -11,6 +11,7 @@ import { scheduleSignalPathLayoutAdapt } from "./signalPath/layout.js";
 import type { UiViewState } from "./types.js";
 import { isJamEnabled } from "./buildFlags.js";
 import { Features, isFeatureEnabled, isJamExperienceEnabled } from "./featureFlags.js";
+import { topOpenModal } from "./modalEscape.js";
 
 function getTabButtons() { return Array.from(document.querySelectorAll(".tab-button")); }
 function getTabPanels() { return Array.from(document.querySelectorAll(".tab-panel")); }
@@ -109,6 +110,46 @@ export function onOpenSettings(): void {
   switchMainPanel("settings");
 }
 
+/** The panel Settings was opened from, which closing it returns to. Play when it was the first thing shown. */
+let panelBeforeSettings = "visualizer";
+
+function isSettingsOpen(): boolean {
+  return document.documentElement.dataset.mainPanel === "settings";
+}
+
+/** Leaves Settings for the panel it was opened from. Does nothing when Settings is not showing. */
+export function closeSettings(): void {
+  if (isSettingsOpen()) {
+    switchMainPanel(panelBeforeSettings);
+  }
+}
+
+function isTextEntry(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+    || (target instanceof HTMLInputElement && !["button", "checkbox", "radio", "range", "submit"].includes(target.type));
+}
+
+/**
+ * The Close button in Settings, and Escape. Escape leaves a dialog, or a field the user is typing
+ * in, to deal with the key first: it closes Settings only when nothing else wanted it.
+ */
+export function initSettingsClose(): void {
+  document.getElementById("settings-close-btn")?.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || !isSettingsOpen()) {
+      return;
+    }
+    if (topOpenModal() || isTextEntry(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    closeSettings();
+  });
+}
+
 const TONES_TAB_PANEL_PREFIX = "tones-";
 
 // The Tones tab goes in the saved view with the rest. Through tonesPanelLink.ts, since the
@@ -138,6 +179,11 @@ export function switchMainPanel(panelId: string): void {
     }
     return normalizedPanelId;
   })();
+
+  const previousPanel = document.documentElement.dataset.mainPanel;
+  if (effectivePanelId === "settings" && previousPanel && previousPanel !== "settings") {
+    panelBeforeSettings = previousPanel;
+  }
 
   // The compact stage tabs belong to Play alone, and CSS cannot see which panel
   // is active from outside .main-content.
@@ -273,6 +319,11 @@ export function initializeIconBarTabs(options?: { onEq?: () => void; onMetronome
         if (options?.onEq) {
           options.onEq();
         }
+        return;
+      }
+      // The gear is a toggle: it is how Settings was opened, so it is where people look to leave.
+      if (panelId === "settings" && isSettingsOpen()) {
+        closeSettings();
         return;
       }
       switchMainPanel(panelId);
