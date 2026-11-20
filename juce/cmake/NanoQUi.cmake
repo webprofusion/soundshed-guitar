@@ -45,6 +45,12 @@ else()
 endif()
 add_subdirectory("${cycfi_elements_SOURCE_DIR}" "${cycfi_elements_BINARY_DIR}" EXCLUDE_FROM_ALL)
 
+# Direct2D's SDK helpers are marked __forceinline, but MSVC can intentionally leave
+# them un-inlined (notably in debug builds). Artist owns the warning-producing TUs.
+if(MSVC AND TARGET artist)
+    target_compile_options(artist PRIVATE /wd4714)
+endif()
+
 # The UI and the platform helpers it uses (the file picker's folder listing, paths, the log, the
 # Jam tab's web view, the caption colour). Nano Q's engine, QPlug glue and dialogs stay out: the
 # JUCE adapter is the engine's host.

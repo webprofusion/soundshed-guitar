@@ -259,6 +259,12 @@ endif()
 FetchContent_MakeAvailable(q)
 q_plug_settings()
 
+# Direct2D's SDK helpers are marked __forceinline, but MSVC can intentionally leave
+# them un-inlined (notably in debug builds). Artist owns the warning-producing TUs.
+if(MSVC AND TARGET artist)
+    target_compile_options(artist PRIVATE /wd4714)
+endif()
+
 # ── Nano Q ──────────────────────────────────────────────────────────────────────
 set(NANOQ_ID "com.soundshed.guitar.nanoq")
 set(NANOQ_NAME "Soundshed Nano Q")
