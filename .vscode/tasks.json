@@ -42,7 +42,8 @@
 				"--config",
 				"Debug",
 				"--target",
-				"SoundshedGuitar_Standalone"
+				"SoundshedGuitar_Standalone",
+				"--parallel"
 			],
 			"group": {
 				"kind": "build",
@@ -52,10 +53,6 @@
 		},
 		{
 			"label": "Build SoundshedGuitar (JUCE) Standalone Release",
-			"dependsOn": [
-				"Build TypeScript"
-			],
-			"dependsOrder": "sequence",
 			"type": "shell",
 			"command": "cmake",
 			"args": [
@@ -147,7 +144,8 @@
 				"--build",
 				"${workspaceFolder}/core/build",
 				"--config",
-				"Debug"
+				"Debug",
+				"--parallel"
 			],
 			"group": "build",
 			"problemMatcher": "$msCompile"
