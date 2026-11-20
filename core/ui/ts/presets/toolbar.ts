@@ -51,6 +51,7 @@ export function updatePresetActionButtons(): void {
   const editBtn = document.getElementById("preset-edit-btn") as HTMLButtonElement | null;
   const saveBtn = document.getElementById("preset-save-btn") as HTMLButtonElement | null;
   const saveAsBtn = document.getElementById("preset-save-as-btn") as HTMLButtonElement | null;
+  const saveAsToolbarBtn = document.getElementById("preset-save-as-toolbar-btn") as HTMLButtonElement | null;
   const deleteBtn = document.getElementById("preset-delete-btn") as HTMLButtonElement | null;
   const exportBtn = document.getElementById("preset-export-btn") as HTMLButtonElement | null;
   const importBtn = document.getElementById("preset-import-btn") as HTMLButtonElement | null;
@@ -73,15 +74,17 @@ export function updatePresetActionButtons(): void {
   if (saveBtn) {
     saveBtn.disabled = !canModify;
     saveBtn.title = canModify
-      ? (isNewPresetDraft ? "Save preset details first" : "Save Preset")
-      : "Cannot overwrite factory presets";
+      ? (isNewPresetDraft ? "Save preset details first" : "Save changes to this preset")
+      : "Factory presets cannot be overwritten. Use Save As to keep your own copy.";
     saveBtn.classList.toggle("preset-action-btn-unsaved", Boolean(uiState.presetDirty));
   }
-  if (saveAsBtn) {
-    const showSaveAs = hasActivePreset && !isNewPresetDraft;
-    saveAsBtn.hidden = !showSaveAs;
-    saveAsBtn.disabled = !showSaveAs;
-    saveAsBtn.title = "Save this preset as a new copy";
+  for (const button of [saveAsBtn, saveAsToolbarBtn]) {
+    if (button) {
+      const showSaveAs = hasActivePreset && !isNewPresetDraft;
+      button.hidden = !showSaveAs;
+      button.disabled = !showSaveAs;
+      button.title = "Save this preset as a new copy";
+    }
   }
   if (deleteBtn) {
     deleteBtn.disabled = !canModify;
