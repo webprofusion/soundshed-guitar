@@ -12,6 +12,7 @@
  * uploading every preset again.
  */
 
+import { summarizeSignalChainIssues, validatePresetSignalChain } from "../signalPath/chainValidation.js";
 import type { Preset } from "../types.js";
 import { escapeHtml } from "../utils.js";
 import { apiFetch } from "./api.js";
@@ -160,6 +161,12 @@ export async function resolveFolderPackItemIds(onProgress: (message: string) => 
   const unpublishable = pending.find((entry) => !hasPublishableSignalChain(entry.preset));
   if (unpublishable) {
     throw new Error(`"${unpublishable.preset.name || unpublishable.preset.id}" has no effects in its signal chain. Uncheck it to continue.`);
+  }
+  for (const entry of pending) {
+    const chainProblem = summarizeSignalChainIssues(validatePresetSignalChain(entry.preset));
+    if (chainProblem) {
+      throw new Error(`"${entry.preset.name || entry.preset.id}" can't be published: ${chainProblem} Fix it or uncheck it to continue.`);
+    }
   }
 
   let uploaded = 0;

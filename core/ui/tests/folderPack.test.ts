@@ -107,4 +107,31 @@ describe("saving a folder pack", () => {
     await expect(resolveFolderPackItemIds(vi.fn())).rejects.toThrow(/Empty/);
     expect(createToneSharingPresetItem).not.toHaveBeenCalled();
   });
+
+  it("refuses before uploading anything when a preset has a drive after its cab", async () => {
+    document.body.innerHTML = `<div id="tone-sharing-pack-items"></div>`;
+    apiFetch.mockResolvedValue({ items: [] });
+    const { EffectGuids } = await import("../ts/effectGuids.js");
+    const fizzy = preset("b", "Fizzy", {
+      graph: {
+        nodes: [
+          { id: "in", type: "input" },
+          { id: "cab", type: EffectGuids.kCabSimple },
+          { id: "od", type: EffectGuids.kOverdrive },
+          { id: "out", type: "output" },
+        ],
+        edges: [
+          { from: "in", to: "cab" },
+          { from: "cab", to: "od" },
+          { from: "od", to: "out" },
+        ],
+      },
+    } as unknown as Partial<Preset>);
+    const presets = [preset("a", "Good"), fizzy];
+    await startFolderPackSession("Gig", presets, async (id) => presets.find((p) => p.id === id)!);
+    renderFolderPackSelection();
+
+    await expect(resolveFolderPackItemIds(vi.fn())).rejects.toThrow(/"Fizzy" can't be published: .*after the cab/);
+    expect(createToneSharingPresetItem).not.toHaveBeenCalled();
+  });
 });

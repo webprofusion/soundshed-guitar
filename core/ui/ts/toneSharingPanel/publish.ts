@@ -4,6 +4,7 @@
  */
 
 import { showNotification } from "../notifications.js";
+import { summarizeSignalChainIssues, validatePresetSignalChain } from "../signalPath/chainValidation.js";
 import { uiState } from "../state.js";
 import { apiFetch } from "./api.js";
 import { loadBrowse, loadMine } from "./browse.js";
@@ -81,6 +82,15 @@ export function openToneSharingPublishPresetModal(defaultTitle?: string, default
       publishButton.disabled = true;
       publishButton.title = "Use Save As to create a new local preset before publishing";
     }
+  } else if (activePreset) {
+    const chainProblem = summarizeSignalChainIssues(validatePresetSignalChain(activePreset));
+    if (chainProblem) {
+      setUploadStatus(`Can't publish yet: ${chainProblem}`);
+      if (publishButton) {
+        publishButton.disabled = true;
+        publishButton.title = "Fix the signal chain before publishing";
+      }
+    }
   }
 
   // Reset pack assign UI
@@ -156,15 +166,23 @@ export async function uploadAndPublishItem(): Promise<void> {
     return;
   }
 
+  // The chain is checked before consent is asked for, so nobody agrees to publish a preset
+  // that is then refused.
+  if (!hasPublishableSignalChain(activePreset)) {
+    setUploadStatus("Preset must have a signal chain with at least one effect node to publish.");
+    return;
+  }
+
+  const chainProblem = summarizeSignalChainIssues(validatePresetSignalChain(activePreset));
+  if (chainProblem) {
+    setUploadStatus(`Can't publish yet: ${chainProblem}`);
+    return;
+  }
+
   try {
     await ensurePublishConsent();
   } catch (error) {
     setUploadStatus(`Publish cancelled: ${(error as Error).message}`);
-    return;
-  }
-
-  if (!hasPublishableSignalChain(activePreset)) {
-    setUploadStatus("Preset must have a signal chain with at least one effect node to publish.");
     return;
   }
 
