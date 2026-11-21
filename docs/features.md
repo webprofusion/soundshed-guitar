@@ -544,7 +544,7 @@ CSS variable-based theming with seven built-in themes (see `docs/theme-system.md
 - All colors use CSS variables (`--color-primary`, `--bg-primary`, `--text-primary`, etc.) — no hardcoded values in components.
 - **Persistence**: Selection stored in `localStorage` and `settings/app.json`.
 - **Choose**: the footer's Theme button opens a flyout with the UI zoom and a picture of each theme; a tile applies its theme at once (see `docs/theme-system.md`). `themeSwitcher.cycleTheme()` steps through them in code.
-- **Own effect-panel background**: Settings → UI → Effect Panel Background puts the player's own picture (PNG, JPEG, GIF or WebP) behind the play page's effect panel under every theme, with a Fade to keep text readable (see `docs/theme-system.md`).
+- **Own effect-panel background**: Settings → User Interface → Effect Panel Background puts the player's own picture (PNG, JPEG, GIF or WebP) behind the play page's effect panel under every theme, with a Fade to keep text readable (see `docs/theme-system.md`).
 - **Variable categories**: Primary colors, backgrounds, text, borders, controls, overlays, shadows.
 
 ---

@@ -567,65 +567,92 @@ body.fx-dragging .signal-connector {
   border: 1px solid var(--border-color);
 }
 
-.signal-diagnostics-header,
-.signal-diagnostics-item {
-  display: grid;
-  grid-template-columns: 90px minmax(220px, 1.4fr) 90px 140px 140px 100px 110px 130px;
-  gap: 8px;
-  align-items: center;
+/* The per-node table (dspNodeTable.ts): dense rows, figures right-aligned in tabular
+   digits, the chains as group headings. */
+.dsp-node-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
 }
 
-.signal-diagnostics-header {
-  font-size: 11px;
+.dsp-node-table th,
+.dsp-node-table td {
+  padding: 2px 6px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 16px;
+}
+
+.dsp-node-table thead th {
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-browser);
-  padding-bottom: 6px;
+  width: 52px;
 }
 
-.signal-diagnostics-columns {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
+/* Upper-casing would turn the micro sign into a capital Greek mu. */
+.dsp-node-table thead th.unit {
+  text-transform: none;
 }
 
-.signal-diagnostics-item {
-  break-inside: avoid;
-  margin-bottom: 8px;
+.dsp-node-table thead th:nth-child(2) {
+  width: 30px;
 }
 
-.signal-diagnostics-item {
-  background: var(--bg-browser-shell);
-  border: 1px solid var(--border-browser);
-  border-radius: var(--radius-lg);
-  padding: 6px 8px;
-  font-size: 11px;
-  color: var(--text-primary);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+.dsp-node-table thead th:nth-child(4) {
+  width: 40px;
 }
 
-.signal-diagnostics-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.dsp-node-table thead th:nth-child(5) {
+  width: 64px;
 }
 
-.signal-diagnostics-cell.scope {
+.dsp-node-table .name {
+  text-align: left;
+  width: auto;
+}
+
+.dsp-node-table thead th.name {
+  width: auto;
+}
+
+.dsp-node-table .dsp-node-group th {
+  text-align: left;
+  padding-top: 6px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text-secondary);
   text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
 }
 
-.signal-diagnostics-cell.node {
-  color: var(--text-primary);
-  flex-wrap: wrap;
+.dsp-node-table .dsp-node-row.odd td {
+  background: var(--bg-browser-shell);
 }
 
-.signal-diagnostics-cell.stereo {
+.dsp-node-table .dsp-node-row:hover td {
+  background: var(--bg-secondary);
+}
+
+.dsp-node-table .clip {
   font-weight: 600;
+}
+
+.dsp-node-table .clip-indicator {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  vertical-align: middle;
+  box-shadow: none;
 }
 
 .stereo-on {
@@ -639,10 +666,6 @@ body.fx-dragging .signal-connector {
 .stereo-unknown {
   color: var(--text-secondary);
   opacity: 0.8;
-}
-
-.signal-diagnostics-cell.clip {
-  font-weight: 600;
 }
 
 .clip-indicator {

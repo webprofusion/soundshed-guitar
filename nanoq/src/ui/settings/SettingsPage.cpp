@@ -1,11 +1,13 @@
 // The settings page, as the web UI's Settings (settings-panel.html, settings.css): the sections in
-// the shared section list (General, Audio & MIDI, DSP Performance, Features, Help; chips across the
-// top at the compact size), each a heading over cards. A card holds rows, a label in capitals at
-// the left and its control at the right (a drop-down, a switch, a slider), with a line under it
-// saying what it does. General has preset switching, the level targets, Tone3000, the library
-// export, software updates and the interface; Audio & MIDI the standalone app's devices
-// (DevicePage.cpp); DSP Performance the processing and the amp model (NAM) quality; Features the
-// switches every UI follows; Help the guides and what this build is. The controls are bound to the
+// the shared section list (General, Audio & MIDI, DSP Performance, UI, Help; chips across the top at
+// the compact size), each a heading over cards, and in DSP Performance and UI a row of tabs under
+// the heading. A card holds rows, a label in capitals at the left and its control at the right (a
+// drop-down, a switch, a slider), with a line under it saying what it does. General has software
+// updates, Tone3000 and the library export; Audio & MIDI the standalone app's devices
+// (DevicePage.cpp); DSP Performance the load over its tabs, then Diagnostics (DspPerformance.cpp),
+// Processing (the cores and the amp model (NAM) quality) and Levels & Switching (preset switching
+// and the level targets); UI the Interface (layout, controls, the native UI switch) and the
+// Features every UI follows; Help the guides and what this build is. The controls are bound to the
 // engine's settings (mLive), so they follow a change made anywhere, and dragging a slider is not
 // interrupted by the setting it just changed coming back. The theme is the footer's, as the web UI's.
 
@@ -45,6 +47,29 @@ using frame::NumberSetting;
 using frame::StringSetting;
 } // namespace
 
+Ptr Shell::BuildSettingsTabs(std::initializer_list<const char*> labels, int& tab)
+{
+    std::vector<Ptr> row;
+    int index = 0;
+
+    for (const char* label : labels)
+    {
+        auto t = std::make_shared<TextTab>(mTheme, label, tab == index, 13.0f, 28.0f, 34.0f);
+        t->onClick = [this, which = index, current = &tab] {
+            if (*current != which)
+            {
+                *current = which;
+                Mark(kPage);
+            }
+        };
+        row.push_back(t);
+        ++index;
+    }
+
+    row.push_back(Stretch());
+    return FixedHeight(34, Row(row));
+}
+
 Ptr Shell::BuildSettingsPage()
 {
     auto& commands = mSession.Commands();
@@ -55,7 +80,7 @@ Ptr Shell::BuildSettingsPage()
 
     for (const auto& [label, which] :
          {std::pair{"General", SettingsSection::General}, std::pair{"Audio & MIDI", SettingsSection::Audio},
-          std::pair{"DSP Performance", SettingsSection::Dsp}, std::pair{"Features", SettingsSection::Features},
+          std::pair{"DSP Performance", SettingsSection::Dsp}, std::pair{"User Interface", SettingsSection::Ui},
           std::pair{"Help", SettingsSection::Help}})
     {
         nav.items.push_back({label, mSettingsSection == which, [this, which] {
@@ -202,45 +227,27 @@ Ptr Shell::BuildSettingsPage()
     switch (mSettingsSection)
     {
     case SettingsSection::General: {
-        heading("DSP");
-        beginCard("Preset Switching");
-        pick(
-            "Carry Delay & Reverb Tails", {"Off", "1 bar", "2 bars", "3 bars", "4 bars"},
-            [this] {
-                return std::clamp(static_cast<int>(NumberSetting(mState.appSettings, kPresetSwitchTailSetting,
-                                                                 kPresetSwitchTailDefault)),
-                                  0, 4);
-            },
-            [&commands](int i) { commands.SetSetting(kPresetSwitchTailSetting, i); });
-        describe("Lets the preset you just left keep ringing out over the new one. Its input fades away, and its "
-                 "delay and reverb state is kept for the selected number of bars before fading out. Bars are counted "
-                 "at the current tempo, and each preset still ringing costs CPU.");
+        heading("Software Updates");
+        beginCard("Current Version");
+        {
+            auto v = std::make_shared<Text>(mTheme,
+                                            mState.environment.version.empty() ? std::string("Soundshed engine")
+                                                                               : mState.environment.version,
+                                            metrics::kTextSize, Weight::Medium);
+            row("Soundshed Nano Q", Middle(v));
+        }
         endCard();
+        beginCard("App Updates");
+        toggle(
+            "Check for updates on startup", [boolOr] { return boolOr("app.updateCheckEnabled", true); },
+            setBool("app.updateCheckEnabled"));
 
-        beginCard("Advanced DSP Level Targets");
-        describe("Target level when auto levelling signal chain elements.");
-        slider("Output Protection Ceiling", "audio.dsp.outputProtectionCeilingDbfs", -6.0, 0.0, -1.0, "dBFS", 1);
-        describe("The level the Output Limiter holds the mix under.");
-        toggle(
-            "Output Limiter", [boolOr] { return boolOr(kOutputLimiterSetting, false); },
-            setBool(kOutputLimiterSetting));
-        describe("Catches peaks at the very end of the chain, at the ceiling above. Applies to the whole output, not "
-                 "to any one preset.");
-        slider("Nominal Level", "audio.dsp.nominalOperatingLevelDbfs", -30.0, -6.0, -18.0, "dBFS", 1);
-        describe("The level the effects are voiced for.");
-        toggle(
-            "Full Level on Mono Outputs", [boolOr] { return boolOr("audio.dsp.monoOutputUnity", false); },
-            setBool("audio.dsp.monoOutputUnity"));
-        describe("A centred rig sits 3 dB below its input, so that it keeps its loudness when panned across a stereo "
-                 "output. A mono output has nothing to pan across: this brings the rig back to its input level there. "
-                 "Stereo outputs are unchanged.");
-        toggle(
-            "NAM Auto Input Calibration", [boolOr] { return boolOr("audio.nam.autoInputCalibration", true); },
-            setBool("audio.nam.autoInputCalibration"));
-        describe("Automatically correct NAM input level using model metadata and the interface calibration level "
-                 "below.");
-        slider("Interface Calibration Level", "audio.nam.interfaceCalibrationLevelDbu", 0.0, 24.0, 12.0, "dBu", 1);
-        describe("Reference level of your audio interface (12 dBu = typical prosumer, 18 dBu = professional).");
+        if (mUpdate)
+        {
+            card.push_back(FixedHeight(
+                44, button("Version " + mUpdate->version + " is available...", [this] { OpenUpdateDialog(); }, true)));
+        }
+
         endCard();
 
         if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::Tone3000))
@@ -267,61 +274,6 @@ Ptr Shell::BuildSettingsPage()
                  ".soundshed-library.zip.");
         endCard();
 
-        heading("Software Updates");
-        beginCard("Current Version");
-        {
-            auto v = std::make_shared<Text>(mTheme,
-                                            mState.environment.version.empty() ? std::string("Soundshed engine")
-                                                                               : mState.environment.version,
-                                            metrics::kTextSize, Weight::Medium);
-            row("Soundshed Nano Q", Middle(v));
-        }
-        endCard();
-        beginCard("App Updates");
-        toggle(
-            "Check for updates on startup", [boolOr] { return boolOr("app.updateCheckEnabled", true); },
-            setBool("app.updateCheckEnabled"));
-
-        if (mUpdate)
-        {
-            card.push_back(FixedHeight(
-                44, button("Version " + mUpdate->version + " is available...", [this] { OpenUpdateDialog(); }, true)));
-        }
-
-        endCard();
-
-        heading("UI");
-        beginCard("Layout");
-        pick(
-            "Layout Density", {"Auto layout", "Compact", "Full"},
-            [this] {
-                const auto density = StringSetting(mState.appSettings, kDensitySetting, "auto");
-                return density == "compact" ? 1 : density == "full" ? 2 : 0;
-            },
-            [&commands](int i) {
-                commands.SetSetting(kDensitySetting, i == 1 ? "compact" : i == 2 ? "full" : "auto");
-            });
-        // Hit areas for a finger (Shell::TouchSizes): Auto has them on a touch-first device.
-        pick(
-            "Touch Sizes", {"Auto", "On", "Off"},
-            [this] {
-                const auto touch = StringSetting(mState.appSettings, kTouchControlsSetting, "auto");
-                return touch == "on" ? 1 : touch == "off" ? 2 : 0;
-            },
-            [&commands](int i) {
-                commands.SetSetting(kTouchControlsSetting, i == 1 ? "on" : i == 2 ? "off" : "auto");
-            });
-        endCard();
-        beginCard("Controls");
-        toggle(
-            "Mouse wheel adjusts controls", [boolOr] { return boolOr("ui.mouseWheelAdjustsControls", true); },
-            setBool("ui.mouseWheelAdjustsControls"));
-        endCard();
-        beginCard("Signal Chain");
-        toggle(
-            "Animate signal flow", [boolOr] { return boolOr("ui.signalFlowAnimation", false); },
-            setBool("ui.signalFlowAnimation"));
-        endCard();
         break;
     }
     case SettingsSection::Audio: {
@@ -352,106 +304,213 @@ Ptr Shell::BuildSettingsPage()
     }
     case SettingsSection::Dsp: {
         heading("DSP Performance");
-        beginCard("Processing");
+        page.push_back(BuildDspFigures());
+        page.push_back(VGap(4));
         {
-            // The standalone app and the plugins keep their own choice, as in the web UI.
-            const char* key = mState.environment.standalone ? "audio.processing.multiCore.standalone"
-                                                            : "audio.processing.multiCore.plugin";
-            toggle("Use Multiple CPU Cores", [boolOr, key] { return boolOr(key, true); }, setBool(key));
-            describe("Spreads the chain over more cores where it can run in parallel.");
+            auto p =
+                std::make_shared<Paragraph>(mTheme,
+                                            "DSP Load is the share of the audio thread's time per block (typically "
+                                            "one core), not your whole CPU. Peak Load is the worst block lately.",
+                                            textWidth + 32.0f, 11.5f);
+            p->Colour(mTheme.TextSecondary());
+            page.push_back(Row({el::share(el::hold_any(p)), Stretch()}));
         }
-        toggle(
-            "Fast NAM Engine", [boolOr] { return boolOr("audio.nam.fusedEngine", true); },
-            setBool("audio.nam.fusedEngine"));
-        describe("A fused pass through a model where the model allows it.");
-        endCard();
+        page.push_back(VGap(10));
+        page.push_back(BuildSettingsTabs({"Diagnostics", "Processing", "Levels & Switching"}, mDspSettingsTab));
+        page.push_back(VGap(12));
 
-        beginCard("NAM Processing Quality");
+        if (mDspSettingsTab == 0)
         {
-            auto quality = std::make_shared<ParamSlider>(mTheme, "");
-            quality->AccessName("NAM Processing Quality");
-            quality->onChange = [&commands](double v) {
-                commands.SetSetting(kNamSlimmableSizeSetting, std::round(v * 100.0) / 100.0);
-            };
-            quality->onReset = [&commands] { commands.SetSetting(kNamSlimmableSizeSetting, 1.0); };
-            mLive.Bind(
-                quality,
-                [this] {
-                    return std::clamp(NumberSetting(mState.appSettings, kNamSlimmableSizeSetting, 1.0), 0.0, 1.0);
-                },
-                [](ParamSlider& s, double v) {
-                    s.Update(v, std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%");
-                });
-            row("Adjust Quality",
-                Row({FixedWidth(std::min(420.0f, textWidth - labelWidth), Middle(quality)), Stretch()}), 52.0f);
+            beginCard("");
+            card.push_back(BuildDspDiagnostics(textWidth));
+            endCard();
         }
-        describe("Lower quality reduces CPU use on models that support it. Watch the DSP load while you adjust it.");
-        pick(
-            "Oversampling", {"Off", "2x", "4x", "8x", "16x", "32x"},
-            [this] {
-                return std::clamp(static_cast<int>(NumberSetting(mState.appSettings, kNamOversamplingSetting, 0)), 0,
-                                  5);
-            },
-            [&commands](int i) { commands.SetSetting(kNamOversamplingSetting, i); });
-        pick(
-            "AA Filter", {"Minimum Phase", "Linear Short", "Linear Long"},
-            [this] {
-                return std::clamp(static_cast<int>(NumberSetting(mState.appSettings, kNamAntiAliasPhaseSetting, 0)), 0,
-                                  2);
-            },
-            [&commands](int i) { commands.SetSetting(kNamAntiAliasPhaseSetting, i); });
-        endCard();
+        else if (mDspSettingsTab == 1)
+        {
+            beginCard("Processing");
+            {
+                // The standalone app and the plugins keep their own choice, as in the web UI.
+                const char* key = mState.environment.standalone ? "audio.processing.multiCore.standalone"
+                                                                : "audio.processing.multiCore.plugin";
+                toggle("Use Multiple CPU Cores", [boolOr, key] { return boolOr(key, true); }, setBool(key));
+                describe("Spreads the chain over more cores where it can run in parallel.");
+            }
+            toggle(
+                "Fast NAM Engine", [boolOr] { return boolOr("audio.nam.fusedEngine", true); },
+                setBool("audio.nam.fusedEngine"));
+            describe("A fused pass through a model where the model allows it.");
+            endCard();
+
+            beginCard("NAM Processing Quality");
+            {
+                auto quality = std::make_shared<ParamSlider>(mTheme, "");
+                quality->AccessName("NAM Processing Quality");
+                quality->onChange = [&commands](double v) {
+                    commands.SetSetting(kNamSlimmableSizeSetting, std::round(v * 100.0) / 100.0);
+                };
+                quality->onReset = [&commands] { commands.SetSetting(kNamSlimmableSizeSetting, 1.0); };
+                mLive.Bind(
+                    quality,
+                    [this] {
+                        return std::clamp(NumberSetting(mState.appSettings, kNamSlimmableSizeSetting, 1.0), 0.0, 1.0);
+                    },
+                    [](ParamSlider& s, double v) {
+                        s.Update(v, std::to_string(static_cast<int>(std::lround(v * 100.0))) + "%");
+                    });
+                row("Adjust Quality",
+                    Row({FixedWidth(std::min(420.0f, textWidth - labelWidth), Middle(quality)), Stretch()}), 52.0f);
+            }
+            describe(
+                "Lower quality reduces CPU use on models that support it. Watch the DSP load while you adjust it.");
+            pick(
+                "Oversampling", {"Off", "2x", "4x", "8x", "16x", "32x"},
+                [this] {
+                    return std::clamp(static_cast<int>(NumberSetting(mState.appSettings, kNamOversamplingSetting, 0)),
+                                      0, 5);
+                },
+                [&commands](int i) { commands.SetSetting(kNamOversamplingSetting, i); });
+            pick(
+                "AA Filter", {"Minimum Phase", "Linear Short", "Linear Long"},
+                [this] {
+                    return std::clamp(static_cast<int>(NumberSetting(mState.appSettings, kNamAntiAliasPhaseSetting, 0)),
+                                      0, 2);
+                },
+                [&commands](int i) { commands.SetSetting(kNamAntiAliasPhaseSetting, i); });
+            endCard();
+        }
+        else
+        {
+            beginCard("Preset Switching");
+            pick(
+                "Carry Delay & Reverb Tails", {"Off", "1 bar", "2 bars", "3 bars", "4 bars"},
+                [this] {
+                    return std::clamp(static_cast<int>(NumberSetting(mState.appSettings, kPresetSwitchTailSetting,
+                                                                     kPresetSwitchTailDefault)),
+                                      0, 4);
+                },
+                [&commands](int i) { commands.SetSetting(kPresetSwitchTailSetting, i); });
+            describe(
+                "Lets the preset you just left keep ringing out over the new one. Its input fades away, and its "
+                "delay and reverb state is kept for the selected number of bars before fading out. Bars are counted "
+                "at the current tempo, and each preset still ringing costs CPU.");
+            endCard();
+
+            beginCard("Advanced DSP Level Targets");
+            describe("Target level when auto levelling signal chain elements.");
+            slider("Output Protection Ceiling", "audio.dsp.outputProtectionCeilingDbfs", -6.0, 0.0, -1.0, "dBFS", 1);
+            describe("The level the Output Limiter holds the mix under.");
+            toggle(
+                "Output Limiter", [boolOr] { return boolOr(kOutputLimiterSetting, false); },
+                setBool(kOutputLimiterSetting));
+            describe(
+                "Catches peaks at the very end of the chain, at the ceiling above. Applies to the whole output, not "
+                "to any one preset.");
+            slider("Nominal Level", "audio.dsp.nominalOperatingLevelDbfs", -30.0, -6.0, -18.0, "dBFS", 1);
+            describe("The level the effects are voiced for.");
+            toggle(
+                "Full Level on Mono Outputs", [boolOr] { return boolOr("audio.dsp.monoOutputUnity", false); },
+                setBool("audio.dsp.monoOutputUnity"));
+            describe(
+                "A centred rig sits 3 dB below its input, so that it keeps its loudness when panned across a stereo "
+                "output. A mono output has nothing to pan across: this brings the rig back to its input level there. "
+                "Stereo outputs are unchanged.");
+            toggle(
+                "NAM Auto Input Calibration", [boolOr] { return boolOr("audio.nam.autoInputCalibration", true); },
+                setBool("audio.nam.autoInputCalibration"));
+            describe("Automatically correct NAM input level using model metadata and the interface calibration level "
+                     "below.");
+            slider("Interface Calibration Level", "audio.nam.interfaceCalibrationLevelDbu", 0.0, 24.0, 12.0, "dBu", 1);
+            describe("Reference level of your audio interface (12 dBu = typical prosumer, 18 dBu = professional).");
+            endCard();
+        }
+
         break;
     }
-    case SettingsSection::Features: {
-        heading("Feature Toggles");
+    case SettingsSection::Ui: {
+        heading("User Interface");
+        page.push_back(BuildSettingsTabs({"Interface", "Features"}, mUiSettingsTab));
+        page.push_back(VGap(12));
 
-        // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web
-        // UI (its Settings → Features has the way here). The standalone app swaps at once.
-        if (mState.environment.nativeEditorOnly)
+        if (mUiSettingsTab == 0)
         {
-            beginCard("Experimental");
-            describe("This copy of Soundshed Guitar uses only the native UI: it was installed that way, or "
-                     "the WebView2 runtime the standard UI needs is not installed.");
+            beginCard("Layout");
+            pick(
+                "Layout Density", {"Auto layout", "Compact", "Full"},
+                [this] {
+                    const auto density = StringSetting(mState.appSettings, kDensitySetting, "auto");
+                    return density == "compact" ? 1 : density == "full" ? 2 : 0;
+                },
+                [&commands](int i) {
+                    commands.SetSetting(kDensitySetting, i == 1 ? "compact" : i == 2 ? "full" : "auto");
+                });
+            // Hit areas for a finger (Shell::TouchSizes): Auto has them on a touch-first device.
+            pick(
+                "Touch Sizes", {"Auto", "On", "Off"},
+                [this] {
+                    const auto touch = StringSetting(mState.appSettings, kTouchControlsSetting, "auto");
+                    return touch == "on" ? 1 : touch == "off" ? 2 : 0;
+                },
+                [&commands](int i) {
+                    commands.SetSetting(kTouchControlsSetting, i == 1 ? "on" : i == 2 ? "off" : "auto");
+                });
             endCard();
-        }
-        else if (mState.environment.nativeEditor)
-        {
-            beginCard("Experimental");
+            beginCard("Controls");
             toggle(
-                "Native UI (Nano)", [boolOr] { return boolOr(guitarfx::kNativeEditorSettingKey, false); },
-                setBool(guitarfx::kNativeEditorSettingKey));
-            describe(mState.environment.standalone
-                         ? "Switch off to go back to the standard UI."
-                         : "Switch off to go back to the standard UI when the plugin window is next opened, for "
-                           "every instance.");
+                "Mouse wheel adjusts controls", [boolOr] { return boolOr("ui.mouseWheelAdjustsControls", true); },
+                setBool("ui.mouseWheelAdjustsControls"));
             endCard();
-        }
 
-        // Core features are on unless switched off; power features off unless switched on.
-        for (const bool core : {true, false})
-        {
-            beginCard(core ? "Core Features" : "Power Features");
-
-            for (const auto feature : guitarfx::uiclient::AllFeatures())
+            // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web
+            // UI (its Settings → User Interface → Interface has the way here). The standalone app swaps at once.
+            if (mState.environment.nativeEditorOnly)
             {
-                if (guitarfx::uiclient::FeatureDefault(feature) != core)
+                beginCard("Native UI");
+                describe("This copy of Soundshed Guitar uses only the native UI: it was installed that way, or "
+                         "the WebView2 runtime the standard UI needs is not installed.");
+                endCard();
+            }
+            else if (mState.environment.nativeEditor)
+            {
+                beginCard("Native UI");
+                toggle(
+                    "Native UI (Nano)", [boolOr] { return boolOr(guitarfx::kNativeEditorSettingKey, false); },
+                    setBool(guitarfx::kNativeEditorSettingKey));
+                describe(mState.environment.standalone
+                             ? "Switch off to go back to the standard UI."
+                             : "Switch off to go back to the standard UI when the plugin window is next opened, for "
+                               "every instance.");
+                endCard();
+            }
+        }
+        else
+        {
+            // Core features are on unless switched off; power features off unless switched on.
+            for (const bool core : {true, false})
+            {
+                beginCard(core ? "Core Features" : "Power Features");
+
+                for (const auto feature : guitarfx::uiclient::AllFeatures())
                 {
-                    continue;
+                    if (guitarfx::uiclient::FeatureDefault(feature) != core)
+                    {
+                        continue;
+                    }
+
+                    const char* key = guitarfx::uiclient::FeatureSettingKey(feature);
+                    toggle(
+                        guitarfx::uiclient::FeatureLabel(feature),
+                        [this, feature] { return guitarfx::uiclient::IsFeatureEnabled(mState, feature); },
+                        setBool(key));
                 }
 
-                const char* key = guitarfx::uiclient::FeatureSettingKey(feature);
-                toggle(
-                    guitarfx::uiclient::FeatureLabel(feature),
-                    [this, feature] { return guitarfx::uiclient::IsFeatureEnabled(mState, feature); }, setBool(key));
+                endCard();
             }
 
+            beginCard("");
+            describe("Shared with Soundshed Guitar. Some features (the AI Tone Builder, the editors) are there only.");
             endCard();
         }
 
-        beginCard("");
-        describe("Shared with Soundshed Guitar. Some features (the AI Tone Builder, the editors) are there only.");
-        endCard();
         break;
     }
     case SettingsSection::Help: {

@@ -594,7 +594,7 @@ function importLatestRevision(applyToNode: boolean): void {
 
 export async function openCustomEffectDesigner(node: GraphNode): Promise<void> {
   if (!isFeatureEnabled(Features.CustomEffects)) {
-    showNotification("Custom Effect Designer", "Custom Effects are disabled in Settings > Features");
+    showNotification("Custom Effect Designer", "Custom Effects are disabled in Settings > User Interface > Features");
     return;
   }
 

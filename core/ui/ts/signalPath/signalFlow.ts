@@ -9,29 +9,18 @@
  * up from about 1% to 9% of a core while playing); a class that flips when you
  * start and stop playing costs nothing in between.
  *
- * It is a setting (Settings → General → UI, "Animate signal flow"), off unless
- * turned on. Even as a class the pulses cost a few percent of a core while
- * playing: the meters keep the page drawing every frame, and Blink restyles
- * running animations on each one. Off, nothing here runs.
+ * It is always on. It used to be a setting ("Animate signal flow", off by
+ * default) because the pulses cost a few percent of a core while playing: the
+ * meters keep the page drawing every frame, and Blink restyles running
+ * animations on each one.
  *
  * A connector carries the signal of the node it leaves. Not every node reports a
  * level (a splitter may not), so a node without its own reading is live when any
  * connector leading into it is.
  */
 
-import { getAppSetting } from "../appSettingsStore.js";
 import { uiState } from "../state.js";
 import { signalPathNodesElement } from "./state.js";
-
-export const SIGNAL_FLOW_ANIMATION_SETTING = "ui.signalFlowAnimation";
-
-/** Off unless the user turned it on. */
-export function isSignalFlowAnimationEnabled(): boolean {
-  return getAppSetting(SIGNAL_FLOW_ANIMATION_SETTING) === true;
-}
-
-/** Whether the last frame lit anything, so turning the setting off clears it once rather than every frame. */
-let lit = false;
 
 /** RMS above this counts as signal. */
 const LIVE_THRESHOLD_DBFS = -54;
@@ -57,14 +46,6 @@ export function updateSignalPathFlow(): void {
   if (!root) {
     return;
   }
-  if (!isSignalFlowAnimationEnabled()) {
-    if (lit) {
-      root.querySelectorAll(".signal-live").forEach((element) => element.classList.remove("signal-live"));
-      lit = false;
-    }
-    return;
-  }
-  lit = true;
 
   const diagnostics = uiState.signalDiagnostics;
   const reported = new Map<string, boolean>();

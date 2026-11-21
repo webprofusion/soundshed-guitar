@@ -249,7 +249,7 @@ By hand, on a machine the workflow cannot reach:
 1. Tests and tools call `nammodelcache::SetFusedEngineEnabled`.
 2. Launching with the environment variable `GUITARFX_NAM_ENGINE=core` makes every model the NAM
    core's, for A/B listening and support. It can only turn the engine off.
-3. Users have **Fast NAM Engine** in Settings → DSP Performance (`audio.nam.fusedEngine`, on when
+3. Users have **Fast NAM Engine** in Settings → DSP Performance → Processing (`audio.nam.fusedEngine`, on when
    absent). The UI is `core/ui/ts/settings/namEngine.ts`, and the engine side is
    `PluginController::ApplyNamEngineSettingFromAppSettings`, which passes it to
    `nammodelcache::SetFusedEngineSettingEnabled`. There is one key for the standalone and plugins,

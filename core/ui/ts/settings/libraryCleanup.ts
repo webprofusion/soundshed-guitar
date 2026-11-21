@@ -37,7 +37,7 @@ export function updateResourceCleanupVisibility(enabled: boolean): void {
 
 export async function cleanupUnusedResources(): Promise<void> {
   if (!isFeatureEnabled(Features.ResourceCleanup)) {
-    showNotification("Cleanup unavailable", "Enable Resource Cleanup Tools in Settings > Features to use Resource Library cleanup.");
+    showNotification("Cleanup unavailable", "Enable Resource Cleanup Tools in Settings > User Interface > Features to use Resource Library cleanup.");
     return;
   }
 

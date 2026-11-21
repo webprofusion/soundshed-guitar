@@ -42,7 +42,7 @@ import { renderLooperStrip, updateLooperStrip } from "./looper/strip.js";
 import { showNotification } from "./notifications.js";
 
 const NOTICES: Record<string, string> = {
-  disabled: "The looper is off. Turn it on in Settings → Features.",
+  disabled: "The looper is off. Turn it on in Settings → User Interface → Features.",
   noCapture: "The looper is still getting ready. Try again in a moment.",
   tooLong: "That many bars is longer than the longest loop. Choose fewer bars, or a longer loop in the looper's options.",
   noSpare: "The next layer was not ready in time. Press again.",

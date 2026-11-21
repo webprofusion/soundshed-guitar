@@ -1,9 +1,5 @@
-          <div class="equipment-tab-panel" id="equipment-tab-performance">
+          <div class="equipment-tab-panel" id="equipment-tab-performance" hidden>
             <h2>DSP Performance</h2>
-            <div class="performance-section">
-              <h3>Diagnostics</h3>
-              <div class="settings-hint">Signal levels, headroom, and clipping are reported continuously for chain input/output and nodes. DSP Load figure is for single audio-thread (typically 1 core), not your entire CPU.</div>
-            </div>
             <div class="performance-stats">
               <div class="performance-metric">
                 <span class="metric-label">DSP Load:</span>
@@ -18,119 +14,194 @@
                 <span class="metric-value" id="dsp-latency-value">—</span>
               </div>
             </div>
-            <div class="performance-section">
-              <h3>Processing</h3>
-              <div class="settings-row">
-                <label for="multi-core-processing-toggle">Use Multiple CPU Cores</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="multi-core-processing-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Spreads heavy chains (stereo NAM and IR, split chains, several presets at once) over extra helper threads. On by default in the standalone app. Off by default in a DAW, which already shares its tracks across your cores: there the extra threads compete with it and can cause crackles. The standalone app and the plugin keep separate settings, and the plugin's applies to every instance.</div>
-              <div class="settings-row">
-                <label for="nam-fused-engine-toggle">Fast NAM Engine</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="nam-fused-engine-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Runs NAM amp and effect models on Soundshed's optimised engine, which typically uses a half to a fifth of the CPU of the standard NAM engine for the same sound. Turn it off to compare the two, or if a model behaves differently. Changing it rebuilds the running presets, and in a DAW it applies to every instance.</div>
+            <div class="settings-hint">DSP Load is the share of the audio thread's time per block (typically one core), not your whole CPU. Peak Load is the worst block lately.</div>
+            <div class="settings-sub-tabs tab-bar" role="tablist" aria-label="DSP Performance settings" data-sub-tabs="performance">
+              <button class="settings-sub-tab-btn tab-btn active" type="button" data-sub-tab="diagnostics" role="tab" aria-selected="true">Diagnostics</button>
+              <button class="settings-sub-tab-btn tab-btn" type="button" data-sub-tab="processing" role="tab" aria-selected="false">Processing</button>
+              <button class="settings-sub-tab-btn tab-btn" type="button" data-sub-tab="levels" role="tab" aria-selected="false">Levels &amp; Switching</button>
             </div>
-            <div class="performance-section">
-              <h3>NAM Processing Quality</h3>
-              <div class="nam-quality-control">
-                <label for="nam-slimmable-size-input">Adjust Quality</label>
-                <div class="nam-quality-slider-row">
-                  <span class="nam-quality-endpoint">Min</span>
-                  <input type="range" id="nam-slimmable-size-input" min="0" max="1" step="0.01" />
-                  <span class="nam-quality-endpoint">Max</span>
+
+            <div class="settings-sub-panel active" data-sub-panel="diagnostics" id="performance-diagnostics-panel">
+              <div class="settings-hint">Signal levels, headroom and clipping, reported continuously for the chain's input and output and for each node.</div>
+              <div class="performance-details">
+                <h3>Signal Diagnostics <span class="metric-value" id="signal-diagnostics-status">Enabled</span></h3>
+                <div class="signal-diagnostics-summary">
+                  <div class="performance-metric">
+                    <span class="metric-label">Input Peak:</span>
+                    <span class="metric-value" id="signal-input-peak">—</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Input RMS:</span>
+                    <span class="metric-value" id="signal-input-rms">—</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Input Headroom:</span>
+                    <span class="metric-value" id="signal-input-headroom">—</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Input Clipping:</span>
+                    <span class="metric-value signal-clip-status clip-off" id="signal-input-clipping">
+                      <span class="clip-indicator"></span>
+                      —
+                    </span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Output Peak:</span>
+                    <span class="metric-value" id="signal-output-peak">—</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Output RMS:</span>
+                    <span class="metric-value" id="signal-output-rms">—</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Output Headroom:</span>
+                    <span class="metric-value" id="signal-output-headroom">—</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Output Clipping:</span>
+                    <span class="metric-value signal-clip-status clip-off" id="signal-output-clipping">
+                      <span class="clip-indicator"></span>
+                      —
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div class="settings-hint">Adjust quality while watching DSP Load and Peak Load above. Lower quality reduces CPU use.</div>
-              <div class="settings-row">
-                <label for="nam-oversampling-select">Oversampling</label>
-                <select id="nam-oversampling-select" class="themed-select">
-                  <option value="0">Off</option>
-                  <option value="1">2x</option>
-                  <option value="2">4x</option>
-                  <option value="3">8x</option>
-                  <option value="4">16x</option>
-                  <option value="5">32x</option>
-                </select>
+              <div class="performance-plot-container">
+                <canvas id="performance-plot" width="400" height="200"></canvas>
               </div>
-              <div class="settings-hint">Renders NAM models at a multiple of their native rate to reduce aliasing on high-gain models. Each step roughly multiplies NAM CPU cost, and applies to every NAM node in every preset.</div>
-              <div class="settings-row">
-                <label for="nam-anti-alias-phase-select">AA Filter</label>
-                <select id="nam-anti-alias-phase-select" class="themed-select">
-                  <option value="0">Minimum Phase</option>
-                  <option value="1">Linear Short</option>
-                  <option value="2">Linear Long</option>
-                </select>
-              </div>
-              <div class="settings-hint">Anti-alias filter for the NAM resampler. Minimum Phase is the low-latency real-time default; the linear options are phase-linear but add latency. This also applies when oversampling is Off if your sample rate differs from the model's native rate.</div>
-            </div>
-            <div class="performance-details">
-              <h3>Signal Diagnostics <span class="metric-value" id="signal-diagnostics-status">Enabled</span></h3>
-              <div class="signal-diagnostics-summary">
-                <div class="performance-metric">
-                  <span class="metric-label">Input Peak:</span>
-                  <span class="metric-value" id="signal-input-peak">—</span>
+              <div class="performance-details">
+                <h3>Per-Node Diagnostics</h3>
+                <div class="designed-peak-input-section" id="designed-peak-input-section">
+                  <div class="performance-metric">
+                    <span class="metric-label">Preset Designed Peak Input:</span>
+                    <span class="metric-value" id="designed-peak-stored-value">&mdash;</span>
+                  </div>
+                  <div class="performance-metric">
+                    <span class="metric-label">Current Raw Input Peak (10s hold):</span>
+                    <span class="metric-value" id="designed-peak-current-value">&mdash;</span>
+                  </div>
                 </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Input RMS:</span>
-                  <span class="metric-value" id="signal-input-rms">—</span>
-                </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Input Headroom:</span>
-                  <span class="metric-value" id="signal-input-headroom">—</span>
-                </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Input Clipping:</span>
-                  <span class="metric-value signal-clip-status clip-off" id="signal-input-clipping">
-                    <span class="clip-indicator"></span>
-                    —
-                  </span>
-                </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Output Peak:</span>
-                  <span class="metric-value" id="signal-output-peak">—</span>
-                </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Output RMS:</span>
-                  <span class="metric-value" id="signal-output-rms">—</span>
-                </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Output Headroom:</span>
-                  <span class="metric-value" id="signal-output-headroom">—</span>
-                </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Output Clipping:</span>
-                  <span class="metric-value signal-clip-status clip-off" id="signal-output-clipping">
-                    <span class="clip-indicator"></span>
-                    —
-                  </span>
+                <div id="signal-diagnostics-list">
+                  <!-- Signal diagnostics details will be populated here -->
                 </div>
               </div>
             </div>
-            <div class="performance-plot-container">
-              <canvas id="performance-plot" width="400" height="200"></canvas>
-            </div>
-            <div class="performance-details">
-              <h3>Per-Node Diagnostics</h3>
-              <div class="designed-peak-input-section" id="designed-peak-input-section">
-                <div class="performance-metric">
-                  <span class="metric-label">Preset Designed Peak Input:</span>
-                  <span class="metric-value" id="designed-peak-stored-value">&mdash;</span>
+
+            <div class="settings-sub-panel" data-sub-panel="processing" hidden>
+              <div class="performance-section">
+                <h3>Processing</h3>
+                <div class="settings-row">
+                  <label for="multi-core-processing-toggle">Use Multiple CPU Cores</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="multi-core-processing-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
                 </div>
-                <div class="performance-metric">
-                  <span class="metric-label">Current Raw Input Peak (10s hold):</span>
-                  <span class="metric-value" id="designed-peak-current-value">&mdash;</span>
+                <div class="settings-hint">Spreads heavy chains (stereo NAM and IR, split chains, several presets at once) over extra helper threads. On by default in the standalone app. Off by default in a DAW, which already shares its tracks across your cores: there the extra threads compete with it and can cause crackles. The standalone app and the plugin keep separate settings, and the plugin's applies to every instance.</div>
+                <div class="settings-row">
+                  <label for="nam-fused-engine-toggle">Fast NAM Engine</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="nam-fused-engine-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
                 </div>
-                <button type="button" id="apply-designed-peak-btn" class="settings-row-btn" disabled>Apply as Designed Peak Input to Preset</button>
+                <div class="settings-hint">Runs NAM amp and effect models on Soundshed's optimised engine, which typically uses a half to a fifth of the CPU of the standard NAM engine for the same sound. Turn it off to compare the two, or if a model behaves differently. Changing it rebuilds the running presets, and in a DAW it applies to every instance.</div>
               </div>
-              <div id="signal-diagnostics-list">
-                <!-- Signal diagnostics details will be populated here -->
+              <div class="performance-section">
+                <h3>NAM Processing Quality</h3>
+                <div class="nam-quality-control">
+                  <label for="nam-slimmable-size-input">Adjust Quality</label>
+                  <div class="nam-quality-slider-row">
+                    <span class="nam-quality-endpoint">Min</span>
+                    <input type="range" id="nam-slimmable-size-input" min="0" max="1" step="0.01" />
+                    <span class="nam-quality-endpoint">Max</span>
+                  </div>
+                </div>
+                <div class="settings-hint">Adjust quality while watching DSP Load and Peak Load above. Lower quality reduces CPU use.</div>
+                <div class="settings-row">
+                  <label for="nam-oversampling-select">Oversampling</label>
+                  <select id="nam-oversampling-select" class="themed-select">
+                    <option value="0">Off</option>
+                    <option value="1">2x</option>
+                    <option value="2">4x</option>
+                    <option value="3">8x</option>
+                    <option value="4">16x</option>
+                    <option value="5">32x</option>
+                  </select>
+                </div>
+                <div class="settings-hint">Renders NAM models at a multiple of their native rate to reduce aliasing on high-gain models. Each step roughly multiplies NAM CPU cost, and applies to every NAM node in every preset.</div>
+                <div class="settings-row">
+                  <label for="nam-anti-alias-phase-select">AA Filter</label>
+                  <select id="nam-anti-alias-phase-select" class="themed-select">
+                    <option value="0">Minimum Phase</option>
+                    <option value="1">Linear Short</option>
+                    <option value="2">Linear Long</option>
+                  </select>
+                </div>
+                <div class="settings-hint">Anti-alias filter for the NAM resampler. Minimum Phase is the low-latency real-time default; the linear options are phase-linear but add latency. This also applies when oversampling is Off if your sample rate differs from the model's native rate.</div>
+              </div>
+            </div>
+
+            <div class="settings-sub-panel" data-sub-panel="levels" hidden>
+              <div class="settings-section">
+                <h3>Preset Switching</h3>
+                <div class="settings-row">
+                  <label for="preset-switch-tail-select">Carry Delay &amp; Reverb Tails</label>
+                  <select id="preset-switch-tail-select">
+                    <option value="0">Off</option>
+                    <option value="1">1 bar</option>
+                    <option value="2">2 bars</option>
+                    <option value="3">3 bars</option>
+                    <option value="4">4 bars</option>
+                  </select>
+                </div>
+                <div class="settings-hint">Lets the preset you just left keep ringing out over the new one. Its input fades away, and its delay and reverb state is kept for the selected number of bars before fading out. Bars are counted at the current tempo, and each preset still ringing costs CPU. Switching again may end an older tail sooner.</div>
+              </div>
+
+              <div class="settings-section">
+                <h3>Advanced DSP Level Targets</h3>
+                <!--<div class="settings-row">
+                  <label for="dsp-nominal-level-input">Nominal Operating Level</label>
+                  <input type="number" id="dsp-nominal-level-input" min="-30" max="-6" step="0.5" />
+                  <span class="settings-unit">dBFS</span>
+                </div>-->
+                <div class="settings-hint">Target level when auto levelling signal chain elements.</div>
+                <div class="settings-row">
+                  <label for="dsp-protection-ceiling-input">Output Protection Ceiling</label>
+                  <input type="number" id="dsp-protection-ceiling-input" min="-6" max="0" step="0.1" />
+                  <span class="settings-unit">dBFS</span>
+                </div>
+                <div class="settings-hint">The level the Output Limiter holds the mix under.</div>
+                <div class="settings-row">
+                  <label for="dsp-output-limiter-toggle">Output Limiter</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="dsp-output-limiter-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint">Catches peaks at the very end of the chain, at the ceiling above. Applies to the whole output, not to any one preset.</div>
+                <div class="settings-row">
+                  <label for="dsp-mono-output-unity-toggle">Full Level on Mono Outputs</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="dsp-mono-output-unity-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint">A centred rig sits 3 dB below its input, so that it keeps its loudness when panned across a stereo output. A mono output, such as a mono DAW track or a single interface output, has nothing to pan across: this brings the rig back to its input level there. Stereo outputs are unchanged. In a DAW it applies to instances you add after turning it on, and saved projects keep the level they were made with. <span id="dsp-mono-output-unity-instance" hidden></span></div>
+                <div class="settings-row">
+                  <label for="nam-auto-input-calibration-toggle">NAM Auto Input Calibration</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="nam-auto-input-calibration-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint">Automatically correct NAM input level using model metadata and the interface calibration level below.</div>
+                <div class="settings-row">
+                  <label for="nam-interface-calibration-level-input">Interface Calibration Level</label>
+                  <input type="number" id="nam-interface-calibration-level-input" min="0" max="24" step="0.5" />
+                  <span class="settings-unit">dBu</span>
+                </div>
+                <div class="settings-hint">Reference level of your audio interface (12 dBu = typical prosumer, 18 dBu = professional).</div>
               </div>
             </div>
           </div>

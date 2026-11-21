@@ -311,7 +311,7 @@ run the fused pass on its NEON kernel, which measured 1.1-2.4x the NAM core on A
 1.5-2.4x on arm64 Linux and 2.3-6.6x on Windows on ARM (`GUITARFX_FUSED_WAVENET_NEON`,
 docs/neural-amp-modeler-core-integration.md).
 
-Turning off **Fast NAM Engine** in Settings → DSP Performance (`audio.nam.fusedEngine`, on by
+Turning off **Fast NAM Engine** in Settings → DSP Performance → Processing (`audio.nam.fusedEngine`, on by
 default) puts every model on the NAM core and rebuilds the running presets. Launching with
 `GUITARFX_NAM_ENGINE=core` in the environment does the same and outranks the setting, for A/B
 listening and support. The session log names the engine on the first model load. The details are in
@@ -1103,7 +1103,7 @@ loads, plays and edits it.
 and bypassed until switched on, so one setting converts the player's pickup ahead of every preset.
 It is edited in the input levelling flyout (the chevron under the input meter), on its Pickup Match tab.
 
-**Experimental, behind a feature flag.** Settings → Features → Power Features → Pickup Match
+**Experimental, behind a feature flag.** Settings → User Interface → Features → Power Features → Pickup Match
 (`features.pickupMatch.enabled`, `Features.PickupMatch`) is off by default. While it is off:
 - the flyout has no tab strip and shows the input profiles alone;
 - the indicator beside IN stays hidden;

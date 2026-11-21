@@ -140,7 +140,7 @@ only the `host` imports above: no WASI, no files, no network. On top of that:
 
 Where modules come from:
 
-- **Custom Effects must be on** (Settings → Features → Power Features). While they are off, the
+- **Custom Effects must be on** (Settings → User Interface → Features → Power Features). While they are off, the
   engine compiles and runs no module, whatever a preset or project asks for.
 - **Shared files don't install modules, for now.** Preset archives, Tone Sharing items and packs
   install only NAM models and IRs. A Custom Effect node in a shared preset arrives without its

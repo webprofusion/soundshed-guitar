@@ -1,65 +1,24 @@
           <div class="equipment-tab-panel active" id="equipment-tab-settings">
 
-            <h2>DSP</h2>
+            <h2>Software Updates</h2>
             <div class="settings-section">
-              <h3>Preset Switching</h3>
+              <h3>Current Version</h3>
               <div class="settings-row">
-                <label for="preset-switch-tail-select">Carry Delay &amp; Reverb Tails</label>
-                <select id="preset-switch-tail-select">
-                  <option value="0">Off</option>
-                  <option value="1">1 bar</option>
-                  <option value="2">2 bars</option>
-                  <option value="3">3 bars</option>
-                  <option value="4">4 bars</option>
-                </select>
+                <label>Soundshed Guitar</label>
+                <span id="current-version-display" class="version-display">—</span>
               </div>
-              <div class="settings-hint">Lets the preset you just left keep ringing out over the new one. Its input fades away, and its delay and reverb state is kept for the selected number of bars before fading out. Bars are counted at the current tempo, and each preset still ringing costs CPU. Switching again may end an older tail sooner.</div>
             </div>
 
             <div class="settings-section">
-              <h3>Advanced DSP Level Targets</h3>
-              <!--<div class="settings-row">
-                <label for="dsp-nominal-level-input">Nominal Operating Level</label>
-                <input type="number" id="dsp-nominal-level-input" min="-30" max="-6" step="0.5" />
-                <span class="settings-unit">dBFS</span>
-              </div>-->
-              <div class="settings-hint">Target level when auto levelling signal chain elements.</div>
+              <h3>App Updates</h3>
               <div class="settings-row">
-                <label for="dsp-protection-ceiling-input">Output Protection Ceiling</label>
-                <input type="number" id="dsp-protection-ceiling-input" min="-6" max="0" step="0.1" />
-                <span class="settings-unit">dBFS</span>
-              </div>
-              <div class="settings-hint">The level the Output Limiter holds the mix under.</div>
-              <div class="settings-row">
-                <label for="dsp-output-limiter-toggle">Output Limiter</label>
+                <label for="update-check-toggle">Check for updates on startup</label>
                 <label class="toggle-switch">
-                  <input type="checkbox" id="dsp-output-limiter-toggle" />
+                  <input type="checkbox" id="update-check-toggle" checked />
                   <span class="toggle-slider"></span>
                 </label>
               </div>
-              <div class="settings-hint">Catches peaks at the very end of the chain, at the ceiling above. Applies to the whole output, not to any one preset.</div>
-              <div class="settings-row">
-                <label for="dsp-mono-output-unity-toggle">Full Level on Mono Outputs</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="dsp-mono-output-unity-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">A centred rig sits 3 dB below its input, so that it keeps its loudness when panned across a stereo output. A mono output, such as a mono DAW track or a single interface output, has nothing to pan across: this brings the rig back to its input level there. Stereo outputs are unchanged. In a DAW it applies to instances you add after turning it on, and saved projects keep the level they were made with. <span id="dsp-mono-output-unity-instance" hidden></span></div>
-              <div class="settings-row">
-                <label for="nam-auto-input-calibration-toggle">NAM Auto Input Calibration</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="nam-auto-input-calibration-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Automatically correct NAM input level using model metadata and the interface calibration level below.</div>
-              <div class="settings-row">
-                <label for="nam-interface-calibration-level-input">Interface Calibration Level</label>
-                <input type="number" id="nam-interface-calibration-level-input" min="0" max="24" step="0.5" />
-                <span class="settings-unit">dBu</span>
-              </div>
-              <div class="settings-hint">Reference level of your audio interface (12 dBu = typical prosumer, 18 dBu = professional).</div>
+              <div class="settings-hint">Automatically checks if a new version of Soundshed Guitar is available.</div>
             </div>
 
             <h2 id="settings-tone3000-heading">Tone3000</h2>
@@ -100,82 +59,6 @@
                 <span class="settings-unit">.soundshed-library.zip</span>
               </div>
               <div class="settings-hint">Exports your presets and every blend, plus IR/NAM files from the library based on the selected scope.</div>
-            </div>
-
-            <h2>Software Updates</h2>
-            <div class="settings-section">
-              <h3>Current Version</h3>
-              <div class="settings-row">
-                <label>Soundshed Guitar</label>
-                <span id="current-version-display" class="version-display">—</span>
-              </div>
-            </div>
-
-            <div class="settings-section">
-              <h3>App Updates</h3>
-              <div class="settings-row">
-                <label for="update-check-toggle">Check for updates on startup</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="update-check-toggle" checked />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Automatically checks if a new version of Soundshed Guitar is available.</div>
-            </div>
-
-            <h2>UI</h2>
-            <div class="settings-section">
-              <h3>Layout</h3>
-              <div class="settings-row settings-row-two">
-                <label for="density-level-select">Layout Density</label>
-                <select id="density-level-select" aria-describedby="density-level-hint">
-                  <option value="auto">Auto layout</option>
-                  <option value="compact">Compact</option>
-                  <option value="full">Full</option>
-                </select>
-              </div>
-              <div class="settings-hint" id="density-level-hint">Auto adapts the interface to the available window size. Choose Compact or Full only to override it.</div>
-            </div>
-            <div class="settings-section">
-              <h3>Controls</h3>
-              <div class="settings-row">
-                <label for="wheel-adjust-toggle">Mouse wheel adjusts controls</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="wheel-adjust-toggle" checked />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Turn off to stop the scroll wheel changing knobs and sliders as the pointer passes over them, so it only scrolls the page.</div>
-            </div>
-            <div class="settings-section">
-              <h3>Signal Chain</h3>
-              <div class="settings-row">
-                <label for="signal-flow-animation-toggle">Animate signal flow</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="signal-flow-animation-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Lights the cables in the signal chain and runs pulses along them while audio is playing. Uses a little extra CPU while you play.</div>
-            </div>
-            <div class="settings-section" id="visualizer-background-section">
-              <h3>Effect Panel Background</h3>
-              <div class="settings-row settings-row-two">
-                <label for="visualizer-background-choose">Image</label>
-                <div class="visualizer-background-actions">
-                  <button type="button" class="secondary" id="visualizer-background-choose">Choose Image…</button>
-                  <button type="button" class="secondary" id="visualizer-background-remove" disabled>Remove</button>
-                </div>
-              </div>
-              <div class="visualizer-background-preview" id="visualizer-background-preview" hidden></div>
-              <div class="settings-row settings-row-two">
-                <label for="visualizer-background-fade">Fade</label>
-                <div class="visualizer-background-fade">
-                  <input type="range" id="visualizer-background-fade" min="0" max="90" step="5" value="30" disabled />
-                  <span class="visualizer-background-fade-value" id="visualizer-background-fade-value">30%</span>
-                </div>
-              </div>
-              <div class="settings-hint">Your own picture behind the effect panel, in place of the theme's backdrop, whichever theme is on. Fade veils it toward the theme's background so the text over it stays readable.</div>
             </div>
 
           </div>

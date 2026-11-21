@@ -435,7 +435,7 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
 
 ## The Player's Own Effect-Panel Background
 
-Settings → UI → Effect Panel Background lets the player put their own picture behind the play
+Settings → User Interface → Effect Panel Background lets the player put their own picture behind the play
 page's effect panel (`#panel-visualizer`), in place of whatever the theme draws there: Stage's
 stage, Eleven's grille, or the plain panel of the others. It applies under every theme.
 

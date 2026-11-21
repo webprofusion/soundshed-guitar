@@ -1,5 +1,5 @@
 /**
- * The experimental "Native UI (Nano)" switch in Settings → Features.
+ * The experimental "Native UI (Nano)" switch in Settings → User Interface → Interface.
  *
  * Only where the host can build either editor (environment.nativeEditor: the Windows x64 app and
  * plugins). The setting is the engine's (guitarfx::kNativeEditorSettingKey): the standalone app

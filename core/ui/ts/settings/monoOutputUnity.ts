@@ -1,5 +1,5 @@
 /**
- * The "Full Level on Mono Outputs" toggle in Settings → Advanced DSP Level Targets.
+ * The "Full Level on Mono Outputs" toggle in Settings → DSP Performance → Levels & Switching.
  *
  * A centred rig sits 3 dB under its input on each side of a stereo output, the equal-power pan
  * law. On a mono output those 3 dB buy nothing, and the toggle makes them up there. The

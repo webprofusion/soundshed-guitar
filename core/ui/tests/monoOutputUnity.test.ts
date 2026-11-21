@@ -7,7 +7,7 @@ vi.mock("../ts/bridge.js", () => ({
   setAppSetting: (key: string, value: unknown) => postMessage({ type: "setSetting", key, value }),
 }));
 
-const GENERAL_PANEL = readFileSync(join(__dirname, "..", "ui-components", "panels", "settings-general.html"), "utf8");
+const PERFORMANCE_PANEL = readFileSync(join(__dirname, "..", "ui-components", "panels", "settings-performance.html"), "utf8");
 const KEY = "audio.dsp.monoOutputUnity";
 
 const { uiState } = await import("../ts/state.js");
@@ -23,7 +23,7 @@ function note(): HTMLElement {
 
 beforeEach(() => {
   postMessage.mockClear();
-  document.body.innerHTML = GENERAL_PANEL;
+  document.body.innerHTML = PERFORMANCE_PANEL;
   uiState.appSettings = {};
   uiState.environment = { standalone: false };
 });

@@ -36,6 +36,7 @@
 #include "uiclient/Riffs.h"
 #include "uiclient/Analysis.h"
 #include "uiclient/Automation.h"
+#include "uiclient/DspDiagnostics.h"
 #include "uiclient/DspStatus.h"
 #include "uiclient/Metronome.h"
 #include "uiclient/UpdateCheck.h"
@@ -1651,15 +1652,60 @@ void TestAnalysisPresentation()
     Expect(output.Value(DspStatusItem::Latency) == "0 smp (0.00 ms)", "a whole chain's zero latency is a figure");
 }
 
+// The DSP Performance page's table (dspNodeTable.ts): grouped by chain, active preset first, in
+// signal order, peaks held, latency in milliseconds.
+void TestDspDiagnostics()
+{
+    ClientState state;
+    Preset preset;
+    preset.id = "p1";
+    preset.name = "Lead";
+    preset.graph.nodes = {Node("__input__", kNodeTypeInput), Node("b", EffectGuids::kGain),
+                          Node("a", EffectGuids::kGain), Node("__output__", kNodeTypeOutput)};
+    preset.graph.edges = {GraphEdge{"__input__", "b", 0, 0, 1.0}, GraphEdge{"b", "a", 0, 0, 1.0},
+                          GraphEdge{"a", "__output__", 0, 0, 1.0}};
+    state.activePreset = preset;
+    state.activePresetId = "p1";
+
+    auto& t = state.telemetry;
+    t.roster = {{"post::eq", "post", "eq", "eqType"}, {"p1::a", "p1", "a", ""}, {"p1::b", "p1", "b", ""}};
+    t.nodes["post::eq"] = LevelReading{-6.0, -12.0, 0, false, 2};
+    t.nodes["p1::a"] = LevelReading{-3.0, -9.0, 2, true, 1};
+    t.nodes["p1::b"] = LevelReading{-10.0, -16.0, 0, false, 2};
+    t.nodeProcessingUs["p1::a"] = 30.0;
+    t.totalProcessingUs = 120.0;
+    t.nodeLatencySamples["p1::a"] = 48.0;
+    t.sampleRate = 48000.0;
+    t.dspLoadPercent = 12.5;
+    t.frameCounter = 1;
+    t.performanceFrameCounter = 1;
+
+    DspDiagnostics diagnostics;
+    diagnostics.Update(state, 0.0);
+    auto table = diagnostics.Table(state);
+    Expect(table.size() == 3 && table[0].rows[0].label == "Chain input", "the chain's input first, on its own");
+    Expect(table[1].title == "Lead" && table[2].title == "Global post chain", "the active preset, then post");
+    Expect(table[1].rows.size() == 2 && table[1].rows[0].peak == "-10.0", "in signal order: b feeds a");
+    const auto& a = table[1].rows[1];
+    Expect(a.time == "30.0" && a.share == "25.0" && a.latency == "1.00 ms", "time, share and latency");
+    Expect(a.clipped && a.clipCount == 2 && a.channels == "1" && !a.stereo, "clipping and channels");
+    Expect(table[2].rows[0].latency == "\xE2\x80\x94" && table[2].rows[0].stereo, "no latency reads as a dash");
+    Expect(diagnostics.Load() == "12.5%" && diagnostics.PeakLoad() == "12.5%", "the load");
+
+    t.nodes["p1::a"].peakDb = -20.0;
+    t.frameCounter = 2;
+    diagnostics.Update(state, 5.0);
+    Expect(diagnostics.Table(state)[1].rows[1].peak == "-3.0", "a peak is held");
+    t.frameCounter = 3;
+    diagnostics.Update(state, 11.0);
+    Expect(diagnostics.Table(state)[1].rows[1].peak == "-20.0", "for ten seconds");
+}
+
 // Which cables light with the signal (signalFlow.ts): a node without its own reading hears what
 // feeds it, and a node stays lit a moment through quiet.
 void TestSignalFlow()
 {
     ClientState state;
-    Expect(!IsSignalFlowAnimationEnabled(state), "off unless turned on");
-    state.appSettings[kSignalFlowAnimationSetting] = true;
-    Expect(IsSignalFlowAnimationEnabled(state), "the setting turns it on");
-
     Preset preset;
     preset.id = "p1";
     preset.graph.nodes = {Node("__input__", kNodeTypeInput), Node("split", "splitter"), Node("amp", EffectGuids::kGain),
@@ -2308,6 +2354,7 @@ int main()
     TestAnalysis();
     TestAnalysisPresentation();
     TestSignalFlow();
+    TestDspDiagnostics();
     TestMetronomeMeters();
     TestUpdateCheckVersions();
     TestGlobalChainEditsMirror();

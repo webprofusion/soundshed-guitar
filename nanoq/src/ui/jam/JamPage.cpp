@@ -722,7 +722,7 @@ Ptr Shell::BuildBackingTracks(float width)
 
     if (!IsFeatureEnabled(mState, Feature::Jam))
     {
-        body.push_back(Message(mTheme, "Backing tracks are turned off in Settings > Features."));
+        body.push_back(Message(mTheme, "Backing tracks are turned off in Settings > User Interface > Features."));
     }
     else if (search && mJamLoading)
     {

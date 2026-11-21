@@ -41,6 +41,7 @@ void UiClient::RegisterLiveHandlers()
     // ── Signal diagnostics: a roster when the node set changes, then bare tuples ──
     On("sldRoster", [this](const nlohmann::json& m) {
         mRoster.clear();
+        mState.telemetry.roster.clear();
         mRosterSeq = m.value("seq", -1);
 
         // The analyzer's display ranges ride along with the roster, not every frame.
@@ -68,9 +69,12 @@ void UiClient::RegisterLiveHandlers()
                 const auto scope = entry[0].is_string() ? entry[0].get<std::string>() : std::string{};
                 const auto presetId = entry[1].is_string() ? entry[1].get<std::string>() : std::string{};
                 const auto nodeId = entry[2].is_string() ? entry[2].get<std::string>() : std::string{};
+                const auto nodeType =
+                    entry.size() > 3 && entry[3].is_string() ? entry[3].get<std::string>() : std::string{};
                 // Keyed as the engine keys dspPerformance: "pre", "post", or the preset id.
                 const auto owner = scope == "pre" || scope == "post" ? scope : presetId;
                 mRoster.push_back(RosterEntry{owner + "::" + nodeId, nodeId});
+                mState.telemetry.roster.push_back(TelemetryNode{owner + "::" + nodeId, owner, nodeId, nodeType});
             }
         }
     });
@@ -141,6 +145,7 @@ void UiClient::RegisterLiveHandlers()
             }
         }
 
+        ++telemetry.performanceFrameCounter;
         Notify(Topic::Telemetry);
     });
 

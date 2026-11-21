@@ -36,6 +36,7 @@
 #include "uiclient/ChainDropRules.h"
 #include "uiclient/ChainHistory.h"
 #include "uiclient/ChainLayout.h"
+#include "uiclient/DspDiagnostics.h"
 #include "uiclient/DspStatus.h"
 #include "uiclient/SignalFlow.h"
 #include "uiclient/UpdateCheck.h"
@@ -766,11 +767,34 @@ class Shell
         General,
         Audio,
         Dsp,
-        Features,
+        Ui,
         Help
     };
     SettingsSection mSettingsSection = SettingsSection::General; // the section Settings shows
+    int mDspSettingsTab = 0; // DSP Performance: Diagnostics, Processing, Levels & Switching
+    int mUiSettingsTab = 0;  // UI: Interface, Features
     Ptr BuildSettingsPage();
+    /// A row of tabs inside a section; `tab` is the one shown, and a click shows another.
+    [[nodiscard]] Ptr BuildSettingsTabs(std::initializer_list<const char*> labels, int& tab);
+
+    // DspPerformance.cpp: Settings → DSP Performance's live figures (the web UI's views.ts and
+    // dspNodeTable.ts): the load over the tabs, and the Diagnostics tab's levels, load history and
+    // per-node table.
+    struct DspSnapshot
+    {
+        std::string load, peakLoad, latency;
+        guitarfx::uiclient::DspLevelSummary input, output;
+        std::vector<guitarfx::uiclient::DspDiagnosticsGroup> table;
+    };
+
+    [[nodiscard]] Ptr BuildDspFigures();
+    [[nodiscard]] Ptr BuildDspDiagnostics(float width);
+    /// Each tick: folds in the feeds, and refreshes what the page shows a few times a second.
+    void SyncDspDiagnostics(bool refresh = false);
+    guitarfx::uiclient::DspDiagnostics mDspDiagnostics;
+    DspSnapshot mDspSnapshot;
+    std::weak_ptr<el::element> mDspFiguresShown; // on screen: the snapshot is kept fresh
+    std::string mDspTableShape;                  // the groups and rows the table was built with
 
     // Dialogs.cpp
     void ApplyElementsTheme();

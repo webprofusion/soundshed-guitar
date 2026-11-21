@@ -8,12 +8,6 @@
 
 namespace guitarfx::uiclient
 {
-bool IsSignalFlowAnimationEnabled(const ClientState& state)
-{
-    const auto it = state.appSettings.find(kSignalFlowAnimationSetting);
-    return it != state.appSettings.end() && it->is_boolean() && it->get<bool>();
-}
-
 bool SignalFlow::Update(const ClientState& state, double nowSeconds)
 {
     std::set<std::string> live;

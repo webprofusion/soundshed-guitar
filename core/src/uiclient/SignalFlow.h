@@ -7,8 +7,8 @@
  * is live when anything feeding it is. Each stays live a little through quiet, so a gap between
  * notes or a decaying note does not flicker it.
  *
- * It is on/off rather than a level, and a setting (ui.signalFlowAnimation, off unless turned on),
- * because the moving pulses cost drawing while playing.
+ * It is on/off rather than a level, so the cables redraw only when a node starts or stops
+ * passing signal. It is always on (it used to be the ui.signalFlowAnimation setting).
  */
 
 #include "uiclient/ClientState.h"
@@ -19,10 +19,6 @@
 
 namespace guitarfx::uiclient
 {
-inline constexpr const char* kSignalFlowAnimationSetting = "ui.signalFlowAnimation";
-
-[[nodiscard]] bool IsSignalFlowAnimationEnabled(const ClientState& state);
-
 class SignalFlow
 {
   public:

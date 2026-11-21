@@ -1,5 +1,6 @@
 /**
- * The three levels of tab in this panel — equipment, library, and the advanced
+ * The levels of tab in this panel — equipment (the sections down the side), the
+ * sub-tabs inside a section (UI, DSP Performance), library, and the advanced
  * sub-tabs — and the feature flags that decide which of them exist.
  *
  * Resolving a tab id is separate from activating one because a tab can be
@@ -52,10 +53,19 @@ export function isEquipmentTabEnabled(tabId: string): boolean {
   }
 }
 
+/**
+ * Section tabs that became sub-tabs: Features moved under UI. A saved view or a link that
+ * names the old tab opens the section it is in now, on its sub-tab.
+ */
+const MOVED_EQUIPMENT_TABS: Record<string, { tab: string; subTabs: string; subTab: string }> = {
+  features: { tab: "ui", subTabs: "ui", subTab: "features" },
+};
+
 export function resolveEquipmentTabId(preferredTabId: string): string {
-  const orderedTabs = ["settings", "audio-midi", "library", "features", "performance", "help"];
-  if (isEquipmentTabEnabled(preferredTabId)) {
-    return preferredTabId;
+  const orderedTabs = ["settings", "audio-midi", "performance", "ui", "library", "help"];
+  const wantedTabId = MOVED_EQUIPMENT_TABS[preferredTabId]?.tab ?? preferredTabId;
+  if (orderedTabs.includes(wantedTabId) && isEquipmentTabEnabled(wantedTabId)) {
+    return wantedTabId;
   }
 
   return orderedTabs.find((tabId) => isEquipmentTabEnabled(tabId)) ?? "settings";
@@ -94,10 +104,64 @@ export function initEquipmentTabs(): void {
       activateEquipmentTab(tabId);
     });
   });
+  initSettingsSubTabs();
   activateEquipmentTab("settings");
 }
 
+/**
+ * The sub-tabs inside a section: a `[data-sub-tabs="<group>"]` bar of
+ * `.settings-sub-tab-btn[data-sub-tab]` buttons, and `[data-sub-panel]` panels beside it.
+ */
+function initSettingsSubTabs(): void {
+  document.querySelectorAll<HTMLElement>("[data-sub-tabs]").forEach((bar) => {
+    const group = bar.dataset.subTabs ?? "";
+    bar.querySelectorAll<HTMLElement>(".settings-sub-tab-btn").forEach((button) => {
+      button.addEventListener("click", () => activateSettingsSubTab(group, button.dataset.subTab ?? ""));
+    });
+  });
+}
+
+export function activateSettingsSubTab(group: string, tabId: string): void {
+  const bar = document.querySelector<HTMLElement>(`[data-sub-tabs="${group}"]`);
+  const section = bar?.parentElement;
+  if (!bar || !section) {
+    return;
+  }
+
+  const buttons = Array.from(bar.querySelectorAll<HTMLElement>(".settings-sub-tab-btn"));
+  if (!buttons.some((button) => button.dataset.subTab === tabId)) {
+    return;
+  }
+
+  buttons.forEach((button) => {
+    const isActive = button.dataset.subTab === tabId;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  Array.from(section.children).forEach((child) => {
+    const panel = child as HTMLElement;
+    if (panel.dataset.subPanel === undefined) {
+      return;
+    }
+    const isMatch = panel.dataset.subPanel === tabId;
+    panel.classList.toggle("active", isMatch);
+    panel.toggleAttribute("hidden", !isMatch);
+  });
+
+  if (group === "performance" && tabId === "diagnostics") {
+    scheduleDSPPerformancePlotUpdate();
+    updateSignalDiagnosticsView();
+  }
+
+  flushShownViews();
+}
+
 export function activateEquipmentTab(tabId: string): void {
+  const moved = MOVED_EQUIPMENT_TABS[tabId];
+  if (moved) {
+    activateSettingsSubTab(moved.subTabs, moved.subTab);
+  }
   const resolvedTabId = resolveEquipmentTabId(tabId);
 
   equipmentTabButtons.forEach((button) => {

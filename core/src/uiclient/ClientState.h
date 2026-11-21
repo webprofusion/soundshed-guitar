@@ -134,6 +134,15 @@ struct LevelReading
     int channelCount = 0; // 0: did not run last block
 };
 
+/// One node the signal diagnostics feed reports, from its roster ("sldRoster").
+struct TelemetryNode
+{
+    std::string key;   // "<scope>::<nodeId>", as `TelemetryState::nodes` is keyed
+    std::string scope; // "pre", "post", or the preset id
+    std::string nodeId;
+    std::string nodeType; // its effect type
+};
+
 struct TelemetryState
 {
     LevelReading rawInput;
@@ -143,6 +152,8 @@ struct TelemetryState
     /// Per node, keyed "<scope>::<nodeId>" as the engine keys dspPerformance: scope is
     /// "pre", "post", or the preset id.
     std::map<std::string, LevelReading> nodes;
+    /// The roster those levels follow, in the engine's order.
+    std::vector<TelemetryNode> roster;
 
     double dspLoadPercent = 0.0;
     int totalLatencySamples = 0;
@@ -151,7 +162,8 @@ struct TelemetryState
     double totalProcessingUs = 0.0;
     std::optional<double> peakDspLoadPercent; // the worst block since the frame before
     double sampleRate = 0.0;
-    unsigned frameCounter = 0;
+    unsigned frameCounter = 0;            // counts "sld" frames
+    unsigned performanceFrameCounter = 0; // counts "dspPerformance" frames
 };
 
 /// One node's input spectrum behind an EQ curve (sldS): `binsDb` log-spaced from minHz to

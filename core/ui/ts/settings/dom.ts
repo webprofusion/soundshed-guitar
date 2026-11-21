@@ -60,7 +60,6 @@ export const densityLevelSelect = document.getElementById("density-level-select"
 /** The same choice in the compact footer's OPTIONS sheet. */
 export const footerDensitySelect = document.getElementById("footer-density-select") as HTMLSelectElement | null;
 export const wheelAdjustToggle = document.getElementById("wheel-adjust-toggle") as HTMLInputElement | null;
-export const signalFlowAnimationToggle = document.getElementById("signal-flow-animation-toggle") as HTMLInputElement | null;
 
 export const librarySearchInput = document.getElementById("equipment-library-search") as HTMLInputElement | null;
 

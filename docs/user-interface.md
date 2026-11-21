@@ -288,7 +288,7 @@ keeps the existing Library/Folder behavior.
 | `getResourceThumbnails` | `{resourceType: "nam"|"ir", resourceIds?, requestId?}` | Which tone picture each library resource of the type shows (all of them without `resourceIds`): answered by `resourceThumbnails`. Only resources from Tone3000 (provider `tone3000`, a `tone3000:` id, or a `toneId`) have one: the `imageUrl` the import recorded, another resource of the same tone's, or one a lookup found. Changes nothing |
 | `hashResourceFile` | `{path, resourceType: "nam"|"ir"}` | Works out a file's content hash (core/src/models/ContentHash.h) on a worker thread, for the Folder tab's "Find on Tone3000" on a file the library does not have: answered by `resourceFileContentHash`. The folder scan does not hash its files. Changes nothing |
 | `saveResourceThumbnail` | `{imageUrl, data?, toneId?}` | Keeps what a UI fetched for `resourceThumbnails`: `data` (base64) is the thumbnail of `imageUrl`, stored in the cache when it is a JPEG, PNG, WebP or GIF of at most 512 KB; `toneId` records a lookup's result, `imageUrl` the tone's picture or empty for none (a tone found to have none is looked up again after 30 days). Not answered; the resource library is not changed |
-| `browseUiBackgroundImage` | `{}` | Opens a file dialog for the play page's own background picture (Settings → UI → Effect Panel Background): answered by `uiBackgroundImageSelected`. Picking one removes the one before |
+| `browseUiBackgroundImage` | `{}` | Opens a file dialog for the play page's own background picture (Settings → User Interface → Effect Panel Background): answered by `uiBackgroundImageSelected`. Picking one removes the one before |
 | `clearUiBackgroundImage` | `{}` | Removes the stored background picture. The UI clears `ui.visualizerBackground.image` itself. Not answered |
 | `importPresetArchiveFile` | `{requestId?, path?}` | Import a preset archive file (`.soundshed.preset`, `.soundshed.presets` or a pack's `.zip`) as the web UI's Import Preset does: the file at `path`, or one the user picks in a file dialog when there is no `path` (nothing happens if they cancel). It is installed as `installPresetArchives` installs a download, under the entry id `requestId` (minted as `zip-<ms>` when absent) with `source: "zipImport"`, its presets in a folder named after the file. Answered by `presetArchivesInstalled` or `presetArchivesInstallFailed`. Nano Q sends it from the preset menu and for an archive dropped on the window; the web UI reads the archive itself |
 | `installPresetArchives` | `{requestId?, entry: {id, title?, source?, packId?, archiveFileName?}, folder?, archives: [{title?, data, itemId?}], allowMissingRemote?, fetchedResources?: [{type, id}]}` | Install tones downloaded from tone sharing (both UIs' Tones panels send it): each `data` is a base64 zip in the web UI's archive format (`preset.json` or `presets.json` plus `resources/<file>`). Models and IRs go into the library (one it already holds, by content hash, is reused), blends get new ids, and the presets are saved under new user ids without replacing the running preset; a one-preset archive's preset takes the archive's `title`. With `folder`, the presets also get a top-level folder of that name (`tone-sharing::<packId>`); an archive's own `presetFolders` are rebuilt as subfolders of it, and the presets in none of them sit in it directly. The install is recorded under `entry.id` in the `toneSharing.installedPacks` app setting, in the web UI's schema (with `entry.archiveFileName` when given) plus the `blends` it added and, for archives that give their tone sharing `itemId`, `presetItems` (preset id to item id: which item a pack's preset came from, so a favourite or rating of it reaches the service), and announced with `appSettingChanged`, `presetList` and, with a folder, `presetFolders`. A model or IR the archive names rather than carries (its `remoteResources`, from any provider, or the older `tone3000Resources` list) must already be in the library, matched by library id, then provider and provider key, then content hash; with `allowMissingRemote` one that is not leaves its slot empty and is named in the reply (the web UI sets it after trying to fetch them). `fetchedResources` are the library resources the UI imported for this install just before sending it (the models it fetched): those the library holds are recorded with the install, so removing it removes them. Every archive is read and every remote reference resolved against the library before anything is written. Answered by `presetArchivesInstalled` or `presetArchivesInstallFailed` |
@@ -639,7 +639,22 @@ on `<html>`; every rule in `css/compact/` keys off those attributes. The pre-pai
   (once "Other") and over a group whose one control has the same name ("Swell"). Such a block
   keeps an empty title line only beside a titled one, so knobs stay in line.
 
-## Settings → Features
+## Settings → User Interface
+
+UI collects what changes how the app looks and behaves rather than how it sounds, as two
+sub-tabs (`activateSettingsSubTab` in `core/ui/ts/settings/tabs.ts`; markup in
+`ui-components/panels/settings-ui.html`):
+
+- **Interface**: Layout Density, Mouse wheel adjusts controls, Effect Panel Background, and the
+  Native UI (Nano) switch below.
+- **Features**: the feature toggles (`settings-features.html`) and the Factory Preset Archives
+  options. A saved view or link that names the old `features` section tab opens here
+  (`MOVED_EQUIPMENT_TABS`).
+
+The signal path's cable lighting (`signalPath/signalFlow.ts`, `uiclient/SignalFlow.h`) is always
+on; it used to be the "Animate signal flow" setting (`ui.signalFlowAnimation`, now ignored).
+
+### Features
 
 **Factory Preset Packs** (`features.factoryPresetPacks.enabled`) is a default-on
 Core Feature. Switching it off hides presets identified by the engine's
@@ -651,7 +666,7 @@ the entries. This is separate from the Power Feature **Factory Preset Archive To
 which controls development/authoring tools.
 
 **Native UI (Nano)** (`ui.nativeEditor`, `core/ui/ts/settings/nativeEditor.ts`) is an
-experimental switch under its own Experimental card, shown only when `environment.nativeEditor`
+experimental switch under its own Native UI card in User Interface → Interface, shown only when `environment.nativeEditor`
 is true: the host can build either editor (`IPluginHost::SupportsNativeEditor`; every desktop
 build, where `SOUNDSHED_NANOQ_UI` is on by default, and never iOS or Android). On, the JUCE app draws itself with Nano Q's
 native UI (`juce/source/NanoQUiEditor.*`, see [plans/nano-q-ui-in-juce.md](plans/nano-q-ui-in-juce.md))
@@ -660,7 +675,7 @@ the standalone window, which swaps its editor in place with no relaunch (`MainWi
 in `juce/source/Main.cpp`). A plugin's next editor follows the setting, so in a DAW it applies when the
 plugin window is next opened, for every instance. The way back is in the native UI itself, under
 the same condition: a **Standard UI** button in its footer beside the theme picker (in the compact
-layout's Options popover, beside the layout), and the same switch in its Settings → Features. Nano
+layout's Options popover, beside the layout), and the same switch in its Settings → User Interface → Interface. Nano
 Q's own app never shows either.
 
 Two more ways in, for a machine where the WebView cannot run:
@@ -682,9 +697,13 @@ Two more ways in, for a machine where the WebView cannot run:
 
 The Settings panel's own tab strip (`core/ui/ts/settings/tabs.ts`, markup in
 `ui-components/panels/settings-panel.html`): General, **Audio & MIDI**, DSP Performance,
-Features, Library, Help. Audio & MIDI holds the two device sections below and nothing else;
-the engine-side settings that used to sit beside them — Preset Switching, Advanced DSP Level
-Targets — stayed in General under its *DSP* heading. Each tab is one partial under
+UI, Library, Help. General is Software Updates, then Tone3000, then the library export. Audio &
+MIDI holds the two device sections below and nothing else. DSP Performance shows DSP Load, Peak
+Load and I/O Latency over three sub-tabs: **Diagnostics** (the input/output levels, the load plot
+and the per-node table, `ts/dspNodeTable.ts`: one dense row per node, grouped by chain and in
+signal order), **Processing** (cores, Fast NAM Engine, NAM quality) and **Levels & Switching**
+(Preset Switching and Advanced DSP Level Targets). A section's sub-tabs are a
+`[data-sub-tabs]` bar beside `[data-sub-panel]` panels. Each tab is one partial under
 `ui-components/panels/`, and its id is `equipment-tab-<tabId>`; a new one needs the button,
 the partial's include, and the tab id in `resolveEquipmentTabId()`.
 
@@ -1190,7 +1209,7 @@ appends " (copy)" so the two are distinguishable in the picker.
 
 ## Looper strip (`core/ui/ts/looper.ts`, `core/ui/ts/looper/`)
 
-Behind the Looper feature flag (Settings → Features, power group) and only in the standalone app
+Behind the Looper feature flag (Settings → User Interface → Features, power group) and only in the standalone app
 (`looperState.available`). The flag drives the engine: the strip sends `setLooper {enabled}` when
 the two disagree. The footer's Loop button opens a strip docked above the footer, so it stays over
 every panel: the one-button transport (Rec, then Play, then Dub), Stop, Undo, Redo and Clear; a

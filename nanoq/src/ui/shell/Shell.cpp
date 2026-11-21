@@ -572,15 +572,13 @@ void Shell::OnTick()
         ShowToast(n.title, n.detail, n.kind == guitarfx::uiclient::Notification::Kind::Error);
     }
 
-    // The cables light with the signal while Animate signal flow is on (web: signalFlow.ts).
-    if (guitarfx::uiclient::IsSignalFlowAnimationEnabled(mState))
-    {
-        mSignalFlow.Update(mState, UiSession::Now());
-    }
+    // The cables light with the signal (web: signalFlow.ts).
+    mSignalFlow.Update(mState, UiSession::Now());
 
     SyncEqPlotFeeds();
     SyncIrExport();
     SyncDspStatus();
+    SyncDspDiagnostics();
     SyncUpdateCheck();
     SyncDevicePage();
     SyncTonePreview();

@@ -8,7 +8,8 @@
 
 /* ── Sub-Tab Navigation ── */
 
-.advanced-sub-tabs {
+.advanced-sub-tabs,
+.settings-sub-tabs {
   margin-bottom: 4px;
 }
 

@@ -1,35 +1,23 @@
-          <div class="equipment-tab-panel" id="equipment-tab-features" hidden>
-            <h2>Feature Toggles</h2>
-            <div class="settings-hint">Simplify the options available in the app depending on your preferences for trying online or advanced features.</div>
-            <div id="settings-feature-groups"></div>
-            <div class="settings-section" id="native-editor-settings-section" hidden>
-              <h3>Experimental</h3>
-              <div class="settings-row">
-                <label for="native-editor-toggle">Native UI (Nano)</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="native-editor-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
+            <div class="settings-sub-panel" data-sub-panel="features" hidden>
+              <div class="settings-hint">Simplify the options available in the app depending on your preferences for trying online or advanced features.</div>
+              <div id="settings-feature-groups"></div>
+              <div class="settings-section" id="factory-archive-settings-section" hidden>
+                <h3>Factory Preset Archives</h3>
+                <div class="settings-row" id="factory-archive-loading-row">
+                  <label for="factory-archive-loading-toggle">Load Factory Preset Archives on Startup</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="factory-archive-loading-toggle" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint">Disable this while authoring factory preset archives in development so bundled preset packs stay on disk without being imported at startup.</div>
+                <div class="settings-row">
+                  <label for="factory-archive-export-effect-presets-toggle">Include My Effect Presets in Preset Exports</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="factory-archive-export-effect-presets-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint">Folder and all-preset exports then carry your saved effect presets, with the models, IRs and blends they choose. Bundled as a factory archive, they become factory presets for those effects.</div>
               </div>
-              <div class="settings-hint" id="native-editor-hint">Draws the app with the native UI from Soundshed Nano Q instead of this one. It starts faster and uses less memory, but not everything is there yet. Switch back from its Settings page.</div>
             </div>
-            <div class="settings-section" id="factory-archive-settings-section" hidden>
-              <h3>Factory Preset Archives</h3>
-              <div class="settings-row" id="factory-archive-loading-row">
-                <label for="factory-archive-loading-toggle">Load Factory Preset Archives on Startup</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="factory-archive-loading-toggle" checked />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Disable this while authoring factory preset archives in development so bundled preset packs stay on disk without being imported at startup.</div>
-              <div class="settings-row">
-                <label for="factory-archive-export-effect-presets-toggle">Include My Effect Presets in Preset Exports</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="factory-archive-export-effect-presets-toggle" />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="settings-hint">Folder and all-preset exports then carry your saved effect presets, with the models, IRs and blends they choose. Bundled as a factory archive, they become factory presets for those effects.</div>
-            </div>
-          </div>

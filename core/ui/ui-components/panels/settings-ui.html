@@ -1,0 +1,65 @@
+          <div class="equipment-tab-panel" id="equipment-tab-ui" hidden>
+            <h2>User Interface</h2>
+            <div class="settings-sub-tabs tab-bar" role="tablist" aria-label="UI settings" data-sub-tabs="ui">
+              <button class="settings-sub-tab-btn tab-btn active" type="button" data-sub-tab="interface" role="tab" aria-selected="true">Interface</button>
+              <button class="settings-sub-tab-btn tab-btn" type="button" data-sub-tab="features" role="tab" aria-selected="false">Features</button>
+            </div>
+
+            <div class="settings-sub-panel active" data-sub-panel="interface">
+              <div class="settings-section">
+                <h3>Layout</h3>
+                <div class="settings-row settings-row-two">
+                  <label for="density-level-select">Layout Density</label>
+                  <select id="density-level-select" aria-describedby="density-level-hint">
+                    <option value="auto">Auto layout</option>
+                    <option value="compact">Compact</option>
+                    <option value="full">Full</option>
+                  </select>
+                </div>
+                <div class="settings-hint" id="density-level-hint">Auto adapts the interface to the available window size. Choose Compact or Full only to override it.</div>
+              </div>
+              <div class="settings-section">
+                <h3>Controls</h3>
+                <div class="settings-row">
+                  <label for="wheel-adjust-toggle">Mouse wheel adjusts controls</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="wheel-adjust-toggle" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint">Turn off to stop the scroll wheel changing knobs and sliders as the pointer passes over them, so it only scrolls the page.</div>
+              </div>
+              <div class="settings-section" id="visualizer-background-section">
+                <h3>Effect Panel Background</h3>
+                <div class="settings-row settings-row-two">
+                  <label for="visualizer-background-choose">Image</label>
+                  <div class="visualizer-background-actions">
+                    <button type="button" class="secondary" id="visualizer-background-choose">Choose Image…</button>
+                    <button type="button" class="secondary" id="visualizer-background-remove" disabled>Remove</button>
+                  </div>
+                </div>
+                <div class="visualizer-background-preview" id="visualizer-background-preview" hidden></div>
+                <div class="settings-row settings-row-two">
+                  <label for="visualizer-background-fade">Fade</label>
+                  <div class="visualizer-background-fade">
+                    <input type="range" id="visualizer-background-fade" min="0" max="90" step="5" value="30" disabled />
+                    <span class="visualizer-background-fade-value" id="visualizer-background-fade-value">30%</span>
+                  </div>
+                </div>
+                <div class="settings-hint">Your own picture behind the effect panel, in place of the theme's backdrop, whichever theme is on. Fade veils it toward the theme's background so the text over it stays readable.</div>
+              </div>
+              <div class="settings-section" id="native-editor-settings-section" hidden>
+                <h3>Native UI</h3>
+                <div class="settings-row">
+                  <label for="native-editor-toggle">Native UI (Nano)</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="native-editor-toggle" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="settings-hint" id="native-editor-hint">Draws the app with the native UI from Soundshed Nano Q instead of this one. It starts faster and uses less memory, but not everything is there yet. Switch back from its Settings page.</div>
+              </div>
+            </div>
+
+            <!--#include:ui-components/panels/settings-features.html-->
+          </div>

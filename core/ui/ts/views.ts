@@ -6,12 +6,10 @@ import { addActivePreset, removeActivePreset, setPresetMix, setPresetPan, setPre
 import { escapeHtml, idAccentColor } from "./utils.js";
 import { updateSignalPathClipIndicators, renderSignalPathBar } from "./signalPath.js";
 import { renderIcon, getCheckmarkSvg, getXMarkSvg, getPlaySvg } from "./iconAssets.js";
-import { EffectGuids } from "./effectGuids.js";
-import { EffectTypeRegistry } from "./presetV2.js";
 import { enhanceRangeInput, formatGainDb } from "./controls.js";
 import { MIX_GAIN_MAX_DB, MIX_GAIN_MIN_DB } from "./multiPresetMixerSupport.js";
-import { nodeDspLatencySamples, nodeDspProcessingSharePercent, nodeDspProcessingTimeUs } from "./dspPerformance.js";
-import type { DSPPerformanceStats, GraphEdge, GraphNode, Preset, PresetFolder, SignalGraph, SignalLevelDiagnostics, SignalLevelNodeMetrics, SignalPeakHoldEntry } from "./types.js";
+import { getFriendlyGraphNodeName, getGraphTopologicalOrder, renderDspNodeTableHtml } from "./dspNodeTable.js";
+import type { DSPPerformanceStats, Preset, PresetFolder, SignalLevelDiagnostics, SignalPeakHoldEntry } from "./types.js";
 import { Features, isFeatureEnabled } from "./featureFlags.js";
 import { createVuMeter } from "./vuMeter.js";
 import { PRESET_FOLDER_ALL_ID, PRESET_FOLDER_FAVORITES_ID, PRESET_FOLDER_RECENTS_ID } from "./presets/sorting.js";
@@ -705,6 +703,12 @@ function isDSPPerformanceTabVisible(): boolean {
     && document.getElementById("panel-settings")?.classList.contains("active"));
 }
 
+/** Its Diagnostics sub-tab: the plot and the tables. The load figures above the sub-tabs show on every one. */
+function isDSPDiagnosticsVisible(): boolean {
+  const panel = document.getElementById("performance-diagnostics-panel");
+  return isDSPPerformanceTabVisible() && Boolean(panel && !panel.hasAttribute("hidden"));
+}
+
 export function scheduleDSPPerformancePlotUpdate(): void {
   if (dspPerformancePlotRafId !== null) {
     return;
@@ -717,17 +721,18 @@ export function scheduleDSPPerformancePlotUpdate(): void {
 }
 
 export function updateDSPPerformancePlot(): void {
-  const canvas = document.getElementById("performance-plot") as HTMLCanvasElement;
-  if (!canvas) return;
-
   if (!isDSPPerformanceTabVisible()) return;
+
+  const history = uiState.dspLoadHistoryPercent;
+  if (history.length === 0) return;
+  updateDSPPerformanceFigures(history);
+
+  const canvas = document.getElementById("performance-plot") as HTMLCanvasElement;
+  if (!canvas || !isDSPDiagnosticsVisible()) return;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const themeColors = getPerformancePlotThemeColors(canvas);
-
-  const history = uiState.dspLoadHistoryPercent;
-  if (history.length === 0) return;
 
   const displayWidth = Math.max(1, Math.floor(canvas.clientWidth));
   const displayHeight = Math.max(1, Math.floor(canvas.clientHeight));
@@ -798,8 +803,10 @@ export function updateDSPPerformancePlot(): void {
   }
 
   ctx.setLineDash([]);
+}
 
-  // Update current values
+/** DSP Load, Peak Load and I/O Latency, over the section's sub-tabs. */
+function updateDSPPerformanceFigures(history: number[]): void {
   const currentLoad = history[history.length - 1];
   const loadValue = document.getElementById("dsp-load-value");
   if (loadValue) {
@@ -895,149 +902,6 @@ function setClipStatusText(el: HTMLElement, text: string): void {
   }
 }
 
-function sortGraphEdges(edges: GraphEdge[]): GraphEdge[] {
-  return edges.slice().sort((left, right) => (
-    (left.fromPort - right.fromPort)
-    || (left.toPort - right.toPort)
-    || left.from.localeCompare(right.from)
-    || left.to.localeCompare(right.to)
-  ));
-}
-
-function getFriendlyGraphNodeName(node: GraphNode | undefined, fallbackNodeType: string, fallbackNodeId: string): string {
-  if (node) {
-    if (node.id === "__input__" || node.type === "input") return "Input";
-    if (node.id === "__output__" || node.type === "output") return "Output";
-    if (typeof node.displayName === "string" && node.displayName.trim()) {
-      return node.displayName.trim();
-    }
-    const nodeTypeInfo = node.type ? EffectTypeRegistry.get(node.type) : undefined;
-    return nodeTypeInfo?.displayName || node.type || fallbackNodeId || "(Unknown)";
-  }
-
-  const typeInfo = fallbackNodeType ? EffectTypeRegistry.get(fallbackNodeType) : undefined;
-  return typeInfo?.displayName || fallbackNodeType || fallbackNodeId || "(Unknown)";
-}
-
-function getDiagnosticsGraphContext(node: SignalLevelNodeMetrics): { graph?: SignalGraph; presetName?: string } {
-  if (node.scope === "pre") {
-    return { graph: uiState.globalSignalChain?.preChainGraph };
-  }
-
-  if (node.scope === "post") {
-    return { graph: uiState.globalSignalChain?.postChainGraph };
-  }
-
-  const presetId = node.presetId ?? uiState.activePresetId ?? "";
-  if (!presetId) {
-    return {};
-  }
-
-  const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((entry) => entry.id === presetId);
-  const mixerPresetName = uiState.mixer?.presets?.[presetId]?.name;
-  return {
-    graph: preset?.graph,
-    presetName: mixerPresetName || preset?.name || presetId,
-  };
-}
-
-function getSplitterBranchSuffix(graph: SignalGraph | undefined, nodeId: string): string {
-  if (!graph || nodeId === "__input__" || nodeId === "__output__") {
-    return "";
-  }
-
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
-  const incomingByNode = new Map<string, GraphEdge[]>();
-  const outgoingByNode = new Map<string, GraphEdge[]>();
-
-  for (const edge of graph.edges) {
-    const incoming = incomingByNode.get(edge.to);
-    if (incoming) {
-      incoming.push(edge);
-    } else {
-      incomingByNode.set(edge.to, [edge]);
-    }
-
-    const outgoing = outgoingByNode.get(edge.from);
-    if (outgoing) {
-      outgoing.push(edge);
-    } else {
-      outgoingByNode.set(edge.from, [edge]);
-    }
-  }
-
-  let currentNodeId = nodeId;
-  const visited = new Set<string>();
-
-  while (currentNodeId && !visited.has(currentNodeId)) {
-    visited.add(currentNodeId);
-    const incomingEdges = sortGraphEdges(incomingByNode.get(currentNodeId) ?? []);
-    if (incomingEdges.length !== 1) {
-      return "";
-    }
-
-    const incomingEdge = incomingEdges[0];
-    const upstreamNode = nodeById.get(incomingEdge.from);
-    if (!upstreamNode) {
-      return "";
-    }
-
-    const upstreamOutgoing = sortGraphEdges(outgoingByNode.get(upstreamNode.id) ?? []);
-    const isSplitter = upstreamNode.type === EffectGuids.kSplitter || upstreamOutgoing.length > 1;
-    if (isSplitter) {
-      const splitterName = getFriendlyGraphNodeName(upstreamNode, upstreamNode.type, upstreamNode.id);
-      return ` (${splitterName} ch ${incomingEdge.fromPort + 1})`;
-    }
-
-    currentNodeId = upstreamNode.id;
-  }
-
-  return "";
-}
-
-function getSignalDiagnosticsNodeLabel(node: SignalLevelNodeMetrics): string {
-  const { graph, presetName } = getDiagnosticsGraphContext(node);
-  const graphNode = graph?.nodes.find((entry) => entry.id === node.nodeId);
-  const nodeName = getFriendlyGraphNodeName(graphNode, node.nodeType, node.nodeId);
-  const branchSuffix = getSplitterBranchSuffix(graph, node.nodeId);
-  const presetPrefix = node.scope === "preset" && presetName ? `${presetName} · ` : "";
-  return `${presetPrefix}${nodeName}${branchSuffix}`;
-}
-
-function formatTimeUs(value: number | null | undefined): string {
-  if (typeof value !== "number" || !isFinite(value)) {
-    return "—";
-  }
-  return `${value.toFixed(1)} μs`;
-}
-
-function formatTimeShare(value: number | null | undefined): string {
-  const timeText = formatTimeUs(value);
-  if (timeText === "—") {
-    return timeText;
-  }
-
-  const share = nodeDspProcessingSharePercent(value);
-  if (share == null || !isFinite(share)) {
-    return timeText;
-  }
-
-  return `${timeText} (${share.toFixed(1)}%)`;
-}
-
-function formatNodeLatencySamples(value: number | null | undefined, sampleRate?: number): string {
-  if (typeof value !== "number" || !isFinite(value) || value <= 0) {
-    return "—";
-  }
-
-  if (sampleRate && sampleRate > 0) {
-    const latencyMs = (value / sampleRate) * 1000.0;
-    return `${value} smp (${latencyMs.toFixed(2)} ms)`;
-  }
-
-  return `${value} smp`;
-}
-
 function formatLatencyValue(stats: DSPPerformanceStats | null | undefined): string {
   if (!stats) {
     return "—";
@@ -1055,38 +919,6 @@ function formatLatencyValue(stats: DSPPerformanceStats | null | undefined): stri
   }
 
   return `${latencySamples} samples`;
-}
-
-/** Returns a map of nodeId → topological position (0-based) for ordering. */
-function getGraphTopologicalOrder(graph: SignalGraph | undefined): Map<string, number> {
-  const order = new Map<string, number>();
-  if (!graph || !graph.nodes.length) return order;
-
-  const indegree = new Map<string, number>();
-  const outgoingByNode = new Map<string, string[]>();
-
-  for (const node of graph.nodes) {
-    indegree.set(node.id, 0);
-  }
-  for (const edge of graph.edges) {
-    indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
-    const out = outgoingByNode.get(edge.from);
-    if (out) out.push(edge.to);
-    else outgoingByNode.set(edge.from, [edge.to]);
-  }
-
-  const queue = graph.nodes.map((n) => n.id).filter((id) => (indegree.get(id) ?? 0) === 0);
-  let idx = 0;
-  while (queue.length) {
-    const nodeId = queue.shift()!;
-    order.set(nodeId, idx++);
-    for (const to of outgoingByNode.get(nodeId) ?? []) {
-      const remaining = (indegree.get(to) ?? 0) - 1;
-      indegree.set(to, remaining);
-      if (remaining === 0) queue.push(to);
-    }
-  }
-  return order;
 }
 
 // The control bar carries two of these. The input meter shows the raw signal ahead of
@@ -1126,7 +958,7 @@ export function updateSignalDiagnosticsView(): void {
     updateSignalPeakHold(diagnostics);
   }
 
-  if (isDSPPerformanceTabVisible()) {
+  if (isDSPDiagnosticsVisible()) {
     renderSignalDiagnosticsPanel(diagnostics);
   }
 
@@ -1273,7 +1105,6 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
   // Update the designed peak input control
   const designedPeakCurrentEl = document.getElementById("designed-peak-current-value");
   const designedPeakStoredEl = document.getElementById("designed-peak-stored-value");
-  const applyDesignedPeakBtn = document.getElementById("apply-designed-peak-btn") as HTMLButtonElement | null;
   
   const rawPeakDbfs = hold?.rawInput.peakDbfs ?? diagnostics.rawInput?.peakDbfs ?? input.peakDbfs;
   const designedPeakText = `${formatDb(rawPeakDbfs)} dBFS`;
@@ -1282,11 +1113,6 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
     signalDiagnosticsLastDesignedPeakText = designedPeakText;
   }
   
-  if (applyDesignedPeakBtn) {
-    applyDesignedPeakBtn.disabled = false;
-    (applyDesignedPeakBtn as HTMLButtonElement & { _peakDbfs?: number })._peakDbfs = rawPeakDbfs;
-  }
-
   // Show stored value from active preset
   if (designedPeakStoredEl) {
     const activePreset = uiState.activePresetId
@@ -1297,112 +1123,7 @@ function renderSignalDiagnosticsPanel(diagnostics: SignalLevelDiagnostics | null
   }
 
   if (listEl) {
-    const makeNodeRow = (
-      scope: string,
-      label: string,
-      channelCount: number | null,
-      timeUs: number | null,
-      latencySamples: number | null,
-      peakDbfs: number,
-      headroomDb: number,
-      clipped: boolean,
-      clipCount: number
-    ): string => {
-      const clipClass = clipped ? "clip-on" : "clip-off";
-      const clipText = clipped ? `Clipping (${clipCount})` : "OK";
-      const channelClass = channelCount == null || channelCount <= 0
-        ? "stereo-unknown"
-        : (channelCount > 1 ? "stereo-on" : "stereo-off");
-      const channelText = channelCount == null || channelCount <= 0 ? "n/a" : `${Math.round(channelCount)}ch`;
-      return `
-        <div class="signal-diagnostics-item">
-          <span class="signal-diagnostics-cell scope">${escapeHtml(scope)}</span>
-          <span class="signal-diagnostics-cell node">${label}</span>
-          <span class="signal-diagnostics-cell stereo ${channelClass}">${channelText}</span>
-          <span class="signal-diagnostics-cell">${formatTimeShare(timeUs)}</span>
-          <span class="signal-diagnostics-cell">${formatNodeLatencySamples(latencySamples, uiState.dspPerformance?.sampleRate)}</span>
-          <span class="signal-diagnostics-cell">${formatDb(peakDbfs)} dBFS</span>
-          <span class="signal-diagnostics-cell">${formatDb(headroomDb)} dB</span>
-          <span class="signal-diagnostics-cell clip ${clipClass}">
-            <span class="clip-indicator"></span>
-            ${clipText}
-          </span>
-        </div>
-      `;
-    };
-
-    const inputRow = makeNodeRow(
-      "in",
-      "chain input",
-      null,
-      null,
-      null,
-      hold?.input.peakDbfs ?? input.peakDbfs,
-      input.headroomDb,
-      input.clipped,
-      input.clipCount
-    );
-
-    // Build topological order maps for each graph so nodes render in signal-chain order.
-    const preOrder = getGraphTopologicalOrder(uiState.globalSignalChain?.preChainGraph);
-    const postOrder = getGraphTopologicalOrder(uiState.globalSignalChain?.postChainGraph);
-    const presetOrderCache = new Map<string, Map<string, number>>();
-    const getPresetOrder = (presetId: string): Map<string, number> => {
-      if (!presetOrderCache.has(presetId)) {
-        const preset = uiState.presetCache.get(presetId) ?? uiState.presets.find((p) => p.id === presetId);
-        presetOrderCache.set(presetId, getGraphTopologicalOrder(preset?.graph));
-      }
-      return presetOrderCache.get(presetId)!;
-    };
-
-    const scopeRank = (scope: string) => scope === "pre" ? 0 : scope === "preset" ? 1 : 2;
-
-    const sortedNodes = (diagnostics.nodes ?? []).slice().sort((a, b) => {
-      const scopeDiff = scopeRank(a.scope) - scopeRank(b.scope);
-      if (scopeDiff !== 0) return scopeDiff;
-      if (a.scope === "pre") {
-        return (preOrder.get(a.nodeId) ?? 9999) - (preOrder.get(b.nodeId) ?? 9999);
-      }
-      if (a.scope === "post") {
-        return (postOrder.get(a.nodeId) ?? 9999) - (postOrder.get(b.nodeId) ?? 9999);
-      }
-      // preset scope — group by preset, then topological order within preset
-      const aPreset = a.presetId ?? "";
-      const bPreset = b.presetId ?? "";
-      if (aPreset !== bPreset) return aPreset.localeCompare(bPreset);
-      const presetOrder = getPresetOrder(aPreset);
-      return (presetOrder.get(a.nodeId) ?? 9999) - (presetOrder.get(b.nodeId) ?? 9999);
-    });
-
-    const nodeRows = sortedNodes
-      .map((node) => {
-        const nodeLabel = escapeHtml(getSignalDiagnosticsNodeLabel(node));
-        const nodeTimeUs = nodeDspProcessingTimeUs(node);
-        const nodeLatencySamples = nodeDspLatencySamples(node);
-        const levels = node.levels ?? { peakDbfs: Number.NaN, headroomDb: Number.NaN, clipped: false, clipCount: 0 };
-        const holdEntry = hold?.nodes[node.nodeId];
-        return makeNodeRow(node.scope, nodeLabel, node.channelCount ?? null, nodeTimeUs, nodeLatencySamples, holdEntry?.peakDbfs ?? levels.peakDbfs, levels.headroomDb, levels.clipped, levels.clipCount);
-      })
-      .join("");
-
-    const rows = inputRow + nodeRows;
-
-    // Only update list HTML if it has changed
-    const newListHtml = `
-      <div class="signal-diagnostics-header">
-        <span class="signal-diagnostics-cell scope">Scope</span>
-        <span class="signal-diagnostics-cell node">Node</span>
-        <span class="signal-diagnostics-cell">Ch</span>
-        <span class="signal-diagnostics-cell">CPU</span>
-        <span class="signal-diagnostics-cell">Latency</span>
-        <span class="signal-diagnostics-cell">Peak</span>
-        <span class="signal-diagnostics-cell">Headroom</span>
-        <span class="signal-diagnostics-cell">Clip</span>
-      </div>
-      <div class="signal-diagnostics-columns">
-        ${rows}
-      </div>
-    `;
+    const newListHtml = renderDspNodeTableHtml(diagnostics, input, hold);
 
     if (newListHtml !== signalDiagnosticsLastListHtml) {
       listEl.innerHTML = newListHtml;

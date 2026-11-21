@@ -350,11 +350,9 @@ Ptr Shell::BuildChain()
             }
         }
 
-        // Lit with the signal while Animate signal flow is on; the pulses move one spacing every
-        // 0.4 s, as the web UI's animation does.
+        // Lit with the signal; the pulses move one spacing every 0.4 s, as the web UI's animation does.
         mLive.Feed(connector, [this, source = connector->Source()](Connector& c) {
-            const bool live = !source.empty() && guitarfx::uiclient::IsSignalFlowAnimationEnabled(mState) &&
-                              mSignalFlow.IsLive(source);
+            const bool live = !source.empty() && mSignalFlow.IsLive(source);
             return c.SetFlow(live, static_cast<float>(std::fmod(UiSession::Now() / 0.4, 1.0)));
         });
         return connector;

@@ -2,7 +2,7 @@
 
 Status: **experimental, every desktop build.** Spike 2026-10-28 (see Results). Since 2026-11-19
 `SOUNDSHED_NANOQ_UI` builds the native UI *beside* the WebView editor, not in place of it:
-Settings → Features → Experimental → Native UI (Nano) (`ui.nativeEditor`) picks one, the
+Settings → User Interface → Interface → Native UI (Nano) (`ui.nativeEditor`) picks one, the
 standalone swaps its editor in place, and a plugin's next window follows the setting
 ([user-interface.md](../user-interface.md#settings--features)); the native UI's footer has a
 **Standard UI** button back. Since 2026-11-20 it is on by default for every desktop build
