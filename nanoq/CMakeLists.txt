@@ -109,6 +109,20 @@ if(NANOQ_ANDROID)
         -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/android/patches/q.patch
         -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 endif()
+# RtAudio is Q's to fetch (q_io/CMakeLists.txt), at the same tag; declared here first, as
+# Elements is below, to patch it. patches/rtaudio-stop-timeouts.patch: stopping an ASIO stream
+# waited without limit for the driver's callback to drain it, and the WASAPI thread waited without
+# limit for its device's events, so a driver that never called back (one that failed to start)
+# hung the UI thread for good when the driver or device was changed. Each wait is now bounded.
+if(NOT NANOQ_IOS AND NOT NANOQ_ANDROID)
+    FetchContent_Declare(rtaudio
+        GIT_REPOSITORY https://github.com/thestk/rtaudio.git
+        GIT_TAG 6.0.1
+        PATCH_COMMAND ${CMAKE_COMMAND}
+            -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/rtaudio-stop-timeouts.patch
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
+endif()
+
 FetchContent_Declare(q
     GIT_REPOSITORY https://github.com/cycfi/q.git
     GIT_TAG efe26114f39e4a78bd67c1456a25487d356fb910 # v1.5.4
@@ -132,6 +146,9 @@ FetchContent_Declare(q
 # filled rectangle, rounded rectangle or oval is drawn as that shape blurred by a mask filter,
 # which Skia's GPU backends blur analytically, instead of through a drop-shadow image filter, a
 # layer blurred in passes; on the iPad mini 2 that halved the main thread's time for a redraw.
+# patches/elements-text-box-caret-lifetime.patch: a text box's caret blinks on a 500 ms timer that
+# held the box by `this`; a box in a dialog closed within that time (the effect picker's search)
+# was written to after it was freed, which corrupted the heap (found with ASan, stress-ui.ps1).
 # An iOS build takes Artist's patch too.
 set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-input-redraws.patch
@@ -150,6 +167,9 @@ set(_nanoq_elements_patch PATCH_COMMAND ${CMAKE_COMMAND}
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
     COMMAND ${CMAKE_COMMAND}
     -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-skia-fast-shadows.patch
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake
+    COMMAND ${CMAKE_COMMAND}
+    -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/elements-text-box-caret-lifetime.patch
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ios/cmake/ApplyPatch.cmake)
 if(NANOQ_IOS)
     # elements-log-clock.patch: Elements' quill loggers stamp messages with quill's TSC, which

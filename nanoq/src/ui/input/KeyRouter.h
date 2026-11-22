@@ -97,8 +97,27 @@ class KeyRouter final : public cycfi::elements::proxy_base
         }
     }
 
+    /// Closes the layer at once: from here it draws nothing and takes no input, though it stays
+    /// in the view until its removal, which is posted (Shell::RemoveLayer). What a dialog's
+    /// controls point at (its state, held by the overlay's close hook) goes when it closes, and a
+    /// second click or a paint in that gap reached it after it was freed.
+    void Retire()
+    {
+        mRetired = true;
+    }
+
+    [[nodiscard]] bool Retired() const
+    {
+        return mRetired;
+    }
+
     void draw(const cycfi::elements::context& ctx) override
     {
+        if (mRetired)
+        {
+            return;
+        }
+
         proxy_base::draw(ctx);
         DrawFocusRing(ctx);
 
@@ -137,6 +156,12 @@ class KeyRouter final : public cycfi::elements::proxy_base
     bool key(const cycfi::elements::context& ctx, cycfi::elements::key_info k) override
     {
         using cycfi::elements::key_code;
+
+        if (mRetired)
+        {
+            return false;
+        }
+
         const bool press =
             k.action == cycfi::elements::key_action::press || k.action == cycfi::elements::key_action::repeat;
         const bool editing = TypingInControl();
@@ -191,6 +216,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
     cycfi::elements::element* hit_test(const cycfi::elements::context& ctx, cycfi::elements::point p, bool leaf,
                                        bool control) override
     {
+        if (mRetired)
+        {
+            return nullptr; // what is under it, which is what shows
+        }
+
         // The router itself: it wants focus, so Elements leaves focus where it is.
         if (HostsKeyboard() && keyboard->Contains(ctx.bounds, p))
         {
@@ -207,6 +237,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
     bool click(const cycfi::elements::context& ctx, cycfi::elements::mouse_button btn) override
     {
+        if (mRetired)
+        {
+            return false;
+        }
+
         if (HostsKeyboard() && (keyboard->Tracking() || (btn.down && keyboard->Contains(ctx.bounds, btn.pos))))
         {
             keyboard->Click(ctx, btn);
@@ -258,6 +293,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
     void drag(const cycfi::elements::context& ctx, cycfi::elements::mouse_button btn) override
     {
+        if (mRetired)
+        {
+            return;
+        }
+
         if (HostsKeyboard() && keyboard->Tracking())
         {
             keyboard->Drag(ctx, btn);
@@ -272,12 +312,19 @@ class KeyRouter final : public cycfi::elements::proxy_base
     bool cursor(const cycfi::elements::context& ctx, cycfi::elements::point p,
                 cycfi::elements::cursor_tracking status) override
     {
-        return !(HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) && proxy_base::cursor(ctx, p, status);
+        return !mRetired && !(HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) &&
+               proxy_base::cursor(ctx, p, status);
+    }
+
+    bool text(const cycfi::elements::context& ctx, cycfi::elements::text_info info) override
+    {
+        return !mRetired && proxy_base::text(ctx, info);
     }
 
     bool scroll(const cycfi::elements::context& ctx, cycfi::elements::point dir, cycfi::elements::point p) override
     {
-        return (HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) || proxy_base::scroll(ctx, dir, p);
+        return !mRetired &&
+               ((HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) || proxy_base::scroll(ctx, dir, p));
     }
 
     // Files dragged in from the desktop are offered to the shell first (a model or IR onto an
@@ -285,6 +332,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
     void track_drop(const cycfi::elements::context& ctx, const cycfi::elements::drop_info& info,
                     cycfi::elements::cursor_tracking status) override
     {
+        if (mRetired)
+        {
+            return;
+        }
+
         if (onTrackDrop)
         {
             onTrackDrop(info, status == cycfi::elements::cursor_tracking::leaving);
@@ -295,6 +347,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
     bool drop(const cycfi::elements::context& ctx, const cycfi::elements::drop_info& info) override
     {
+        if (mRetired)
+        {
+            return false;
+        }
+
         if (onDrop && onDrop(info))
         {
             return true;
@@ -317,7 +374,8 @@ class KeyRouter final : public cycfi::elements::proxy_base
         // take the keys from the page under it.
         for (auto i = static_cast<int>(content.size()) - 1; i >= 0; --i)
         {
-            if (dynamic_cast<KeyRouter*>(&content.at(static_cast<std::size_t>(i))) != nullptr)
+            if (const auto* router = dynamic_cast<KeyRouter*>(&content.at(static_cast<std::size_t>(i)));
+                router != nullptr && !router->Retired())
             {
                 content.focus(static_cast<std::size_t>(i));
                 content.at(static_cast<std::size_t>(i)).begin_focus(focus_request::from_top);
@@ -688,6 +746,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
     cycfi::elements::element_ptr mSubject;
     bool mFocusContent;
+    bool mRetired = false; // Retire()
     // The control focus was last on, by its FocusKey and ordinal, so a rebuild can find it again.
     // mLastLeaf is only compared, never followed: it may be gone.
     const cycfi::elements::element* mLastLeaf = nullptr;

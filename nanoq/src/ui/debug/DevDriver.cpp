@@ -167,6 +167,13 @@ void DevDriver::Poll(el::view& view)
 
             for (std::string line; std::getline(in, line);)
             {
+                // A file written on Windows ends its lines in CRLF: a "key escape\r" parsed as no
+                // key, and a shot went to a file name ending in a carriage return.
+                if (!line.empty() && line.back() == '\r')
+                {
+                    line.pop_back();
+                }
+
                 lines.push_back(line);
             }
         }
@@ -197,6 +204,16 @@ bool DevDriver::Play(el::view& view, const std::string& line)
         if (space != std::string::npos && onSetting)
         {
             onSetting(rest.substr(0, space), rest.substr(space + 1));
+        }
+
+        return true;
+    }
+
+    if (line.rfind("cmd ", 0) == 0)
+    {
+        if (onCommand)
+        {
+            onCommand(line.substr(4));
         }
 
         return true;

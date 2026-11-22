@@ -17,6 +17,7 @@
 #include "detail/standalone/standalone_host.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 #include <utility>
 
@@ -94,6 +95,15 @@ void RefreshChannelCounts(sa::StandaloneHost& host)
 void Save(sa::StandaloneHost& host)
 {
     host.captureAudioSettings();
+
+    // A run on a throwaway profile (SOUNDSHED_NANOQ_PROFILE: run-isolated.ps1, stress-ui.ps1)
+    // leaves the setup file alone: it is clap-wrapper's, outside the profile, and the real
+    // session's.
+    if (const char* profile = std::getenv("SOUNDSHED_NANOQ_PROFILE"); profile != nullptr && *profile != '\0')
+    {
+        return;
+    }
+
     host.saveStandaloneSettings();
 }
 

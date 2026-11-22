@@ -18,6 +18,7 @@
 //   hold x y ms        a press held still for ms milliseconds, then let go (a touch's long press);
 //                      the lines after it wait for the release
 //   setting <key> <json>  sets an app setting, as the UI would (to seed a test profile)
+//   cmd <verb> ...     an edit sent to the engine as the UI's controls send it (DevCommands.h)
 
 #include <elements.hpp>
 
@@ -41,6 +42,9 @@ class DevDriver
 
     /// Called with `setting` lines' key and JSON value; the session sends them to the engine.
     std::function<void(const std::string& key, const std::string& json)> onSetting;
+
+    /// Called with `cmd` lines, without the verb; the session plays them (DevCommands.h).
+    std::function<void(const std::string& line)> onCommand;
 
   private:
     explicit DevDriver(std::filesystem::path file) : mFile(std::move(file))

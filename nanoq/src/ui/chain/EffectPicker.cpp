@@ -176,7 +176,12 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
     auto* s = state.get();
     s->self = state;
 
-    auto choose = [this, afterNodeId, replaceNodeId, currentType](const std::string& type) {
+    auto choose = [this, weak = s->self, afterNodeId, replaceNodeId, currentType](const std::string& type) {
+        if (weak.expired())
+        {
+            return; // a second click on the closed chooser, before its layer has gone
+        }
+
         CloseOverlay();
 
         if (type == currentType)
@@ -272,12 +277,22 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
                                                      (fav || recent) ? mTheme.Accent()
                                                                      : Theme::Argb(mPresentation.CategoryColour(id)),
                                                      query.empty() && id == mPickerCategory);
-            row->onClick = [this, s, id] {
+            // The rows hold the state weakly: it goes when the chooser closes, while the closed
+            // layer can still take a click until its posted removal (a second click in the same
+            // batch wrote to the freed search text).
+            row->onClick = [this, weak = s->self, id] {
+                const auto live = weak.lock();
+
+                if (!live)
+                {
+                    return;
+                }
+
                 mPickerCategory = id;
-                s->search.clear();
+                live->search.clear();
                 // Refilled once this click is over: the row being clicked is in the column that
                 // the refill replaces, and must outlive its own handler.
-                mSession.View().post([alive = std::weak_ptr<bool>(mAlive), this, weak = s->self] {
+                mSession.View().post([alive = std::weak_ptr<bool>(mAlive), this, weak] {
                     const auto state = weak.lock();
 
                     if (alive.lock() && state && state->fill)
@@ -339,10 +354,15 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
             }
 
             const auto key = guitarfx::uiclient::FxItemKey(effect->type);
-            row->Star(guitarfx::uiclient::IsFxFavorite(mState, key), [this, s, key] {
+            row->Star(guitarfx::uiclient::IsFxFavorite(mState, key), [this, weak = s->self, key] {
+                if (weak.expired())
+                {
+                    return; // the chooser has closed
+                }
+
                 guitarfx::uiclient::ToggleFxFavorite(mSession.Commands(), mState, key);
                 // Refilled once this click is over (the row is in the column being replaced).
-                mSession.View().post([alive = std::weak_ptr<bool>(mAlive), weak = s->self] {
+                mSession.View().post([alive = std::weak_ptr<bool>(mAlive), weak] {
                     const auto state = weak.lock();
 
                     if (alive.lock() && state && state->fill)
@@ -418,9 +438,14 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
     close->MinWidth(80).TextSize(12.0f);
 
     auto [searchElement, searchBox] = el::input_box("Search effects...", Font(Weight::Regular), 1.0f);
-    searchBox->on_text = [s](std::string_view text) {
-        s->search = std::string(text);
-        s->fill();
+    searchBox->on_text = [weak = s->self](std::string_view text) {
+        const auto live = weak.lock();
+
+        if (live && live->fill)
+        {
+            live->search = std::string(text);
+            live->fill();
+        }
     };
 
     auto header =

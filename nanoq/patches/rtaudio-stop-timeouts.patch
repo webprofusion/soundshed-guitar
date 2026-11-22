@@ -1,0 +1,37 @@
+--- a/RtAudio.cpp
++++ b/RtAudio.cpp
+@@ -4014,7 +4014,13 @@
+   if ( stream_.mode == OUTPUT || stream_.mode == DUPLEX ) {
+     if ( handle->drainCounter == 0 ) {
+       handle->drainCounter = 2;
+-      WaitForSingleObject( handle->condition, INFINITE );  // block until signaled
++      // Soundshed Nano Q: the drain is signalled from the driver's callback, so a driver that
++      // never calls back (a device that failed to start, or was unplugged) used to block the
++      // caller here for ever. Wait a few buffers' worth, then stop it anyway.
++      DWORD drainWaitMs = 1000;
++      if ( stream_.sampleRate > 0 )
++        drainWaitMs += (DWORD) ( 4000.0 * stream_.bufferSize / stream_.sampleRate );
++      WaitForSingleObject( handle->condition, drainWaitMs );  // block until signaled
+     }
+   }
+ 
+@@ -6092,7 +6098,9 @@
+     if ( captureAudioClient ) {
+       // if the callback input buffer was not pulled from captureBuffer, wait for next capture event
+       if ( !callbackPulled ) {
+-        WaitForSingleObject( loopbackEnabled ? renderEvent : captureEvent, INFINITE );
++        // Soundshed Nano Q: bounded, so a device that stops signalling (unplugged, or never
++        // started) cannot keep this thread, and stopStream() waiting for it, blocked for ever.
++        WaitForSingleObject( loopbackEnabled ? renderEvent : captureEvent, 1000 );
+       }
+ 
+       // Get capture buffer from stream
+@@ -6148,7 +6156,7 @@
+     if ( renderAudioClient ) {
+       // if the callback output buffer was not pushed to renderBuffer, wait for next render event
+       if ( callbackPulled && !callbackPushed ) {
+-        WaitForSingleObject( renderEvent, INFINITE );
++        WaitForSingleObject( renderEvent, 1000 ); // Soundshed Nano Q: bounded, as above
+       }
+ 
+       // Get render buffer from stream

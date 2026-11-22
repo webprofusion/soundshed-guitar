@@ -1,5 +1,6 @@
 #include "FileDialogs.h"
 
+#include <cstdlib>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -14,6 +15,15 @@ namespace nanoq
 namespace
 {
 FileDialogHook gHook;
+
+/// SOUNDSHED_NANOQ_NO_FILE_DIALOGS: every dialog answers at once as cancelled. For a driven run
+/// (nanoq/tools/stress-ui.ps1), where a native dialog would wait for a person, and can only save
+/// or open something by accident.
+bool DialogsSuppressed()
+{
+    const char* value = std::getenv("SOUNDSHED_NANOQ_NO_FILE_DIALOGS");
+    return value != nullptr && *value != '\0' && *value != '0';
+}
 } // namespace
 
 #if defined(__APPLE__)
@@ -178,6 +188,12 @@ void ShowOpenDialog(guitarfx::BrowseFileType type, const std::string& title,
         return;
     }
 
+    if (DialogsSuppressed())
+    {
+        std::thread([done = std::move(done)] { done({}); }).detach();
+        return;
+    }
+
 #if defined(_WIN32)
     std::thread([=, done = std::move(done)] { done(RunDialog(false, type, title, {})); }).detach();
 #elif defined(__APPLE__)
@@ -193,6 +209,12 @@ void ShowSaveDialog(guitarfx::BrowseFileType type, const std::string& title, con
     if (gHook)
     {
         gHook(true, type, title, defaultName, std::move(done));
+        return;
+    }
+
+    if (DialogsSuppressed())
+    {
+        std::thread([done = std::move(done)] { done({}); }).detach();
         return;
     }
 
