@@ -391,27 +391,6 @@ std::shared_ptr<IconButton> Shell::BuildStandardUiButton()
     return button;
 }
 
-std::shared_ptr<IconButton> Shell::BuildThemeButton()
-{
-    auto themeButton = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    const std::string themeName(guitarfx::uiclient::theme::FindTheme(mState.theme).label);
-    themeButton->Size(84, 28).Label(themeName, 11.0f).Caret(true);
-    themeButton->onClick = [this, t = themeButton.get()] {
-        std::vector<MenuItem> items;
-
-        // Every theme the web UI lists, in its order.
-        for (const auto& theme : guitarfx::uiclient::theme::kThemes)
-        {
-            const std::string id(theme.id);
-            items.push_back({std::string(theme.label), mState.theme == id, false,
-                             [this, id] { mSession.Commands().SetTheme(id); }});
-        }
-
-        OpenDropdown(t->Bounds(), std::move(items), 150.0f);
-    };
-    return themeButton;
-}
-
 Ptr Shell::BuildChainStage()
 {
     // The add button floats at the bottom right (.signal-path-add-menu-trigger): it adds at the
@@ -643,14 +622,8 @@ void Shell::OpenOptions(el::rect anchor)
 
         OpenDropdown(d->Bounds(), std::move(items), 150.0f);
     };
+    // The zoom is in the theme's flyout, as the web UI's.
     std::vector<Ptr> viewRow{themeButton, HGap(8), densityButton};
-
-    if (mSession.getZoom && mSession.setZoom)
-    {
-        auto zoom = ZoomButton();
-        viewRow.push_back(HGap(8));
-        viewRow.push_back(zoom);
-    }
 
     if (auto standardUi = BuildStandardUiButton())
     {
@@ -688,6 +661,10 @@ void Shell::OpenOptions(el::rect anchor)
 
     ShowPopover(Pad(10, 10, 10, 10, Col(rows)), anchor, 350.0f,
                 touch ? 20.0f + 5.0f * 40.0f + 3.0f * 17.0f + 8.0f : 190.0f, true);
+    // Noted, so a theme chosen in the flyout over it redraws it in the theme's colours.
+    mOptionsAnchor = anchor;
+    mOptionsOpen = true;
+    mOnOverlayClosed = [this] { mOptionsOpen = false; };
 }
 
 std::shared_ptr<IconButton> Shell::TouchControlsButton()

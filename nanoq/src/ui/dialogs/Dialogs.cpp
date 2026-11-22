@@ -130,6 +130,7 @@ std::shared_ptr<Button> Shell::DialogButton(const std::string& label, std::funct
 void Shell::CloseOverlay()
 {
     CloseDropdown();
+    CloseThemeFlyout(); // opened from the Options sheet, it goes with it
     mOverlayCancel = nullptr;
 
     // A dialog with live feeds (tuner, metronome) stops listening, and tells the engine it is

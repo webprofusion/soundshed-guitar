@@ -10,6 +10,15 @@ UiRoot::UiRoot(UiLink& link, cycfi::elements::view& view, Options options)
 {
     mSession->getZoom = std::move(options.getZoom);
     mSession->setZoom = std::move(options.setZoom);
+
+    // A host that keeps no zoom of its own (EmbeddedUi, in Soundshed Guitar's window): the view's
+    // scale, inside the window it is given, as the web UI's zoom is.
+    if (!mSession->getZoom || !mSession->setZoom)
+    {
+        mSession->getZoom = [&view] { return view.scale(); };
+        mSession->setZoom = [&view](float scale) { view.scale(scale); };
+    }
+
     mShell = std::make_unique<Shell>(*mSession);
     mSession->onTick = [this] {
         if (mShell)

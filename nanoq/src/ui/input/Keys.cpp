@@ -139,6 +139,12 @@ bool Shell::HandleKey(const el::key_info& k)
             return true;
         }
 
+        if (mThemeFlyout)
+        {
+            CloseThemeFlyout();
+            return true;
+        }
+
         if (mOverlay)
         {
             CancelOverlay();
@@ -149,7 +155,7 @@ bool Shell::HandleKey(const el::key_info& k)
     }
 
     // Under a menu or dialog the page's shortcuts are off, as the web UI's are under a modal.
-    if (mFilePicker || mDropdown || mOverlay || !mState.activePreset)
+    if (mFilePicker || mDropdown || mThemeFlyout || mOverlay || !mState.activePreset)
     {
         return false;
     }

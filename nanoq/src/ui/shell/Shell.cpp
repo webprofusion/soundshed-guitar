@@ -235,6 +235,20 @@ void Shell::Rebuild()
         mEffectSignature.clear();
         mSceneSignature.clear();
         mTopSignature.clear();
+
+        // The flyout that chose it stays open, drawn afresh in the theme's colours, and so does
+        // the Options sheet it may have opened from (reopening the sheet closes the flyout).
+        const bool flyout = mThemeFlyout != nullptr;
+
+        if (mOptionsOpen)
+        {
+            OpenOptions(mOptionsAnchor);
+        }
+
+        if (flyout)
+        {
+            OpenThemeFlyout(mThemeFlyoutAnchor);
+        }
     }
 
     if (!mState.haveState)
@@ -505,6 +519,7 @@ void Shell::OnTick()
     TickKeyboard();
     TickLooper();
     TickFilePicker();
+    SyncZoom();
     {
         const auto wheel = mState.appSettings.find("ui.mouseWheelAdjustsControls");
         ParamKnob::sWheelAdjusts = wheel == mState.appSettings.end() || !wheel->is_boolean() || wheel->get<bool>();

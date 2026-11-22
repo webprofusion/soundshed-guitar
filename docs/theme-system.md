@@ -176,7 +176,7 @@ The footer's **Theme** button (`#footer-theme-btn`) opens the theme flyout (`ts/
 `css/theme-flyout.css`): the UI zoom at the top, then a tile per theme with a picture of the app
 wearing it. A tile applies its theme at once and the flyout stays open, so themes can be tried
 one after another; a click outside, Escape or the button closes it. At compact density the button
-is in the footer's OPTIONS sheet, which stays open while the flyout is used.
+is in the footer's OPTIONS sheet, which stays open while the flyout is used. Nano Q has the same flyout (`nanoq/src/ui/shell/ThemeFlyout.cpp`), with the same pictures and zoom stops; its zoom is kept in `uiSettings.native.zoom`.
 
 The pictures are `core/ui/images/themes/thumbnails/<theme>.jpg`: 320px squares of the app's top-left
 corner (its 560px square at 1280x800 and 100% zoom), captured from the running Standalone by

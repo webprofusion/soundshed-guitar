@@ -547,7 +547,7 @@ void Shell::SyncJamWebViews()
 {
     // A native window sits over everything Elements draws: it shows only while its slot is on
     // screen with nothing (a dialog, a drop-down, a toast) opened over the page.
-    const bool covered = mOverlay != nullptr || mDropdown != nullptr;
+    const bool covered = mOverlay != nullptr || mDropdown != nullptr || mThemeFlyout != nullptr;
     const float scale = mSession.View().scale();
     const float dpi = nanoq::WebView::PixelScale(static_cast<void*>(mSession.View().host()));
     const auto place = [&](nanoq::WebView* web, const std::weak_ptr<WebViewSlot>& weak, bool wanted) {

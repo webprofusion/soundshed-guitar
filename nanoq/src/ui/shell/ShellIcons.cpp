@@ -132,6 +132,12 @@ void AddShellIcons(Icons& icons)
               Svg("0 0 24 24", 1.8f, R"(<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/>)"));
     icons.Add("ui-speaker",
               Svg("0 0 24 24", 1.8f, R"(<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>)"));
+    // The Theme button's palette (#footer-theme-btn).
+    icons.Add(
+        "ui-theme",
+        Svg("0 0 24 24", 1.8f,
+            R"(<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.2 0 1.9-.8 1.9-1.8 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7h2.1a4.2 4.2 0 0 0 4.2-4.2C21 6.9 17 3.5 12 3.5Z"/>)"
+            R"(<circle cx="7.6" cy="11.2" r="1.1"/><circle cx="10.4" cy="7.4" r="1.1"/><circle cx="15" cy="7.6" r="1.1"/>)"));
 
     // The input modes' routing (inputModeIcons.ts): the inputs at the left (filled when used),
     // the chain as a box, the two sides leaving at the right.

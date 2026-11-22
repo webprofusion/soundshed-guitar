@@ -21,8 +21,8 @@ class UiRoot
   public:
     struct Options
     {
-        /// The editor's zoom (1 = 100%), kept by the host with its state. Without them the
-        /// UI offers no zoom.
+        /// The editor's zoom (1 = 100%), where the host keeps one with its state. Without them
+        /// the zoom is the view's own scale. Either way the UI stores it in uiSettings.native.
         std::function<float()> getZoom;
         std::function<void(float)> setZoom;
     };

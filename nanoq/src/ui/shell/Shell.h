@@ -285,8 +285,23 @@ class Shell
     Ptr BuildTransport();
     Ptr BuildStarting();
     Ptr BuildChainStage();
-    /// The footer's theme drop-down, in either frame.
+    // ThemeFlyout.cpp: the footer's Theme button, its flyout (the zoom, and a tile per theme), and
+    // the zoom, kept in uiSettings.native.zoom.
+    /// The footer's Theme button, in either frame: it opens the flyout.
     [[nodiscard]] std::shared_ptr<IconButton> BuildThemeButton();
+    void ToggleThemeFlyout(el::rect anchor);
+    void OpenThemeFlyout(el::rect anchor);
+    void CloseThemeFlyout();
+    /// The flyout's zoom select (100%, ...), bound to the zoom.
+    [[nodiscard]] Ptr BuildZoomPicker();
+    [[nodiscard]] float CurrentZoom() const;
+    /// A zoom chosen in the UI: applied and stored.
+    void SetZoom(float zoom);
+    /// Puts `zoom` on the view, and places what is open (the flyout, the Options sheet) again.
+    void ApplyZoom(float zoom);
+    /// Each tick: a stored zoom the view has not applied yet is applied, and one the host changed
+    /// (QPlug's zoom keys) is stored.
+    void SyncZoom();
     /// Back to the web UI, where Soundshed Guitar hosts this UI (environment.nativeEditor); null
     /// anywhere else.
     [[nodiscard]] std::shared_ptr<IconButton> BuildStandardUiButton();
@@ -306,8 +321,6 @@ class Shell
     /// frame's Options sheet (bound, so they follow an undo made in the sheet without a rebuild).
     [[nodiscard]] Ptr BuildHistoryControls();
     void PlayOrStopDemo();
-    /// The zoom's select (100%, ...), for the Options sheet and the full footer.
-    [[nodiscard]] Ptr ZoomButton();
     /// The presets loaded, in order, for the control bar's back and forward (preset-undo/redo).
     void NotePresetTrail();
     void StepPresetTrail(int direction);
@@ -1029,7 +1042,13 @@ class Shell
     std::string mTopSignature;
 
     Ptr mOverlay;
-    Ptr mDropdown; // a drop-down list: a layer of its own, so one opened from a dialog stacks over it
+    Ptr mDropdown;    // a drop-down list: a layer of its own, so one opened from a dialog stacks over it
+    Ptr mThemeFlyout; // the theme flyout: over the overlay (the Options sheet), under a drop-down
+    el::rect mThemeFlyoutAnchor;
+    bool mOptionsOpen = false; // the overlay is the compact footer's Options sheet
+    el::rect mOptionsAnchor;
+    bool mZoomKnown = false; // mZoomStored holds the zoom stored, or the one first seen
+    float mZoomStored = 1.0f;
     Ptr mToast;
     Ptr mFilePickerLayer; // over everything: a dialog may be what asked for the file
     std::shared_ptr<FilePickerState> mFilePicker;

@@ -485,33 +485,6 @@ Ptr Shell::BuildTempoControls(bool withTap)
     return Tight(parts);
 }
 
-Ptr Shell::ZoomButton()
-{
-    const float zoom = mSession.getZoom ? mSession.getZoom() : 1.0f;
-    const int percent = static_cast<int>(std::lround(zoom * 100.0f));
-    auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    button->Size(72, 28).Label(std::to_string(percent) + "%", 11.0f).Caret(true);
-    button->onClick = [this, b = button.get(), percent] {
-        std::vector<MenuItem> items;
-
-        // The web UI's choices (settings/keys.ts ZOOM_LEVEL_OPTIONS); QPlug allows 50% to 200%.
-        for (const int p : {75, 90, 100, 110, 125, 150, 175, 200})
-        {
-            items.push_back({std::to_string(p) + "%", p == percent, false, [this, p] {
-                                 if (mSession.setZoom)
-                                 {
-                                     mSession.setZoom(static_cast<float>(p) / 100.0f);
-                                 }
-
-                                 Mark(kTransport);
-                             }});
-        }
-
-        OpenDropdown(b->Bounds(), std::move(items), 110.0f);
-    };
-    return button;
-}
-
 /// The footers' Rec (the riff capture dialog, counting in at once: the standalone app with the
 /// riff library on, as the web UI's) and Loop (the looper strip) buttons, those that apply.
 std::vector<Ptr> Shell::BuildCaptureButtons(float size, bool labelled, bool withLoop)
@@ -620,12 +593,7 @@ Ptr Shell::BuildWideFooter()
                          Stretch(), BuildTempoControls(true),
                          divider()};
 
-    if (mSession.getZoom && mSession.setZoom)
-    {
-        row.push_back(ZoomButton());
-        row.push_back(HGap(8));
-    }
-
+    // The zoom is in the theme's flyout, as the web UI's.
     if (auto standardUi = BuildStandardUiButton())
     {
         row.push_back(standardUi);
