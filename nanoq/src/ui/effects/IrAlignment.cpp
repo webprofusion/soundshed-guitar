@@ -15,6 +15,7 @@
 // align, and the section shows that IR's response alone.
 
 #include "ui/Drawn.h"
+#include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
@@ -22,6 +23,7 @@
 #include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/TextDraw.h"
 #include "uiclient/Analysis.h"
+#include "uiclient/ParamFormat.h"
 #include "util/PathEncoding.h"
 
 #include <algorithm>
@@ -43,12 +45,257 @@ constexpr double kMaxOffsetMs = 10.0;
 /// Sound travels about 34.3 cm in a millisecond: how far a mic moves for an offset.
 constexpr double kCmPerMs = 34.3;
 
-// The section's rows, top to bottom.
-constexpr float kTitleH = 14.0f, kHeaderH = 16.0f, kWavesH = 84.0f, kStripH = 28.0f, kControlsH = 26.0f,
-                kReadoutH = 26.0f, kPlotLabelH = 14.0f, kPlotH = 150.0f, kNoteH = 14.0f, kGap = 6.0f;
+// The section's rows, top to bottom (ir-alignment.css), 8 px apart; the group box's padding
+// round them, under its title.
+constexpr float kHeaderH = 16.0f, kWavesH = 120.0f, kStripH = 40.0f, kControlsH = 28.0f, kReadoutH = 20.0f,
+                kPlotH = 140.0f, kNoteH = 14.0f, kGap = 8.0f, kPadX = 14.0f, kPadTop = 28.0f, kPadBottom = 12.0f;
 
-const el::color kColourA = el::rgba(72, 168, 224, 242);
-const el::color kColourB = el::rgba(240, 160, 64, 242);
+/// IR A's and IR B's colours (--ir-alignment-a, --ir-alignment-b), darker on the light themes.
+el::color ColourA(const Theme& theme)
+{
+    return theme.IsLight() ? el::rgba(40, 104, 160, 242) : el::rgba(72, 168, 224, 242);
+}
+
+el::color ColourB(const Theme& theme)
+{
+    return theme.IsLight() ? el::rgba(190, 96, 20, 242) : el::rgba(240, 160, 64, 242);
+}
+
+/// The match strip's fill (--ir-alignment-match-fill).
+el::color MatchFill(const Theme& theme)
+{
+    return theme.IsLight() ? el::rgba(40, 104, 160, 77) : el::rgba(72, 168, 224, 102);
+}
+
+/// The theme's --radius-sm: 4, and 2 in the square-cut Stage and Eleven themes.
+float RadiusSm(const Theme& theme)
+{
+    return theme.Name() == "stage" || theme.Name() == "high-gain" ? 2.0f : 4.0f;
+}
+
+/// One of the section's buttons (.ir-alignment-controls button): an input-coloured box with a
+/// medium border and the label in secondary text, lit with the accent under the pointer; Auto
+/// Align outlined in the accent. Half faded while it cannot be used.
+class AlignButton final : public Pressable
+{
+  public:
+    AlignButton(const Theme& theme, std::string label, bool accent = false)
+        : mTheme(theme), mLabel(std::move(label)), mAccent(accent)
+    {
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.name = NameOr(mLabel);
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context& ctx) const override
+    {
+        // 10 px either side of the label, inside a 1 px border.
+        const float w = el::measure_text(ctx.canvas, mLabel, Font(Weight::SemiBold).size(11.0f)).x + 22.0f;
+        return {{w, kControlsH}, {w, kControlsH}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const float fade = mEnabled ? 1.0f : 0.5f;
+        const auto faded = [fade](el::color c) { return c.opacity(c.alpha * fade); };
+        const bool lit = mAccent || (mHover && mEnabled);
+        const float radius = RadiusSm(mTheme);
+        cnv.fill_style(faded(mTheme.Input()));
+        cnv.fill_round_rect(b, radius);
+        cnv.stroke_style(faded(lit ? mTheme.Accent() : mTheme.BorderStrong()));
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), radius);
+        FillText(cnv, mLabel, Font(Weight::SemiBold).size(11.0f), faded(lit ? mTheme.Text() : mTheme.TextSecondary()),
+                 b, HAlign::Centre);
+    }
+
+  private:
+    const Theme& mTheme;
+    std::string mLabel;
+    bool mAccent;
+};
+
+/// The offset typed in ms (.ir-alignment-offset-input): a click or, with focus, Enter or a digit
+/// opens it for typing; with focus the up and down arrows step it 0.01 ms.
+class OffsetField final : public el::element, public Drawn, public Focusable
+{
+  public:
+    explicit OffsetField(const Theme& theme) : mTheme(theme)
+    {
+    }
+
+    std::function<void(int direction)> onStep;
+    std::function<void(const std::string& typed)> onTyped;
+
+    void Set(std::string text)
+    {
+        mText = std::move(text);
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info;
+        info.role = mEdit.Active() ? AccessRole::Edit : AccessRole::Slider;
+        info.name = NameOr("IR B offset in ms");
+        info.value = mEdit.Active() ? mEdit.Value() : mText;
+        return info;
+    }
+
+    [[nodiscard]] bool Editing() const override
+    {
+        return mEdit.Active();
+    }
+
+    bool wants_focus() const override
+    {
+        return FocusWanted(onTyped != nullptr) || mEdit.Active();
+    }
+
+    void begin_focus(focus_request) override
+    {
+        NoteFocus(true);
+    }
+
+    bool end_focus() override
+    {
+        InlineEdit::Leave(mEdit, onTyped, [this] { RepaintSoon(DrawnArea()); });
+        NoteFocus(false);
+        return true;
+    }
+
+    bool key(const el::context& ctx, el::key_info k) override
+    {
+        bool changed = false;
+        const bool used = InlineEdit::FieldKey(
+            mEdit, k, [this] { return mText; }, onTyped, changed);
+
+        if (changed)
+        {
+            ctx.view.refresh(ctx);
+        }
+
+        if (used || mEdit.Active())
+        {
+            return used;
+        }
+
+        if ((k.action == el::key_action::press || k.action == el::key_action::repeat) && onStep &&
+            (k.key == el::key_code::up || k.key == el::key_code::down))
+        {
+            onStep(k.key == el::key_code::up ? 1 : -1);
+            return true;
+        }
+
+        return false;
+    }
+
+    bool text(const el::context& ctx, el::text_info info) override
+    {
+        if (!mEdit.Char(info))
+        {
+            return false;
+        }
+
+        ctx.view.refresh(ctx);
+        return true;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{kWidth, kHeight}, {kWidth, kHeight}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const auto font = Font(Weight::Regular).size(12.0f);
+
+        if (mEdit.Active())
+        {
+            mEdit.Draw(cnv, b, mTheme, font);
+            return;
+        }
+
+        const float radius = RadiusSm(mTheme);
+        cnv.fill_style(mTheme.Input());
+        cnv.fill_round_rect(b, radius);
+        cnv.stroke_style(mHover ? mTheme.Accent() : mTheme.BorderStrong());
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), radius);
+        FillText(cnv, mText, font, mTheme.Text(), el::rect{b.left + 7.0f, b.top, b.right - 7.0f, b.bottom},
+                 HAlign::Left);
+    }
+
+    bool click(const el::context& ctx, el::mouse_button btn) override
+    {
+        if (!btn.down || btn.state != el::mouse_button::left || mEdit.Active() || !onTyped)
+        {
+            return true;
+        }
+
+        // The number turns into a field where it is, which takes focus for the keys once this
+        // click is done with.
+        mEdit.Begin(mText);
+        ctx.view.refresh(ctx);
+        ctx.view.post([self = weak_from_this(), &view = ctx.view] {
+            if (const auto field = self.lock())
+            {
+                FocusInView(view, *field);
+            }
+        });
+        return true;
+    }
+
+    bool cursor(const el::context& ctx, el::point, el::cursor_tracking status) override
+    {
+        const bool hover = status != el::cursor_tracking::leaving;
+
+        if (hover != mHover)
+        {
+            mHover = hover;
+            ctx.view.refresh(ctx);
+        }
+
+        if (hover)
+        {
+            el::set_cursor(el::cursor_type::ibeam);
+        }
+
+        return hover;
+    }
+
+    bool wants_control() const override
+    {
+        return true;
+    }
+
+    // 72 across, as tall as the buttons beside it.
+    static constexpr float kWidth = 72.0f, kHeight = kControlsH;
+
+  private:
+    const Theme& mTheme;
+    std::string mText;
+    bool mHover = false;
+    InlineEdit mEdit;
+};
+
+/// "IR A" with its colour's swatch before it (.ir-alignment-key): 14 by 3, 6 px from the name.
+Ptr LegendKey(const Theme& theme, const std::string& name, el::color colour)
+{
+    auto text = std::make_shared<Text>(theme, name, 11.0f, Weight::SemiBold);
+    text->Colour(theme.Text()).Fixed(true);
+    auto swatch = Rounded(colour, 1.5f, std::make_shared<el::element>());
+    return Row({Middle(FixedWidth(14, FixedHeight(3, swatch))), HGap(6), text});
+}
 
 /// The slot's ref as the node holds it, or null for an empty slot (irAlignmentPanel.ts slotRef).
 const guitarfx::ResourceRef* SlotRef(const guitarfx::GraphNode& node, std::size_t index)
@@ -155,14 +402,16 @@ std::string NoteFor(const guitarfx::GraphNode& node)
 {
     if (Param(node, "lrSplit", 0.0) >= 0.5)
     {
-        return "L/R Split is on: A plays left and B right, so the offset sets the stereo width.";
+        return "L/R Split is on: A plays left and B right, so the offset sets the stereo width rather than the tone "
+               "of a blend.";
     }
 
     const double blend = Param(node, "irBlend", 0.0);
 
     if (blend <= 0.01 || blend >= 0.99)
     {
-        return std::string("IR Blend is all ") + (blend <= 0.01 ? "A" : "B") + ", so the offset is not heard yet.";
+        return std::string("IR Blend is all ") + (blend <= 0.01 ? "A" : "B") +
+               ", so the offset is not heard yet. Move IR Blend toward the middle.";
     }
 
     return {};
@@ -204,8 +453,9 @@ void DashedVLine(canvas& cnv, float x, float top, float bottom)
 }
 
 /// The start of both IRs, B moved by the offset, each drawn to its own peak: the shapes and their
-/// timing are what line up, not their levels. Dragging moves B.
-class AlignmentWaves final : public el::element, public Drawn
+/// timing are what line up, not their levels. Dragging moves B; with focus the left and right
+/// arrows nudge it 0.01 ms, 0.1 ms with Shift.
+class AlignmentWaves final : public el::element, public Drawn, public Focusable
 {
   public:
     AlignmentWaves(const Theme& theme, std::shared_ptr<DrawState> state) : mTheme(theme), mState(std::move(state))
@@ -220,6 +470,70 @@ class AlignmentWaves final : public el::element, public Drawn
     bool wants_control() const override
     {
         return true;
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info;
+        info.role = AccessRole::Slider;
+        info.name = NameOr("IR B offset: drag to move IR B");
+        info.value = FormatOffset(mState->offsetMs);
+        return info;
+    }
+
+    bool wants_focus() const override
+    {
+        return FocusWanted(mState->analysis.has_value());
+    }
+
+    void begin_focus(focus_request) override
+    {
+        NoteFocus(true);
+    }
+
+    bool end_focus() override
+    {
+        NoteFocus(false);
+        return true;
+    }
+
+    bool key(const el::context& ctx, el::key_info k) override
+    {
+        if ((k.action != el::key_action::press && k.action != el::key_action::repeat) || !mState->analysis ||
+            !mState->onOffset)
+        {
+            return false;
+        }
+
+        const double step = (k.modifiers & el::mod_shift) != 0 ? 0.1 : 0.01;
+
+        if (k.key == el::key_code::left || k.key == el::key_code::down)
+        {
+            mState->onOffset(mState->offsetMs - step, true);
+        }
+        else if (k.key == el::key_code::right || k.key == el::key_code::up)
+        {
+            mState->onOffset(mState->offsetMs + step, true);
+        }
+        else
+        {
+            return false;
+        }
+
+        ctx.view.refresh(ctx);
+        return true;
+    }
+
+    bool cursor(const el::context&, el::point, el::cursor_tracking status) override
+    {
+        // The web UI's ew-resize, grabbing while dragged (Elements has no grabbing hand).
+        if (status != el::cursor_tracking::leaving && mState->analysis)
+        {
+            el::set_cursor(el::cursor_type::h_resize);
+            return true;
+        }
+
+        return false;
     }
 
     void draw(const el::context& ctx) override
@@ -308,17 +622,8 @@ class AlignmentWaves final : public el::element, public Drawn
 
             cnv.stroke();
         };
-        trace(analysis.waveformA, 0.0, mState->polarityA, kColourA);
-        trace(analysis.waveformB, mState->offsetMs, mState->polarityB, kColourB);
-
-        // Where each IR starts: a short mark at the top in its colour.
-        const auto onset = [&](double ms, el::color colour) {
-            const float x = toX(ms);
-            cnv.fill_style(colour);
-            cnv.fill_rect(el::rect{x - 1.0f, b.top, x + 1.0f, b.top + 8.0f});
-        };
-        onset(analysis.onsetAMs, kColourA);
-        onset(analysis.onsetBMs + mState->offsetMs, kColourB);
+        trace(analysis.waveformA, 0.0, mState->polarityA, ColourA(mTheme));
+        trace(analysis.waveformB, mState->offsetMs, mState->polarityB, ColourB(mTheme));
     }
 
     bool click(const el::context& ctx, el::mouse_button btn) override
@@ -431,7 +736,7 @@ class AlignmentStrip final : public el::element, public Drawn
         }
 
         const double sign = mState->polarityA * mState->polarityB;
-        cnv.fill_style(kColourA.opacity(0.45f));
+        cnv.fill_style(MatchFill(mTheme));
         cnv.begin_path();
         cnv.move_to(b.left, middle);
 
@@ -446,10 +751,10 @@ class AlignmentStrip final : public el::element, public Drawn
         cnv.close_path();
         cnv.fill();
 
-        cnv.stroke_style(mTheme.TextMuted());
+        cnv.stroke_style(mTheme.TextSecondary());
         cnv.line_width(1.0f);
         DashedVLine(cnv, std::round(toX(mState->analysis->alignedOffsetMs)) + 0.5f, b.top, b.bottom);
-        cnv.stroke_style(kColourB);
+        cnv.stroke_style(ColourB(mTheme));
         cnv.line_width(2.0f);
         cnv.begin_path();
         const float x = std::round(toX(mState->offsetMs)) + 0.5f;
@@ -489,6 +794,17 @@ class AlignmentStrip final : public el::element, public Drawn
         }
 
         ctx.view.refresh(ctx);
+    }
+
+    bool cursor(const el::context&, el::point, el::cursor_tracking status) override
+    {
+        if (status != el::cursor_tracking::leaving && mState->analysis)
+        {
+            el::set_cursor(el::cursor_type::hand);
+            return true;
+        }
+
+        return false;
     }
 
   private:
@@ -534,10 +850,21 @@ struct Shell::IrAlignmentPanel
     std::shared_ptr<DrawState> draw = std::make_shared<DrawState>();
     std::weak_ptr<el::element> waves, strip;
     std::weak_ptr<ResponsePlot> plot;
+    std::string slotName;   // with one IR, the plot card's title: "IR A" or "IR B"
+    std::string lastStatus; // with one IR, the status its card's header shows
     std::weak_ptr<Text> status, distance, match, note;
-    std::weak_ptr<IconButton> autoAlign, invertA, invertB;
+    std::weak_ptr<OffsetField> offset;
+    std::weak_ptr<AlignButton> autoAlign;
+    std::weak_ptr<ToggleSwitch> invertA, invertB;
     std::string lastQuery; // the response last asked for
 };
+
+namespace
+{
+/// The response plot's card (.eq-visualizer): ResponsePlot::CardHeight at the themes' 16 px card
+/// padding, which IrAlignmentHeight, having no theme, cannot ask for.
+constexpr float kResponseCardH = 2.0f * 16.0f + 12.0f + 6.0f + kPlotH;
+} // namespace
 
 float Shell::IrAlignmentHeight(const guitarfx::GraphNode& node)
 {
@@ -549,13 +876,14 @@ float Shell::IrAlignmentHeight(const guitarfx::GraphNode& node)
         return 0.0f;
     }
 
+    // The group box with its title, round the rows.
     if (!hasA || !hasB)
     {
-        return kTitleH + kGap + kHeaderH + kPlotH;
+        return kPadTop + kResponseCardH + kPadBottom;
     }
 
-    return kTitleH + kGap + kHeaderH + kGap + kWavesH + kGap + kStripH + kGap + kControlsH + kGap + kReadoutH + kGap +
-           kPlotLabelH + kPlotH + kGap + kNoteH;
+    return kPadTop + kHeaderH + kGap + kWavesH + kGap + kStripH + kGap + kControlsH + kGap + kReadoutH + kGap +
+           kResponseCardH + kGap + kNoteH + kPadBottom;
 }
 
 Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
@@ -575,6 +903,8 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
     panel.irB = RefJson(refB);
     panel.lastQuery.clear();
     panel.draw = std::make_shared<DrawState>();
+    panel.invertA.reset();
+    panel.invertB.reset();
     const std::string nodeId = node.id;
 
     const auto text = [this](float size, el::color colour) {
@@ -582,23 +912,28 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
         t->Colour(colour);
         return t;
     };
-    auto title =
-        std::make_shared<SkinText>(mTheme, panel.single ? "IR Response" : "Alignment", &ControlSkin::cardTitle);
+    // The section is a group box (.node-param-group-block) under its title, its rows inside.
+    const auto boxed = [this](const char* title, Ptr rows) {
+        return Over(Pad(kPadX, kPadTop, kPadX, kPadBottom, std::move(rows)), std::make_shared<InsetBox>(mTheme, title));
+    };
     auto status = text(11.0f, mTheme.TextSecondary());
     status->Alignment(Text::Align::Right);
     panel.status = status;
 
+    // The response in its plot card: with one IR, that IR's, the status in the header's range.
     auto plot = std::make_shared<ResponsePlot>(mTheme);
     plot->Range(-36.0, 18.0, 12.0); // the web UI's: a cabinet rolls the top off by far more than it lifts
+    panel.slotName = refA != nullptr ? "IR A" : "IR B";
+    panel.lastStatus.clear();
+    plot->Card(panel.single ? panel.slotName : "A + B Response",
+               panel.single ? std::string() : "Dashed: without interference");
     panel.plot = plot;
 
     if (panel.single)
     {
-        auto label = text(11.0f, mTheme.TextMuted());
-        label->Set(refA != nullptr ? "IR A" : "IR B");
+        panel.status.reset();
         SyncIrAlignment();
-        return Col({FixedHeight(kTitleH, title), VGap(kGap), FixedHeight(kHeaderH, Row({label, Stretch(), status})),
-                    FixedHeight(kPlotH, plot)});
+        return boxed("IR Response", Col({FixedHeight(kResponseCardH, plot)}));
     }
 
     // ── Both IRs: the alignment controls ──
@@ -632,17 +967,31 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
         return n != nullptr ? OffsetOf(*n) : 0.0;
     };
 
-    auto keyA = text(11.0f, kColourA);
-    keyA->Set("IR A");
-    auto keyB = text(11.0f, kColourB);
-    keyB->Set("IR B");
-
     auto waves = std::make_shared<AlignmentWaves>(mTheme, panel.draw);
     auto strip = std::make_shared<AlignmentStrip>(mTheme, panel.draw);
     panel.waves = waves;
     panel.strip = strip;
 
-    std::vector<Ptr> controls;
+    // The controls (.ir-alignment-controls), 12 px apart: the offset typed in ms, the nudges 4 px
+    // apart, Auto Align and Zero.
+    const auto caption = [this](const char* value) {
+        auto t = std::make_shared<Text>(mTheme, value, 11.0f, Weight::SemiBold);
+        t->Colour(mTheme.TextSecondary()).Fixed(true);
+        return t;
+    };
+    auto offsetField = std::make_shared<OffsetField>(mTheme);
+    offsetField->onStep = [setOffset, offsetNow](int direction) { setOffset(offsetNow() + 0.01 * direction); };
+    offsetField->onTyped = [setOffset](const std::string& typed) {
+        const auto value = guitarfx::uiclient::ParseTypedNumber(typed);
+        setOffset(value && std::isfinite(*value) ? *value : 0.0);
+    };
+    panel.offset = offsetField;
+    std::vector<Ptr> controls{Middle(caption("Offset")),
+                              HGap(6),
+                              FixedWidth(OffsetField::kWidth, offsetField),
+                              HGap(6),
+                              Middle(caption("ms")),
+                              HGap(12)};
 
     for (const auto& [label, step] : std::vector<std::pair<const char*, double>>{{"\xE2\x88\x92"
                                                                                   "0.1",
@@ -653,15 +1002,15 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
                                                                                  {"+.01", 0.01},
                                                                                  {"+0.1", 0.1}})
     {
-        auto nudge = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-        nudge->Size(44, kControlsH).Label(label, 11.0f);
+        auto nudge = std::make_shared<AlignButton>(mTheme, label);
+        nudge->AccessName(std::abs(step) == 0.1 ? (step < 0 ? "0.1 ms earlier" : "0.1 ms later")
+                                                : (step < 0 ? "0.01 ms earlier" : "0.01 ms later"));
         nudge->onClick = [setOffset, offsetNow, step = step] { setOffset(offsetNow() + step); };
         controls.push_back(nudge);
-        controls.push_back(HGap(4));
+        controls.push_back(HGap(step < 0.1 ? 4.0f : 12.0f));
     }
 
-    auto autoAlign = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    autoAlign->Size(84, kControlsH).Label("Auto Align", 11.0f);
+    auto autoAlign = std::make_shared<AlignButton>(mTheme, "Auto Align", true);
     autoAlign->onClick = [this, nodeId, setOffset, setParam] {
         if (!mIrAlignment || !mIrAlignment->shown || mIrAlignment->shownKey != mIrAlignment->pairKey)
         {
@@ -687,51 +1036,58 @@ Ptr Shell::BuildIrAlignment(const guitarfx::GraphNode& node, bool inverts)
 
         setOffset(aligned);
     };
+    autoAlign->AccessName("Auto Align: move IR B, and flip it if needed, to where it lines up best with IR A");
     panel.autoAlign = autoAlign;
-    auto zero = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    zero->Size(52, kControlsH).Label("Zero", 11.0f);
+    auto zero = std::make_shared<AlignButton>(mTheme, "Zero");
+    zero->AccessName("Zero: put IR B back where its file starts it");
     zero->onClick = [setOffset] { setOffset(0.0); };
-    controls.push_back(HGap(8));
     controls.push_back(autoAlign);
-    controls.push_back(HGap(4));
+    controls.push_back(HGap(12));
     controls.push_back(zero);
     controls.push_back(Stretch());
 
-    const auto invert = [this, nodeId, setParam](const char* label, const char* key) {
-        auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-        button->Size(76, kReadoutH).Label(label, 11.0f);
-        button->onClick = [this, nodeId, setParam, key] {
+    // Invert A and Invert B as labelled switches (.ir-alignment-invert).
+    const auto invert = [this, nodeId, setParam, caption](const char* label, const char* key,
+                                                          std::weak_ptr<ToggleSwitch>& kept) -> Ptr {
+        auto toggle = std::make_shared<ToggleSwitch>(mTheme);
+        toggle->AccessName(label);
+        toggle->onClick = [this, nodeId, setParam, key] {
             const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
             setParam(key, n != nullptr && Param(*n, key, 0.0) >= 0.5 ? 0.0 : 1.0);
         };
-        return button;
+        kept = toggle;
+        return Row({Middle(FixedWidth(36, FixedHeight(20, toggle))), HGap(6), Middle(caption(label))});
     };
-    auto invertA = invert("Invert A", "slotAPolarity");
-    auto invertB = invert("Invert B", "slotBPolarity");
-    panel.invertA = invertA;
-    panel.invertB = invertB;
     auto distance = text(11.0f, mTheme.TextSecondary());
-    auto match = text(11.0f, mTheme.TextSecondary());
-    match->Alignment(Text::Align::Right);
+    auto match = std::make_shared<Text>(mTheme, "", 11.0f, Weight::SemiBold);
+    match->Colour(mTheme.TextSecondary()).Alignment(Text::Align::Right);
     panel.distance = distance;
     panel.match = match;
+    std::vector<Ptr> readouts;
 
-    auto plotLabel = text(10.0f, mTheme.TextMuted());
-    plotLabel->Set("A + B Response");
-    auto plotKey = text(10.0f, mTheme.TextMuted());
-    plotKey->Set("Dashed: without interference").Alignment(Text::Align::Right);
-    auto note = text(10.5f, mTheme.Warning());
+    // In the cards above (irAbPanel.ts), each IR's Invert is there already.
+    if (inverts)
+    {
+        readouts = {invert("Invert A", "slotAPolarity", panel.invertA), HGap(12),
+                    invert("Invert B", "slotBPolarity", panel.invertB), HGap(12)};
+    }
+
+    readouts.push_back(distance);
+    readouts.push_back(HGap(12));
+    readouts.push_back(match);
+
+    auto note = text(11.0f, mTheme.TextSecondary());
     panel.note = note;
 
+    // The legend: each IR's colour and name, 12 px apart, over the waveforms.
+    auto legend = Row({LegendKey(mTheme, "IR A", ColourA(mTheme)), HGap(12), LegendKey(mTheme, "IR B", ColourB(mTheme))});
+
     SyncIrAlignment();
-    return Col({FixedHeight(kTitleH, title), VGap(kGap),
-                FixedHeight(kHeaderH, Row({FixedWidth(40, keyA), FixedWidth(40, keyB), Stretch(), status})), VGap(kGap),
-                FixedHeight(kWavesH, waves), VGap(kGap), FixedHeight(kStripH, strip), VGap(kGap),
-                FixedHeight(kControlsH, Row(controls)), VGap(kGap),
-                FixedHeight(kReadoutH, inverts ? Row({invertA, HGap(6), invertB, HGap(12), distance, Stretch(), match})
-                                               : Row({distance, Stretch(), match})),
-                VGap(kGap), FixedHeight(kPlotLabelH, Row({plotLabel, Stretch(), plotKey})), FixedHeight(kPlotH, plot),
-                VGap(kGap), FixedHeight(kNoteH, note)});
+    return boxed("Alignment", Col({FixedHeight(kHeaderH, Row({legend, HGap(12), status})), VGap(kGap),
+                                   FixedHeight(kWavesH, waves), VGap(kGap), FixedHeight(kStripH, strip), VGap(kGap),
+                                   FixedHeight(kControlsH, Row(controls)), VGap(kGap),
+                                   FixedHeight(kReadoutH, Row(readouts)), VGap(kGap),
+                                   FixedHeight(kResponseCardH, plot), VGap(kGap), FixedHeight(kNoteH, note)}));
 }
 
 void Shell::SyncIrAlignment()
@@ -825,16 +1181,25 @@ void Shell::SyncIrAlignment()
 
     setText(panel.status, status);
 
+    // With one IR the status sits in the plot card's header, where its range would be.
+    if (panel.single && panel.lastStatus != status)
+    {
+        panel.lastStatus = status;
+        plot->Card(panel.slotName, status);
+        mSession.Repaint(*plot);
+    }
+
     if (!panel.single)
     {
         setText(panel.distance, FormatOffset(offset) + " \xC2\xB7 " + DescribeDistance(offset));
         std::string matchText;
+        bool cancelling = false;
 
         if (ready)
         {
             const double m = MatchAtOffset(*panel.shown, offset) * draw.polarityA * draw.polarityB;
             const long percent = std::lround(std::abs(m) * 100.0);
-            const bool cancelling = m < 0.0 && percent > 0; // not "-0%"
+            cancelling = m < 0.0 && percent > 0; // not "-0%"
             char text[64];
             std::snprintf(text, sizeof(text), "Match %s%ld%%%s", cancelling ? "\xE2\x88\x92" : "+", percent,
                           cancelling ? " (cancelling)" : "");
@@ -842,21 +1207,46 @@ void Shell::SyncIrAlignment()
         }
 
         setText(panel.match, matchText);
+
+        // Cancelling reads in the warning colour (.ir-alignment-match-readout.is-cancelling).
+        if (const auto t = panel.match.lock())
+        {
+            t->Colour(cancelling ? mTheme.Warning() : mTheme.TextSecondary());
+            mSession.Repaint(*t);
+        }
+
         setText(panel.note, NoteFor(*node));
+
+        // The typed offset, as the web UI shows it: to the microsecond, without trailing zeros.
+        if (const auto field = panel.offset.lock(); field && !field->Editing())
+        {
+            char text[32];
+            std::snprintf(text, sizeof(text), "%.3f", offset);
+            std::string value = text;
+            value.erase(value.find_last_not_of('0') + 1);
+
+            if (!value.empty() && value.back() == '.')
+            {
+                value.pop_back();
+            }
+
+            field->Set(value == "-0" ? std::string("0") : value);
+            mSession.Repaint(*field);
+        }
 
         if (const auto b = panel.autoAlign.lock())
         {
-            b->Disabled(!ready);
+            b->Enabled(ready);
             mSession.Repaint(*b);
         }
 
-        for (const auto& [weak, lit] :
+        for (const auto& [weak, on] :
              {std::pair{panel.invertA, draw.polarityA < 0.0}, std::pair{panel.invertB, draw.polarityB < 0.0}})
         {
-            if (const auto b = weak.lock())
+            if (const auto toggle = weak.lock())
             {
-                b->Lit(lit);
-                mSession.Repaint(*b);
+                toggle->Set(on);
+                mSession.Repaint(*toggle);
             }
         }
 

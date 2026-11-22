@@ -6,12 +6,21 @@
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
+#include "dsp/FiniteCheck.h"
 #include "ui/effects/SpatialPanner.h"
+#include "ui/widgets/ControlSkin.h"
+#include "ui/widgets/Graphics.h"
+#include "ui/widgets/Panels.h"
 #include "uiclient/Analysis.h"
+#include "uiclient/EffectLayouts.h"
+#include "uiclient/NodeLabels.h"
 
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <deque>
+#include <string>
+#include <vector>
 
 namespace nanoq::ui
 {
@@ -56,8 +65,91 @@ el::color Hsl(double hue, double saturation, double lightness)
     return el::color{static_cast<float>(r + m), static_cast<float>(g + m), static_cast<float>(b + m), 1.0f};
 }
 
-/// The Signal Analyzer: a grid of readouts over a scrolling spectrogram (newest at the right)
-/// and the Bark bands as bars.
+// The analyzer's fixed colours (params-panel.css): the same in every theme, as the web UI's.
+const ControlBox kTileBox{0xB8080C14, 0x9E0F121C, 1.0f, 0x1AAAB7D6, 10.0f, 0.0f, 0, 0, 0.0f, 0.0f, 0, 0};
+const ControlBox kWellBox{0xEB090C13, 0xDB0B0E16, 1.0f, 0x24AAB7D6, 12.0f, 0.0f, 0, 0, 0.0f, 0.0f, 0x0AFFFFFF, 0};
+const el::color kCanvasFill = el::color{8.0f / 255.0f, 10.0f / 255.0f, 18.0f / 255.0f, 0.92f};
+
+// Its measures: the lines of its 10 and 12 px text (Inter's normal line height), the grid's
+// gap and least column, a tile's border and padding, and the wells'.
+constexpr float kLine10 = 12.0f;
+constexpr float kLine12 = 14.5f;
+constexpr float kStackGap = 12.0f;
+constexpr float kGridGap = 8.0f;
+constexpr float kTileMin = 130.0f;
+constexpr float kTileInsetX = 11.0f;
+constexpr float kTileInsetY = 9.0f;
+constexpr float kWellInset = 9.0f;
+constexpr float kSpectrogramHeight = 170.0f;
+constexpr float kBarkHeight = 92.0f;
+constexpr float kSpectrogramWell = 2.0f * kWellInset + kSpectrogramHeight;
+constexpr float kBarkWell = 2.0f * kWellInset + kLine10 + 6.0f + kBarkHeight;
+
+/// A tile's label (.input-analyzer-label): 10 px capitals spaced 0.08 em, in the page's face.
+ControlText LabelText(const Theme& theme, std::uint32_t colour)
+{
+    const auto& body = theme.Controls().body;
+    return ControlText{colour, 10.0f, body.weight, 0.08f, true, body.family};
+}
+
+/// `text` broken at spaces into lines of `width` in `skin`, as the browser wraps a label.
+std::vector<std::string> WrapControlText(const std::string& text, const ControlText& skin, float width)
+{
+    std::vector<std::string> lines;
+    std::string line;
+    std::size_t i = 0;
+
+    while (i < text.size())
+    {
+        auto end = text.find(' ', i);
+
+        if (end == std::string::npos)
+        {
+            end = text.size();
+        }
+
+        const auto word = text.substr(i, end - i);
+        const auto candidate = line.empty() ? word : line + " " + word;
+
+        if (!line.empty() && MeasureControlText(candidate, skin) > width)
+        {
+            lines.push_back(line);
+            line = word;
+        }
+        else
+        {
+            line = candidate;
+        }
+
+        i = end + 1;
+    }
+
+    if (!line.empty() || lines.empty())
+    {
+        lines.push_back(line);
+    }
+
+    return lines;
+}
+
+/// The time of day `ms` (since the epoch) falls at, in this computer's zone.
+std::string LocalTime(double ms)
+{
+    const auto seconds = static_cast<std::time_t>(ms / 1000.0);
+    std::tm local{};
+#ifdef _WIN32
+    localtime_s(&local, &seconds);
+#else
+    localtime_r(&seconds, &local);
+#endif
+    char text[32];
+    std::strftime(text, sizeof(text), "%X", &local);
+    return text;
+}
+
+/// The Signal Analyzer (.input-analyzer-panel's content): the header with when the last frame
+/// came, a grid of readout tiles, the spectrogram (one pixel per frame from the left, scrolling
+/// once it is full) and the Bark bands as bars, each in its well.
 class AnalyzerPanel final : public el::element, public Drawn
 {
   public:
@@ -69,10 +161,18 @@ class AnalyzerPanel final : public el::element, public Drawn
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{300.0f, 260.0f}, {el::full_extent, el::full_extent}};
+        return {{200.0f, 200.0f}, {el::full_extent, el::full_extent}};
     }
 
-    /// Takes a frame; returns true when it was a new one.
+    /// The content's height at `width`: its tiles laid out as the web UI's grid lays them.
+    static float ContentHeight(const Theme& theme, float width)
+    {
+        return kLine10 + kStackGap + LayTiles(theme, guitarfx::uiclient::AnalyzerReadouts(nullptr, 0), width).height +
+               kStackGap + kSpectrogramWell + kStackGap + kBarkWell;
+    }
+
+    /// Takes a frame, or nothing when there is none; returns true when there is something new
+    /// to draw.
     bool Set(const guitarfx::uiclient::AnalyzerFrame* frame, const guitarfx::uiclient::AnalyzerRanges& ranges,
              int configuredChannels)
     {
@@ -81,12 +181,19 @@ class AnalyzerPanel final : public el::element, public Drawn
 
         if (frame == nullptr)
         {
-            return false;
+            // The frame has gone: the wells are drawn empty and the readouts go back to dashes.
+            // The history is kept, as the web UI keeps it, and carries on when frames return.
+            const bool had = mHasFrame;
+            mHasFrame = false;
+            return had;
         }
+
+        const bool returned = !mHasFrame;
+        mHasFrame = true;
 
         if (frame->timeMs == mLastTime && !mHistory.empty())
         {
-            return false;
+            return returned;
         }
 
         mLastTime = frame->timeMs;
@@ -106,103 +213,228 @@ class AnalyzerPanel final : public el::element, public Drawn
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
-        const auto labelFont = Font(Weight::SemiBold).size(9.0f);
-        const auto valueFont = Font(Weight::SemiBold).size(12.0f);
 
-        // Readouts: six to a row.
-        constexpr int kColumns = 6;
-        constexpr float kRow = 40.0f;
-        const float cell = b.width() / kColumns;
+        // The header: the title, and when the last frame came on the right.
+        const auto& body = mTheme.Controls().body;
+        const ControlText title{0xBDDCE3F3, 10.0f, 800, 0.12f, true, body.family};
+        const auto statusFont = Font().size(10.0f);
+        const std::string status = !mHasFrame      ? "Waiting for live analyzer data\xE2\x80\xA6"
+                                   : mLastTime > 0.0 ? "Updated: " + LocalTime(mLastTime)
+                                                     : "Updated: live";
+        const float statusWidth = std::min(b.width() * 0.6f, MeasureTextWidth(status, statusFont));
+        FillText(cnv, Ellipsize(cnv, status, statusFont, statusWidth), statusFont, el::rgba(201, 209, 225, 173),
+                 el::rect{b.right - statusWidth, b.top, b.right, b.top + kLine10}, HAlign::Right);
+        DrawControlText(cnv, "Signal Analyzer", title,
+                        el::rect{b.left, b.top, b.right - statusWidth - 8.0f, b.top + kLine10}, HAlign::Left);
 
-        for (std::size_t i = 0; i < mReadouts.size(); ++i)
+        // The readout tiles.
+        const auto label = LabelText(mTheme, 0xA8C2CBDE);
+        const auto valueFont = FaceFor(body.family, 700).size(12.0f);
+        const auto hintFont = Font().size(10.0f);
+        const float gridTop = b.top + kLine10 + kStackGap;
+        const auto tiles = LayTiles(mTheme, mReadouts, b.width());
+        float rowTop = gridTop;
+
+        for (std::size_t row = 0; row < tiles.rows.size(); ++row)
         {
-            const float x = b.left + cell * static_cast<float>(i % kColumns);
-            const float y = b.top + kRow * static_cast<float>(i / kColumns);
-            const auto& r = mReadouts[i];
-            FillText(cnv, Ellipsize(cnv, r.label, labelFont, cell - 8.0f), labelFont, mTheme.TextMuted(),
-                     el::rect{x + 4.0f, y, x + cell - 4.0f, y + 12.0f}, HAlign::Left);
-            FillText(cnv, Ellipsize(cnv, r.value, valueFont, cell - 8.0f), valueFont, mTheme.Ink(),
-                     el::rect{x + 4.0f, y + 13.0f, x + cell - 4.0f, y + 28.0f}, HAlign::Left);
-
-            if (!r.hint.empty())
+            for (int col = 0; col < tiles.columns; ++col)
             {
-                FillText(cnv, r.hint, Font().size(9.0f), mTheme.TextSecondary(),
-                         el::rect{x + 4.0f, y + 28.0f, x + cell - 4.0f, y + 39.0f}, HAlign::Left);
-            }
-        }
+                const std::size_t i = row * static_cast<std::size_t>(tiles.columns) + static_cast<std::size_t>(col);
 
-        const float top = b.top + 2.0f * kRow + 6.0f;
-        const float barkHeight = 48.0f;
-        const el::rect spec{b.left, top, b.right, b.bottom - barkHeight - 18.0f};
-        const el::rect bark{b.left, b.bottom - barkHeight, b.right, b.bottom};
-        const el::color well = el::rgba(8, 10, 18, 235);
-
-        cnv.fill_style(well);
-        cnv.fill_rect(spec);
-
-        if (!mHistory.empty() && !mHistory.back().empty())
-        {
-            const auto [minDb, maxDb, minHz, maxHz] = mRanges.spectrogram;
-            const double range = std::max(1.0, maxDb - minDb);
-            const std::size_t bins = mHistory.back().size();
-            const float rowHeight = spec.height() / static_cast<float>(bins);
-            const float columnWidth = std::max(1.0f, spec.width() / static_cast<float>(kHistory));
-            const std::size_t start = kHistory > mHistory.size() ? kHistory - mHistory.size() : 0;
-
-            for (std::size_t c = 0; c < mHistory.size(); ++c)
-            {
-                const auto& frame = mHistory[c];
-                const float x = spec.left + columnWidth * static_cast<float>(start + c);
-
-                for (std::size_t y = 0; y < frame.size() && y < bins; ++y)
+                if (i >= mReadouts.size())
                 {
-                    const double norm = std::clamp((frame[y] - minDb) / range, 0.0, 1.0);
+                    break;
+                }
 
-                    if (norm <= 0.001)
-                    {
-                        continue;
-                    }
+                const auto& r = mReadouts[i];
+                const float x = b.left + static_cast<float>(col) * (tiles.width + kGridGap);
+                const el::rect tile{x, rowTop, x + tiles.width, rowTop + tiles.rows[row]};
+                DrawControlBox(cnv, tile, kTileBox);
 
-                    cnv.fill_style(Hsl(230.0 - std::round(norm * 190.0), (76.0 + std::round(norm * 18.0)) / 100.0,
-                                       (12.0 + std::round(norm * 56.0)) / 100.0));
-                    cnv.fill_rect(el::rect{x, spec.bottom - static_cast<float>(y + 1) * rowHeight, x + columnWidth,
-                                           spec.bottom - static_cast<float>(y) * rowHeight + 0.5f});
+                const float left = tile.left + kTileInsetX, right = tile.right - kTileInsetX;
+                float y = tile.top + kTileInsetY;
+
+                for (const auto& line : WrapControlText(r.label, label, right - left))
+                {
+                    DrawControlText(cnv, line, label, el::rect{left, y, right, y + kLine10}, HAlign::Left);
+                    y += kLine10;
+                }
+
+                y += 4.0f;
+                FillText(cnv, Ellipsize(cnv, r.value, valueFont, right - left), valueFont,
+                         el::rgba(239, 244, 255, 240), el::rect{left, y, right, y + kLine12}, HAlign::Left);
+
+                if (HasHint(r))
+                {
+                    y += kLine12 + 4.0f;
+                    FillText(cnv, Ellipsize(cnv, r.hint, hintFont, right - left), hintFont,
+                             el::rgba(194, 203, 222, 168), el::rect{left, y, right, y + kLine10}, HAlign::Left);
                 }
             }
+
+            rowTop += tiles.rows[row] + kGridGap;
         }
 
-        FillText(cnv, "BARK PERCEPTION", labelFont, mTheme.TextMuted(),
-                 el::rect{b.left, bark.top - 15.0f, b.right, bark.top - 3.0f}, HAlign::Left);
-        cnv.fill_style(well);
-        cnv.fill_rect(bark);
+        // The spectrogram's well, and the Bark bands' with its title.
+        const float specTop = gridTop + tiles.height + kStackGap;
+        const el::rect specWell{b.left, specTop, b.right, specTop + kSpectrogramWell};
+        DrawControlBox(cnv, specWell, kWellBox);
+        DrawSpectrogram(cnv, specWell.inset(kWellInset, kWellInset));
 
-        if (!mBark.empty())
+        const float barkTop = specWell.bottom + kStackGap;
+        const el::rect barkWell{b.left, barkTop, b.right, barkTop + kBarkWell};
+        DrawControlBox(cnv, barkWell, kWellBox);
+        const float inner = barkWell.top + kWellInset;
+        DrawControlText(cnv, "Bark Perception", LabelText(mTheme, 0xB8C2CBDE),
+                        el::rect{barkWell.left + kWellInset, inner, barkWell.right - kWellInset, inner + kLine10},
+                        HAlign::Left);
+        DrawBark(cnv, el::rect{barkWell.left + kWellInset, inner + kLine10 + 6.0f, barkWell.right - kWellInset,
+                               inner + kLine10 + 6.0f + kBarkHeight});
+    }
+
+  private:
+    struct Tiles
+    {
+        int columns = 1;
+        float width = 0.0f;
+        std::vector<float> rows; // each row's height
+        float height = 0.0f;
+    };
+
+    /// Only the Channels tile keeps a line for its hint, filled or not.
+    static bool HasHint(const guitarfx::uiclient::AnalyzerReadout& r)
+    {
+        return r.label == "Channels";
+    }
+
+    /// The grid (repeat(auto-fit, minmax(130px, 1fr)), gap 8): as many columns as fit, never
+    /// more than there are tiles, and each row as tall as its tallest tile.
+    static Tiles LayTiles(const Theme& theme, const std::vector<guitarfx::uiclient::AnalyzerReadout>& readouts,
+                          float width)
+    {
+        Tiles t;
+        const int count = std::max(1, static_cast<int>(readouts.size()));
+        t.columns = std::clamp(static_cast<int>(std::floor((width + kGridGap) / (kTileMin + kGridGap))), 1, count);
+        t.width = (width - kGridGap * static_cast<float>(t.columns - 1)) / static_cast<float>(t.columns);
+        const auto label = LabelText(theme, 0);
+
+        for (std::size_t i = 0; i < readouts.size(); ++i)
         {
-            const auto [minDb, maxDb, minHz, maxHz] = mRanges.bark;
-            const double range = std::max(1.0, maxDb - minDb);
-            const float gap = 1.0f;
-            const float width = std::max(1.0f, (bark.width() - gap * static_cast<float>(mBark.size() - 1)) /
-                                                   static_cast<float>(mBark.size()));
+            const auto lines = WrapControlText(readouts[i].label, label, t.width - 2.0f * kTileInsetX).size();
+            const float h = 2.0f * kTileInsetY + kLine10 * static_cast<float>(lines) + 4.0f + kLine12 +
+                            (HasHint(readouts[i]) ? 4.0f + kLine10 : 0.0f);
 
-            for (std::size_t i = 0; i < mBark.size(); ++i)
+            if (i % static_cast<std::size_t>(t.columns) == 0)
             {
-                const double norm = std::clamp((mBark[i] - minDb) / range, 0.0, 1.0);
-                const float x = bark.left + static_cast<float>(i) * (width + gap);
-                cnv.fill_style(Hsl(232.0 - std::round(norm * 168.0), (76.0 + std::round(norm * 14.0)) / 100.0,
-                                   (14.0 + std::round(norm * 58.0)) / 100.0));
-                cnv.fill_rect(
-                    el::rect{x, bark.bottom - static_cast<float>(norm) * bark.height(), x + width, bark.bottom});
+                t.rows.push_back(h);
+            }
+            else
+            {
+                t.rows.back() = std::max(t.rows.back(), h);
+            }
+        }
+
+        for (const float h : t.rows)
+        {
+            t.height += h;
+        }
+
+        t.height += kGridGap * static_cast<float>(std::max<std::size_t>(t.rows.size(), 1) - 1);
+        return t;
+    }
+
+    /// A range's low and high, or the web UI's own when it has none.
+    static std::pair<double, double> Range(const std::array<double, 4>& range, double low)
+    {
+        return {guitarfx::IsFinite(range[0]) ? range[0] : low, guitarfx::IsFinite(range[1]) ? range[1] : 0.0};
+    }
+
+    /// The spectrogram as the web UI draws it: a pixel's column per frame from the left, the
+    /// oldest dropped once it is full; the bins up the height, coloured by level.
+    void DrawSpectrogram(cycfi::artist::canvas& cnv, const el::rect& r) const
+    {
+        auto state = cnv.new_state();
+        cnv.begin_path();
+        cnv.add_round_rect(r, 8.0f);
+        cnv.clip();
+        cnv.fill_style(kCanvasFill);
+        cnv.fill_rect(r);
+
+        if (!mHasFrame || mHistory.empty() || mHistory.front().empty())
+        {
+            return;
+        }
+
+        const auto [minDb, maxDb] = Range(mRanges.spectrogram, -120.0);
+        const double range = std::max(1.0, maxDb - minDb);
+        const float width = std::max(1.0f, std::floor(r.width()));
+        const float height = std::max(1.0f, std::floor(r.height()));
+        const std::size_t bins = mHistory.front().size();
+        const std::size_t columns = std::min(static_cast<std::size_t>(width), mHistory.size());
+        const std::size_t start = mHistory.size() - columns;
+        const float rowHeight = height / static_cast<float>(bins);
+
+        for (std::size_t x = 0; x < columns; ++x)
+        {
+            const auto& frame = mHistory[start + x];
+
+            for (std::size_t y = 0; y < bins && y < frame.size(); ++y)
+            {
+                const double norm = std::clamp((frame[y] - minDb) / range, 0.0, 1.0);
+
+                if (norm <= 0.001)
+                {
+                    continue;
+                }
+
+                cnv.fill_style(Hsl(230.0 - std::round(norm * 190.0), (76.0 + std::round(norm * 18.0)) / 100.0,
+                                   (12.0 + std::round(norm * 56.0)) / 100.0));
+                cnv.fill_rect(r.left + static_cast<float>(x), r.top + height - static_cast<float>(y + 1) * rowHeight,
+                              1.0f, std::max(1.0f, rowHeight + 0.5f));
             }
         }
     }
 
-  private:
+    /// The Bark bands as bars across the width, a pixel apart, each as tall as its level.
+    void DrawBark(cycfi::artist::canvas& cnv, const el::rect& r) const
+    {
+        auto state = cnv.new_state();
+        cnv.begin_path();
+        cnv.add_round_rect(r, 8.0f);
+        cnv.clip();
+        cnv.fill_style(kCanvasFill);
+        cnv.fill_rect(r);
+
+        if (!mHasFrame || mBark.empty())
+        {
+            return;
+        }
+
+        const auto [minDb, maxDb] = Range(mRanges.bark, -96.0);
+        const double range = std::max(1.0, maxDb - minDb);
+        const float width = std::max(1.0f, std::floor(r.width()));
+        const float height = std::max(1.0f, std::floor(r.height()));
+        const float count = static_cast<float>(mBark.size());
+        const float barWidth = std::max(1.0f, (width - (count - 1.0f)) / count);
+
+        for (std::size_t i = 0; i < mBark.size(); ++i)
+        {
+            const double norm = std::clamp((mBark[i] - minDb) / range, 0.0, 1.0);
+            const float barHeight = static_cast<float>(norm) * height;
+            cnv.fill_style(Hsl(232.0 - std::round(norm * 168.0), (76.0 + std::round(norm * 14.0)) / 100.0,
+                               (14.0 + std::round(norm * 58.0)) / 100.0));
+            cnv.fill_rect(r.left + static_cast<float>(i) * (barWidth + 1.0f), r.top + height - barHeight, barWidth,
+                          barHeight);
+        }
+    }
+
     const Theme& mTheme;
     std::vector<guitarfx::uiclient::AnalyzerReadout> mReadouts = guitarfx::uiclient::AnalyzerReadouts(nullptr, 0);
     guitarfx::uiclient::AnalyzerRanges mRanges;
     std::deque<std::vector<double>> mHistory;
     std::vector<double> mBark;
     double mLastTime = -1.0;
+    bool mHasFrame = false;
 };
 } // namespace
 
@@ -212,11 +444,29 @@ Ptr Shell::BuildLiveSection(const guitarfx::GraphNode& node, float& height)
     mAnalyzerPanel.reset();
     mLiveNodeId = node.id;
 
+    // The width the section gets, as the effect page works it out (EffectPage.cpp): these nodes
+    // take the whole stage, less the panel's and the section's padding, and the equipment
+    // artwork beside the section when that shows.
+    const auto sectionWidth = [this, &node] {
+        const float stage = StageWidth();
+        float width = std::max(448.0f, stage - 20.0f) - 2.0f * (10.0f + 14.0f);
+
+        if (PlayStageShown() && stage >= 860.0f && guitarfx::uiclient::ResolveLayoutForNode(mState, node) == nullptr &&
+            mImages.Find(mPresentation.EquipmentImage(node.type, guitarfx::uiclient::NodeCategory(mState, node))) !=
+                nullptr)
+        {
+            width -= 300.0f + 12.0f;
+        }
+
+        return width;
+    };
+
     if (node.type == guids::kSpatial3D)
     {
-        auto panner = std::make_shared<SpatialPanner>(mTheme);
+        // The panner in its card (.spatial-visualizer), the card as wide as the section.
+        auto card = std::make_shared<SpatialCard>(mTheme);
         const std::string nodeId = node.id;
-        panner->onChange = [this, nodeId](const SpatialPoint& p, bool commit) {
+        card->Panner().onChange = [this, nodeId](const SpatialPoint& p, bool commit) {
             mSession.Commands().SetNodeParam(nodeId, "azimuth", p.azimuth);
             mSession.Commands().SetNodeParam(nodeId, "elevation", p.elevation);
             mSession.Commands().SetNodeParam(nodeId, "distance", p.distance);
@@ -227,20 +477,24 @@ Ptr Shell::BuildLiveSection(const guitarfx::GraphNode& node, float& height)
                 Mark(kValues);
             }
         };
-        mSpatialPanner = panner;
+        mSpatialPanner = card;
         SyncLiveSection();
-        height = 200.0f;
-        // The radar is as big as the height allows; wider only parts it from its height arc.
-        return Row({Stretch(), FixedWidth(440, panner), Stretch()});
+        height = SpatialCard::HeightFor(mTheme, sectionWidth());
+        const float below = height - SpatialCard::kPannerTop - SpatialPanner::kHeight;
+        return Over(Pad(SpatialCard::kSide, SpatialCard::kPannerTop, SpatialCard::kSide, below, card->PannerPtr()),
+                    card);
     }
 
     if (node.type == guids::kInputAnalyzer)
     {
+        // In the effect view's inset box (.default-effect-shell .input-analyzer-panel: a 1 px
+        // border and 16 px of padding), as tall as its tiles' rows need at this width.
+        constexpr float kInset = 17.0f;
         auto panel = std::make_shared<AnalyzerPanel>(mTheme);
         mAnalyzerPanel = panel;
         SyncLiveSection();
-        height = 340.0f;
-        return panel;
+        height = 2.0f * kInset + AnalyzerPanel::ContentHeight(mTheme, sectionWidth() - 2.0f * kInset);
+        return Over(Pad(kInset, kInset, kInset, kInset, panel), std::make_shared<InsetBox>(mTheme));
     }
 
     height = 0.0f;
@@ -258,14 +512,15 @@ void Shell::SyncLiveSection()
 
     const std::string key = mState.activePresetId + "::" + node->id;
 
-    if (const auto panner = std::static_pointer_cast<SpatialPanner>(mSpatialPanner.lock()))
+    if (const auto card = std::static_pointer_cast<SpatialCard>(mSpatialPanner.lock()))
     {
+        auto& panner = card->Panner();
         const auto param = [node](const char* k, double fallback) {
             const auto it = node->params.find(k);
             return it != node->params.end() ? it->second : fallback;
         };
-        panner->SetPosition({param("azimuth", 0.0), param("elevation", 0.0), param("distance", 1.5)});
-        panner->SetSpeakerMode(param("listenMode", 0.0) >= 0.5);
+        panner.SetAnchor({param("azimuth", 0.0), param("elevation", 0.0), param("distance", 1.5)});
+        const bool modeChanged = panner.SetSpeakerMode(param("listenMode", 0.0) >= 0.5);
         const auto& spatial = mState.analysis.spatial;
         auto live = spatial.find(key);
 
@@ -274,8 +529,17 @@ void Shell::SyncLiveSection()
             live = spatial.find("::" + node->id);
         }
 
-        panner->SetLive(live != spatial.end() ? &live->second : nullptr);
-        mSession.Repaint(*panner);
+        panner.SetLive(live != spatial.end() ? &live->second : nullptr);
+
+        // The card's hint follows the listening mode; otherwise only the panner changes.
+        if (modeChanged)
+        {
+            mSession.Repaint(*card);
+        }
+        else
+        {
+            mSession.Repaint(panner);
+        }
     }
 
     if (const auto panel = std::static_pointer_cast<AnalyzerPanel>(mAnalyzerPanel.lock()))

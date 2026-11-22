@@ -166,6 +166,19 @@ struct TelemetryState
     unsigned performanceFrameCounter = 0; // counts "dspPerformance" frames
 };
 
+/// One band of a multi-band effect, metered with its spectrum (sldS `b`): its range (0 for an
+/// open end), how hard it is working (gain reduction, or drive past the clipper's knee; held at
+/// its peak since the last frame), its level, and where its curve starts to act when the engine
+/// sends it.
+struct NodeSpectrumBand
+{
+    double lowHz = 0.0;
+    double highHz = 0.0;
+    double gainReductionDb = 0.0;
+    double levelDb = -120.0;
+    std::optional<double> thresholdDb;
+};
+
 /// One node's input spectrum behind an EQ curve (sldS): `binsDb` log-spaced from minHz to
 /// maxHz, both ends included, tilted +3 dB/octave about 1 kHz so pink noise reads flat.
 struct NodeSpectrum
@@ -175,6 +188,10 @@ struct NodeSpectrum
     double floorDb = -96.0;
     double ceilingDb = 0.0;
     std::vector<double> binsDb;
+    /// A node with band meters (the multi-band effects) sends its output's spectrum, on the same
+    /// bins, and its bands, low band first (sldS `o` and `b`); both empty for any other node.
+    std::vector<double> outputBinsDb;
+    std::vector<NodeSpectrumBand> bands;
     double receivedAt = 0.0; // UiClient's clock; a spectrum that stops arriving is cleared
 };
 
@@ -220,11 +237,14 @@ struct SpatialPosition
 {
     double azimuth = 0.0;
     double elevation = 0.0;
-    double distance = 1.0;
+    double distance = 1.5;
     double itdUs = 0.0;
     double ildDb = 0.0;
     double rateHz = 0.0;
     bool moving = false;
+    /// Counts the spatialPosition messages, so a view adds one point to its trail per message
+    /// however often it is synced.
+    std::uint64_t serial = 0;
 };
 
 /// One band of a Multi-band Gate's listen.

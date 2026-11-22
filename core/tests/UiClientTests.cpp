@@ -1392,6 +1392,8 @@ void TestAnalysis()
     const auto& a = client.State().analysis;
     Expect(a.spectra.count("p1::eq1") && a.spectra.at("p1::eq1").binsDb.size() == 3,
            "a node's spectrum is kept by its feed key");
+    Expect(a.spectra.at("p1::eq1").outputBinsDb.empty() && a.spectra.at("p1::eq1").bands.empty(),
+           "a node without band meters has no output bins or bands");
     Expect(a.loudness.count("post::global_eq") && a.loudness.at("post::global_eq").momentaryLufs == -18.2 &&
                !a.loudness.at("post::global_eq").integratedLufs,
            "a node's loudness, an unfilled window empty");
@@ -1404,6 +1406,23 @@ void TestAnalysis()
            "a spatial position");
     Expect(a.gateLearn.count("global::global_gate") && a.gateLearn.at("global::global_gate").thresholdDb == -64.0,
            "the global gate's Learn result");
+
+    // A multi-band effect's frame: its output on the same bins and its band meters, a threshold
+    // only where the engine sent one; a malformed band drops the lot, as the web UI reads them.
+    client.Enqueue(
+        R"({"type":"sldS","scope":"preset","presetId":"p1","id":"mb","r":[20,20000,-96,0],"s":[-50,-40,-30],"o":[-52,null,-33],"b":[[0,200,3.5,-20],[200,0,-1,-30,-6]]})");
+    client.Enqueue(
+        R"({"type":"sldS","scope":"preset","presetId":"p1","id":"mb2","r":[20,20000,-96,0],"s":[-50,-40,-30],"o":[-52,-41,-33],"b":[[0,200,null,-20]]})");
+    client.DrainPending();
+    const auto& mb = client.State().analysis.spectra.at("p1::mb");
+    Expect(mb.outputBinsDb.size() == 3 && mb.outputBinsDb[1] == -96.0 && mb.bands.size() == 2,
+           "a multi-band frame keeps its output bins (a gap at the floor) and its bands");
+    Expect(mb.bands[0].gainReductionDb == 3.5 && !mb.bands[0].thresholdDb && mb.bands[1].gainReductionDb == 0.0 &&
+               mb.bands[1].thresholdDb == -6.0 && mb.bands[1].highHz == 0.0,
+           "a band's reduction is never negative, its threshold only when sent");
+    Expect(client.State().analysis.spectra.at("p1::mb2").bands.empty() &&
+               client.State().analysis.spectra.at("p1::mb2").outputBinsDb.empty(),
+           "a malformed band drops the band meters");
 
     // A Multi-band Gate's listen: one entry per band, its noise floors kept through a listen
     // that heard playing.
@@ -1426,6 +1445,27 @@ void TestAnalysis()
     Expect(kept.size() == 6 && kept[0].noiseFloorDb == -90.0 && kept[1].noiseFloorDb == -80.0 && !kept[0].levelDb &&
                !kept[0].thresholdDb,
            "a band's learned noise floor stays drawn; one that heard playing is not taken as noise");
+
+    // The noise gate's floor stays drawn through statuses that bring none, a cancel, and a
+    // listen that heard playing; progress carries on when a status leaves it out.
+    const auto& gate = client.State().analysis.gateLearn.at("global::global_gate");
+    client.Enqueue(
+        R"({"type":"gateLearnStatus","scope":"global","nodeId":"global_gate","state":"listening","progress":0.4,"levelDb":-50})");
+    client.Enqueue(R"({"type":"gateLearnStatus","scope":"global","nodeId":"global_gate","state":"listening"})");
+    client.DrainPending();
+    Expect(gate.noiseFloorDb == -70.0 && gate.progress == 0.4 && !gate.levelDb,
+           "a listen keeps the last noise floor, and its progress when a status has none");
+    client.Enqueue(
+        R"({"type":"gateLearnStatus","scope":"global","nodeId":"global_gate","state":"failed","reason":"playing","noiseFloorDb":-20})");
+    client.DrainPending();
+    Expect(gate.noiseFloorDb == -70.0, "a listen that heard playing does not take it as the noise floor");
+    client.Enqueue(R"({"type":"gateLearnStatus","scope":"global","nodeId":"global_gate","state":"cancelled"})");
+    client.DrainPending();
+    Expect(gate.noiseFloorDb == -70.0 && gate.state == "cancelled", "a cancelled listen keeps the noise floor");
+    client.Enqueue(
+        R"({"type":"gateLearnStatus","scope":"global","nodeId":"global_gate","state":"done","noiseFloorDb":-75,"thresholdDb":-69})");
+    client.DrainPending();
+    Expect(gate.noiseFloorDb == -75.0 && gate.progress == 1.0, "a finished listen brings its own noise floor");
     Expect(DecodeFloat32Base64("AACAPwAAAMA=") == std::vector<float>{1.0f, -2.0f}, "float32 samples from base64");
 }
 

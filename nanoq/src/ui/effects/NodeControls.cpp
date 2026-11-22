@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <map>
 #include <set>
 
 namespace nanoq::ui
@@ -87,6 +88,146 @@ int IndexIn(const std::vector<const LibraryResource*>& list, const guitarfx::Res
 
     return -1;
 }
+
+/// The theme's --radius-sm and --radius-md: 4 and 6, 2 and 3 in the square-cut Stage and Eleven.
+bool SquareCut(const Theme& theme)
+{
+    return theme.Name() == "stage" || theme.Name() == "high-gain";
+}
+
+float RadiusSm(const Theme& theme)
+{
+    return SquareCut(theme) ? 2.0f : 4.0f;
+}
+
+float RadiusMd(const Theme& theme)
+{
+    return SquareCut(theme) ? 3.0f : 6.0f;
+}
+
+/// The IR list's buttons (irSlotList.ts): its list button and close cross, the two source tabs
+/// and a row's A and B. Each an input-coloured box with a medium border in secondary ink, the
+/// border lit with the accent and the ink brightened under the pointer; the chosen source tab in
+/// the accent.
+class IrListButton final : public Pressable
+{
+  public:
+    enum class Kind
+    {
+        Toggle, // .ir-slot-list-toggle: the list's icon, 30 by 29
+        Close,  // .ir-slot-list-toggle.is-close: a cross, 26 by 26
+        Source, // .ir-slot-list-source: "IR A · Library", sharing the header's width
+        Assign  // .ir-slot-list-assign: A or B, 22 by 20
+    };
+
+    IrListButton(const Theme& theme, Icons& icons, Kind kind, std::string label = {}, bool active = false)
+        : mTheme(theme), mIcons(icons), mKind(kind), mLabel(std::move(label)), mActive(active)
+    {
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.role = mKind == Kind::Source ? AccessRole::Tab : AccessRole::Button;
+        info.name = NameOr(mKind == Kind::Toggle  ? "Show IR list"
+                           : mKind == Kind::Close ? "Hide IR list"
+                                                  : mLabel);
+        info.selected = mActive;
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        switch (mKind)
+        {
+        case Kind::Toggle:
+            return {{30.0f, 29.0f}, {30.0f, 29.0f}};
+        case Kind::Close:
+            return {{26.0f, 26.0f}, {26.0f, 26.0f}};
+        case Kind::Source:
+            return {{24.0f, 22.0f}, {el::full_extent, 22.0f}};
+        case Kind::Assign:
+            break;
+        }
+
+        return {{22.0f, 20.0f}, {22.0f, 20.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const float radius = mKind == Kind::Toggle ? RadiusMd(mTheme) : RadiusSm(mTheme);
+        const bool lit = mActive || mHover;
+        cnv.fill_style(mTheme.Input());
+        cnv.fill_round_rect(b, radius);
+        cnv.stroke_style(lit ? mTheme.Accent() : mTheme.BorderStrong());
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), radius);
+        const auto ink = mActive ? mTheme.Accent() : mHover ? mTheme.Text() : mTheme.TextSecondary();
+
+        if (mKind == Kind::Toggle || mKind == Kind::Close)
+        {
+            const auto c = cycfi::artist::center_point(b);
+            mIcons.Draw(cnv, mKind == Kind::Toggle ? "list" : "close",
+                        el::rect{c.x - 7.5f, c.y - 7.5f, c.x + 7.5f, c.y + 7.5f}, ink);
+            return;
+        }
+
+        FillText(cnv, mLabel, Font(Weight::SemiBold).size(10.0f), ink, b.inset(6.0f, 0.0f), HAlign::Centre);
+    }
+
+  private:
+    const Theme& mTheme;
+    Icons& mIcons;
+    Kind mKind;
+    std::string mLabel;
+    bool mActive;
+};
+
+/// "A" or "B" on a row whose IR that slot plays (.ir-slot-list-row-loaded): a pill in the accent.
+class LoadedBadge final : public el::element
+{
+  public:
+    LoadedBadge(const Theme& theme, std::string letter) : mTheme(theme), mLetter(std::move(letter))
+    {
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{16.0f, 16.0f}, {16.0f, 16.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        auto& cnv = ctx.canvas;
+        cnv.fill_style(mTheme.Accent());
+        cnv.fill_round_rect(ctx.bounds, ctx.bounds.height() * 0.5f);
+        FillText(cnv, mLetter, Font(Weight::SemiBold).size(9.0f), mTheme.Input(), ctx.bounds, HAlign::Centre);
+    }
+
+  private:
+    const Theme& mTheme;
+    std::string mLetter;
+};
+
+/// The IR list's state per cabinet across the page's rebuilds, as the web UI keeps it: whose
+/// list it shows (IR A's or IR B's) and the filter. UI thread.
+struct IrListState
+{
+    int sourceSlot = 0;
+    std::string query;
+};
+
+std::map<std::string, IrListState>& IrListStates()
+{
+    static std::map<std::string, IrListState> states;
+    return states;
+}
+
+/// Rows drawn at once; a filter narrows a longer list (irSlotList.ts MAX_ROWS).
+constexpr std::size_t kIrListMaxRows = 300;
 } // namespace
 
 Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string& resourceType, int resourceIndex,
@@ -517,58 +658,186 @@ Ptr Shell::BuildBlendInfo(const guitarfx::GraphNode& node)
 
 Ptr Shell::BuildIrList(const guitarfx::GraphNode& node)
 {
-    // The web UI's IR list between the IR Cabinet's slots (paramsPanel/irSlotList.ts): the list
-    // IR A steps through (the library, in its category), each row with A and B to load it into
-    // either slot; the IRs playing are marked. Hidden or shown for every cabinet at once.
+    // The web UI's IR list between the IR Cabinet's slots (paramsPanel/irSlotList.ts). Closed, a
+    // button with the list's icon. Open: whose list it is (IR A's or IR B's: the library, in the
+    // category of the IR that slot plays, as its previous and next step through it), the list's
+    // title and count, a filter, and the rows, each marked with the slots that play it and with
+    // A and B to load it into either. Hidden or shown for every cabinet at once; whose list and
+    // the filter are kept per cabinet. Its height is the one EffectPage.cpp lays it out at:
+    // 29 closed, 8 + 26 + 6 + 14 + 6 + 24 + 6 + 220 + 8 = 318 open.
     const std::string nodeId = node.id;
-    const auto* a = SlotRef(node, 0);
-    const auto* b = SlotRef(node, 1);
-    const auto list = OrderedResources(mState, "ir", a != nullptr ? a->resourceId : std::string());
+    auto& listState = IrListStates()[nodeId];
+    const auto toggleList = [this, nodeId] {
+        mShowIrList = !mShowIrList;
 
-    auto toggle = std::make_shared<Button>(
-        mTheme, mShowIrList ? "Hide the IR list" : "Show the IR list (" + std::to_string(list.size()) + ")",
-        [this] {
-            mShowIrList = !mShowIrList;
-            mEffectSignature.clear();
-            Mark(kPage);
-        },
-        Button::Style::Flat);
-    toggle->TextSize(metrics::kSmallText);
+        if (mShowIrList)
+        {
+            IrListStates()[nodeId].sourceSlot = 0; // every slot's list is the library's here
+        }
+
+        mEffectSignature.clear();
+        Mark(kPage);
+    };
 
     if (!mShowIrList)
     {
-        return FixedHeight(28, Row({toggle, Stretch()}));
+        auto toggle = std::make_shared<IrListButton>(mTheme, mIcons, IrListButton::Kind::Toggle);
+        toggle->onClick = toggleList;
+        return Row({Stretch(), toggle, Stretch()});
     }
 
-    std::vector<Ptr> rows;
+    const auto listFor = [this](const guitarfx::GraphNode& n, int slot) {
+        const auto* ref = SlotRef(n, slot);
+        return OrderedResources(mState, "ir", ref != nullptr ? ref->resourceId : std::string());
+    };
+    const int source = std::clamp(listState.sourceSlot, 0, 1);
 
-    for (const auto* r : list)
+    // The header: whose list, then the cross that closes it.
+    std::vector<Ptr> header;
+
+    for (int slot = 0; slot < 2; ++slot)
     {
-        const bool inA = a != nullptr && a->resourceId == r->id;
-        const bool inB = b != nullptr && b->resourceId == r->id;
-        auto name = std::make_shared<Text>(mTheme, r->name.empty() ? r->id : r->name, 11.5f,
-                                           inA || inB ? Weight::SemiBold : Weight::Regular);
-        name->Colour(inA || inB ? mTheme.Ink() : mTheme.TextSecondary());
-        const auto slotButton = [this, nodeId, id = r->id](const char* label, int index, bool on) {
-            auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Chip);
-            button->Size(26, 22).Label(label, 10.0f).Ink(on ? mTheme.Accent() : mTheme.TextSecondary());
-            button->onClick = [this, nodeId, id, index] {
-                mSession.Commands().SetNodeResource(nodeId, "ir", id, index);
-                NoteChainEdit();
-            };
-            return button;
+        auto tab = std::make_shared<IrListButton>(mTheme, mIcons, IrListButton::Kind::Source,
+                                                  std::string(slot == 0 ? "IR A" : "IR B") + " \xC2\xB7 Library",
+                                                  slot == source);
+        tab->onClick = [this, nodeId, slot] {
+            IrListStates()[nodeId].sourceSlot = slot;
+            mEffectSignature.clear();
+            Mark(kPage);
         };
-        rows.push_back(FixedHeight(
-            26, Row({HGap(8), name, HGap(6), slotButton("A", 0, inA), HGap(4), slotButton("B", 1, inB), HGap(6)})));
+        header.push_back(tab);
+        header.push_back(HGap(slot == 0 ? 4.0f : 6.0f));
     }
 
-    if (rows.empty())
-    {
-        auto none = std::make_shared<Text>(mTheme, "The library has no IRs yet.", 11.5f);
-        none->Colour(mTheme.TextMuted());
-        rows.push_back(FixedHeight(26, PadXY(8, 0, none)));
-    }
+    auto close = std::make_shared<IrListButton>(mTheme, mIcons, IrListButton::Kind::Close);
+    close->onClick = toggleList;
+    header.push_back(close);
 
-    return Col({FixedHeight(28, Row({toggle, Stretch()})), FixedHeight(150, VScroll(Col(rows)))});
+    const auto list = listFor(node, source);
+    auto title = std::make_shared<Text>(mTheme, "Library", 11.0f);
+    title->Colour(mTheme.TextSecondary()).Fixed(true);
+    auto count = std::make_shared<Text>(mTheme, std::to_string(list.size()), 11.0f);
+    count->Colour(mTheme.TextSecondary().opacity(mTheme.TextSecondary().alpha * 0.7f));
+
+    // The rows, refilled in place as the filter is typed into, so the field keeps its focus.
+    auto rowsSlot = MakeSlot();
+    const auto fillRows = [this, nodeId, listFor, rowsSlot = std::weak_ptr<Slot>(rowsSlot)](bool relayout) {
+        const auto slot = rowsSlot.lock();
+        const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+
+        if (!slot || n == nullptr)
+        {
+            return;
+        }
+
+        const auto& state = IrListStates()[nodeId];
+        const auto items = listFor(*n, std::clamp(state.sourceSlot, 0, 1));
+        const auto needle = Lower(state.query);
+        const auto* a = SlotRef(*n, 0);
+        const auto* b = SlotRef(*n, 1);
+        const auto plays = [](const guitarfx::ResourceRef* ref, const LibraryResource& r) {
+            return ref != nullptr && ((!ref->resourceId.empty() && ref->resourceId == r.id) ||
+                                      (ref->IsFilePath() && guitarfx::util::PathToUtf8(ref->filePath) == r.filePath));
+        };
+        const auto message = [this](const std::string& text) -> Ptr {
+            auto t = std::make_shared<Text>(mTheme, text, 11.0f);
+            t->Colour(mTheme.TextSecondary());
+            return FixedHeight(30, PadXY(8, 0, t));
+        };
+
+        std::vector<Ptr> rows;
+        std::size_t shown = 0;
+
+        for (const auto* r : items)
+        {
+            const std::string label = r->name.empty() ? r->id : r->name;
+
+            if (!needle.empty() && Lower(label).find(needle) == std::string::npos)
+            {
+                continue;
+            }
+
+            if (++shown > kIrListMaxRows)
+            {
+                continue; // counted for the message under the rows
+            }
+
+            const bool inA = plays(a, *r);
+            const bool inB = plays(b, *r);
+            auto name = std::make_shared<Text>(mTheme, label, 11.0f);
+            name->Colour(mTheme.Text());
+            std::vector<Ptr> cells{name};
+
+            for (const auto& [letter, loaded] : {std::pair{"A", inA}, std::pair{"B", inB}})
+            {
+                if (loaded)
+                {
+                    cells.push_back(HGap(4));
+                    cells.push_back(Middle(std::make_shared<LoadedBadge>(mTheme, letter)));
+                }
+            }
+
+            for (int slot = 0; slot < 2; ++slot)
+            {
+                const std::string slotName = slot == 0 ? "IR A" : "IR B";
+                auto assign = std::make_shared<IrListButton>(mTheme, mIcons, IrListButton::Kind::Assign,
+                                                             slot == 0 ? "A" : "B");
+                assign->AccessName("Load into " + slotName + ": " + label);
+                assign->onClick = [this, nodeId, id = r->id, slot] {
+                    mSession.Commands().SetNodeResource(nodeId, "ir", id, slot);
+                    NoteChainEdit();
+                };
+                cells.push_back(HGap(4));
+                cells.push_back(Middle(assign));
+            }
+
+            Ptr row = Pad(8, 2, 4, 2, Row(cells));
+
+            // A row a slot plays takes the accent's tint.
+            if (inA || inB)
+            {
+                row = Over(row, Rounded(mTheme.Accent().opacity(0.14f), RadiusSm(mTheme),
+                                        std::make_shared<el::element>()));
+            }
+
+            rows.push_back(FixedHeight(26, row));
+            rows.push_back(VGap(2));
+        }
+
+        if (shown == 0)
+        {
+            rows.push_back(message(items.empty() ? "No IRs in this list." : "No IRs match the filter."));
+        }
+        else if (shown > kIrListMaxRows)
+        {
+            rows.push_back(message("Showing " + std::to_string(kIrListMaxRows) + " of " + std::to_string(shown) +
+                                   ". Filter to narrow the list."));
+        }
+
+        Fill(*slot, VScroll(Col(rows)));
+
+        if (relayout)
+        {
+            mSession.View().layout();
+            mSession.View().refresh();
+        }
+    };
+    fillRows(false);
+
+    auto [filterElement, filterBox] = el::input_box("Filter", Font(Weight::Regular).size(11.0f), 1.0f);
+    filterBox->set_text(listState.query);
+    filterBox->on_text = [nodeId, fillRows](std::string_view text) {
+        IrListStates()[nodeId].query = std::string(text);
+        fillRows(true);
+    };
+    auto filter = Over(PadXY(8, 0, Middle(el::share(std::move(filterElement)))),
+                       el::share(Surface(mTheme.Input(), mTheme.BorderStrong(), RadiusSm(mTheme))));
+
+    // The open list (.ir-slot-list.is-open): an inset panel, 8 px inside, its parts 6 apart.
+    return Over(Pad(8, 8, 8, 8,
+                    Col({FixedHeight(26, Row(header)), VGap(6),
+                         FixedHeight(14, Row({title, HGap(4), count})), VGap(6), FixedHeight(24, filter), VGap(6),
+                         FixedHeight(220, rowsSlot)})),
+                std::make_shared<SkinBox>(mTheme, &ControlSkin::group));
 }
 } // namespace nanoq::ui

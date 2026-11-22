@@ -124,9 +124,11 @@ class MultibandCompressorEffect : public EffectProcessor
         // The first control step lands on Makeup, Mix and Output rather than gliding to them.
         mLevelsPrimed = false;
 
-        for (auto& meter : mMeterReductionDb)
+        for (std::size_t band = 0; band < kBands; ++band)
         {
-            meter.store(0.0f, std::memory_order_relaxed);
+            mMeterReductionDb[band].store(0.0f, std::memory_order_relaxed);
+            // Silent until a block says otherwise, as the distortion's meters are, not 0 dBFS.
+            mMeterLevelDb[band].store(-120.0f, std::memory_order_relaxed);
         }
     }
 

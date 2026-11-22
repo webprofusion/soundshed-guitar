@@ -8,6 +8,7 @@
 #include "uiclient/Analysis.h"
 #include "uiclient/UiClient.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace guitarfx::uiclient
@@ -50,6 +51,60 @@ std::vector<double> Numbers(const nlohmann::json& m, const char* key)
 
     return values;
 }
+
+/// A frame's output bins ("o") and band meters ("b": [lowHz, highHz, grDb, levelDb] each, then
+/// thresholdDb from newer engines), into `spectrum`; both left empty unless the whole of each is
+/// well formed (as eqSpectrum.ts parseBandMeters reads them).
+void ReadBandMeters(const nlohmann::json& m, NodeSpectrum& spectrum)
+{
+    spectrum.outputBinsDb.clear();
+    spectrum.bands.clear();
+    const auto output = m.find("o");
+    const auto bands = m.find("b");
+
+    if (output == m.end() || !output->is_array() || output->size() != spectrum.binsDb.size() || bands == m.end() ||
+        !bands->is_array())
+    {
+        return;
+    }
+
+    std::vector<NodeSpectrumBand> parsed;
+
+    for (const auto& entry : *bands)
+    {
+        if (!entry.is_array() || entry.size() < 4)
+        {
+            return;
+        }
+
+        const auto lowHz = OptionalNumber(entry, 0);
+        const auto highHz = OptionalNumber(entry, 1);
+        const auto reduction = OptionalNumber(entry, 2);
+        const auto level = OptionalNumber(entry, 3);
+
+        if (!lowHz || !highHz || !reduction || !level)
+        {
+            return;
+        }
+
+        NodeSpectrumBand band;
+        band.lowHz = std::max(0.0, *lowHz);
+        band.highHz = std::max(0.0, *highHz);
+        band.gainReductionDb = std::max(0.0, *reduction);
+        band.levelDb = *level;
+        band.thresholdDb = OptionalNumber(entry, 4);
+        parsed.push_back(band);
+    }
+
+    spectrum.outputBinsDb.reserve(output->size());
+
+    for (std::size_t i = 0; i < output->size(); ++i)
+    {
+        spectrum.outputBinsDb.push_back(OptionalNumber(*output, i).value_or(spectrum.floorDb));
+    }
+
+    spectrum.bands = std::move(parsed);
+}
 } // namespace
 
 void UiClient::RegisterAnalysisHandlers()
@@ -64,6 +119,7 @@ void UiClient::RegisterAnalysisHandlers()
         spectrum.floorDb = OptionalNumber(range, 2).value_or(-96.0);
         spectrum.ceilingDb = OptionalNumber(range, 3).value_or(0.0);
         spectrum.binsDb = Numbers(m, "s");
+        ReadBandMeters(m, spectrum);
         spectrum.receivedAt = mNowSeconds;
         Notify(Topic::Analysis);
     });
@@ -122,6 +178,8 @@ void UiClient::RegisterAnalysisHandlers()
 
     // ── Where each 3D Spatial node's source is, ~20 Hz ───────────────────────
     On("spatialPosition", [this](const nlohmann::json& m) {
+        static std::uint64_t serial = 0;
+        ++serial;
         auto& spatial = mState.analysis.spatial;
         spatial.clear();
 
@@ -132,14 +190,18 @@ void UiClient::RegisterAnalysisHandlers()
                 continue;
             }
 
+            // As the web UI reads them (spatial.ts): a field that is not a number takes its
+            // default, and only `true` is moving.
             SpatialPosition position;
-            position.azimuth = node.value("azimuth", 0.0);
-            position.elevation = node.value("elevation", 0.0);
-            position.distance = node.value("distance", 1.0);
-            position.itdUs = node.value("itdUs", 0.0);
-            position.ildDb = node.value("ildDb", 0.0);
-            position.rateHz = node.value("rateHz", 0.0);
-            position.moving = node.value("moving", false);
+            position.azimuth = OptionalField(node, "azimuth").value_or(0.0);
+            position.elevation = OptionalField(node, "elevation").value_or(0.0);
+            position.distance = OptionalField(node, "distance").value_or(1.5);
+            position.itdUs = OptionalField(node, "itdUs").value_or(0.0);
+            position.ildDb = OptionalField(node, "ildDb").value_or(0.0);
+            position.rateHz = OptionalField(node, "rateHz").value_or(0.0);
+            const auto moving = node.find("moving");
+            position.moving = moving != node.end() && moving->is_boolean() && moving->get<bool>();
+            position.serial = serial;
             spatial[NodeFeedKey(node.value("scope", ""), node.value("presetId", ""), node.value("nodeId", ""))] =
                 position;
         }
@@ -153,19 +215,25 @@ void UiClient::RegisterAnalysisHandlers()
             mState.analysis
                 .gateLearn[NodeFeedKey(m.value("scope", ""), m.value("presetId", ""), m.value("nodeId", ""))];
         status.state = m.value("state", std::string());
-        status.progress = m.value("progress", status.state == "done" ? 1.0 : 0.0);
+        status.progress = OptionalField(m, "progress").value_or(status.state == "done" ? 1.0 : status.progress);
         status.levelDb = OptionalField(m, "levelDb");
-        status.noiseFloorDb = OptionalField(m, "noiseFloorDb");
         status.spreadDb = OptionalField(m, "spreadDb");
         status.thresholdDb = OptionalField(m, "thresholdDb");
         status.reason = m.value("reason", std::string());
 
-        // A Multi-band Gate's bands: live levels while listening, results once done. A band
-        // that brings no noise floor keeps the one last learned, and a listen that heard
-        // playing leaves the floors as they were (gateLearn.ts onGateLearnStatus).
+        // A status without a noise floor keeps showing the last one learned, and a listen that
+        // heard playing leaves it as it was: what it heard was not noise. A Multi-band Gate's
+        // bands: live levels while listening, results once done; a band that brings no noise
+        // floor keeps the one last learned (gateLearn.ts onGateLearnStatus).
+        const bool heardPlaying = status.state == "failed" && status.reason == "playing";
+
+        if (const auto noiseFloorDb = OptionalField(m, "noiseFloorDb"); noiseFloorDb && !heardPlaying)
+        {
+            status.noiseFloorDb = noiseFloorDb;
+        }
+
         const auto previous = std::move(status.bands);
         status.bands.clear();
-        const bool heardPlaying = status.state == "failed" && status.reason == "playing";
 
         if (const auto it = m.find("bands"); it != m.end() && it->is_array() && !heardPlaying)
         {

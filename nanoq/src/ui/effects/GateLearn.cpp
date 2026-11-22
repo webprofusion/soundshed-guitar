@@ -30,13 +30,19 @@ namespace
 {
 using cycfi::artist::canvas;
 
-/// The meter: the threshold's range across, the noise floor heard filled from the left, the
-/// band between Threshold and where the gate closes again, Threshold as a line, and while
-/// listening the live level and the listen's progress.
+/// The theme's --radius-md: 6, and 3 in the square-cut Stage and Eleven themes.
+float RadiusMd(const Theme& theme)
+{
+    return theme.Name() == "stage" || theme.Name() == "high-gain" ? 3.0f : 6.0f;
+}
+
+/// The meter (.gate-learn-meter): the threshold's range across, the noise floor heard hatched
+/// from the left, the band between Threshold and where the gate closes again, Threshold as a
+/// line, and while listening the live level and the listen's progress.
 class GateLearnMeter final : public el::element, public Drawn
 {
   public:
-    explicit GateLearnMeter(const Theme& theme, float height = 14.0f) : mTheme(theme), mHeight(height)
+    explicit GateLearnMeter(const Theme& theme, float height = 18.0f) : mTheme(theme), mHeight(height)
     {
     }
 
@@ -72,44 +78,79 @@ class GateLearnMeter final : public el::element, public Drawn
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = ctx.bounds;
+        const auto outer = ctx.bounds;
+        const float radius = RadiusMd(mTheme);
+        // Inside its 1 px border, where the web UI places the meter's parts.
+        const auto b = outer.inset(1.0f, 1.0f);
         const auto at = [&](double db) {
             return b.left + static_cast<float>(std::clamp((db - mMin) / (mMax - mMin), 0.0, 1.0)) * b.width();
         };
 
-        cnv.fill_style(mTheme.Pick(el::rgba(0, 0, 0, 90), el::rgba(0, 0, 0, 28)));
-        cnv.add_round_rect(b, 3.0f);
+        cnv.fill_style(el::rgba(0, 0, 0, 71)); // rgba(0, 0, 0, 0.28) in every theme
+        cnv.add_round_rect(outer, radius);
         cnv.fill();
 
-        auto state = cnv.new_state();
-        cnv.add_round_rect(b, 3.0f);
-        cnv.clip();
-
-        if (mNoise)
         {
-            cnv.fill_style(mTheme.TextMuted().opacity(0.35f));
-            cnv.fill_rect(el::rect{b.left, b.top, at(*mNoise), b.bottom});
-        }
+            auto state = cnv.new_state();
+            cnv.add_round_rect(b, std::max(0.0f, radius - 1.0f));
+            cnv.clip();
 
-        cnv.fill_style(mTheme.Accent().opacity(0.22f));
-        cnv.fill_rect(el::rect{at(mClose), b.top, at(mThreshold), b.bottom});
+            // The noise floor: orange hatching at 135 degrees, 4 px a stripe.
+            if (mNoise)
+            {
+                const float right = at(*mNoise);
+                auto hatch = cnv.new_state();
+                cnv.add_rect(el::rect{b.left, b.top, right, b.bottom});
+                cnv.clip();
+                cnv.fill_style(el::rgba(232, 160, 80, 51));
+                cnv.fill_rect(el::rect{b.left, b.top, right, b.bottom});
+                cnv.fill_style(el::rgba(232, 160, 80, 97));
+                // A stripe 4 px across measured square to it is 4 * sqrt(2) along a row.
+                constexpr float kStripe = 5.657f;
+                const float h = b.height();
+                cnv.begin_path();
 
-        if (mLevel)
-        {
-            cnv.fill_style(mTheme.Success().opacity(0.7f));
-            cnv.fill_rect(el::rect{b.left, b.top + 4.0f, at(*mLevel), b.bottom - 4.0f});
-        }
+                for (float x = b.left; x < right + h; x += 2.0f * kStripe)
+                {
+                    cnv.move_to(x, b.top);
+                    cnv.line_to(x + kStripe, b.top);
+                    cnv.line_to(x + kStripe - h, b.bottom);
+                    cnv.line_to(x - h, b.bottom);
+                    cnv.close_path();
+                }
 
-        if (mProgress > 0.0)
-        {
+                cnv.fill();
+            }
+
+            cnv.fill_style(mTheme.Accent().opacity(0.22f));
+            cnv.fill_rect(el::rect{at(mClose), b.top, at(mThreshold), b.bottom});
+
             cnv.fill_style(mTheme.Accent());
-            cnv.fill_rect(el::rect{b.left, b.bottom - 2.0f,
-                                   b.left + static_cast<float>(std::clamp(mProgress, 0.0, 1.0)) * b.width(), b.bottom});
+            const float x = at(mThreshold);
+            cnv.fill_rect(el::rect{x - 1.0f, b.top, x + 1.0f, b.bottom});
+
+            // The live level, rounded at its right end only (its left is under the meter's edge).
+            if (mLevel)
+            {
+                cnv.fill_style(el::rgba(240, 240, 248, 128));
+                cnv.add_round_rect(el::rect{b.left - 2.0f, b.top + 3.0f, std::max(b.left, at(*mLevel)), b.bottom - 3.0f},
+                                   2.0f);
+                cnv.fill();
+            }
+
+            if (mProgress > 0.0)
+            {
+                cnv.fill_style(mTheme.Text());
+                cnv.fill_rect(el::rect{b.left, b.bottom - 2.0f,
+                                       b.left + static_cast<float>(std::clamp(mProgress, 0.0, 1.0)) * b.width(),
+                                       b.bottom});
+            }
         }
 
-        cnv.fill_style(mTheme.Accent());
-        const float x = at(mThreshold);
-        cnv.fill_rect(el::rect{x - 1.0f, b.top, x + 1.0f, b.bottom});
+        cnv.stroke_style(mTheme.Border());
+        cnv.line_width(1.0f);
+        cnv.add_round_rect(outer.inset(0.5f, 0.5f), std::max(0.0f, radius - 0.5f));
+        cnv.stroke();
     }
 
   private:
@@ -120,14 +161,70 @@ class GateLearnMeter final : public el::element, public Drawn
     double mProgress = 0.0;
 };
 
+/// Learn, and Cancel while listening (.gate-learn-button): a pill outlined in the accent, the
+/// accent's tint under the pointer, filled with it while listening.
+class LearnButton final : public Pressable
+{
+  public:
+    explicit LearnButton(const Theme& theme) : mTheme(theme)
+    {
+    }
+
+    void Set(bool listening)
+    {
+        mListening = listening;
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.name = NameOr(mListening ? "Cancel" : "Learn");
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{kWidth, kHeight}, {kWidth, kHeight}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const float radius = b.height() * 0.5f;
+
+        if (mListening || mHover)
+        {
+            cnv.fill_style(mListening ? mTheme.Accent() : mTheme.Accent().opacity(0.2f));
+            cnv.fill_round_rect(b, radius);
+        }
+
+        cnv.stroke_style(mTheme.Accent());
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), radius - 0.5f);
+        FillText(cnv, mListening ? "Cancel" : "Learn", Font(Weight::SemiBold).size(11.0f),
+                 mListening ? mTheme.Background() : mTheme.Text(), b, HAlign::Centre);
+    }
+
+    // At least 64 across (min-width), 4 and 10 px round an 11 px label and its 1 px border.
+    static constexpr float kWidth = 64.0f, kHeight = 24.0f;
+
+  private:
+    const Theme& mTheme;
+    bool mListening = false;
+};
+
 std::string WholeDb(double value)
 {
     const long rounded = std::lround(value);
     return (rounded < 0 ? std::string("\xE2\x88\x92") + std::to_string(-rounded) : std::to_string(rounded)) + " dB";
 }
 
-// The Multi-band Gate's meters: their height, the gap between them, and their labels' column.
-constexpr float kBandMeterHeight = 12.0f, kBandGap = 3.0f, kBandLabelWidth = 56.0f, kBandLabelGap = 6.0f;
+// The meter's height (the Multi-band Gate's are thinner), the 4 px between the view's parts, the
+// scale's height, and the Multi-band Gate's labels' column.
+constexpr float kMeterHeight = 18.0f, kBandMeterHeight = 12.0f, kGap = 4.0f, kScaleHeight = 12.0f,
+                kBandLabelWidth = 56.0f, kBandLabelGap = 6.0f;
 
 /// A node's parameter as stored, else its effect's default, else `fallback`. The effect type
 /// is looked up on each call, not kept: the catalog is replaced whenever the engine sends it
@@ -164,22 +261,21 @@ double NodeParam(const guitarfx::uiclient::ClientState& state, const std::string
 float Shell::GateLearnHeight(const GateLearnTarget& target)
 {
     const auto bands = static_cast<float>(target.bandLabels.size());
-    const float meters = bands > 0.0f ? bands * kBandMeterHeight + (bands - 1.0f) * kBandGap : 14.0f;
-    return meters + 2.0f + 12.0f + 6.0f + 26.0f;
+    const float meters = bands > 0.0f ? bands * kBandMeterHeight + (bands - 1.0f) * kGap : kMeterHeight;
+    return meters + kGap + kScaleHeight + kGap + LearnButton::kHeight;
 }
 
 Ptr Shell::BuildGateLearn(GateLearnTarget target)
 {
     const bool multiband = !target.bandLabels.empty();
-    auto meter = std::make_shared<GateLearnMeter>(mTheme, multiband ? kBandMeterHeight : 14.0f);
+    auto meter = std::make_shared<GateLearnMeter>(mTheme, multiband ? kBandMeterHeight : kMeterHeight);
     auto low = std::make_shared<Text>(mTheme, WholeDb(target.minDb), 9.0f);
     auto high = std::make_shared<Text>(mTheme, WholeDb(target.maxDb), 9.0f);
-    low->Colour(mTheme.TextMuted());
-    high->Colour(mTheme.TextMuted()).Alignment(Text::Align::Right);
+    low->Colour(mTheme.TextSecondary());
+    high->Colour(mTheme.TextSecondary()).Alignment(Text::Align::Right);
     auto status = std::make_shared<Text>(mTheme, "", 11.0f);
     status->Colour(mTheme.TextSecondary());
-    auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    button->Size(72, 26);
+    auto button = std::make_shared<LearnButton>(mTheme);
 
     const auto key =
         guitarfx::uiclient::NodeFeedKey(target.address.scope, target.address.presetId, target.address.nodeId);
@@ -203,16 +299,22 @@ Ptr Shell::BuildGateLearn(GateLearnTarget target)
             ensureEnabled();
         }
 
-        // Listening at once, as the web UI shows it, until the engine's first status. A
-        // Multi-band Gate's bands keep their learned noise floors under the live levels.
-        GateLearnStatus listening{"listening"};
+        // Listening at once, as the web UI shows it, until the engine's first status. The noise
+        // floor learned last stays drawn under the live level, a Multi-band Gate's band by band
+        // (gateLearn.ts startGateLearn).
+        auto& previous = learn[key];
+        GateLearnStatus listening = previous;
+        listening.state = "listening";
+        listening.progress = 0.0;
+        listening.levelDb.reset();
+        listening.bands.clear();
 
-        for (const auto& band : learn[key].bands)
+        for (const auto& band : previous.bands)
         {
             listening.bands.push_back(GateLearnBandStatus{{}, band.noiseFloorDb, {}, {}});
         }
 
-        learn[key] = std::move(listening);
+        previous = std::move(listening);
         mGateLearnSeen[key] = "listening";
         analysis.StartGateLearn(address);
     };
@@ -275,18 +377,28 @@ Ptr Shell::BuildGateLearn(GateLearnTarget target)
         status,
         [learnStatus, minDb = target.minDb] { return guitarfx::uiclient::GateLearnStatusText(learnStatus(), minDb); },
         &Text::Set);
+    // A failed listen's reason in the warning colour (.gate-learn.is-failed).
+    mLive.Bind(
+        status,
+        [learnStatus] {
+            const auto* s = learnStatus();
+            return s != nullptr && s->state == "failed";
+        },
+        [this](Text& t, bool failed) { t.Colour(failed ? mTheme.Warning() : mTheme.TextSecondary()); });
     mLive.Bind(
         button,
         [learnStatus] {
             const auto* s = learnStatus();
             return s != nullptr && s->state == "listening";
         },
-        [](IconButton& b, bool listening) { b.Label(listening ? "Cancel" : "Learn", 11.0f); });
-    auto controls = FixedHeight(26, Row({button, HGap(10), status, Stretch()}));
+        &LearnButton::Set);
+    auto controls =
+        FixedHeight(LearnButton::kHeight, Row({FixedWidth(LearnButton::kWidth, button), HGap(8), status, Stretch()}));
 
     if (!multiband)
     {
-        return Col({FixedHeight(14, meter), VGap(2), FixedHeight(12, Row({low, Stretch(), high})), VGap(6), controls});
+        return Col({FixedHeight(kMeterHeight, meter), VGap(kGap), FixedHeight(kScaleHeight, Row({low, Stretch(), high})),
+                    VGap(kGap), controls});
     }
 
     // One labelled meter per band (.gate-learn-band), the scale under the meters alone.
@@ -304,16 +416,16 @@ Ptr Shell::BuildGateLearn(GateLearnTarget target)
                 const auto* s = learnStatus();
                 return m.Set(target.minDb, target.maxDb, bandThreshold(band), 0.0, s, bandStatus(s, band));
             });
-            rows.push_back(VGap(kBandGap));
+            rows.push_back(VGap(kGap));
         }
 
         rows.push_back(FixedHeight(kBandMeterHeight,
                                    Row({FixedWidth(kBandLabelWidth, Middle(label)), HGap(kBandLabelGap), bandMeter})));
     }
 
-    rows.push_back(VGap(2));
-    rows.push_back(FixedHeight(12, Row({HGap(kBandLabelWidth + kBandLabelGap), low, Stretch(), high})));
-    rows.push_back(VGap(6));
+    rows.push_back(VGap(kGap));
+    rows.push_back(FixedHeight(kScaleHeight, Row({HGap(kBandLabelWidth + kBandLabelGap), low, Stretch(), high})));
+    rows.push_back(VGap(kGap));
     rows.push_back(controls);
     return Col(rows);
 }
@@ -521,10 +633,16 @@ void Shell::OpenGlobalGate(el::rect anchor)
         Button::Style::Flat);
     reset->TextSize(11.0f);
 
+    // Learn sits between the header and the knobs, ruled off under its 6 px padding.
+    const float learnHeight = GateLearnHeight(target);
     std::vector<Ptr> column{FixedHeight(26, Row({Middle(heading("Noise Gate", 11.0f)), Stretch(), Middle(enabled)})),
-                            VGap(8), FixedHeight(60, BuildGateLearn(std::move(target))), VGap(6),
+                            VGap(8),
+                            FixedHeight(learnHeight, BuildGateLearn(std::move(target))),
+                            VGap(6),
+                            rule(),
+                            VGap(6),
                             BuildFlyoutParamRows(main, binding)};
-    float height = 26.0f + 8.0f + 60.0f + 6.0f + 38.0f * static_cast<float>(main.size());
+    float height = 26.0f + 8.0f + learnHeight + 6.0f + 1.0f + 6.0f + 38.0f * static_cast<float>(main.size());
 
     if (!advanced.empty())
     {

@@ -271,6 +271,30 @@ void TestStaticCurveAndIsolation()
 
     compressor->ReadBandMeters(meters);
     Check(meters[0].gainReductionDb == 0.0f, "a read starts the next hold", Num(meters[0].gainReductionDb, 2) + " dB");
+
+    // Reset, the meters read silence again, as before any audio, rather than 0 dBFS.
+    compressor->Reset();
+    compressor->ReadBandMeters(meters);
+    Check(meters[0].levelDb <= -120.0f && meters[3].levelDb <= -120.0f, "a reset meters silence",
+          Num(meters[0].levelDb, 2) + " dBFS");
+}
+
+void TestMetersSilentBeforeAudio()
+{
+    std::cout << "\n-- before any audio, every band meters silence --" << std::endl;
+
+    // The UI draws the level strip from these: 0 dBFS would show every band far over threshold.
+    auto compressor = MakeCompressor(-24.0, 3.0);
+    std::array<BandMeter, kBands> meters{};
+    compressor->ReadBandMeters(meters);
+    bool silent = true;
+
+    for (const auto& meter : meters)
+    {
+        silent = silent && meter.levelDb <= -120.0f && meter.gainReductionDb == 0.0f;
+    }
+
+    Check(silent, "a prepared compressor meters -120 dBFS and no reduction", Num(meters[0].levelDb, 2) + " dBFS");
 }
 
 void TestRatioOneAndThresholdPerBand()
@@ -522,6 +546,7 @@ int main()
     RegisterAllEffects();
 
     TestBelowThresholdIsFlat();
+    TestMetersSilentBeforeAudio();
     TestStaticCurveAndIsolation();
     TestRatioOneAndThresholdPerBand();
     TestCrossoverOrdering();

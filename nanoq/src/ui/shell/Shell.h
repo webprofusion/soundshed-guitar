@@ -26,6 +26,7 @@
 #include "ui/input/KeyRouter.h"
 #include "ui/widgets/Layout.h"
 #include "ui/effects/LayoutView.h"
+#include "ui/effects/MultibandPlot.h"
 #include "ui/effects/ResponsePlot.h"
 #include "ui/chain/EffectRows.h"
 #include "ui/shell/FrameWidgets.h"
@@ -544,9 +545,25 @@ class Shell
     std::weak_ptr<el::element> mSpatialPanner, mAnalyzerPanel;
     std::string mLiveNodeId;
 
-    /// Pickup Match's custom designs, described from its curve's reply.
-    [[nodiscard]] Ptr BuildPickupDesignLines();
-    std::vector<std::pair<std::string, std::weak_ptr<Text>>> mPickupDesignLines;
+    /// A control's cell as the effect page builds it: its width and the cell, named `shown`.
+    using ParamCellMaker =
+        std::function<std::pair<float, Ptr>(const guitarfx::uiclient::EffectParamInfo& info, const std::string& shown)>;
+    /// Pickup Match's design blocks (EqPlot.cpp): one per side set to Custom Design, its design
+    /// controls made by `makeCell`, its summary from the curve's reply, and the note. Null when
+    /// neither side is custom; `height` is what they take `width` wide.
+    [[nodiscard]] Ptr BuildPickupDesignBlocks(const guitarfx::GraphNode& node, float width,
+                                              const ParamCellMaker& makeCell, float& height);
+    void NotePickupDesigns(const std::map<std::string, double>& summary);
+    /// A Pickup Match parameter its design blocks show, so the knob groups leave it out.
+    [[nodiscard]] static bool IsPickupDesignParam(const std::string& key);
+    std::map<std::string, std::string> mPickupDesignText; // each side's summary, for mPickupDesignNodeId
+    std::string mPickupDesignNodeId;
+    std::vector<std::weak_ptr<el::element>> mPickupDesignPills;
+    /// The graphic EQ's sliders over its curve (GraphicEq.cpp), `width` wide; `height` is what it takes.
+    [[nodiscard]] Ptr BuildGraphicEq(const guitarfx::GraphNode& node, float width, float& height);
+    /// What the EQ sections' layout depends on (the graphic EQ's bands, Pickup Match's custom
+    /// sides), for EffectPageSignature.
+    [[nodiscard]] std::string EqSectionSignature(const guitarfx::GraphNode& node) const;
 
     // DspStatusView.cpp: the effect's and the output's DSP status readouts.
     struct DspStatusView
@@ -594,10 +611,22 @@ class Shell
     /// The Simple Cabinet's Match an IR and Export as IR.
     [[nodiscard]] Ptr BuildCabTools(const guitarfx::GraphNode& node);
     void SyncIrExport();
+    /// The tools' buttons disabled and the status set while a match or an export runs.
+    void ShowCabToolsState();
     std::string mPendingIrExport; // the request id of an export as IR still out
+    bool mCabMatchPending = false;
     std::weak_ptr<Text> mIrExportStatus;
+    std::weak_ptr<PlotToolButton> mCabMatchButton, mIrExportButton;
     std::optional<EqPlotState> mEffectPlot;  // the effect editor's
     std::optional<EqPlotState> mOverlayPlot; // a dialog's (the Global EQ)
+
+    // MultibandSection.cpp: the Multi-band Compressor's and Distortion's Bands plot, fed with the
+    // node's spectrum in and out and its band meters while no EQ plot has the spectrum watch.
+    [[nodiscard]] Ptr BuildMultibandPlot(const guitarfx::GraphNode& node);
+    /// Keeps the plot's feed going; false when there is no plot on show to feed.
+    bool SyncMultibandFeed();
+    std::shared_ptr<MultibandPlot> mMultibandPlot;
+    EqPlotSource mMultibandSource;
 
     // PadsView.cpp
     [[nodiscard]] Ptr BuildPadsView();
