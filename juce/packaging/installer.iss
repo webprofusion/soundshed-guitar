@@ -5,6 +5,8 @@
 #define TargetArch GetEnv('GUITARFX_WINDOWS_ARCH')
 #define BuildDir GetEnv('GUITARFX_WINDOWS_BUILD_DIR')
 #define Arm64EcBuildDir GetEnv('GUITARFX_WINDOWS_ARM64EC_BUILD_DIR')
+; build-installer.bat sets this to 1 when the AAX is signed (or GUITARFX_ALLOW_UNSIGNED_AAX=1).
+#define IncludeAAX GetEnv('GUITARFX_INCLUDE_AAX')
 #if BuildDir == ""
   #define BuildDir "..\Builds"
 #endif
@@ -17,6 +19,10 @@
 ; build_windows.bat exports the resolved architecture; keep x64 as a fallback for standalone packaging outside that script.
 #if TargetArch == ""
   #define TargetArch "x64"
+#endif
+; JUCE builds AAX for x64 only.
+#if IncludeAAX != "1" || TargetArch != "x64"
+  #define IncludeAAX "0"
 #endif
 #if TargetArch == "Win32"
   #define CommonFiles "{commoncf32}"
@@ -47,6 +53,9 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "standalone"; Description: "Standalone application"; Types: full custom; Flags: checkablealone
 Name: "vst3"; Description: "VST3 plugin"; Types: full custom; Flags: checkablealone
 Name: "clap"; Description: "CLAP plugin"; Types: custom; Flags: checkablealone
+#if IncludeAAX == "1"
+Name: "aax"; Description: "AAX plugin for Pro Tools"; Types: full custom; Flags: checkablealone
+#endif
 
 ; Advanced choices, off unless ticked (or passed: /TASKS="nativeuionly" or "skipwebview2" for a
 ; silent install). Inno remembers them for the next install over this one.
@@ -80,6 +89,9 @@ UninstallFilesDir="{commonappdata}\{#ProductName}\uninstall"
 ; Inno Setup already removes every file it installed via the [Files] section.
 Type: filesandordirs; Name: "{code:GetVst3Dir}"
 Type: filesandordirs; Name: "{code:GetClapBinaryPath}"
+#if IncludeAAX == "1"
+Type: filesandordirs; Name: "{code:GetAaxDir}"
+#endif
 #if TargetArch == "ARM64"
 Type: filesandordirs; Name: "{code:GetClapDir}\{#ProductName} (ARM64EC).clap"
 #endif
@@ -93,6 +105,9 @@ Type: filesandordirs; Name: "{%TEMP}\SoundshedGuitarWebView2Check"
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "StandaloneDir"; ValueData: "{code:GetStandaloneDir}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "VST3Dir"; ValueData: "{code:GetVst3Dir}"; Flags: uninsdeletekeyifempty
 Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "CLAPDir"; ValueData: "{code:GetClapDir}"; Flags: uninsdeletekeyifempty
+#if IncludeAAX == "1"
+Root: HKA; Subkey: "Software\{#Publisher}\{#ProductName}\Installer"; ValueType: string; ValueName: "AAXDir"; ValueData: "{code:GetAaxDir}"; Flags: uninsdeletekeyifempty
+#endif
 ; Read by the app and the plugins (PluginProcessorAdapter::NativeEditorOnly): 1 builds only the
 ; native UI and hides the way back to the WebView one. Written either way, so unticking it in a
 ; later install undoes it.
@@ -111,7 +126,14 @@ Source: "{#ArtefactsDir}\Standalone\*"; DestDir: "{code:GetStandaloneDir}"; Excl
 Source: "{#ArtefactsDir}\Standalone\resources\*.ttf"; DestDir: "{code:GetStandaloneDir}\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: standalone
 Source: "{#ArtefactsDir}\VST3\{#ProductName}.vst3\Contents\{#Vst3ArchDir}\resources\*.ttf"; DestDir: "{code:GetVst3Dir}\Contents\{#Vst3ArchDir}\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: vst3
 Source: "{#ArtefactsDir}\CLAP\resources\*.ttf"; DestDir: "{code:GetClapDir}\{#ProductName} Resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: clap
+#if IncludeAAX == "1"
+; The AAX bundle, laid out like the VST3: the library under Contents\x64, its fonts beside it.
+Source: "{#ArtefactsDir}\AAX\{#ProductName}.aaxplugin\*"; DestDir: "{code:GetAaxDir}"; Excludes: *.ilk,resources\*,*\resources\*; Flags: ignoreversion recursesubdirs; Components: aax
+Source: "{#ArtefactsDir}\AAX\{#ProductName}.aaxplugin\Contents\x64\resources\*.ttf"; DestDir: "{code:GetAaxDir}\Contents\x64\resources"; Flags: ignoreversion skipifsourcedoesntexist; Components: aax
+Source: "{#UiStageDir}\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui"; Excludes: assets\amps\*,*\assets\amps\*,assets\ir\*,*\assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone or vst3 or clap or aax
+#else
 Source: "{#UiStageDir}\*"; DestDir: "{commonappdata}\{#ProductName}\resources\ui"; Excludes: assets\amps\*,*\assets\amps\*,assets\ir\*,*\assets\ir\*; Flags: ignoreversion recursesubdirs createallsubdirs; Components: standalone or vst3 or clap
+#endif
 #if TargetArch == "ARM64"
 ; The ARM64EC plugins, beside the native ARM64 ones above. A host loads the one built for its own
 ; kind of process: REAPER's Windows ARM build is ARM64EC and cannot load an ARM64 plugin, and a
@@ -183,6 +205,16 @@ begin
         Result := ReadSavedInstallPath('CLAPDir', ExpandConstant('{#CommonFiles}\CLAP'));
 end;
 
+#if IncludeAAX == "1"
+function GetAaxDir(Param: string): string;
+begin
+    if Assigned(InstallPathsPage) and (Trim(InstallPathsPage.Values[3]) <> '') then
+        Result := TrimmedPath(InstallPathsPage.Values[3])
+    else
+        Result := ReadSavedInstallPath('AAXDir', ExpandConstant('{#CommonFiles}\Avid\Audio\Plug-Ins\{#ProductName}.aaxplugin'));
+end;
+#endif
+
 function GetClapResourcesDir(Param: string): string;
 begin
     Result := AddBackslash(GetClapDir('')) + 'resources';
@@ -217,6 +249,11 @@ begin
 
     InstallPathsPage.Add('CLAP plugin folder:');
     InstallPathsPage.Values[2] := GetClapDir('');
+#if IncludeAAX == "1"
+
+    InstallPathsPage.Add('AAX bundle folder (.aaxplugin):');
+    InstallPathsPage.Values[3] := GetAaxDir('');
+#endif
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -235,7 +272,11 @@ begin
     begin
         if not WizardIsComponentSelected('standalone')
             and not WizardIsComponentSelected('vst3')
-            and not WizardIsComponentSelected('clap') then
+            and not WizardIsComponentSelected('clap')
+#if IncludeAAX == "1"
+            and not WizardIsComponentSelected('aax')
+#endif
+            then
         begin
             MsgBox('Select at least one component to install.', mbError, MB_OK);
             Result := False;
@@ -267,6 +308,15 @@ begin
         Result := False;
         Exit;
     end;
+#if IncludeAAX == "1"
+
+    if WizardIsComponentSelected('aax') and (Trim(GetAaxDir('')) = '') then
+    begin
+        MsgBox('AAX install folder cannot be empty.', mbError, MB_OK);
+        Result := False;
+        Exit;
+    end;
+#endif
 end;
 
 function IsWebView2RuntimeInstalled: Boolean;

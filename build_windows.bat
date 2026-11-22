@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 :: ---------------------------------------------------------------------------
-:: Full release build: JUCE Standalone + VST3 + CLAP, then installer
+:: Full release build: JUCE Standalone + VST3 + CLAP (+ AAX on x64), then installer
 :: Run from the workspace root.
 :: Usage: build_windows.bat [x86|x64|arm64] [--simd=avx2|avx|sse2] [--refresh-deps]
 ::   --simd=avx2  (default) /arch:AVX2 - Intel Haswell 2013+, AMD Excavator 2015+
@@ -16,6 +16,16 @@ setlocal EnableExtensions EnableDelayedExpansion
 :: directory with the Standalone, and ARM64EC in juce\builds-arm64ec. An ARM64EC
 :: host (REAPER's Windows ARM build is one) cannot load a native ARM64 plugin,
 :: nor a native ARM64 host an ARM64EC one, so the installer ships both.
+::
+:: AAX (Pro Tools) is built on x64 only: JUCE creates no AAX target for Win32 or
+:: ARM64, and Pro Tools on Windows is x64 only. Retail Pro Tools loads it only
+:: once it is PACE-signed (the developer build of Pro Tools loads it unsigned),
+:: so the installer packages it only when it is signed:
+::   GUITARFX_AAX_SIGN_SCRIPT      Batch script run after the AAX build, called with
+::                                 <bundle-path> <binary-path>; does the PACE step.
+::   GUITARFX_REQUIRE_SIGNED_AAX=1 Fail instead of leaving an unsigned AAX out.
+::   GUITARFX_ALLOW_UNSIGNED_AAX=1 Package an unsigned AAX (developer Pro Tools).
+:: The signature check is in juce\packaging\build-installer.bat.
 :: ---------------------------------------------------------------------------
 
 set "WORKSPACE_ROOT=%~dp0"
@@ -167,14 +177,41 @@ echo UI dependencies are ready. CMake will build the bundle once from its stamp 
 echo.
 
 :: --- Build desktop formats --------------------------------------------------
-echo [2/4] Building Standalone, VST3 and CLAP (Release)...
-cmake --build "%JUCE_BUILDS%" --config Release --target SoundshedGuitar_Standalone SoundshedGuitar_VST3 SoundshedGuitar_CLAP --parallel
+set "DESKTOP_TARGETS=SoundshedGuitar_Standalone SoundshedGuitar_VST3 SoundshedGuitar_CLAP"
+set "DESKTOP_FORMATS=Standalone, VST3 and CLAP"
+if /I "%ARCH%"=="x64" (
+    set "DESKTOP_TARGETS=!DESKTOP_TARGETS! SoundshedGuitar_AAX"
+    set "DESKTOP_FORMATS=Standalone, VST3, CLAP and AAX"
+)
+echo [2/4] Building !DESKTOP_FORMATS! (Release)...
+cmake --build "%JUCE_BUILDS%" --config Release --target !DESKTOP_TARGETS! --parallel
 if !ERRORLEVEL! neq 0 (
     echo ERROR: Desktop format build failed.
     goto :fail
 )
 echo Desktop format builds succeeded.
 echo.
+
+:: --- Sign the AAX (x64, when a signing script is set) -----------------------
+if /I not "%ARCH%"=="x64" goto :aax_sign_done
+if not defined GUITARFX_AAX_SIGN_SCRIPT goto :aax_sign_done
+
+set "AAX_BUNDLE=%JUCE_BUILDS%\SoundshedGuitar_artefacts\Release\AAX\Soundshed Guitar.aaxplugin"
+set "AAX_BINARY=%AAX_BUNDLE%\Contents\x64\Soundshed Guitar.aaxplugin"
+if not exist "%GUITARFX_AAX_SIGN_SCRIPT%" (
+    echo ERROR: GUITARFX_AAX_SIGN_SCRIPT not found: "%GUITARFX_AAX_SIGN_SCRIPT%"
+    goto :fail
+)
+echo Signing the AAX plugin...
+call "%GUITARFX_AAX_SIGN_SCRIPT%" "%AAX_BUNDLE%" "%AAX_BINARY%"
+if !ERRORLEVEL! neq 0 (
+    echo ERROR: AAX signing script failed.
+    goto :fail
+)
+echo AAX signing script finished.
+echo.
+
+:aax_sign_done
 
 :: --- Build the ARM64EC plugins (arm64 only) ---------------------------------
 if /I not "%ARCH%"=="ARM64" goto :arm64ec_done
