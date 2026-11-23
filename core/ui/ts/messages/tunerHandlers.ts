@@ -19,6 +19,7 @@ export function onTunerUpdate(payload: IncomingPayload): void {
     frequency?: number;
     centOffset?: number;
     confidence?: number;
+    levelDb?: number;
     debugRms?: number;
     debugRawFreq?: number;
   };
@@ -35,6 +36,7 @@ export function onTunerUpdate(payload: IncomingPayload): void {
     frequency: tunerPayload.frequency,
     centOffset: tunerPayload.centOffset,
     confidence: tunerPayload.confidence,
+    levelDb: tunerPayload.levelDb,
   });
 }
 

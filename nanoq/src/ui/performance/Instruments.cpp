@@ -3,14 +3,17 @@
 
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/Drawn.h"
+#include "ui/performance/IntonationPanel.h"
 #include "ui/shell/Shell.h"
 
 #include "uiclient/Instruments.h"
+#include "uiclient/Intonation.h"
 
 #include <elements/support/text_utils.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 
@@ -50,6 +53,20 @@ const el::color kInTune = el::rgba(0x40, 0xc0, 0x80, 255);
 
 // Hz or cents, kept while the app runs, as the web UI keeps its choice for the session.
 bool gTunerShowsHz = false;
+
+// The intonation check: whether it shows, and what it has measured, kept while the app runs as
+// the web UI keeps them (tunerIntonationView.ts).
+bool gTunerIntonation = false;
+
+guitarfx::uiclient::intonation::IntonationTest& Intonation()
+{
+    static guitarfx::uiclient::intonation::IntonationTest test;
+    return test;
+}
+
+// Set while the tuner closes only to open again (Intonation shown or hidden, which changes the
+// dialog's height): the engine's tuner stays on, so a muted output does not blip through.
+bool gTunerReopening = false;
 } // namespace
 
 /// The tuner's display (tuner-modal.html, css/modals/tuner.css): -50 and +50 either side of
@@ -59,14 +76,21 @@ class TunerFace final : public el::element, public Drawn
 {
   public:
     static constexpr float kHeight = 300.0f;
+    /// Under the intonation panel, with the gaps closed up, so the panel's buttons stay in view.
+    static constexpr float kCompactHeight = 236.0f;
 
-    explicit TunerFace(const Theme& theme) : mTheme(theme)
+    explicit TunerFace(const Theme& theme, bool compact = false) : mTheme(theme), mCompact(compact)
     {
+    }
+
+    [[nodiscard]] float Height() const
+    {
+        return mCompact ? kCompactHeight : kHeight;
     }
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{300.0f, kHeight}, {el::full_extent, kHeight}};
+        return {{300.0f, Height()}, {el::full_extent, Height()}};
     }
 
     void draw(const el::context& ctx) override
@@ -77,7 +101,7 @@ class TunerFace final : public el::element, public Drawn
         const auto& r = mReading;
 
         // The cents row: -50, the mark, the reading, +50, spread across.
-        const float rowY = b.top + 30.0f + 12.0f;
+        const float rowY = b.top + (mCompact ? 24.0f : 30.0f + 12.0f);
         const float inner = b.width() - 60.0f;
         const auto at = [&](float fraction) { return b.left + 30.0f + inner * fraction; };
         const auto marker = Font(Weight::Regular).size(14.0f);
@@ -118,7 +142,7 @@ class TunerFace final : public el::element, public Drawn
                  canvas::center | canvas::middle);
 
         // The track: a line, the in-tune ring at its middle, and the puck at the reading.
-        const float trackY = b.top + 30.0f + 24.0f + 20.0f + 40.0f;
+        const float trackY = mCompact ? rowY + 62.0f : b.top + 30.0f + 24.0f + 20.0f + 40.0f;
         const float left = b.left + 60.0f, right = b.right - 60.0f;
         cnv.fill_style(mTheme.ModalRule());
         cnv.fill_rect(el::rect{left, trackY - 1.0f, right, trackY + 1.0f});
@@ -139,32 +163,58 @@ class TunerFace final : public el::element, public Drawn
         cnv.add_circle(cycfi::artist::circle({x, trackY}, kPuck));
         cnv.stroke();
 
-        // The note, between the semitones below and above.
-        const float noteY = trackY + 40.0f + 30.0f + 40.0f;
+        // The note, between the semitones below and above; with a string set for the intonation
+        // check, the fret between its neighbours, under a FRET caption.
+        const float noteY = trackY + (mCompact ? 92.0f : 40.0f + 30.0f + 40.0f);
         const auto side = Font(Weight::Regular).size(24.0f);
         DrawText(cnv, r.detected ? r.noteLeft : std::string("-"), side, mTheme.ModalTextMuted(),
                  {b.left + 30.0f, noteY + 10.0f}, canvas::left | canvas::middle);
         DrawText(cnv, r.detected ? r.noteRight : std::string("-"), side, mTheme.ModalTextMuted(),
                  {b.right - 30.0f, noteY + 10.0f}, canvas::right | canvas::middle);
+
+        if (mFretMode && r.detected)
+        {
+            DrawText(cnv, "FRET", Font(Weight::SemiBold).size(11.0f), mTheme.ModalTextMuted(),
+                     {(b.left + b.right) * 0.5f, noteY - 42.0f}, canvas::center | canvas::middle);
+        }
+
         DrawText(cnv, r.detected ? r.note : std::string("-"), Font(Weight::Regular).size(72.0f),
                  r.detected ? mTheme.ModalText() : mTheme.ModalTextMuted(), {(b.left + b.right) * 0.5f, noteY},
                  canvas::center | canvas::middle);
     }
 
-    void Set(const guitarfx::uiclient::TunerModel::Reading& reading)
+    /// The reading, and the fret it is nearest while the intonation check has a string set
+    /// (tuner.ts's intonationReadout): the fret takes the note's place and its cents the needle.
+    void Set(const guitarfx::uiclient::TunerModel::Reading& reading,
+             const std::optional<guitarfx::uiclient::intonation::FretReading>& fret = std::nullopt)
     {
         mReading = reading;
+        mFretMode = fret.has_value();
+
+        if (fret && reading.detected)
+        {
+            using guitarfx::uiclient::TunerModel;
+            mReading.note = std::to_string(fret->fret);
+            mReading.noteLeft = fret->fret > 0 ? std::to_string(fret->fret - 1) : std::string();
+            mReading.noteRight =
+                fret->fret < guitarfx::uiclient::intonation::kMaxFret ? std::to_string(fret->fret + 1) : std::string();
+            mReading.cents = fret->cents;
+            mReading.inTune = std::abs(fret->cents) < TunerModel::kInTuneCents;
+            mReading.needle = std::clamp(0.5 + (fret->cents / 50.0) * 0.45, 0.05, 0.95);
+        }
     }
 
   private:
     const Theme& mTheme;
+    bool mCompact = false;
     guitarfx::uiclient::TunerModel::Reading mReading;
+    bool mFretMode = false;
 };
 
 void Shell::OpenTuner()
 {
     auto& commands = mSession.Commands();
-    auto face = std::make_shared<TunerFace>(mTheme);
+    auto face = std::make_shared<TunerFace>(mTheme, gTunerIntonation);
     auto model = std::make_shared<guitarfx::uiclient::TunerModel>();
     const auto setReference = [&commands](double hz) {
         commands.SetTunerReference(std::clamp(std::round(hz * 10.0) / 10.0, 400.0, 480.0));
@@ -201,9 +251,59 @@ void Shell::OpenTuner()
         }
     };
 
-    auto sync = [this, face, model, mute, live, reference, units] {
+    // ── The intonation check: its switch in the header, and its panel and buttons under the face ──
+    auto& intonation = Intonation();
+    intonation.ResetReadings();
+    // On, it takes the accent, as the web UI's .tuner-intonation-btn.active.
+    auto intonationBtn = std::make_shared<Button>(mTheme, "Intonation", nullptr,
+                                                  gTunerIntonation ? Button::Style::Primary : Button::Style::Plain);
+    intonationBtn->OnClick([this] {
+        gTunerIntonation = !gTunerIntonation;
+        // The dialog changes height: it opens again, after this click is done with its button.
+        mSession.PostToUi([this] {
+            gTunerReopening = true;
+            OpenTuner();
+        });
+    });
+    auto panel = std::make_shared<IntonationPanel>(mTheme, IntonationPanel::Part::Status);
+    auto strings = std::make_shared<IntonationPanel>(mTheme, IntonationPanel::Part::Strings);
+    auto setOpen = std::make_shared<Button>(mTheme, "Set open string", nullptr, Button::Style::Primary);
+    auto newString = std::make_shared<Button>(mTheme, "New string");
+    auto clear = std::make_shared<Button>(mTheme, "Clear results");
+    // The last reading handed to the check: the feed may notify more than once per reading.
+    auto lastReading = std::make_shared<std::uint64_t>(mState.tuner.readings);
+
+    auto sync = [this, face, model, mute, live, reference, units, panel, strings, setOpen, newString, clear,
+                 lastReading] {
         const auto& t = mState.tuner;
-        face->Set(model->Push(t.detected, t.noteName, t.octave, t.centOffset, t.frequency));
+        auto& check = Intonation();
+        check.SetReferenceFrequency(t.referenceFrequency);
+
+        if (t.readings != *lastReading)
+        {
+            *lastReading = t.readings;
+            check.Push({t.detected, t.frequency, t.levelDb});
+        }
+
+        const auto reading = model->Push(t.detected, t.noteName, t.octave, t.centOffset, t.frequency);
+        face->Set(reading, gTunerIntonation && reading.detected ? check.Readout(reading.frequency) : std::nullopt);
+
+        if (gTunerIntonation)
+        {
+            const auto view = check.GetView();
+            setOpen->Enabled(!view.hasString && view.candidate.has_value());
+            newString->Enabled(view.hasString);
+            clear->Enabled(!view.strings.empty());
+            panel->Set(view);
+            strings->Set(view);
+
+            for (el::element* e : std::initializer_list<el::element*>{panel.get(), strings.get(), setOpen.get(),
+                                                                      newString.get(), clear.get()})
+            {
+                mSession.Repaint(*e);
+            }
+        }
+
         // As the web UI's .tuner-mute-btn: muted, it takes the accent.
         mute->Ink(t.liveMode ? mTheme.ModalTextMuted() : mTheme.Accent());
         live->Set(t.liveMode);
@@ -220,20 +320,53 @@ void Shell::OpenTuner()
         gTunerShowsHz = index == 1;
         sync();
     };
+    setOpen->OnClick([sync] {
+        Intonation().SetOpenString();
+        sync();
+    });
+    newString->OnClick([sync] {
+        Intonation().NewString();
+        sync();
+    });
+    clear->OnClick([sync] {
+        Intonation().Clear();
+        sync();
+    });
+
+    constexpr float kButtonsHeight = 48.0f;
+    Ptr body = face;
+
+    if (gTunerIntonation)
+    {
+        // The web UI's order: the step, the measurement and advice, the buttons, then the strings.
+        body = Col({face, panel,
+                    FixedHeight(kButtonsHeight, Pad(20, 0, 20, 8,
+                                                    Middle(Row({Middle(setOpen), HGap(8), Middle(newString), HGap(8),
+                                                                Middle(clear), Stretch()})))),
+                    strings});
+    }
 
     ShowDialog({.title = "Tuner",
-                .body = face,
+                .body = body,
                 .footerLeft = Row(
                     {Middle(units), Stretch(), Middle(live), HGap(8), Middle(liveLabel), Stretch(), Middle(reference)}),
-                .headerExtras = {mute},
+                .headerExtras = {intonationBtn, mute},
                 .width = 560.0f,
-                .height = kDialogHeaderHeight + TunerFace::kHeight + kDialogFooterHeight + 14.0f,
+                .height = kDialogHeaderHeight + face->Height() + kDialogFooterHeight + 14.0f +
+                          (gTunerIntonation ? panel->Height() + kButtonsHeight + strings->Height() : 0.0f),
                 .padX = 0.0f,
                 .padY = 0.0f});
 
     // The tuner listens only while it is open.
     mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Tuner, sync));
-    mOnOverlayClosed = [&commands] { commands.SetTunerActive(false); };
+    // ShowDialog closed the dialog it replaces first, so a reopening is over by here.
+    gTunerReopening = false;
+    mOnOverlayClosed = [&commands] {
+        if (!gTunerReopening)
+        {
+            commands.SetTunerActive(false);
+        }
+    };
     commands.SetTunerActive(true);
     sync();
 }

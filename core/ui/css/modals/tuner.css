@@ -435,3 +435,211 @@
 .tuner-display.no-signal .current-note {
   color: var(--modal-text-muted);
 }
+
+/* ── Intonation check (tunerIntonationView.ts) ─────────────────────────────── */
+
+.tuner-intonation-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--modal-border-medium);
+  border-radius: 6px;
+  background: var(--modal-input-bg);
+  color: var(--modal-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tuner-intonation-btn:hover:not(.active) {
+  background: var(--modal-close-hover);
+  color: var(--modal-text);
+}
+
+.tuner-intonation-btn.active {
+  background: var(--color-accent);
+  color: var(--text-on-accent);
+  border-color: var(--color-accent-dark);
+}
+
+/* The fret number takes the note's place; a caption says it is a fret. */
+.tuner-display.fret-mode .current-note {
+  position: relative;
+}
+
+.tuner-display.fret-mode .current-note::before {
+  content: "FRET";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--modal-text-muted);
+}
+
+.tuner-intonation {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px 16px;
+  background: var(--modal-bg);
+  border-top: 1px solid var(--modal-border-medium);
+}
+
+.tuner-intonation[hidden],
+.tuner-intonation [hidden] {
+  display: none !important;
+}
+
+.tuner-intonation-hint,
+.tuner-intonation-advice {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--modal-text-secondary);
+}
+
+.tuner-intonation-advice:empty {
+  display: none;
+}
+
+.tuner-intonation-result {
+  --quality-colour: var(--modal-border-medium);
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--modal-border-medium);
+  border-left: 4px solid var(--quality-colour);
+  background: var(--modal-bg-raised);
+}
+
+.tuner-intonation-result-fret {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--modal-text);
+}
+
+.tuner-intonation-result-cents {
+  font-size: 16px;
+  color: var(--modal-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tuner-intonation-result-quality {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--quality-colour);
+}
+
+.tuner-intonation-result[data-quality=""] .tuner-intonation-result-quality {
+  font-weight: 400;
+  color: var(--modal-text-muted);
+}
+
+:is(.tuner-intonation-result, .tuner-intonation-chip)[data-quality="excellent"],
+:is(.tuner-intonation-result, .tuner-intonation-chip)[data-quality="good"] {
+  --quality-colour: var(--color-success);
+}
+
+:is(.tuner-intonation-result, .tuner-intonation-chip)[data-quality="fair"] {
+  --quality-colour: var(--color-accent);
+}
+
+:is(.tuner-intonation-result, .tuner-intonation-chip)[data-quality="poor"] {
+  --quality-colour: var(--color-warning);
+}
+
+.tuner-intonation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tuner-intonation-action {
+  padding: 7px 12px;
+  border: 1px solid var(--modal-border-medium);
+  border-radius: 6px;
+  background: var(--modal-input-bg);
+  color: var(--modal-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tuner-intonation-action:hover:not(:disabled) {
+  background: var(--modal-close-hover);
+}
+
+.tuner-intonation-action.primary:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--text-on-accent);
+  border-color: var(--color-accent-dark);
+}
+
+.tuner-intonation-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tuner-intonation-strings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.tuner-intonation-string {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.tuner-intonation-string.current {
+  border-color: var(--modal-border-medium);
+  background: var(--modal-bg-raised);
+}
+
+.tuner-intonation-string-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--modal-text);
+}
+
+.tuner-intonation-string-frets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tuner-intonation-string-empty {
+  font-size: 12px;
+  color: var(--modal-text-muted);
+}
+
+.tuner-intonation-string-advice {
+  grid-column: 2;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--modal-text-secondary);
+}
+
+.tuner-intonation-chip {
+  --quality-colour: var(--modal-border-medium);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--quality-colour);
+  font-size: 12px;
+  color: var(--modal-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tuner-intonation-chip b {
+  color: var(--quality-colour);
+}

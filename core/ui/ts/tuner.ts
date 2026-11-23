@@ -1,6 +1,13 @@
 import { postMessage } from "./bridge.js";
 import { appendLog } from "./logging.js";
 import { getCheckmarkSvg } from "./iconAssets.js";
+import {
+  initializeTunerIntonation,
+  intonationReadout,
+  pushIntonationReading,
+  resetIntonationReadings,
+  setIntonationReference,
+} from "./tunerIntonationView.js";
 
 // Note names for display
 const NOTE_NAMES = ["C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B"];
@@ -48,6 +55,8 @@ interface TunerData {
   frequency?: number;
   centOffset?: number;
   confidence?: number;
+  /** The input level over the reading, dBFS: a jump in it is a new pluck. */
+  levelDb?: number;
 }
 
 interface TunerSample {
@@ -202,6 +211,10 @@ export function initializeTuner(): void {
     }
   });
 
+  initializeTunerIntonation(() => {
+    if (tunerState.lastDetection) updateTunerDisplay(tunerState.lastDetection);
+  });
+
   appendLog("Tuner initialized");
 }
 
@@ -212,6 +225,7 @@ export function openTuner(): void {
   tunerState.isOpen = true;
 
   resetTunerSamples();
+  resetIntonationReadings();
 
   // Always start the tuner when modal opens
   startTuner();
@@ -233,6 +247,7 @@ export function closeTuner(): void {
   tunerState.isOpen = false;
 
   resetTunerSamples();
+  resetIntonationReadings();
 
   // Stop the tuner
   stopTuner();
@@ -328,6 +343,7 @@ function onReferenceChange(): void {
   }
 
   tunerState.referenceFrequency = value;
+  setIntonationReference(value);
 
   postMessage({
     type: "tuner",
@@ -343,6 +359,7 @@ function adjustReference(delta: number): void {
 
   const newValue = Math.max(400, Math.min(480, tunerState.referenceFrequency + delta));
   tunerState.referenceFrequency = newValue;
+  setIntonationReference(newValue);
   tunerRefInput.value = newValue.toFixed(1);
 
   postMessage({
@@ -359,6 +376,9 @@ export function handleTunerUpdate(data: TunerData): void {
     appendLog("Tuner update ignored - modal not open");
     return;
   }
+
+  // The intonation check measures each note's sustain itself, from the unsmoothed readings.
+  pushIntonationReading({ detected: data.detected, frequency: data.frequency, levelDb: data.levelDb });
 
   if (!data.detected) {
     resetTunerSamples();
@@ -405,6 +425,7 @@ function updateTunerDisplay(data: TunerData): void {
   if (!data.detected) {
     // No pitch detected
     tunerDisplay.classList.add("no-signal");
+    tunerDisplay.classList.remove("fret-mode");
     tunerCurrentNote.textContent = "-";
     tunerNoteLeft.textContent = "-";
     tunerNoteRight.textContent = "-";
@@ -428,8 +449,17 @@ function updateTunerDisplay(data: TunerData): void {
   tunerNoteLeft.textContent = adjacentNotes.left;
   tunerNoteRight.textContent = adjacentNotes.right;
 
+  // With a string set for the intonation check, the readout is the fret and how far out it is.
+  const fretView = intonationReadout(data.frequency ?? 0);
+  tunerDisplay.classList.toggle("fret-mode", fretView !== null);
+  if (fretView) {
+    tunerCurrentNote.textContent = fretView.fret;
+    tunerNoteLeft.textContent = fretView.left;
+    tunerNoteRight.textContent = fretView.right;
+  }
+
   // Update cents/Hz display
-  const centOffset = data.centOffset ?? 0;
+  const centOffset = fretView ? fretView.cents : (data.centOffset ?? 0);
   if (tunerState.displayMode === "cents") {
     const sign = centOffset >= 0 ? "+" : "";
     tunerCentsValue.textContent = `${sign}${centOffset.toFixed(1)}`;
@@ -462,6 +492,7 @@ function updateTunerDisplay(data: TunerData): void {
 
 export function handleTunerStarted(referenceFrequency: number): void {
   tunerState.referenceFrequency = referenceFrequency;
+  setIntonationReference(referenceFrequency);
   if (tunerRefInput) {
     tunerRefInput.value = referenceFrequency.toFixed(1);
   }
@@ -474,6 +505,7 @@ export function handleTunerStopped(): void {
 
 export function handleTunerReferenceChanged(referenceFrequency: number): void {
   tunerState.referenceFrequency = referenceFrequency;
+  setIntonationReference(referenceFrequency);
   if (tunerRefInput) {
     tunerRefInput.value = referenceFrequency.toFixed(1);
   }
