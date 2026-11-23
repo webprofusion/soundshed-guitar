@@ -242,6 +242,9 @@
   "themes/stage-skin.css": {
     "skinRules": 152
   },
+  "themes/studio-1973-skin.css": {
+    "skinRules": 244
+  },
   "themes/studio-2003-skin.css": {
     "skinRules": 170
   },

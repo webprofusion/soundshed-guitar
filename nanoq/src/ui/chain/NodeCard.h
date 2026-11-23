@@ -4,6 +4,7 @@
 // note their bounds in. It paints from the theme; the strip decides where it goes.
 
 #include "ui/Drawn.h"
+#include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/DragScroll.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
@@ -358,54 +359,83 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             return on ? c : Mix(Mix(c, el::color{0.5f, 0.5f, 0.55f, c.alpha}, 0.35f), mTheme.Bar(), fade);
         };
 
-        // The shadow under it, and for the selected card a glow in its colour.
+        // A theme that draws its own modules (Studio 1973's cream caps): the cap as its web UI's,
+        // standing its wall proud of the tray, its border the category's unless the theme sets
+        // its own. Otherwise the shared look below.
+        const auto& skin = mTheme.Controls();
+        const NodeSkin& nodeSkin = mLook.selected ? skin.nodes.selected : skin.nodes.plain;
+        const bool skinned = nodeSkin.face.drawn;
+
+        if (skinned)
         {
-            auto state = cnv.new_state();
+            const el::color category = mLook.missing    ? el::rgba(232, 76, 76, 153)
+                                       : mLook.selected ? tint
+                                       : boundary       ? Mix(tint, mTheme.Border(), 0.6f)
+                                                        : Mix(tint, mTheme.Border(), 0.42f);
+            const std::uint32_t border = nodeSkin.fixedBorder && !mLook.missing ? 0u : Theme::ArgbOf(ghost(category));
+            const el::rect cap{r.left, r.top, r.right, r.bottom + nodeSkin.face.wall};
+            DrawKey(cnv, mTheme, cap, nodeSkin.face,
+                    mLook.selected ? skin.backdrops.nodeSelected : skin.backdrops.nodePlain, mHover && !mLook.selected,
+                    false, border);
+
+            if (!on)
+            {
+                // Bypassed: faded toward the tray, as the web UI's opacity.
+                cnv.fill_style(mTheme.Bar().opacity(1.0f - fade));
+                cnv.fill_round_rect(cap, nodeSkin.face.box.radius);
+            }
+        }
+        else
+        {
+            // The shadow under it, and for the selected card a glow in its colour.
+            {
+                auto state = cnv.new_state();
+
+                if (mLook.selected)
+                {
+                    cnv.shadow_style(el::point{0.0f, 0.0f}, 22.0f, tint.opacity(0.24f));
+                }
+                else
+                {
+                    cnv.shadow_style(el::point{0.0f, 3.0f}, 8.0f, el::rgba(0, 0, 0, on ? 90 : 40));
+                }
+
+                cnv.fill_style(ghost(face));
+                cnv.fill_round_rect(r, kRadius);
+            }
+            // A wash of the category colour from the top, and a shade at the foot.
+            {
+                auto state = cnv.new_state();
+                const el::point top{r.left + r.width() * 0.5f, r.top};
+                artist::canvas::radial_gradient wash{top, 0.0f, top, std::max(r.width() * 0.6f, r.height() * 0.7f)};
+                wash.add_color_stop(0.0f, tint.opacity(0.16f * fade));
+                wash.add_color_stop(1.0f, tint.opacity(0.0f));
+                cnv.fill_style(wash);
+                cnv.fill_round_rect(r, kRadius);
+
+                artist::canvas::linear_gradient shade{r.top_left(), r.bottom_left()};
+                shade.add_color_stop(0.55f, el::rgba(0, 0, 0, 0));
+                shade.add_color_stop(1.0f, el::rgba(0, 0, 0, 26));
+                cnv.fill_style(shade);
+                cnv.fill_round_rect(r, kRadius);
+            }
+
+            // The border: the category colour mixed into the border colour, full strength with an inner
+            // ring when selected; red when its file is missing.
+            const el::color border = mLook.missing    ? el::rgba(232, 76, 76, 153)
+                                     : mLook.selected ? tint
+                                     : boundary       ? Mix(tint, mTheme.Border(), 0.6f)
+                                                      : Mix(tint, mTheme.Border(), 0.42f);
+            cnv.stroke_style(ghost(border));
+            cnv.line_width(mLook.selected ? 2.0f : 1.0f);
+            cnv.stroke_round_rect(mLook.selected ? r.inset(0.5f, 0.5f) : r, kRadius);
 
             if (mLook.selected)
             {
-                cnv.shadow_style(el::point{0.0f, 0.0f}, 22.0f, tint.opacity(0.24f));
+                cnv.stroke_style(tint.opacity(0.36f));
+                cnv.line_width(1.0f);
+                cnv.stroke_round_rect(r.inset(-1.0f, -1.0f), kRadius + 1.0f);
             }
-            else
-            {
-                cnv.shadow_style(el::point{0.0f, 3.0f}, 8.0f, el::rgba(0, 0, 0, on ? 90 : 40));
-            }
-
-            cnv.fill_style(ghost(face));
-            cnv.fill_round_rect(r, kRadius);
-        }
-        // A wash of the category colour from the top, and a shade at the foot.
-        {
-            auto state = cnv.new_state();
-            const el::point top{r.left + r.width() * 0.5f, r.top};
-            artist::canvas::radial_gradient wash{top, 0.0f, top, std::max(r.width() * 0.6f, r.height() * 0.7f)};
-            wash.add_color_stop(0.0f, tint.opacity(0.16f * fade));
-            wash.add_color_stop(1.0f, tint.opacity(0.0f));
-            cnv.fill_style(wash);
-            cnv.fill_round_rect(r, kRadius);
-
-            artist::canvas::linear_gradient shade{r.top_left(), r.bottom_left()};
-            shade.add_color_stop(0.55f, el::rgba(0, 0, 0, 0));
-            shade.add_color_stop(1.0f, el::rgba(0, 0, 0, 26));
-            cnv.fill_style(shade);
-            cnv.fill_round_rect(r, kRadius);
-        }
-
-        // The border: the category colour mixed into the border colour, full strength with an inner
-        // ring when selected; red when its file is missing.
-        const el::color border = mLook.missing    ? el::rgba(232, 76, 76, 153)
-                                 : mLook.selected ? tint
-                                 : boundary       ? Mix(tint, mTheme.Border(), 0.6f)
-                                                  : Mix(tint, mTheme.Border(), 0.42f);
-        cnv.stroke_style(ghost(border));
-        cnv.line_width(mLook.selected ? 2.0f : 1.0f);
-        cnv.stroke_round_rect(mLook.selected ? r.inset(0.5f, 0.5f) : r, kRadius);
-
-        if (mLook.selected)
-        {
-            cnv.stroke_style(tint.opacity(0.36f));
-            cnv.line_width(1.0f);
-            cnv.stroke_round_rect(r.inset(-1.0f, -1.0f), kRadius + 1.0f);
         }
 
         // A dragged card would land after this one, or a held one is picked up: an accent ring.
@@ -416,16 +446,19 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             cnv.stroke_round_rect(r.inset(-3.0f, -3.0f), kRadius + 3.0f);
         }
 
-        // The highlight along the top edge.
-        cnv.stroke_style(Mix(el::rgba(255, 255, 255, 255), tint, 0.08f).opacity(0.18f * fade));
-        cnv.line_width(1.0f);
-        cnv.begin_path();
-        cnv.move_to(r.left + kRadius, r.top + 1.5f);
-        cnv.line_to(r.right - kRadius, r.top + 1.5f);
-        cnv.stroke();
+        // The highlight along the top edge (a skinned cap has its own).
+        if (!skinned)
+        {
+            cnv.stroke_style(Mix(el::rgba(255, 255, 255, 255), tint, 0.08f).opacity(0.18f * fade));
+            cnv.line_width(1.0f);
+            cnv.begin_path();
+            cnv.move_to(r.left + kRadius, r.top + 1.5f);
+            cnv.line_to(r.right - kRadius, r.top + 1.5f);
+            cnv.stroke();
+        }
 
         // The underglow: a strip of the category colour along the foot, wider when selected.
-        if (on)
+        if (on && !skinned)
         {
             auto state = cnv.new_state();
             const float inset = r.width() * (mLook.selected ? 0.10f : 0.22f);
@@ -499,6 +532,14 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             {
                 const el::point c{cx, y + 15.0f};
                 auto state = cnv.new_state();
+
+                if (skinned)
+                {
+                    // The theme's well for the icon (Studio 1973's dark jewel), under the lit badge.
+                    DrawControlBox(cnv, el::rect{c.x - 15.0f, c.y - 15.0f, c.x + 15.0f, c.y + 15.0f}, nodeSkin.icon,
+                                   1.0f, 15.0f);
+                }
+
                 artist::canvas::radial_gradient badge{el::point{c.x, c.y - 3.5f}, 0.0f, el::point{c.x, c.y - 3.5f},
                                                       15.0f * 1.1f};
                 badge.add_color_stop(0.0f, tint.opacity(0.28f * fade));
@@ -515,8 +556,10 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             }
 
             // The name, in capitals as the web UI's are, the effect under it, and the model's badge.
-            const el::color ink = ghost(mTheme.Text());
-            const auto nameFont = Font(Weight::Medium).size(CardNameSize());
+            // A skinned module's name in its theme's lettering (Studio 1973's Fraunces).
+            const el::color ink = ghost(skinned ? Theme::Argb(nodeSkin.name.colour) : mTheme.Text());
+            const auto nameFont =
+                skinned ? ControlFont(nodeSkin.name, CardNameSize()) : Font(Weight::Medium).size(CardNameSize());
             const auto detailFont = Font(Weight::Medium).size(CardDetailSize());
             const float textWidth = std::min(160.0f, r.width() - 16.0f);
             const float nameRow = metrics::Touch() ? 13.0f : 12.0f;
@@ -527,7 +570,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             if (!mLook.detail.empty())
             {
                 FillText(cnv, Ellipsize(cnv, mLook.detail, detailFont, textWidth), detailFont,
-                         ghost(Mix(tint, mTheme.TextMuted(), 0.26f)),
+                         ghost(skinned ? Theme::Argb(nodeSkin.detail) : Mix(tint, mTheme.TextMuted(), 0.26f)),
                          el::rect{r.left + 6.0f, y, r.right - 6.0f, y + 11.0f}, HAlign::Centre);
                 y += 13.0f;
             }

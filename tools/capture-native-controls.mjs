@@ -39,16 +39,33 @@ const SHEETS = linkedSheets(UI, applyThemeStylesheets);
 const CHECK = process.argv.includes('--check');
 
 // The effect panel's markup, inside the ancestors the web UI puts it in (so rules scoped by them
-// apply): a plot's card, the tabs, and a group with a switch (on and off) and a knob.
+// apply): a plot's card, the tabs, and a group with a switch (on and off) and a knob. Round it,
+// in their own places: the preset's display and its keys, two of the chain's modules (one
+// chosen), a dialog's keys (plain, latched, primary) and the footer's tempo.
 const FIXTURE = `<!doctype html><html class="is-active"><head><meta charset="utf-8">
 <base href="${pathToFileURL(UI).href}/">
 ${SHEETS.map((s) => `<link rel="stylesheet" href="css/${s}">`).join('\n')}
 <style>*, *::before, *::after { transition: none !important; animation: none !important; }</style>
 </head><body class="is-standalone"><div id="app" class="prevent-select">
 <header class="icon-bar film-grain"></header>
-<section class="control-bar film-grain"></section>
-<div class="signal-path-stage" style="position: relative;"><section class="signal-path-bar film-grain" id="signal-path-bar"></section></div>
+<section class="control-bar film-grain"><div class="control-bar-group"><div class="vu-meter"><span class="vu-readout">-∞ dB</span>
+<div class="vu-segments"><div class="vu-seg"></div></div><div class="vu-gauge"><div class="vu-needle"></div></div></div></div>
+<div class="control-bar-group preset-group"><div class="preset-row preset-toolbar-row"><div class="preset-toolbar"><div class="preset-toolbar-group">
+<button class="preset-action-btn" id="tool-key" type="button">Edit</button></div></div></div>
+<div class="preset-row preset-selector-row"><button class="nav-btn preset-nav-btn" id="nav-key" type="button"></button>
+<div class="preset-selector" id="preset-selector"><button class="preset-favorite" type="button"></button>
+<button class="preset-chooser-label" id="preset-chooser-label" type="button">Default Preset</button>
+<span class="preset-selector-status" id="preset-selector-status">Factory</span></div></div></div></section>
+<div class="signal-path-stage" style="position: relative;"><section class="signal-path-bar film-grain" id="signal-path-bar">
+<div class="signal-path-nodes" id="signal-path-nodes">
+<div class="signal-node amp" id="node-plain" tabindex="0"><div class="node-icon"></div><div class="node-info"><div class="node-name">Amp</div><div class="node-type">Heavy American</div></div></div>
+<div class="signal-node amp selected" id="node-selected" tabindex="0"><div class="node-icon"></div><div class="node-info"><div class="node-name">Amp</div><div class="node-type">Heavy American</div></div></div>
+<div class="signal-node delay" id="node-plain-2" tabindex="0"><div class="node-icon"></div><div class="node-info"><div class="node-name">Delay</div><div class="node-type">Tape</div></div></div>
+<div class="signal-node delay selected" id="node-selected-2" tabindex="0"><div class="node-icon"></div><div class="node-info"><div class="node-name">Delay</div><div class="node-type">Tape</div></div></div>
+</div></section></div>
 <main class="main-content film-grain">
+<div class="key-samples"><button class="btn" id="key-plain" type="button">Cancel</button><button class="btn active" id="key-on" type="button">On</button>
+<button class="btn btn-primary" id="key-primary" type="button">Save</button></div>
 <div id="panel-visualizer" class="tab-panel active"><div class="visualization-panel">
 <div id="effect-visualization" class="effect-visualization has-selection has-equipment-image">
 <section id="node-params-panel" class="node-params-panel visible"><div class="node-params-body">
@@ -67,7 +84,7 @@ ${SHEETS.map((s) => `<link rel="stylesheet" href="css/${s}">`).join('\n')}
 <div class="node-param-group"><span class="node-param-label">Bright</span><label class="toggle-switch" id="sw-off"><input type="checkbox"><span class="toggle-slider"></span></label><span class="node-param-value">Off</span></div>
 <div class="node-param-group"><span class="node-param-label">Gain</span><div class="knob node-param-knob" style="--knob-pct: 0.5"><div class="knob-indicator"></div></div><span class="node-param-value">0.50</span></div>
 </div></div></div></div></div></div></div></div></section></div></section></div></div></div></main>
-<footer class="footer-bar film-grain"></footer>
+<footer class="footer-bar film-grain"><button class="footer-btn bpm-display metronome-only" id="bpm" type="button">120.0 BPM</button></footer>
 <div class="modal" style="display: block"><div class="modal-content"><div class="modal-header"><h3>Settings</h3></div></div></div>
 </div></body></html>`;
 
@@ -205,20 +222,21 @@ const READ = String.raw`async (classes) => {
   };
   // Every layer of an element's background, top layer first: pictures with their place, size
   // and tiling, linear and radial gradients with their stops, and the colour under them all.
-  const backdrop = (el) => {
-    const s = cs(el);
+  const backdrop = (el, pseudo) => {
+    const s = cs(el, pseudo);
     const pos = layers(s.backgroundPosition), size = layers(s.backgroundSize), rep = layers(s.backgroundRepeat);
     const out = layers(s.backgroundImage).map((layer, i) => {
+      // Where a layer sits and how it tiles: a picture's, and a linear gradient's too (a band
+      // sized and placed along an edge, say). Auto on a gradient is the whole box.
+      const sz = (size[i % size.length] || 'auto').trim();
+      const wh = sz.split(/\s+/);
+      const r = (rep[i % rep.length] || 'repeat').trim().split(/\s+/);
+      const rx = r[0] === 'repeat' || r[0] === 'repeat-x', ry = r[0] === 'repeat' || r[0] === 'repeat-y' || r[1] === 'repeat';
+      const tile = { ...place(pos[i % pos.length]),
+        mode: sz === 'cover' ? 1 : sz === 'contain' ? 2 : 0, w: length(wh[0]), h: length(wh[1] ?? 'auto'),
+        repeatX: r.length === 2 ? r[0] === 'repeat' : rx, repeatY: r.length === 2 ? r[1] === 'repeat' : ry };
       const url = layer.match(/^url\("?([^")]+)"?\)/);
-      if (url) {
-        const sz = (size[i % size.length] || 'auto').trim();
-        const wh = sz.split(/\s+/);
-        const r = (rep[i % rep.length] || 'repeat').trim().split(/\s+/);
-        const rx = r[0] === 'repeat' || r[0] === 'repeat-x', ry = r[0] === 'repeat' || r[0] === 'repeat-y' || r[1] === 'repeat';
-        return { kind: 0, image: url[1], ...place(pos[i % pos.length]),
-          mode: sz === 'cover' ? 1 : sz === 'contain' ? 2 : 0, w: length(wh[0]), h: length(wh[1] ?? 'auto'),
-          repeatX: r.length === 2 ? r[0] === 'repeat' : rx, repeatY: r.length === 2 ? r[1] === 'repeat' : ry };
-      }
+      if (url) return { kind: 0, image: url[1], ...tile };
       const g = layer.match(/^(repeating-)?(linear|radial)-gradient\((.*)\)$/s);
       if (!g) return { kind: -1, text: layer };
       const args = layers(g[3]);
@@ -228,7 +246,7 @@ const READ = String.raw`async (classes) => {
         const turn = { 'to top': 0, 'to right': 90, 'to bottom': 180, 'to left': 270 };
         if (/^-?[\d.]+deg$/.test(first)) { angle = parseFloat(first); args.shift(); }
         else if (turn[first] !== undefined) { angle = turn[first]; args.shift(); }
-        return { kind: 1, angle, repeating: !!g[1], stops: stopsOf(args) };
+        return { kind: 1, ...tile, angle, repeating: !!g[1], stops: stopsOf(args) };
       }
       // radial-gradient([<size>] [at <position>], stops): an ellipse, sized in per cent or px.
       let shape = '';
@@ -279,7 +297,52 @@ const READ = String.raw`async (classes) => {
   });
   const tabs = document.querySelectorAll('.node-param-tab');
   const shell = document.querySelector('.default-effect-shell');
+  // Cheeks: a theme's ::before and ::after on the effect panel, set outside its sides (Studio
+  // 1973's walnut). Only drawn pieces count, not a pseudo-element used for something else.
+  const panel = document.getElementById('node-params-panel');
+  const cheek = (pseudo) => {
+    const s = cs(panel, pseudo);
+    return s.content !== 'none' && s.position === 'absolute' && px(s.width) > 0 && px(pseudo === '::before' ? s.left : s.right) < 0;
+  };
+  const NONE = { colour: [0, 0, 0, 0], layers: [] };
+  // A key: its box, the side wall it stands on (its box-shadow's hard bands straight down, top
+  // to bottom: how far it stands proud), its legend's ink and its background's layers. \`look\`
+  // is what it computes to, for telling a theme's own keys from its base theme's.
+  const key = (el) => {
+    const s = cs(el);
+    const all = shadows(s.boxShadow);
+    const walls = all.filter((w) => !w.inset && w.blur === 0 && w.x === 0 && w.spread === 0 && w.y > 0 && w.colour[3] > 0)
+      .sort((a, b) => a.y - b.y);
+    const b = box(el);
+    b.shadows = all.filter((w) => !walls.includes(w));
+    return { box: b, wall: walls.length ? walls[walls.length - 1].y : 0, wallTop: walls[0]?.colour ?? [0, 0, 0, 0],
+      wallBottom: walls[walls.length - 1]?.colour ?? [0, 0, 0, 0], press: px(words(s.translate || '')[1] || '0'),
+      ink: colour(s.color), backdrop: backdrop(el),
+      look: [s.backgroundImage, s.backgroundColor, s.boxShadow, s.borderTopColor, s.borderTopLeftRadius, s.color].join('|') };
+  };
+  // A display (the preset's name, the tempo): its box, its ink and type, and the glow round its
+  // lettering (its first text-shadow).
+  const display = (el, label) => {
+    const k = key(el), t = cs(label);
+    const glow = layers(t.textShadow)[0] || '';
+    const g = glow.replace(COLOUR, '').trim().split(/\s+/).map(px);
+    return { ...k, text: text(label), glow: colour((glow.match(COLOUR) || [''])[0]), glowX: g[0] || 0, glowY: g[1] || 0,
+      glowBlur: g[2] || 0, look: k.look + '|' + [t.color, t.textShadow].join('|') };
+  };
+  // A module, and another of a different category beside it: where their borders match, the
+  // theme draws its own border in place of the category's.
+  const nodeOf = (el, other) => {
+    const k = key(el);
+    return { ...k, name: text(el.querySelector('.node-name')), detail: colour(cs(el.querySelector('.node-type')).color),
+      icon: box(el.querySelector('.node-icon')), fixedBorder: cs(el).borderTopColor === cs(other).borderTopColor };
+  };
+  // The level meters' needle gauge, where a theme shows one in place of the ladder: its face
+  // picture and its size as laid out (zoom included).
+  const gaugeEl = document.querySelector('.vu-gauge');
+  const gaugeFace = cs(gaugeEl).display !== 'none' && cs(gaugeEl).backgroundImage.match(/url\("?([^")]+)"?\)/);
+  const gaugeBox = gaugeEl.getBoundingClientRect();
   return {
+    gauge: gaugeFace ? { face: gaugeFace[1], width: gaugeBox.width, height: gaugeBox.height } : null,
     knob: {
       size: D, inset: px(face.top), face: box(knob, '::before'), pointer,
       tick: { colour: colour(tick.backgroundColor), width: px(tick.width), height: px(tick.height), bottom: px(tick.bottom) },
@@ -300,6 +363,19 @@ const READ = String.raw`async (classes) => {
     body: text(document.body),
     title: text(document.querySelector('.default-effect-shell-title-text')),
     titleScale: await titleScale(document.querySelector('.default-effect-shell-title-text')),
+    keys: {
+      plain: key(document.getElementById('key-plain')), on: key(document.getElementById('key-on')),
+      primary: key(document.getElementById('key-primary')), tool: key(document.getElementById('tool-key')),
+      nav: key(document.getElementById('nav-key')),
+    },
+    nodes: {
+      plain: nodeOf(document.getElementById('node-plain'), document.getElementById('node-plain-2')),
+      selected: nodeOf(document.getElementById('node-selected'), document.getElementById('node-selected-2')),
+    },
+    presetDisplay: display(document.getElementById('preset-selector'), document.getElementById('preset-chooser-label')),
+    tempo: display(document.getElementById('bpm'), document.getElementById('bpm')),
+    cheekWidth: cheek('::before') ? px(cs(panel, '::before').width) : 0,
+    cheekRadius: cheek('::before') ? px(cs(panel, '::before').borderTopLeftRadius) : 0,
     backdrops: {
       header: backdrop(document.querySelector('.icon-bar')),
       controlBar: backdrop(document.querySelector('.control-bar')),
@@ -310,6 +386,8 @@ const READ = String.raw`async (classes) => {
       shell: backdrop(shell),
       modal: backdrop(document.querySelector('.modal-content')),
       modalHeader: backdrop(document.querySelector('.modal-header')),
+      cheekLeft: cheek('::before') ? backdrop(panel, '::before') : NONE,
+      cheekRight: cheek('::after') ? backdrop(panel, '::after') : NONE,
     },
   };
 }`;
@@ -463,7 +541,36 @@ const textInit = (t) =>
   `{${hex(t.colour)}, ${num(t.size)}, ${t.weight}, ${num(t.tracking)}, ${t.upper}, ${str(t.family)}}`;
 
 // The surfaces whose backgrounds are captured, in ControlSkin::Backdrops' order.
-const SURFACES = ['header', 'controlBar', 'chain', 'main', 'stage', 'footer', 'shell', 'modal', 'modalHeader'];
+const SURFACES = ['header', 'controlBar', 'chain', 'main', 'stage', 'footer', 'shell', 'modal', 'modalHeader', 'cheekLeft', 'cheekRight',
+  'keyPlain', 'keyOn', 'keyPrimary', 'keyTool', 'keyNav', 'nodePlain', 'nodeSelected', 'presetDisplay', 'tempo'];
+
+/** The keys', modules' and displays' backgrounds join the surfaces' (under the names above). */
+function withPieceBackdrops(c) {
+  const b = c.backdrops;
+  b.keyPlain = c.keys.plain.backdrop; b.keyOn = c.keys.on.backdrop; b.keyPrimary = c.keys.primary.backdrop;
+  b.keyTool = c.keys.tool.backdrop; b.keyNav = c.keys.nav.backdrop;
+  b.nodePlain = c.nodes.plain.backdrop; b.nodeSelected = c.nodes.selected.backdrop;
+  b.presetDisplay = c.presetDisplay.backdrop; b.tempo = c.tempo.backdrop;
+  return c;
+}
+
+/**
+ * Marks each key, module and display a theme draws its own way: one that computes to something
+ * other than its base theme's (the theme its first class names: Studio 1973's is the dark
+ * theme). The base themes' own are left to the native UI's plain look.
+ */
+function markDrawn(captured) {
+  for (const theme of MANIFEST.THEMES) {
+    const base = captured[theme.classes[0].replace(/^theme-/, '')];
+    const c = captured[theme.id];
+    const drawn = (mine, theirs) => (mine.drawn = !!base && base !== c && mine.look !== theirs.look);
+    for (const k of ['plain', 'on', 'primary', 'tool', 'nav']) drawn(c.keys[k], base?.keys[k] ?? c.keys[k]);
+    for (const k of ['plain', 'selected']) drawn(c.nodes[k], base?.nodes[k] ?? c.nodes[k]);
+    drawn(c.presetDisplay, base?.presetDisplay ?? c.presetDisplay);
+    drawn(c.tempo, base?.tempo ?? c.tempo);
+  }
+  return captured;
+}
 const MAX_STOPS = 4;
 const ident = (id, name) => `kBackdrop_${id.replace(/-(\w)/g, (_, c) => c.toUpperCase())}_${name}`;
 const lengthInit = (l) => `${num(l.v)}, ${l.unit}`;
@@ -473,8 +580,8 @@ function layerInit(layer) {
   const stops = layer.stops ?? [];
   if (stops.length > MAX_STOPS) throw new Error(`a gradient with ${stops.length} stops; raise MAX_STOPS`);
   const stopInits = stops.map((st) => `{${hex(st.c)}, ${num(st.at)}, ${st.px}}`);
-  const where = layer.kind === 1 ? '0.0f, 0.0f, 0.0f, 0.0f' : `${num(layer.fx)}, ${num(layer.px)}, ${num(layer.fy)}, ${num(layer.py)}`;
-  const size = layer.kind === 1 ? '0, 0.0f, 2, 0.0f, 2' : `${layer.mode ?? 0}, ${lengthInit(layer.w)}, ${lengthInit(layer.h)}`;
+  const where = `${num(layer.fx)}, ${num(layer.px)}, ${num(layer.fy)}, ${num(layer.py)}`;
+  const size = `${layer.mode ?? 0}, ${lengthInit(layer.w)}, ${lengthInit(layer.h)}`;
   return `{${layer.kind}, ${layer.kind === 0 ? asset(layer.image) : '""'}, ${where}, ${size}, ${!!layer.repeatX}, ${!!layer.repeatY}, ` +
     `${num(layer.angle ?? 0)}, ${!!layer.repeating}, ${stops.length}, {${stopInits.join(', ')}}}`;
 }
@@ -494,6 +601,12 @@ function backdropArrays(captured) {
 
 const backdropInit = (id, name, b) =>
   b.layers.length ? `{${hex(b.colour)}, ${ident(id, name)}, ${b.layers.length}}` : `{${hex(b.colour)}, nullptr, 0}`;
+
+const keyInit = (k) =>
+  `{${!!k.drawn}, ${boxInit(k.box)}, ${num(k.wall)}, ${hex(k.wallTop)}, ${hex(k.wallBottom)}, ${num(k.press)}, ${hex(k.ink)}}`;
+const nodeInit = (n) => `{${keyInit(n)}, ${textInit(n.name)}, ${hex(n.detail)}, ${boxInit(n.icon)}, ${n.fixedBorder}}`;
+const displayInit = (d) =>
+  `{${keyInit(d)}, ${textInit(d.text)}, ${hex(d.glow)}, ${num(d.glowX)}, ${num(d.glowY)}, ${num(d.glowBlur)}}`;
 
 function themeInit(id, c) {
   const k = c.knob;
@@ -519,6 +632,12 @@ function themeInit(id, c) {
     `     ${boxInit(c.shell)}, ${boxInit(c.section)}, ${boxInit(c.art)},`,
     `     ${boxInit(c.card)}, ${num(c.cardPadding)}, ${textInit(c.cardTitle)}, ${textInit(c.cardRange)}, ${boxInit(c.plot)},`,
     `     ${textInit(c.body)}, ${textInit(c.title)}, ${num(c.titleScale)},`,
+    `     ${num(c.cheekWidth)}, ${num(c.cheekRadius)},`,
+    `     ${c.gauge ? asset(c.gauge.face) : '""'}, ${num(c.gauge?.width ?? 0)}, ${num(c.gauge?.height ?? 0)},`,
+    `     {${['plain', 'on', 'primary', 'tool', 'nav'].map((k) => keyInit(c.keys[k])).join(',\n      ')}},`,
+    `     {${nodeInit(c.nodes.plain)},\n      ${nodeInit(c.nodes.selected)}},`,
+    `     ${displayInit(c.presetDisplay)},`,
+    `     ${displayInit(c.tempo)},`,
     `     {${SURFACES.map((name) => backdropInit(id, name, c.backdrops[name])).join(', ')}}},`,
   ].join('\n');
 }
@@ -642,7 +761,8 @@ struct BackdropStop
 ///    it plus \`offsetX\` pixels (and the same down), sized as given (\`sizeMode\` 0: a width and
 ///    a height, each in pixels, per cent of the box or auto), to cover (1) or fit (2) the box,
 ///    tiled across and down as \`repeatX\` and \`repeatY\` say.
-///  - A linear gradient (kind 1) at \`angle\` degrees (180 runs down), \`repeating\` or not.
+///  - A linear gradient (kind 1) at \`angle\` degrees (180 runs down), \`repeating\` or not,
+///    placed, sized and tiled as a picture is; auto (and cover or fit) is the whole box.
 ///  - A radial gradient (kind 2): an ellipse centred \`placeX\` of the box across plus
 ///    \`offsetX\` (and the same down), \`width\` and \`height\` its radii, its last stop at its edge.
 struct BackdropLayer
@@ -676,7 +796,9 @@ struct Backdrop
 
 /// The surfaces a theme dresses: the bars top to bottom (.icon-bar, .control-bar, the signal
 /// chain's, .footer-bar), the page under every panel (.main-content), the play page behind the
-/// effect (#panel-visualizer), the effect's shell, and a dialog and its header.
+/// effect (#panel-visualizer), the effect's shell, a dialog and its header, and the cheeks beside
+/// the effect's panel; then the faces of its keys, the chain's modules and its displays (see
+/// KeySkins, NodeSkins, DisplaySkin).
 struct Backdrops
 {
     Backdrop header;
@@ -688,6 +810,75 @@ struct Backdrops
     Backdrop shell;
     Backdrop modal;
     Backdrop modalHeader;
+    Backdrop cheekLeft;
+    Backdrop cheekRight;
+    Backdrop keyPlain;
+    Backdrop keyOn;
+    Backdrop keyPrimary;
+    Backdrop keyTool;
+    Backdrop keyNav;
+    Backdrop nodePlain;
+    Backdrop nodeSelected;
+    Backdrop presetDisplay;
+    Backdrop tempo;
+};
+
+/// A key as a theme draws it, where \`drawn\` (one the theme restyles from its base theme's; the
+/// native UI keeps its own look for the rest): its box (its face's layers are a Backdrops
+/// entry), the side wall it stands on (\`wall\` pixels of bands, \`wallTop\` down to
+/// \`wallBottom\`: how far it stands proud), how far down it is pressed (a latched key), and
+/// its legend's ink.
+struct KeySkin
+{
+    bool drawn;
+    ControlBox box;
+    float wall;
+    std::uint32_t wallTop;
+    std::uint32_t wallBottom;
+    float press;
+    std::uint32_t ink;
+};
+
+/// The keys: a dialog's (.btn), latched on (.btn.active), the confirming one (.btn-primary), the
+/// preset toolbar's (.preset-action-btn) and the arrows either side of the preset
+/// (.preset-nav-btn).
+struct KeySkins
+{
+    KeySkin plain;
+    KeySkin on;
+    KeySkin primary;
+    KeySkin tool;
+    KeySkin nav;
+};
+
+/// One of the chain's modules (.signal-node): its cap as a key, its name's lettering, its
+/// effect's ink, and the well its icon sits in. Its border is its category's colour, unless
+/// \`fixedBorder\` (the cap's own border is the same for every category).
+struct NodeSkin
+{
+    KeySkin face;
+    ControlText name;
+    std::uint32_t detail;
+    ControlBox icon;
+    bool fixedBorder;
+};
+
+struct NodeSkins
+{
+    NodeSkin plain;
+    NodeSkin selected;
+};
+
+/// A display (the preset's name, .preset-selector; the tempo, .bpm-display): its window as a
+/// key, the lettering in it, and the glow round the lettering (its first text-shadow).
+struct DisplaySkin
+{
+    KeySkin face;
+    ControlText text;
+    std::uint32_t glow;
+    float glowX;
+    float glowY;
+    float glowBlur;
 };
 
 // clang-format off
@@ -720,6 +911,20 @@ struct ControlSkin
     ControlText body;
     ControlText title;
     float titleScale;
+    /// Cheeks either side of the effect's panel, outside it (0 wide for none), their outer
+    /// corners rounded; their backgrounds are backdrops.cheekLeft and cheekRight.
+    float cheekWidth;
+    float cheekRadius;
+    /// The level meters as a needle gauge (Studio 1973's VU meters): the face picture, under the
+    /// UI's assets, and its size; no picture for the web UI's ladder of segments. The needle's
+    /// geometry is the face's (tools/studio-1973-theme-assets/vu-face.mjs).
+    std::string_view gaugeFace;
+    float gaugeWidth;
+    float gaugeHeight;
+    KeySkins keys;
+    NodeSkins nodes;
+    DisplaySkin presetDisplay;
+    DisplaySkin tempo;
     /// The backgrounds of the bars, the page, the effect's panel and a dialog.
     Backdrops backdrops;
 };
@@ -747,7 +952,7 @@ inline const ControlSkin& FindControlSkin(std::string_view id) noexcept
 `;
 }
 
-const captured = await capture();
+const captured = markDrawn(Object.fromEntries(Object.entries(await capture()).map(([id, c]) => [id, withPieceBackdrops(c)])));
 if (process.argv.includes('--json')) {
   console.log(JSON.stringify(captured, null, 1));
   process.exit(0);

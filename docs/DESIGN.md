@@ -33,6 +33,10 @@ Soundshed Guitar uses a token-driven, multi-theme design system built on CSS cus
   the dark theme drawn as a high-gain amp head (black diamond plate and tolex, rendered black knobs,
   red only for what is lit, heavy condensed type, and the effect panel in front of a black grille with
   valves glowing behind it)
+- `.theme-studio-1973` — Studio 1973 theme, applied together with `.theme-dark`: the dark theme drawn
+  as a 1970s control room (walnut and teak veneer, cream plastic keys, turned aluminium knobs, a padded
+  leather armrest, amber lamps behind black glass, and the effect panel in a walnut sleeve in front of an
+  out-of-focus control room)
 
 ### Semantic Color Roles
 

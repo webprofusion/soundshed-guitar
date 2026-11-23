@@ -110,6 +110,16 @@ export const THEMES = [
     palette: 'themes/studio-2003.css',
     skin: ['themes/studio-2003-skin.css'],
   },
+  {
+    id: 'studio-1973',
+    label: 'Studio 1973',
+    base: 'dark',
+    scheme: 'dark',
+    classes: ['theme-dark', 'theme-studio-1973'],
+    palette: 'themes/studio-1973.css',
+    skin: ['themes/studio-1973-skin.css'],
+    fonts: { title: 'Fraunces' },
+  },
 ] as const satisfies readonly ThemeDefinition[];
 
 /** A theme's stored name. */

@@ -143,3 +143,13 @@ export function renameFamily(font, family) {
   name.data = Buffer.concat([table, ...records.map((record) => record.bytes)]);
   return writeFont(font.readUInt32BE(0), tables);
 }
+
+/**
+ * `font` without the tables named. A static cut keeps its variable font's STAT table, which
+ * describes the axes the cut was pinned on; where those include more than weight (Fraunces's
+ * optical size, softness and wonk), DirectWrite names the cut's family after them and the
+ * family asked for is not found.
+ */
+export function dropTables(font, tags) {
+  return writeFont(font.readUInt32BE(0), readTables(font).filter((table) => !tags.includes(table.tag)));
+}

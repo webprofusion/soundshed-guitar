@@ -168,3 +168,11 @@ variable woff2 file.
 
 Copyright 2020 The Archivo Project Authors. Licensed under the SIL Open Font
 License, Version 1.1; the full text ships beside the font as `Archivo-OFL.txt`.
+
+## Fraunces
+
+The Studio 1973 theme's title and legend font, shipped in `core/ui/css/fonts/`
+as a Latin-subset variable woff2 file.
+
+Copyright 2018 The Fraunces Project Authors. Licensed under the SIL Open Font
+License, Version 1.1; the full text ships beside the font as `Fraunces-OFL.txt`.

@@ -10,6 +10,8 @@
 #include <elements.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -42,6 +44,15 @@ class Theme
     {
         return el::rgba(static_cast<std::uint8_t>(value >> 16), static_cast<std::uint8_t>(value >> 8),
                         static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(value >> 24));
+    }
+
+    /// The other way: a colour as 0xAARRGGBB.
+    [[nodiscard]] static std::uint32_t ArgbOf(el::color c) noexcept
+    {
+        const auto channel = [](float v) {
+            return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
+        };
+        return channel(c.alpha) << 24 | channel(c.red) << 16 | channel(c.green) << 8 | channel(c.blue);
     }
 
     [[nodiscard]] el::color Accent() const noexcept

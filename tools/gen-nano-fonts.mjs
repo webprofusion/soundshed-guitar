@@ -25,7 +25,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { renameFamily } from './nano-fonts/sfnt.mjs';
+import { dropTables, renameFamily } from './nano-fonts/sfnt.mjs';
 import { decodeWoff2 } from './nano-fonts/woff2.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -73,6 +73,21 @@ const FAMILIES = [
       ['Archivo-SemiBold.ttf', 'wght=600'],
       ['Archivo-Bold.ttf', 'wght=700'],
       ['Archivo-ExtraBold.ttf', 'wght=800'],
+    ],
+  },
+  {
+    // Studio 1973's titles and legends (its body text stays Inter): softness all the way up and
+    // the wonky letters on, as its skin sets them, at the small optical size its legends use.
+    source: 'Fraunces-VariableFont_SOFT,WONK,opsz,wght.latin.woff2',
+    family: 'Fraunces',
+    licence: 'Fraunces-OFL.txt',
+    // Its STAT names the pinned axes, which splits the cuts off into a family of their own in
+    // DirectWrite (see sfnt.mjs, dropTables).
+    dropTables: ['STAT'],
+    cuts: [
+      ['Fraunces-SemiBold.ttf', 'wght=600', 'SOFT=100', 'WONK=1', 'opsz=12'],
+      ['Fraunces-Bold.ttf', 'wght=700', 'SOFT=100', 'WONK=1', 'opsz=12'],
+      ['Fraunces-ExtraBold.ttf', 'wght=800', 'SOFT=100', 'WONK=1', 'opsz=12'],
     ],
   },
 ];
@@ -193,6 +208,8 @@ try {
 
       if (family.family)
         fs.writeFileSync(cut, renameFamily(fs.readFileSync(cut), family.family));
+      if (family.dropTables)
+        fs.writeFileSync(cut, dropTables(fs.readFileSync(cut), family.dropTables));
     }
 
     copyText(path.join(FONTS, family.licence), path.join(OUT, family.licence));

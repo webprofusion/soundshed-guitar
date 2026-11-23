@@ -116,7 +116,8 @@ struct BackdropStop
 ///    it plus `offsetX` pixels (and the same down), sized as given (`sizeMode` 0: a width and
 ///    a height, each in pixels, per cent of the box or auto), to cover (1) or fit (2) the box,
 ///    tiled across and down as `repeatX` and `repeatY` say.
-///  - A linear gradient (kind 1) at `angle` degrees (180 runs down), `repeating` or not.
+///  - A linear gradient (kind 1) at `angle` degrees (180 runs down), `repeating` or not,
+///    placed, sized and tiled as a picture is; auto (and cover or fit) is the whole box.
 ///  - A radial gradient (kind 2): an ellipse centred `placeX` of the box across plus
 ///    `offsetX` (and the same down), `width` and `height` its radii, its last stop at its edge.
 struct BackdropLayer
@@ -150,7 +151,9 @@ struct Backdrop
 
 /// The surfaces a theme dresses: the bars top to bottom (.icon-bar, .control-bar, the signal
 /// chain's, .footer-bar), the page under every panel (.main-content), the play page behind the
-/// effect (#panel-visualizer), the effect's shell, and a dialog and its header.
+/// effect (#panel-visualizer), the effect's shell, a dialog and its header, and the cheeks beside
+/// the effect's panel; then the faces of its keys, the chain's modules and its displays (see
+/// KeySkins, NodeSkins, DisplaySkin).
 struct Backdrops
 {
     Backdrop header;
@@ -162,6 +165,75 @@ struct Backdrops
     Backdrop shell;
     Backdrop modal;
     Backdrop modalHeader;
+    Backdrop cheekLeft;
+    Backdrop cheekRight;
+    Backdrop keyPlain;
+    Backdrop keyOn;
+    Backdrop keyPrimary;
+    Backdrop keyTool;
+    Backdrop keyNav;
+    Backdrop nodePlain;
+    Backdrop nodeSelected;
+    Backdrop presetDisplay;
+    Backdrop tempo;
+};
+
+/// A key as a theme draws it, where `drawn` (one the theme restyles from its base theme's; the
+/// native UI keeps its own look for the rest): its box (its face's layers are a Backdrops
+/// entry), the side wall it stands on (`wall` pixels of bands, `wallTop` down to
+/// `wallBottom`: how far it stands proud), how far down it is pressed (a latched key), and
+/// its legend's ink.
+struct KeySkin
+{
+    bool drawn;
+    ControlBox box;
+    float wall;
+    std::uint32_t wallTop;
+    std::uint32_t wallBottom;
+    float press;
+    std::uint32_t ink;
+};
+
+/// The keys: a dialog's (.btn), latched on (.btn.active), the confirming one (.btn-primary), the
+/// preset toolbar's (.preset-action-btn) and the arrows either side of the preset
+/// (.preset-nav-btn).
+struct KeySkins
+{
+    KeySkin plain;
+    KeySkin on;
+    KeySkin primary;
+    KeySkin tool;
+    KeySkin nav;
+};
+
+/// One of the chain's modules (.signal-node): its cap as a key, its name's lettering, its
+/// effect's ink, and the well its icon sits in. Its border is its category's colour, unless
+/// `fixedBorder` (the cap's own border is the same for every category).
+struct NodeSkin
+{
+    KeySkin face;
+    ControlText name;
+    std::uint32_t detail;
+    ControlBox icon;
+    bool fixedBorder;
+};
+
+struct NodeSkins
+{
+    NodeSkin plain;
+    NodeSkin selected;
+};
+
+/// A display (the preset's name, .preset-selector; the tempo, .bpm-display): its window as a
+/// key, the lettering in it, and the glow round the lettering (its first text-shadow).
+struct DisplaySkin
+{
+    KeySkin face;
+    ControlText text;
+    std::uint32_t glow;
+    float glowX;
+    float glowY;
+    float glowBlur;
 };
 
 // clang-format off
@@ -180,6 +252,15 @@ inline constexpr BackdropLayer kBackdrop_light_main[] = {
 inline constexpr BackdropLayer kBackdrop_light_footer[] = {
     {0, "images/themes/vintage-film-grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 48.0f, 0, 48.0f, 0, true, true, 0.0f, false, 0, {}},
 };
+inline constexpr BackdropLayer kBackdrop_light_keyPrimary[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFB5521E, 0.0f, false}, {0xFF964118, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_light_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xCCFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_light_nodeSelected[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xCCFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
 inline constexpr BackdropLayer kBackdrop_dark_header[] = {
     {0, "images/themes/vintage-film-grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 48.0f, 0, 48.0f, 0, true, true, 0.0f, false, 0, {}},
 };
@@ -196,14 +277,29 @@ inline constexpr BackdropLayer kBackdrop_dark_footer[] = {
     {0, "images/themes/vintage-film-grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 48.0f, 0, 48.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_dark_shell[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x1F3A0E14, 0.0f, false}, {0x0A08090C, 0.18f, false}, {0x05030406, 1.0f, false}}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 160.0f, false, 3, {{0xF51A1C21, 0.0f, false}, {0xFA0A0B0F, 0.44f, false}, {0xFF020305, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x1F3A0E14, 0.0f, false}, {0x0A08090C, 0.18f, false}, {0x05030406, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 160.0f, false, 3, {{0xF51A1C21, 0.0f, false}, {0xFA0A0B0F, 0.44f, false}, {0xFF020305, 1.0f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_dark_modal[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0xFF18181E, 0.0f, false}, {0xFF101014, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF18181E, 0.0f, false}, {0xFF101014, 1.0f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_dark_modalHeader[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0xFF28282F, 0.0f, false}, {0xFF1E1E25, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF28282F, 0.0f, false}, {0xFF1E1E25, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_dark_keyPlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF3A3A44, 0.0f, false}, {0xFF2E2E38, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_dark_keyOn[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF3A3A44, 0.0f, false}, {0xFF2E2E38, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_dark_keyPrimary[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFF8850, 0.0f, false}, {0xFFE86838, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_dark_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x12FFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_dark_nodeSelected[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x12FFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_classic_header[] = {
     {0, "images/themes/vintage-film-grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 48.0f, 0, 48.0f, 0, true, true, 0.0f, false, 0, {}},
@@ -220,45 +316,89 @@ inline constexpr BackdropLayer kBackdrop_classic_main[] = {
 inline constexpr BackdropLayer kBackdrop_classic_footer[] = {
     {0, "images/themes/vintage-film-grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 48.0f, 0, 48.0f, 0, true, true, 0.0f, false, 0, {}},
 };
+inline constexpr BackdropLayer kBackdrop_classic_keyPrimary[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF0A010, 0.0f, false}, {0xFFD88A00, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_classic_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x14FFE2B4, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_classic_nodeSelected[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x14FFE2B4, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
 inline constexpr BackdropLayer kBackdrop_stage_stage[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0xB30A0A0A, 0.0f, false}, {0x000A0A0A, 0.26f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xB30A0A0A, 0.0f, false}, {0x000A0A0A, 0.26f, false}}},
     {2, "", 0.5f, 0.0f, 0.7f, 0.0f, 0, 130.0f, 1, 100.0f, 1, false, false, 0.0f, false, 2, {{0x00000000, 0.45f, false}, {0x8C000000, 1.0f, false}}},
     {0, "images/themes/stage/stage.jpg", 0.5f, 0.0f, 1.0f, 0.0f, 1, 0.0f, 0, 0.0f, 2, false, false, 0.0f, false, 0, {}},
 };
+inline constexpr BackdropLayer kBackdrop_stage_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF353535, 0.0f, false}, {0xFF2C2C2C, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_stage_nodeSelected[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF6B14D, 0.0f, false}, {0xFFEEA232, 1.0f, false}}},
+};
 inline constexpr BackdropLayer kBackdrop_highGain_header[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x09FFFFFF, 0.0f, false}, {0x40000000, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x09FFFFFF, 0.0f, false}, {0x40000000, 1.0f, false}}},
     {0, "images/themes/high-gain/plate.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_highGain_controlBar[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x06FFFFFF, 0.0f, false}, {0x2E000000, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x06FFFFFF, 0.0f, false}, {0x2E000000, 1.0f, false}}},
     {0, "images/themes/high-gain/tolex.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_highGain_chain[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x59000000, 0.0f, false}, {0x26000000, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x59000000, 0.0f, false}, {0x26000000, 1.0f, false}}},
     {0, "images/themes/high-gain/tolex.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_highGain_stage[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0xBF080809, 0.0f, false}, {0x00080809, 0.3f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xBF080809, 0.0f, false}, {0x00080809, 0.3f, false}}},
     {2, "", 0.5f, 0.0f, 0.75f, 0.0f, 0, 140.0f, 1, 110.0f, 1, false, false, 0.0f, false, 2, {{0x00000000, 0.45f, false}, {0x99000000, 1.0f, false}}},
     {0, "images/themes/high-gain/grille.jpg", 0.5f, 0.0f, 1.0f, 0.0f, 1, 0.0f, 0, 0.0f, 2, false, false, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_highGain_footer[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x33000000, 0.0f, false}, {0x05FFFFFF, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x33000000, 0.0f, false}, {0x05FFFFFF, 1.0f, false}}},
     {0, "images/themes/high-gain/plate.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_highGain_shell[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x09FFFFFF, 0.0f, false}, {0x00FFFFFF, 120.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x09FFFFFF, 0.0f, false}, {0x00FFFFFF, 120.0f, true}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_keyPlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF2B2C31, 0.0f, false}, {0xFF1C1D20, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_keyOn[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF1C1D20, 0.0f, false}, {0xFF222327, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_keyPrimary[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF0323A, 0.0f, false}, {0xFFC9161F, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_keyTool[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF2B2C31, 0.0f, false}, {0xFF1C1D20, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x0FFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.38f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF24252A, 0.0f, false}, {0xFF18191C, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_nodeSelected[] = {
+    {2, "", 0.5f, 0.0f, 1.1f, 0.0f, 0, 120.0f, 1, 90.0f, 1, false, false, 0.0f, false, 2, {{0x47FF3420, 0.0f, false}, {0x00FF3420, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x0FFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.38f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF26262A, 0.0f, false}, {0xFF19191C, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_presetDisplay[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x0DFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}}},
+    {2, "", 0.5f, 0.0f, 0.5f, 0.0f, 0, 120.0f, 1, 140.0f, 1, false, false, 0.0f, false, 2, {{0xFF170708, 0.0f, false}, {0xFF070708, 0.7f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_highGain_tempo[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x0DFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}}},
+    {2, "", 0.5f, 0.0f, 0.5f, 0.0f, 0, 120.0f, 1, 140.0f, 1, false, false, 0.0f, false, 2, {{0xFF170708, 0.0f, false}, {0xFF070708, 0.7f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_studio_header[] = {
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x4DFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.6f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x4DFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.6f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_studio_controlBar[] = {
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_studio_chain[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x0F1C1C18, 0.0f, true}, {0x041C1C18, 10.0f, true}, {0x001C1C18, 24.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x0F1C1C18, 0.0f, true}, {0x041C1C18, 10.0f, true}, {0x001C1C18, 24.0f, true}}},
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio_main[] = {
@@ -267,11 +407,11 @@ inline constexpr BackdropLayer kBackdrop_studio_main[] = {
 };
 inline constexpr BackdropLayer kBackdrop_studio_footer[] = {
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x4DFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.6f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x4DFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.6f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_studio_shell[] = {
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.3f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.3f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_studio_modal[] = {
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
@@ -279,8 +419,45 @@ inline constexpr BackdropLayer kBackdrop_studio_modal[] = {
 inline constexpr BackdropLayer kBackdrop_studio_modalHeader[] = {
     {0, "images/themes/studio/grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
+inline constexpr BackdropLayer kBackdrop_studio_keyPlain[] = {
+    {2, "", 0.5f, 0.0f, 0.0f, 0.0f, 0, 140.0f, 1, 90.0f, 1, false, false, 0.0f, false, 2, {{0xE6FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFBFBF9, 0.0f, false}, {0xFFF0F0EC, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_keyOn[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFECECE8, 0.0f, false}, {0xFFF3F3F0, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_keyPrimary[] = {
+    {2, "", 0.5f, 0.0f, 0.0f, 0.0f, 0, 140.0f, 1, 90.0f, 1, false, false, 0.0f, false, 2, {{0x1FFFFFFF, 0.0f, false}, {0x00FFFFFF, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFF3D4045, 0.0f, false}, {0xFF2C2E32, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_keyTool[] = {
+    {2, "", 0.5f, 0.0f, 0.0f, 0.0f, 0, 140.0f, 1, 90.0f, 1, false, false, 0.0f, false, 2, {{0xE6FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFBFBF9, 0.0f, false}, {0xFFF0F0EC, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_keyNav[] = {
+    {2, "", 0.5f, 0.0f, 0.0f, 0.0f, 0, 140.0f, 1, 90.0f, 1, false, false, 0.0f, false, 2, {{0xE6FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFBFBF9, 0.0f, false}, {0xFFF0F0EC, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xBFFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_nodeSelected[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xBFFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_presetDisplay[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 0.0f, true, 4, {{0x0D141E0A, 0.0f, true}, {0x0D141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 90.0f, true, 4, {{0x0A141E0A, 0.0f, true}, {0x0A141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x24FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFA3B287, 0.0f, false}, {0xFFB4C298, 0.55f, false}, {0xFFA9B88D, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio_tempo[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 0.0f, true, 4, {{0x0D141E0A, 0.0f, true}, {0x0D141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 90.0f, true, 4, {{0x0A141E0A, 0.0f, true}, {0x0A141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x24FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFA3B287, 0.0f, false}, {0xFFB4C298, 0.55f, false}, {0xFFA9B88D, 1.0f, false}}},
+};
 inline constexpr BackdropLayer kBackdrop_studio2003_header[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.42f, false}, {0x291E2024, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.42f, false}, {0x291E2024, 1.0f, false}}},
     {0, "images/themes/studio-2003/brushed.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 128.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio2003_controlBar[] = {
@@ -288,12 +465,12 @@ inline constexpr BackdropLayer kBackdrop_studio2003_controlBar[] = {
     {0, "images/themes/studio-2003/screw-b.png", 1.0f, -9.0f, 0.0f, 20.0f, 0, 13.0f, 0, 13.0f, 0, false, false, 0.0f, false, 0, {}},
     {0, "images/themes/studio-2003/screw-b.png", 0.0f, 9.0f, 1.0f, -8.0f, 0, 13.0f, 0, 13.0f, 0, false, false, 0.0f, false, 0, {}},
     {0, "images/themes/studio-2003/screw-a.png", 1.0f, -9.0f, 1.0f, -8.0f, 0, 13.0f, 0, 13.0f, 0, false, false, 0.0f, false, 0, {}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x4DFFFCF4, 0.0f, false}, {0x00FFFCF4, 0.3f, false}, {0x122C2414, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x4DFFFCF4, 0.0f, false}, {0x00FFFCF4, 0.3f, false}, {0x122C2414, 1.0f, false}}},
     {0, "images/themes/studio-2003/wear.png", 0.0f, 40.0f, 0.0f, 10.0f, 0, 640.0f, 0, 640.0f, 0, true, true, 0.0f, false, 0, {}},
     {0, "images/themes/studio-2003/casing.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio2003_chain[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x332C2414, 0.0f, true}, {0x0D2C2414, 9.0f, true}, {0x002C2414, 22.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x332C2414, 0.0f, true}, {0x0D2C2414, 9.0f, true}, {0x002C2414, 22.0f, true}}},
     {0, "images/themes/studio-2003/casing.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio2003_main[] = {
@@ -302,7 +479,7 @@ inline constexpr BackdropLayer kBackdrop_studio2003_main[] = {
     {0, "images/themes/studio-2003/casing.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio2003_footer[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.42f, false}, {0x291E2024, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.42f, false}, {0x291E2024, 1.0f, false}}},
     {0, "images/themes/studio-2003/brushed.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 128.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio2003_shell[] = {
@@ -310,7 +487,7 @@ inline constexpr BackdropLayer kBackdrop_studio2003_shell[] = {
     {0, "images/themes/studio-2003/screw-a.png", 1.0f, -6.0f, 0.0f, 6.0f, 0, 13.0f, 0, 13.0f, 0, false, false, 0.0f, false, 0, {}},
     {0, "images/themes/studio-2003/screw-a.png", 0.0f, 6.0f, 1.0f, -6.0f, 0, 13.0f, 0, 13.0f, 0, false, false, 0.0f, false, 0, {}},
     {0, "images/themes/studio-2003/screw-b.png", 1.0f, -6.0f, 1.0f, -6.0f, 0, 13.0f, 0, 13.0f, 0, false, false, 0.0f, false, 0, {}},
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 2, {{0x6BFFFCF4, 0.0f, false}, {0x38FFFCF4, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x6BFFFCF4, 0.0f, false}, {0x38FFFCF4, 1.0f, false}}},
     {0, "images/themes/studio-2003/wear.png", 0.0f, 120.0f, 0.0f, 60.0f, 0, 640.0f, 0, 640.0f, 0, true, true, 0.0f, false, 0, {}},
     {0, "images/themes/studio-2003/casing.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
@@ -318,8 +495,127 @@ inline constexpr BackdropLayer kBackdrop_studio2003_modal[] = {
     {0, "images/themes/studio-2003/casing.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
 };
 inline constexpr BackdropLayer kBackdrop_studio2003_modalHeader[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, false, false, 180.0f, false, 3, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}, {0x241E2024, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x80FFFFFF, 0.0f, false}, {0x00FFFFFF, 0.45f, false}, {0x241E2024, 1.0f, false}}},
     {0, "images/themes/studio-2003/brushed.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 128.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_keyPlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFF6F3EA, 0.0f, false}, {0xFFE3DFD2, 0.48f, false}, {0xFFCFC9B9, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_keyOn[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFD9C9B6, 0.0f, false}, {0xFFE9DCCB, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_keyPrimary[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFD9693A, 0.0f, false}, {0xFFB8461C, 0.52f, false}, {0xFF9C3713, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_keyTool[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFF6F3EA, 0.0f, false}, {0xFFE3DFD2, 0.48f, false}, {0xFFCFC9B9, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_keyNav[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFF6F3EA, 0.0f, false}, {0xFFE3DFD2, 0.48f, false}, {0xFFCFC9B9, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x8CFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_nodeSelected[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x8CFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_presetDisplay[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 0.0f, true, 4, {{0x0D141E0A, 0.0f, true}, {0x0D141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 90.0f, true, 4, {{0x0A141E0A, 0.0f, true}, {0x0A141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFA3B287, 0.0f, false}, {0xFFB4C298, 0.55f, false}, {0xFFA9B88D, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio2003_tempo[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 0.0f, true, 4, {{0x0D141E0A, 0.0f, true}, {0x0D141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 90.0f, true, 4, {{0x0A141E0A, 0.0f, true}, {0x0A141E0A, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 3.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xFFA3B287, 0.0f, false}, {0xFFB4C298, 0.55f, false}, {0xFFA9B88D, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_header[] = {
+    {1, "", 0.0f, 0.0f, 1.0f, -4.0f, 0, 100.0f, 1, 2.0f, 0, false, false, 180.0f, false, 2, {{0xFFD9622B, 0.0f, false}, {0xFFD9622B, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 1.0f, -2.0f, 0, 100.0f, 1, 2.0f, 0, false, false, 180.0f, false, 2, {{0xFFF2952E, 0.0f, false}, {0xFFF2952E, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 1.0f, 0.0f, 0, 100.0f, 1, 2.0f, 0, false, false, 180.0f, false, 2, {{0xFFE8B13A, 0.0f, false}, {0xFFE8B13A, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x24FFE4BE, 0.0f, false}, {0x08FFE4BE, 0.35f, false}, {0x4D0C0602, 1.0f, false}}},
+    {0, "images/themes/studio-1973/walnut.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_controlBar[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x1FFFE2B4, 0.0f, false}, {0x2E281204, 0.45f, false}, {0x6B180A02, 1.0f, false}}},
+    {0, "images/themes/studio-1973/teak.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_chain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0xB3080401, 0.0f, true}, {0x6B080401, 16.0f, true}, {0x80080401, 1.0f, false}}},
+    {0, "images/themes/studio-1973/walnut.jpg", 0.0f, 0.0f, 0.0f, 64.0f, 0, 512.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_main[] = {
+    {2, "", 0.5f, 0.0f, 0.0f, 0.0f, 0, 120.0f, 1, 80.0f, 1, false, false, 0.0f, false, 2, {{0x0DFFC88C, 0.0f, false}, {0x00000000, 0.6f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xB30E0804, 0.0f, false}, {0xC70E0804, 1.0f, false}}},
+    {0, "images/themes/studio-1973/walnut.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_stage[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xB30A0603, 0.0f, false}, {0x000A0603, 0.32f, false}}},
+    {2, "", 0.5f, 0.0f, 0.75f, 0.0f, 0, 140.0f, 1, 110.0f, 1, false, false, 0.0f, false, 2, {{0x00000000, 0.45f, false}, {0x8C000000, 1.0f, false}}},
+    {0, "images/themes/studio-1973/room.jpg", 0.5f, 0.0f, 1.0f, 0.0f, 1, 0.0f, 0, 0.0f, 2, false, false, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_footer[] = {
+    {0, "images/themes/studio-1973/stitch.png", 0.0f, 0.0f, 0.0f, 5.0f, 0, 8.0f, 0, 4.0f, 0, true, false, 0.0f, false, 0, {}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 4, {{0x4D000000, 0.0f, true}, {0x29FFDCAA, 0.3f, false}, {0x0D000000, 0.6f, false}, {0x73000000, 1.0f, false}}},
+    {0, "images/themes/studio-1973/leather.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_shell[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x0FFFECCD, 0.0f, false}, {0x00FFECCD, 120.0f, true}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xED160E09, 0.0f, false}, {0xF2100A06, 1.0f, false}}},
+    {0, "images/themes/studio-2003/brushed.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 128.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_modalHeader[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x1FFFE4BE, 0.0f, false}, {0x590C0602, 1.0f, false}}},
+    {0, "images/themes/studio-1973/walnut-fine.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 512.0f, 0, 256.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_cheekLeft[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 90.0f, false, 4, {{0x2EFFE4BE, 0.0f, false}, {0x00FFE4BE, 0.35f, false}, {0x00000000, 0.65f, false}, {0x73000000, 1.0f, false}}},
+    {0, "images/themes/studio-1973/walnut-fine-v.jpg", 0.0f, 0.0f, 0.0f, 0.0f, 0, 256.0f, 0, 512.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_cheekRight[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 90.0f, false, 4, {{0x73000000, 0.0f, false}, {0x00000000, 0.35f, false}, {0x00FFE4BE, 0.65f, false}, {0x24FFE4BE, 1.0f, false}}},
+    {0, "images/themes/studio-1973/walnut-fine-v.jpg", 0.0f, 96.0f, 0.0f, 0.0f, 0, 256.0f, 0, 512.0f, 0, true, true, 0.0f, false, 0, {}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_keyPlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 4, {{0xCCFFFDF7, 0.0f, false}, {0x26FFFDF7, 0.3f, false}, {0x00FFFDF7, 0.55f, false}, {0x1F785A32, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF3EAD7, 0.0f, false}, {0xFFE2D5BA, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_keyOn[] = {
+    {2, "", 0.5f, 0.0f, 0.4f, 0.0f, 0, 120.0f, 1, 100.0f, 1, false, false, 0.0f, false, 2, {{0xBFFFECAA, 0.0f, false}, {0x00FFECAA, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFFC35A, 0.0f, false}, {0xFFF2952E, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_keyPrimary[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 4, {{0x80FFE2BE, 0.0f, false}, {0x1AFFE2BE, 0.3f, false}, {0x00FFE2BE, 0.55f, false}, {0x1F5A1400, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFE2703A, 0.0f, false}, {0xFFC4541F, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_keyTool[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 4, {{0xCCFFFDF7, 0.0f, false}, {0x26FFFDF7, 0.3f, false}, {0x00FFFDF7, 0.55f, false}, {0x1F785A32, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF3EAD7, 0.0f, false}, {0xFFE2D5BA, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_keyNav[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 4, {{0xCCFFFDF7, 0.0f, false}, {0x26FFFDF7, 0.3f, false}, {0x00FFFDF7, 0.55f, false}, {0x1F785A32, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF3EAD7, 0.0f, false}, {0xFFE2D5BA, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_nodePlain[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x99FFFCF4, 0.0f, false}, {0x00FFFCF4, 0.4f, false}, {0x1A5A3C14, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFF3EAD7, 0.0f, false}, {0xFFE2D5BA, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_nodeSelected[] = {
+    {2, "", 0.5f, 0.0f, 1.1f, 0.0f, 0, 120.0f, 1, 90.0f, 1, false, false, 0.0f, false, 2, {{0x73FFAA3C, 0.0f, false}, {0x00FFAA3C, 0.7f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0x99FFFCF4, 0.0f, false}, {0x00FFFCF4, 0.4f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFBEFD6, 0.0f, false}, {0xFFF0D9AE, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_presetDisplay[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x17FFF5E6, 0.0f, false}, {0x05FFF5E6, 0.46f, false}, {0x00FFF5E6, 0.5f, false}}},
+    {1, "", 0.0f, 0.0f, 1.0f, 0.0f, 0, 100.0f, 1, 6.0f, 0, false, false, 90.0f, true, 4, {{0x52FFB450, 0.0f, true}, {0x52FFB450, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 30.0f, true}}},
+    {1, "", 0.0f, 0.0f, 1.0f, 0.0f, 0, 100.0f, 1, 3.0f, 0, false, false, 90.0f, true, 4, {{0x33FFB450, 0.0f, true}, {0x33FFB450, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 6.0f, true}}},
+    {2, "", 0.5f, 0.0f, 0.55f, 0.0f, 0, 90.0f, 1, 160.0f, 1, false, false, 0.0f, false, 3, {{0xFF3A1A06, 0.0f, false}, {0xFF170A03, 0.6f, false}, {0xFF0A0502, 1.0f, false}}},
+};
+inline constexpr BackdropLayer kBackdrop_studio1973_tempo[] = {
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x17FFF5E6, 0.0f, false}, {0x05FFF5E6, 0.46f, false}, {0x00FFF5E6, 0.5f, false}}},
+    {1, "", 0.0f, 0.0f, 1.0f, 0.0f, 0, 100.0f, 1, 6.0f, 0, false, false, 90.0f, true, 4, {{0x52FFB450, 0.0f, true}, {0x52FFB450, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 30.0f, true}}},
+    {1, "", 0.0f, 0.0f, 1.0f, 0.0f, 0, 100.0f, 1, 3.0f, 0, false, false, 90.0f, true, 4, {{0x33FFB450, 0.0f, true}, {0x33FFB450, 1.0f, true}, {0x00000000, 1.0f, true}, {0x00000000, 6.0f, true}}},
+    {2, "", 0.5f, 0.0f, 0.55f, 0.0f, 0, 90.0f, 1, 160.0f, 1, false, false, 0.0f, false, 3, {{0xFF3A1A06, 0.0f, false}, {0xFF170A03, 0.6f, false}, {0xFF0A0502, 1.0f, false}}},
 };
 // clang-format on
 
@@ -349,6 +645,20 @@ struct ControlSkin
     ControlText body;
     ControlText title;
     float titleScale;
+    /// Cheeks either side of the effect's panel, outside it (0 wide for none), their outer
+    /// corners rounded; their backgrounds are backdrops.cheekLeft and cheekRight.
+    float cheekWidth;
+    float cheekRadius;
+    /// The level meters as a needle gauge (Studio 1973's VU meters): the face picture, under the
+    /// UI's assets, and its size; no picture for the web UI's ladder of segments. The needle's
+    /// geometry is the face's (tools/studio-1973-theme-assets/vu-face.mjs).
+    std::string_view gaugeFace;
+    float gaugeWidth;
+    float gaugeHeight;
+    KeySkins keys;
+    NodeSkins nodes;
+    DisplaySkin presetDisplay;
+    DisplaySkin tempo;
     /// The backgrounds of the bars, the page, the effect's panel and a dialog.
     Backdrops backdrops;
 };
@@ -368,7 +678,18 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xFFDBE0EB, 0xFFDBE0EB, 0.0f, 0xFFC3CAD8, 0.0f, 0.0f, 0x00000000, 0x0F000000, 4.0f, 12.0f, 0x00000000, 0x00000000}, {0xFFEBEEF5, 0xFFEBEEF5, 1.0f, 0xFFC3CAD8, 18.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0DFFFFFF, 0x00000000}, {0xBC10131D, 0xE0090C12, 1.0f, 0x24A8B6D4, 18.0f, 0.0f, 0x00000000, 0x47000000, 18.0f, 28.0f, 0x0DFFFFFF, 0x73000000},
      {0xFFCDD4E2, 0xFFD5DBE7, 1.0f, 0x29252C3D, 16.0f, 0.0f, 0x00000000, 0xB3FFFFFF, 1.0f, 0.0f, 0x1A252C3D, 0x00000000}, 16.0f, {0xB845536E, 10.0f, 800, 0.12f, true, "Inter"}, {0xB845536E, 10.0f, 800, 0.12f, true, "Inter"}, {0xFFCFD5E3, 0xFFCFD5E3, 0.0f, 0xFF12171F, 4.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFF12171F, 14.0f, 400, 0.0f, false, "Inter"}, {0xFF243044, 11.0f, 700, 0.0f, false, "Inter"}, 1.0f,
-     {{0xFFDBE0EB, kBackdrop_light_header, 1}, {0xFFCFD5E3, kBackdrop_light_controlBar, 1}, {0xFFDBE0EB, kBackdrop_light_chain, 1}, {0x00000000, kBackdrop_light_main, 1}, {0x00000000, nullptr, 0}, {0xFFDBE0EB, kBackdrop_light_footer, 1}, {0xFFDBE0EB, nullptr, 0}, {0xFFE2E6F0, nullptr, 0}, {0xFFEBEEF5, nullptr, 0}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{false, {0xFFEFF1F8, 0xFFEFF1F8, 1.0f, 0xFFB6BDCD, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF12171F},
+      {false, {0xFFEFF1F8, 0xFFEFF1F8, 1.0f, 0xFFB6BDCD, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF12171F},
+      {false, {0xFFB5521E, 0xFF964118, 1.0f, 0xFF964118, 6.0f, 0.0f, 0x00000000, 0x1A252C3D, 1.0f, 2.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFFFFFF},
+      {false, {0x00000000, 0x00000000, 0.0f, 0xFF3C434E, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0DFFFFFF, 0x00000000}, 1.0f, 0x0FFFFFFF, 0x0FFFFFFF, 0.0f, 0xFF3C434E},
+      {false, {0xFFEFF1F8, 0xFFEFF1F8, 1.0f, 0xFFB6BDCD, 8.0f, 0.0f, 0x00000000, 0x1A252C3D, 1.0f, 2.0f, 0xCCFFFFFF, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF3C434E}},
+     {{{false, {0xFFFEFEFF, 0xFFF1F2F4, 1.0f, 0xFFF3BB7E, 10.0f, 0.0f, 0x00000000, 0x19252C3D, 7.0f, 12.0f, 0xFFFFFFFF, 0x0F000000}, 4.0f, 0xFFCCD2DE, 0x24252C3D, 0.0f, 0xFF12171F}, {0xFF12171F, 10.0f, 500, 0.06f, true, "Inter"}, 0xFF796A5C, {0x1FF0A24C, 0x1FF0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{false, {0xFFFEFEFF, 0xFFF1F2F4, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x19252C3D, 7.0f, 12.0f, 0xFFFFFFFF, 0x0F000000}, 4.0f, 0xFFCCD2DE, 0x24252C3D, 0.0f, 0xFF12171F}, {0xFF12171F, 10.0f, 500, 0.06f, true, "Inter"}, 0xFF796A5C, {0x1FF0A24C, 0x1FF0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
+     {{false, {0xFFF3F5F9, 0xFFF3F5F9, 1.0f, 0xFFB6BDCD, 10.0f, 0.0f, 0x00000000, 0x0D000000, 1.0f, 2.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF12171F}, {0xFF12171F, 11.0f, 700, 0.05f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{false, {0x00000000, 0x00000000, 1.0f, 0x00000000, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF3C434E}, {0xFF3C434E, 11.0f, 600, 0.02f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{0xFFDBE0EB, kBackdrop_light_header, 1}, {0xFFCFD5E3, kBackdrop_light_controlBar, 1}, {0xFFDBE0EB, kBackdrop_light_chain, 1}, {0x00000000, kBackdrop_light_main, 1}, {0x00000000, nullptr, 0}, {0xFFDBE0EB, kBackdrop_light_footer, 1}, {0xFFDBE0EB, nullptr, 0}, {0xFFE2E6F0, nullptr, 0}, {0xFFEBEEF5, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0xFFEFF1F8, nullptr, 0}, {0xFFEFF1F8, nullptr, 0}, {0x00000000, kBackdrop_light_keyPrimary, 1}, {0x00000000, nullptr, 0}, {0xFFEFF1F8, nullptr, 0}, {0xFFFBFCFE, kBackdrop_light_nodePlain, 1}, {0xFFFBFCFE, kBackdrop_light_nodeSelected, 1}, {0xFFF3F5F9, nullptr, 0}, {0x00000000, nullptr, 0}}},
     {"dark",
      {38.0f, 4.0f, {0xFF2E2E3A, 0xFF2E2E3A, 1.0f, 0xFF46465A, 50.0f, 2.0f, 0xFF18181E, 0x00000000, 0.0f, 0.0f, 0x29FFFFFF, 0x80000000}, "", 0.5f, 0.5f, 0x00000000, 0x00000000, 1.0f,
       {6.0f, 2.0f, 7.0f, 2.0f, 0xFFD0D0E0, 0xFFD0D0E0, 1.0f, 0x00000000, 0.0f},
@@ -382,7 +703,18 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xF61E1A1F, 0xFF020305, 0.0f, 0x38687080, 0.0f, 0.0f, 0x00000000, 0x80000000, 28.0f, 55.0f, 0x14FFFFFF, 0x94000000}, {0x9C171920, 0x6D1D2028, 1.0f, 0x1AA9B8DA, 18.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0DFFFFFF, 0x00000000}, {0xBC10131D, 0xE0090C12, 1.0f, 0x24A8B6D4, 18.0f, 0.0f, 0x00000000, 0x47000000, 18.0f, 28.0f, 0x0DFFFFFF, 0x73000000},
      {0x9E04060B, 0x6B090B12, 1.0f, 0x6B000000, 16.0f, 0.0f, 0x00000000, 0x0DFFFFFF, 1.0f, 0.0f, 0x73000000, 0x00000000}, 16.0f, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Inter"}, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Inter"}, {0xCC101218, 0xCC101218, 0.0f, 0xFFEBEBF4, 4.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFFEBEBF4, 14.0f, 400, 0.0f, false, "Inter"}, {0xFFEEF2FF, 11.0f, 700, 0.0f, false, "Inter"}, 1.0f,
-     {{0xFF18181E, kBackdrop_dark_header, 1}, {0xFF1E1E25, kBackdrop_dark_controlBar, 1}, {0xFF18181E, kBackdrop_dark_chain, 1}, {0x00000000, kBackdrop_dark_main, 1}, {0x00000000, nullptr, 0}, {0xFF141419, kBackdrop_dark_footer, 1}, {0x00000000, kBackdrop_dark_shell, 2}, {0x00000000, kBackdrop_dark_modal, 1}, {0x00000000, kBackdrop_dark_modalHeader, 1}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{false, {0xFF3A3A44, 0xFF2E2E38, 1.0f, 0xFF4A4A58, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFE0E0F0},
+      {false, {0xFF3A3A44, 0xFF2E2E38, 1.0f, 0xFF4A4A58, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFE0E0F0},
+      {false, {0xFFFF8850, 0xFFE86838, 1.0f, 0xFFE86838, 6.0f, 0.0f, 0x00000000, 0x66000000, 1.0f, 3.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFFFFFF},
+      {false, {0x00000000, 0x00000000, 0.0f, 0xFFF0F0F8, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0DFFFFFF, 0x00000000}, 1.0f, 0x0FFFFFFF, 0x0FFFFFFF, 0.0f, 0xFFF0F0F8},
+      {false, {0x0DFFFFFF, 0x0DFFFFFF, 1.0f, 0x14FFFFFF, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFD0D0E0}},
+     {{{false, {0xFF33333B, 0xFF23232A, 1.0f, 0xFFB77F43, 10.0f, 0.0f, 0x00000000, 0x4D000000, 8.0f, 12.0f, 0x1FFFFFFF, 0x33000000}, 5.0f, 0xFF70747D, 0x99000000, 0.0f, 0xFFEBEBF4}, {0xFFEBEBF4, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFB4A19C, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{false, {0xFF33333B, 0xFF23232A, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x4D000000, 8.0f, 12.0f, 0x1FFFFFFF, 0x33000000}, 5.0f, 0xFF70747D, 0x99000000, 0.0f, 0xFFEBEBF4}, {0xFFEBEBF4, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFB4A19C, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
+     {{false, {0xFF111118, 0xFF111118, 1.0f, 0x0FFFFFFF, 10.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0x0AFFFFFF, 0x0AFFFFFF, 0.0f, 0xFFEBEBF4}, {0xFFF0F0F8, 11.0f, 700, 0.05f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{false, {0x00000000, 0x00000000, 1.0f, 0x00000000, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFC0C0D0}, {0xFFC0C0D0, 11.0f, 600, 0.02f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{0xFF18181E, kBackdrop_dark_header, 1}, {0xFF1E1E25, kBackdrop_dark_controlBar, 1}, {0xFF18181E, kBackdrop_dark_chain, 1}, {0x00000000, kBackdrop_dark_main, 1}, {0x00000000, nullptr, 0}, {0xFF141419, kBackdrop_dark_footer, 1}, {0x00000000, kBackdrop_dark_shell, 2}, {0x00000000, kBackdrop_dark_modal, 1}, {0x00000000, kBackdrop_dark_modalHeader, 1}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, kBackdrop_dark_keyPlain, 1}, {0x00000000, kBackdrop_dark_keyOn, 1}, {0x00000000, kBackdrop_dark_keyPrimary, 1}, {0x00000000, nullptr, 0}, {0x0DFFFFFF, nullptr, 0}, {0xFF24242C, kBackdrop_dark_nodePlain, 1}, {0xFF24242C, kBackdrop_dark_nodeSelected, 1}, {0xFF111118, nullptr, 0}, {0x00000000, nullptr, 0}}},
     {"classic",
      {38.0f, 4.0f, {0xFF8A7A6A, 0xFF8A7A6A, 1.0f, 0xFF6B5F4F, 50.0f, 2.0f, 0xFF3D2F25, 0x00000000, 0.0f, 0.0f, 0x3DF5F1E8, 0x572A1F15}, "", 0.5f, 0.5f, 0x00000000, 0x00000000, 1.0f,
       {6.0f, 2.0f, 7.0f, 2.0f, 0xFFF5F1E8, 0xFFF5F1E8, 1.0f, 0x00000000, 0.0f},
@@ -396,7 +728,18 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xFF3D2F25, 0xFF3D2F25, 0.0f, 0x1FF5F1E8, 0.0f, 0.0f, 0x00000000, 0x2E000000, 4.0f, 12.0f, 0x00000000, 0x00000000}, {0x00000000, 0x00000000, 0.0f, 0xFFF5F1E8, 18.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, {0xFF1F1815, 0xFF1F1815, 1.0f, 0x1FF5F1E8, 18.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFF2A1F15, 0xFF2A1F15, 1.0f, 0x61000000, 16.0f, 0.0f, 0x00000000, 0x12FFECC8, 1.0f, 0.0f, 0x66000000, 0x00000000}, 16.0f, {0xADF9E4BB, 10.0f, 800, 0.12f, true, "Inter"}, {0xADF9E4BB, 10.0f, 800, 0.12f, true, "Inter"}, {0xE61F1815, 0xE61F1815, 0.0f, 0xFFF5F1E8, 4.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFFF5F1E8, 14.0f, 400, 0.0f, false, "Inter"}, {0xFFF5F1E8, 11.0f, 700, 0.0f, false, "Inter"}, 1.0f,
-     {{0xFF3D2F25, kBackdrop_classic_header, 1}, {0xFF4A403A, kBackdrop_classic_controlBar, 1}, {0xFF3D2F25, kBackdrop_classic_chain, 1}, {0x00000000, kBackdrop_classic_main, 1}, {0x00000000, nullptr, 0}, {0xFF3D2F25, kBackdrop_classic_footer, 1}, {0xFF3D2F25, nullptr, 0}, {0xFF2A1F15, nullptr, 0}, {0xFF3D2F25, nullptr, 0}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{false, {0xFF4A403A, 0xFF4A403A, 1.0f, 0xFF6B5F4F, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF5F1E8},
+      {false, {0xFF4A403A, 0xFF4A403A, 1.0f, 0xFF6B5F4F, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF5F1E8},
+      {false, {0xFFF0A010, 0xFFD88A00, 1.0f, 0xFFD88A00, 6.0f, 0.0f, 0x00000000, 0x33000000, 1.0f, 2.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFFFFFF},
+      {false, {0x00000000, 0x00000000, 0.0f, 0xFFC9C5BB, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0DFFFFFF, 0x00000000}, 1.0f, 0x0FFFFFFF, 0x0FFFFFFF, 0.0f, 0xFFC9C5BB},
+      {false, {0x0DFFFFFF, 0x0DFFFFFF, 1.0f, 0x14FFFFFF, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFE0DCD2}},
+     {{{false, {0xFF4E3F32, 0xFF3C2F25, 1.0f, 0xFFBE8242, 10.0f, 0.0f, 0x00000000, 0x4D140A02, 7.0f, 12.0f, 0x29FFE2B4, 0x0F000000}, 4.0f, 0xFF1F1712, 0x73000000, 0.0f, 0xFFF5F1E8}, {0xFFF5F1E8, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFC7AA89, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{false, {0xFF4E3F32, 0xFF3C2F25, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x4D140A02, 7.0f, 12.0f, 0x29FFE2B4, 0x0F000000}, 4.0f, 0xFF1F1712, 0x73000000, 0.0f, 0xFFF5F1E8}, {0xFFF5F1E8, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFC7AA89, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
+     {{false, {0xD93D2F25, 0xD93D2F25, 1.0f, 0xFF5A5048, 10.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x14F5F1E8, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF5F1E8}, {0xFFF5F1E8, 11.0f, 700, 0.05f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{false, {0x00000000, 0x00000000, 1.0f, 0x00000000, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFC9C5BB}, {0xFFC9C5BB, 11.0f, 600, 0.02f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{0xFF3D2F25, kBackdrop_classic_header, 1}, {0xFF4A403A, kBackdrop_classic_controlBar, 1}, {0xFF3D2F25, kBackdrop_classic_chain, 1}, {0x00000000, kBackdrop_classic_main, 1}, {0x00000000, nullptr, 0}, {0xFF3D2F25, kBackdrop_classic_footer, 1}, {0xFF3D2F25, nullptr, 0}, {0xFF2A1F15, nullptr, 0}, {0xFF3D2F25, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0xFF4A403A, nullptr, 0}, {0xFF4A403A, nullptr, 0}, {0x00000000, kBackdrop_classic_keyPrimary, 1}, {0x00000000, nullptr, 0}, {0x0DFFFFFF, nullptr, 0}, {0xFF3F3127, kBackdrop_classic_nodePlain, 1}, {0xFF3F3127, kBackdrop_classic_nodeSelected, 1}, {0xD93D2F25, nullptr, 0}, {0x00000000, nullptr, 0}}},
     {"stage",
      {38.0f, 3.0f, {0xFF262626, 0xFF141414, 2.0f, 0xFF0E0E0E, 50.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0FFFFFFF, 0x00000000}, "", 0.5f, 0.35f, 0xFF262626, 0xFF141414, 0.7f,
       {6.0f, 2.0f, 7.0f, 2.0f, 0xFFF2F2F2, 0xFFF2F2F2, 1.0f, 0x00000000, 0.0f},
@@ -410,7 +753,18 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xF01E1E1E, 0xF01E1E1E, 1.0f, 0xFF3E3E3E, 4.0f, 0.0f, 0x00000000, 0x99000000, 18.0f, 50.0f, 0x0AFFFFFF, 0x00000000}, {0xFF1A1A1A, 0xFF1A1A1A, 1.0f, 0xFF303030, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, {0xFF101010, 0xFF101010, 1.0f, 0xFF303030, 3.0f, 0.0f, 0x00000000, 0x47000000, 18.0f, 28.0f, 0x0DFFFFFF, 0x73000000},
      {0xFF181818, 0xFF181818, 1.0f, 0xFF2E2E2E, 16.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 16.0f, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Archivo"}, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Archivo"}, {0xFF141414, 0xFF141414, 0.0f, 0xFFEEEEEE, 2.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFFEEEEEE, 14.0f, 500, 0.0f, false, "Archivo"}, {0xFFF2F2F2, 11.0f, 800, 0.0f, false, "Archivo"}, 1.0f,
-     {{0xFF1B1B1B, nullptr, 0}, {0xFF222222, nullptr, 0}, {0xFF121212, nullptr, 0}, {0x00000000, nullptr, 0}, {0xFF0E0C0A, kBackdrop_stage_stage, 3}, {0xFF1B1B1B, nullptr, 0}, {0xF01E1E1E, nullptr, 0}, {0xFF1E1E1E, nullptr, 0}, {0xFF262626, nullptr, 0}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{true, {0xFF303030, 0xFF303030, 1.0f, 0xFF424242, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFE6E6E6},
+      {true, {0xFF3A3328, 0xFF3A3328, 1.0f, 0xFFF2A73B, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF2A73B},
+      {true, {0xFFF2A73B, 0xFFF2A73B, 1.0f, 0xFFF2A73B, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF191512},
+      {true, {0x00000000, 0x00000000, 0.0f, 0xFFF2F2F2, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF2F2F2},
+      {true, {0x0DFFFFFF, 0x0DFFFFFF, 1.0f, 0x14FFFFFF, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFD4D4D4}},
+     {{{true, {0xFF353535, 0xFF2C2C2C, 1.0f, 0xFF464646, 3.0f, 0.0f, 0x00000000, 0x8C000000, 4.0f, 10.0f, 0x0FFFFFFF, 0x00000000}, 1.0f, 0xB3000000, 0xB3000000, 0.0f, 0xFFEEEEEE}, {0xFFE8E8E8, 10.0f, 700, 0.06f, true, "Archivo"}, 0xFF9E9E9E, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, true},
+      {{true, {0xFFF6B14D, 0xFFEEA232, 1.0f, 0xFFF2A73B, 3.0f, 1.0f, 0x80000000, 0x59F2A73B, 0.0f, 18.0f, 0x0FFFFFFF, 0x00000000}, 1.0f, 0xB3000000, 0xB3000000, 0.0f, 0xFFEEEEEE}, {0xFF191512, 10.0f, 700, 0.06f, true, "Archivo"}, 0xFF191512, {0x1F000000, 0x1F000000, 0.0f, 0xFF191512, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, true}},
+     {{true, {0xFF121212, 0xFF121212, 1.0f, 0xFF3E3E3E, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFEEEEEE}, {0xFFF4F4F4, 11.0f, 700, 0.05f, false, "Archivo"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{true, {0xFF121212, 0xFF121212, 1.0f, 0xFF3E3E3E, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF4F4F4}, {0xFFF4F4F4, 11.0f, 600, 0.02f, false, "Archivo"}, 0x00000000, 0.0f, 0.0f, 0.0f},
+     {{0xFF1B1B1B, nullptr, 0}, {0xFF222222, nullptr, 0}, {0xFF121212, nullptr, 0}, {0x00000000, nullptr, 0}, {0xFF0E0C0A, kBackdrop_stage_stage, 3}, {0xFF1B1B1B, nullptr, 0}, {0xF01E1E1E, nullptr, 0}, {0xFF1E1E1E, nullptr, 0}, {0xFF262626, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0xFF303030, nullptr, 0}, {0xFF3A3328, nullptr, 0}, {0xFFF2A73B, nullptr, 0}, {0x00000000, nullptr, 0}, {0x0DFFFFFF, nullptr, 0}, {0x00000000, kBackdrop_stage_nodePlain, 1}, {0x00000000, kBackdrop_stage_nodeSelected, 1}, {0xFF121212, nullptr, 0}, {0xFF121212, nullptr, 0}}},
     {"high-gain",
      {38.0f, 3.98f, {0xFF0B0B0C, 0xFF050506, 0.0f, 0xFFEDEDEF, 50.0f, 1.5f, 0xFF000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, "images/themes/high-gain/knob.png", 0.5f, 0.5f, 0xFF0B0B0C, 0xFF050506, 1.0f,
       {9.5f, 2.0f, 7.97f, 99.0f, 0xFFF4F4F4, 0xFFF4F4F4, 1.0f, 0xE6000000, 2.0f},
@@ -424,7 +778,18 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xF31A1B1D, 0xF2111214, 1.0f, 0xFF000000, 4.0f, 1.0f, 0x0AFFFFFF, 0xB3000000, 18.0f, 50.0f, 0x1FFFFFFF, 0x00000000}, {0xFF121315, 0xFF121315, 1.0f, 0xFF000000, 3.0f, 0.0f, 0x00000000, 0x0AFFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000}, {0xFF0B0B0D, 0xFF0B0B0D, 1.0f, 0xFF000000, 3.0f, 0.0f, 0x00000000, 0x47000000, 18.0f, 28.0f, 0x0DFFFFFF, 0x73000000},
      {0xFF111214, 0xFF111214, 1.0f, 0xFF26272B, 16.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 16.0f, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Oswald"}, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Oswald"}, {0xFF0D0E10, 0xFF0D0E10, 0.0f, 0xFFEDEDEF, 2.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFFEDEDEF, 14.0f, 500, 0.02f, false, "Oswald"}, {0xFFF4F4F5, 11.0f, 700, 0.02f, false, "Oswald"}, 1.0f,
-     {{0xFF141518, kBackdrop_highGain_header, 2}, {0xFF111214, kBackdrop_highGain_controlBar, 2}, {0xFF0D0E10, kBackdrop_highGain_chain, 2}, {0x00000000, nullptr, 0}, {0xFF080809, kBackdrop_highGain_stage, 3}, {0xFF141518, kBackdrop_highGain_footer, 2}, {0xF2111214, kBackdrop_highGain_shell, 1}, {0xFF17181B, nullptr, 0}, {0xFF1F2023, nullptr, 0}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{true, {0xFF2B2C31, 0xFF1C1D20, 1.0f, 0xFF000000, 3.0f, 0.0f, 0x00000000, 0x99000000, 1.0f, 2.0f, 0x1FFFFFFF, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFE8E8EA},
+      {true, {0xFF1C1D20, 0xFF222327, 1.0f, 0x99FF3420, 3.0f, 0.0f, 0x00000000, 0x59FF3420, 0.0f, 8.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFF4A3D},
+      {true, {0xFFF0323A, 0xFFC9161F, 1.0f, 0xFFA8121A, 3.0f, 0.0f, 0x00000000, 0x99000000, 1.0f, 2.0f, 0x40FFFFFF, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFFFFFF},
+      {true, {0xFF2B2C31, 0xFF1C1D20, 0.0f, 0xFF000000, 3.0f, 0.0f, 0x00000000, 0x99000000, 1.0f, 2.0f, 0x1FFFFFFF, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFF1F1F3},
+      {true, {0x0DFFFFFF, 0x0DFFFFFF, 1.0f, 0x14FFFFFF, 3.0f, 0.0f, 0x00000000, 0x99000000, 1.0f, 2.0f, 0x1FFFFFFF, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFD2D3D7}},
+     {{{true, {0xFF313237, 0xFF18191C, 1.0f, 0xFFB57D40, 3.0f, 0.0f, 0x00000000, 0x69000000, 8.0f, 12.0f, 0x29FFFFFF, 0x33000000}, 5.0f, 0xFF70747D, 0x99000000, 0.0f, 0xFFEDEDEF}, {0xFFECECEE, 10.0f, 600, 0.06f, true, "Oswald"}, 0xFF9FA0A7, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{true, {0xFF6C3330, 0xFF19191C, 1.0f, 0xFFFF4A3D, 3.0f, 1.0f, 0x8CFF3420, 0x73FF3420, 0.0f, 18.0f, 0x29FFFFFF, 0x33000000}, 5.0f, 0xFF70747D, 0x99000000, 0.0f, 0xFFEDEDEF}, {0xFFFFFFFF, 10.0f, 600, 0.06f, true, "Oswald"}, 0xFF9FA0A7, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, true}},
+     {{true, {0xFF231314, 0xFF070708, 1.0f, 0xFF000000, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0x0FFFFFFF, 0x0FFFFFFF, 0.0f, 0xFFFF4A3D}, {0xFFFF4A3D, 11.0f, 700, 0.05f, false, "Oswald"}, 0x8CFF3420, 0.0f, 0.0f, 8.0f},
+     {{true, {0xFF231314, 0xFF070708, 1.0f, 0xFF000000, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0x0FFFFFFF, 0x0FFFFFFF, 0.0f, 0xFFFF4A3D}, {0xFFFF4A3D, 11.0f, 700, 0.02f, false, "Oswald"}, 0x8CFF3420, 0.0f, 0.0f, 8.0f},
+     {{0xFF141518, kBackdrop_highGain_header, 2}, {0xFF111214, kBackdrop_highGain_controlBar, 2}, {0xFF0D0E10, kBackdrop_highGain_chain, 2}, {0x00000000, nullptr, 0}, {0xFF080809, kBackdrop_highGain_stage, 3}, {0xFF141518, kBackdrop_highGain_footer, 2}, {0xF2111214, kBackdrop_highGain_shell, 1}, {0xFF17181B, nullptr, 0}, {0xFF1F2023, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, kBackdrop_highGain_keyPlain, 1}, {0x00000000, kBackdrop_highGain_keyOn, 1}, {0x00000000, kBackdrop_highGain_keyPrimary, 1}, {0x00000000, kBackdrop_highGain_keyTool, 1}, {0x0DFFFFFF, nullptr, 0}, {0x00000000, kBackdrop_highGain_nodePlain, 2}, {0x00000000, kBackdrop_highGain_nodeSelected, 3}, {0x00000000, kBackdrop_highGain_presetDisplay, 2}, {0x00000000, kBackdrop_highGain_tempo, 2}}},
     {"studio",
      {38.0f, -1.0f, {0x00000000, 0x00000000, 0.0f, 0xFF17181A, 0.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, "images/themes/studio/knob.png", 0.5f, 0.5f, 0x00000000, 0x00000000, 1.0f,
       {7.97f, 2.0f, 4.55f, 99.0f, 0xFF2A2C30, 0xFF2A2C30, 1.0f, 0x99FFFFFF, 0.0f},
@@ -438,7 +803,18 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xFFFCFCFB, 0xFFF8F8F6, 0.0f, 0x00000000, 13.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, {0x0F282822, 0x06282822, 1.0f, 0x1F282822, 11.0f, 0.0f, 0x00000000, 0xD9FFFFFF, 1.0f, 0.0f, 0x141C1C18, 0x00000000}, {0xBC10131D, 0xE0090C12, 1.0f, 0x291C1C18, 11.0f, 0.0f, 0x00000000, 0xD9FFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000},
      {0x0F282822, 0x06282822, 1.0f, 0x1F282822, 16.0f, 0.0f, 0x00000000, 0xD9FFFFFF, 1.0f, 0.0f, 0x141C1C18, 0x00000000}, 16.0f, {0xFF52555A, 10.0f, 800, 0.12f, true, "Inter"}, {0xFF52555A, 10.0f, 800, 0.12f, true, "Inter"}, {0xFFF1F1EE, 0xFFF1F1EE, 0.0f, 0xFF17181A, 4.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFF17181A, 14.0f, 400, 0.0f, false, "Inter"}, {0xFF1D1E21, 11.0f, 700, 0.0f, false, "Inter"}, 1.0f,
-     {{0xFFEBEBE8, kBackdrop_studio_header, 2}, {0xFFF8F8F6, kBackdrop_studio_controlBar, 2}, {0xFFE3E3DF, kBackdrop_studio_chain, 2}, {0xFFEBEBE8, kBackdrop_studio_main, 2}, {0x00000000, nullptr, 0}, {0xFFEBEBE8, kBackdrop_studio_footer, 2}, {0xFFF8F8F6, kBackdrop_studio_shell, 2}, {0xFFF8F8F6, kBackdrop_studio_modal, 1}, {0xFFFDFDFC, kBackdrop_studio_modalHeader, 1}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{true, {0xFFFFFFFE, 0xFFF0F0EC, 1.0f, 0x291C1C18, 6.0f, 0.0f, 0x00000000, 0x1A1C1C18, 4.0f, 6.0f, 0xFFFFFFFF, 0x0A1C1C18}, 3.0f, 0xFFCFCFCA, 0x291C1C18, 0.0f, 0xFF1D1E21},
+      {true, {0xFFECECE8, 0xFFF3F3F0, 1.0f, 0x66A43B10, 6.0f, 0.0f, 0x00000000, 0x1A1C1C18, 1.0f, 2.0f, 0x00000000, 0x00000000}, 1.0f, 0xFFCFCFCA, 0xFFCFCFCA, 2.0f, 0xFFA43B10},
+      {true, {0xFF54575B, 0xFF2C2E32, 1.0f, 0xFF1B1C1F, 6.0f, 0.0f, 0x00000000, 0x241C1C18, 4.0f, 6.0f, 0x29FFFFFF, 0x00000000}, 3.0f, 0xFF18191B, 0x40000000, 0.0f, 0xFFF7F7F5},
+      {true, {0xFFFFFFFE, 0xFFF0F0EC, 1.0f, 0x291C1C18, 8.0f, 0.0f, 0x00000000, 0x1A1C1C18, 4.0f, 6.0f, 0xFFFFFFFF, 0x0A1C1C18}, 3.0f, 0xFFCFCFCA, 0x291C1C18, 0.0f, 0xFF1D1E21},
+      {true, {0xFFFFFFFE, 0xFFF0F0EC, 1.0f, 0x291C1C18, 8.0f, 0.0f, 0x00000000, 0x1A1C1C18, 4.0f, 6.0f, 0xFFFFFFFF, 0x0A1C1C18}, 3.0f, 0xFFCFCFCA, 0x291C1C18, 0.0f, 0xFF1D1E21}},
+     {{{true, {0xFFFEFEFD, 0xFFF0F0EE, 1.0f, 0xFFF3BB7C, 10.0f, 0.0f, 0x00000000, 0x1C1C1C18, 7.0f, 12.0f, 0xF2FFFFFF, 0x0F000000}, 4.0f, 0xFFD1D1CC, 0x241C1C18, 0.0f, 0xFF17181A}, {0xFF1D1E21, 10.0f, 500, 0.06f, true, "Inter"}, 0xFF7B6956, {0x1FF0A24C, 0x1FF0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{true, {0xFFFEFEFD, 0xFFF0F0EE, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x1C1C1C18, 7.0f, 12.0f, 0xF2FFFFFF, 0x0F000000}, 4.0f, 0xFFD1D1CC, 0x241C1C18, 0.0f, 0xFF17181A}, {0xFF1D1E21, 10.0f, 500, 0.06f, true, "Inter"}, 0xFF7B6956, {0x1FF0A24C, 0x1FF0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
+     {{true, {0xFFA2AF8B, 0xFFA9B88D, 1.0f, 0xFF45474B, 6.0f, 1.0f, 0x2E1C1C18, 0xD9FFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF1C2412}, {0xFF1C2412, 11.0f, 700, 0.04f, false, "Arial"}, 0x33141E0A, 1.0f, 1.0f, 0.0f},
+     {{true, {0xFFA2AF8B, 0xFFA9B88D, 1.0f, 0xFF45474B, 4.0f, 1.0f, 0x2E1C1C18, 0xD9FFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF1C2412}, {0xFF1C2412, 11.0f, 700, 0.02f, false, "Arial"}, 0x33141E0A, 1.0f, 1.0f, 0.0f},
+     {{0xFFEBEBE8, kBackdrop_studio_header, 2}, {0xFFF8F8F6, kBackdrop_studio_controlBar, 2}, {0xFFE3E3DF, kBackdrop_studio_chain, 2}, {0xFFEBEBE8, kBackdrop_studio_main, 2}, {0x00000000, nullptr, 0}, {0xFFEBEBE8, kBackdrop_studio_footer, 2}, {0xFFF8F8F6, kBackdrop_studio_shell, 2}, {0xFFF8F8F6, kBackdrop_studio_modal, 1}, {0xFFFDFDFC, kBackdrop_studio_modalHeader, 1}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, kBackdrop_studio_keyPlain, 2}, {0x00000000, kBackdrop_studio_keyOn, 1}, {0x00000000, kBackdrop_studio_keyPrimary, 2}, {0x00000000, kBackdrop_studio_keyTool, 2}, {0x00000000, kBackdrop_studio_keyNav, 2}, {0xFFFAFAF8, kBackdrop_studio_nodePlain, 1}, {0xFFFAFAF8, kBackdrop_studio_nodeSelected, 1}, {0x00000000, kBackdrop_studio_presetDisplay, 4}, {0x00000000, kBackdrop_studio_tempo, 4}}},
     {"studio-2003",
      {38.0f, -1.0f, {0x00000000, 0x00000000, 0.0f, 0xFF1B1A18, 0.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, "images/themes/studio-2003/knob.png", 0.5f, 0.5f, 0x00000000, 0x00000000, 1.0f,
       {4.36f, 2.08f, 10.25f, 1.0f, 0xFFFFFDF6, 0xFF3A3A3E, 0.42f, 0xB3000000, 1.0f},
@@ -452,7 +828,43 @@ inline constexpr ControlSkin kControlSkins[] = {
      {0xFFE7E5DF, 0xFFDFDED8, 0.0f, 0x00000000, 5.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, {0x1C3C321E, 0x0D3C321E, 1.0f, 0x4D302818, 6.0f, 0.0f, 0x00000000, 0xBFFFFCF4, 1.0f, 0.0f, 0x292C2414, 0x00000000}, {0xBC10131D, 0xE0090C12, 1.0f, 0x80302818, 6.0f, 0.0f, 0x00000000, 0xBFFFFCF4, 1.0f, 0.0f, 0x00000000, 0x00000000},
      {0x1C3C321E, 0x0D3C321E, 1.0f, 0x4D302818, 16.0f, 0.0f, 0x00000000, 0xBFFFFCF4, 1.0f, 0.0f, 0x292C2414, 0x00000000}, 16.0f, {0xFF4A4741, 10.0f, 800, 0.12f, true, "Inter"}, {0xFF4A4741, 10.0f, 800, 0.12f, true, "Inter"}, {0xFFC6C5BF, 0xFFC6C5BF, 0.0f, 0xFF1B1A18, 4.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
      {0xFF1B1A18, 14.0f, 400, 0.0f, false, "Inter"}, {0xFF2A2824, 11.0f, 700, 0.0f, false, "Inter"}, 1.0f,
-     {{0xFFD2D3D3, kBackdrop_studio2003_header, 2}, {0xFFC9C8C3, kBackdrop_studio2003_controlBar, 7}, {0xFFBFBDB7, kBackdrop_studio2003_chain, 2}, {0xFFC9C8C3, kBackdrop_studio2003_main, 3}, {0x00000000, nullptr, 0}, {0xFFD2D3D3, kBackdrop_studio2003_footer, 2}, {0xFFD6D5D0, kBackdrop_studio2003_shell, 7}, {0xFFD1D0CB, kBackdrop_studio2003_modal, 1}, {0xFFD2D3D3, kBackdrop_studio2003_modalHeader, 2}}},
+     0.0f, 0.0f,
+     "", 0.0f, 0.0f,
+     {{true, {0xFFF6F3EA, 0xFFCFC9B9, 1.0f, 0xFF7D7666, 6.0f, 0.0f, 0x00000000, 0x732C2414, 1.0f, 1.0f, 0xFFFFFFFF, 0x242C2414}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF2A2824},
+      {true, {0xFFD9C9B6, 0xFFE9DCCB, 1.0f, 0xFF6B2710, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0xB3FFFCF4, 0xB3FFFCF4, 0.0f, 0xFF8A2F10},
+      {true, {0xFFD9693A, 0xFF9C3713, 1.0f, 0xFF6B2710, 6.0f, 0.0f, 0x00000000, 0x802C2414, 1.0f, 1.0f, 0xB3FFDCBE, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFFF8EE},
+      {true, {0xFFF6F3EA, 0xFFCFC9B9, 1.0f, 0xFF7D7666, 8.0f, 0.0f, 0x00000000, 0x732C2414, 1.0f, 1.0f, 0xFFFFFFFF, 0x242C2414}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF2A2824},
+      {true, {0xFFF6F3EA, 0xFFCFC9B9, 1.0f, 0xFF7D7666, 8.0f, 0.0f, 0x00000000, 0x732C2414, 1.0f, 1.0f, 0xFFFFFFFF, 0x242C2414}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF2A2824}},
+     {{{true, {0xFFEEEEEC, 0xFFD1D0CC, 1.0f, 0xFFEAB172, 10.0f, 0.0f, 0x00000000, 0x302C2414, 7.0f, 12.0f, 0xE6FFFFFF, 0x0F000000}, 4.0f, 0xFFA3A19A, 0x4D2C2414, 0.0f, 0xFF1B1A18}, {0xFF2A2824, 10.0f, 500, 0.06f, true, "Inter"}, 0xFF755F44, {0x1FF0A24C, 0x1FF0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{true, {0xFFEEEEEC, 0xFFD1D0CC, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x302C2414, 7.0f, 12.0f, 0xE6FFFFFF, 0x0F000000}, 4.0f, 0xFFA3A19A, 0x4D2C2414, 0.0f, 0xFF1B1A18}, {0xFF2A2824, 10.0f, 500, 0.06f, true, "Inter"}, 0xFF755F44, {0x1FF0A24C, 0x1FF0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
+     {{true, {0xFF96A57C, 0xFFA9B88D, 1.0f, 0xFF4D4A40, 3.0f, 2.0f, 0xFF2B2924, 0xBFFFFCF4, 1.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF1C2412}, {0xFF1C2412, 11.0f, 700, 0.04f, false, "Arial"}, 0x33141E0A, 1.0f, 1.0f, 0.0f},
+     {{true, {0xFF96A57C, 0xFFA9B88D, 1.0f, 0xFF4D4A40, 2.0f, 1.0f, 0xFF2B2924, 0x99FFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFF1C2412}, {0xFF1C2412, 11.0f, 700, 0.02f, false, "Arial"}, 0x33141E0A, 1.0f, 1.0f, 0.0f},
+     {{0xFFD2D3D3, kBackdrop_studio2003_header, 2}, {0xFFC9C8C3, kBackdrop_studio2003_controlBar, 7}, {0xFFBFBDB7, kBackdrop_studio2003_chain, 2}, {0xFFC9C8C3, kBackdrop_studio2003_main, 3}, {0x00000000, nullptr, 0}, {0xFFD2D3D3, kBackdrop_studio2003_footer, 2}, {0xFFD6D5D0, kBackdrop_studio2003_shell, 7}, {0xFFD1D0CB, kBackdrop_studio2003_modal, 1}, {0xFFD2D3D3, kBackdrop_studio2003_modalHeader, 2}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, kBackdrop_studio2003_keyPlain, 1}, {0x00000000, kBackdrop_studio2003_keyOn, 1}, {0x00000000, kBackdrop_studio2003_keyPrimary, 1}, {0x00000000, kBackdrop_studio2003_keyTool, 1}, {0x00000000, kBackdrop_studio2003_keyNav, 1}, {0xFFDAD9D4, kBackdrop_studio2003_nodePlain, 1}, {0xFFDAD9D4, kBackdrop_studio2003_nodeSelected, 1}, {0x00000000, kBackdrop_studio2003_presetDisplay, 3}, {0x00000000, kBackdrop_studio2003_tempo, 3}}},
+    {"studio-1973",
+     {38.0f, -1.0f, {0x00000000, 0x00000000, 0.0f, 0xFFF6EAD3, 0.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, "images/themes/studio-1973/knob.png", 0.5f, 0.5f, 0x00000000, 0x00000000, 1.0f,
+      {7.97f, 2.0f, 5.31f, 99.0f, 0xFF15100C, 0xFF15100C, 1.0f, 0x8CFFFFFF, 0.0f},
+      {0xFF5A412C, 2.0f, 3.0f, 2.0f}},
+     {0xFFD2BA93, 9.0f, 600, 0.12f, true, "Fraunces"},
+     {0xFFFFC35A, 11.0f, 600, 0.0f, false, "Inter"},
+     {36.0f, 20.0f, {0xFF0F0905, 0xFF0F0905, 1.0f, 0xFF050302, 20.0f, 0.0f, 0x00000000, 0x14FFE6BE, 1.0f, 0.0f, 0x00000000, 0x00000000}, {0xFFFAF6EE, 0xFF9D968A, 0.0f, 0xFFF6EAD3, 50.0f, 0.0f, 0x00000000, 0xBF000000, 1.0f, 2.0f, 0xFFFFFFFF, 0x00000000}, 14.0f, 2.0f},
+     {36.0f, 20.0f, {0xFFD0721E, 0xFFFFAD4A, 1.0f, 0xFFB5520F, 20.0f, 0.0f, 0x00000000, 0x80FF9628, 0.0f, 10.0f, 0x00000000, 0x00000000}, {0xFFFAF6EE, 0xFF9D968A, 1.0f, 0x2E000000, 50.0f, 2.0f, 0x73FFFFFF, 0xCC000000, 1.0f, 3.0f, 0x00000000, 0x00000000}, 14.0f, 2.0f},
+     {{0xFFE6D3B1, 10.0f, 700, 0.08f, true, "Fraunces"}, {0xFFF2952E, 10.0f, 700, 0.08f, true, "Fraunces"}, 0xFFF2952E, 2.0f, 0xFF3E2B1D},
+     {0x6B0A0603, 0x6B0A0603, 1.0f, 0x8C000000, 5.0f, 0.0f, 0x00000000, 0x0FFFE6BE, 1.0f, 0.0f, 0x00000000, 0x00000000}, {0xFFD2BA93, 10.0f, 800, 0.12f, true, "Fraunces"},
+     {0xFF241C15, 0xFF110A06, 1.0f, 0x00000000, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x38FFF0D7, 0x1AFFF0D7}, {0x6B0A0603, 0x6B0A0603, 1.0f, 0x8C000000, 4.0f, 0.0f, 0x00000000, 0x0FFFE6BE, 1.0f, 0.0f, 0x00000000, 0x00000000}, {0xFF0D0805, 0xFF0D0805, 1.0f, 0xFF050302, 4.0f, 0.0f, 0x00000000, 0x47000000, 18.0f, 28.0f, 0x0DFFFFFF, 0x73000000},
+     {0x6B0A0603, 0x6B0A0603, 1.0f, 0x8C000000, 16.0f, 0.0f, 0x00000000, 0x0FFFE6BE, 1.0f, 0.0f, 0x00000000, 0x00000000}, 16.0f, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Inter"}, {0xADDCE3F3, 10.0f, 800, 0.12f, true, "Inter"}, {0xFF150D08, 0xFF150D08, 0.0f, 0xFFF6EAD3, 2.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000},
+     {0xFFF6EAD3, 14.0f, 400, 0.0f, false, "Inter"}, {0xFFF8EEDB, 11.0f, 700, 0.0f, false, "Fraunces"}, 1.0f,
+     16.0f, 6.0f,
+     "images/themes/studio-1973/vu-face.png", 79.19f, 57.59f,
+     {{true, {0xFFFDF9F1, 0xFFD5C6AA, 1.0f, 0xFFC9B894, 3.0f, 0.0f, 0x00000000, 0x80281606, 3.0f, 3.0f, 0xF2FFFFFF, 0x408C6E46}, 2.0f, 0xFFE2D5BA, 0xFFB09D7A, 0.0f, 0xFF1D1712},
+      {true, {0xFFFFE296, 0xFFF2952E, 1.0f, 0xFFB5520F, 3.0f, 0.0f, 0x00000000, 0x80FF9628, 0.0f, 12.0f, 0x00000000, 0x00000000}, 1.0f, 0xFF8A4A14, 0xFF8A4A14, 2.0f, 0xFF2A1404},
+      {true, {0xFFF1A97C, 0xFFB74C1B, 1.0f, 0xFFA8461A, 3.0f, 0.0f, 0x00000000, 0x80280E02, 3.0f, 3.0f, 0xB3FFDCB4, 0x4D5A1800}, 2.0f, 0xFFB14A1A, 0xFF94380F, 0.0f, 0xFFFFF4E0},
+      {true, {0xFFFDF9F1, 0xFFD5C6AA, 1.0f, 0xFFC9B894, 5.0f, 0.0f, 0x00000000, 0x80281606, 3.0f, 3.0f, 0xF2FFFFFF, 0x408C6E46}, 2.0f, 0xFFE2D5BA, 0xFFB09D7A, 0.0f, 0xFF1D1712},
+      {true, {0xFFFDF9F1, 0xFFD5C6AA, 1.0f, 0xFFC9B894, 5.0f, 0.0f, 0x00000000, 0x80281606, 3.0f, 3.0f, 0xF2FFFFFF, 0x408C6E46}, 2.0f, 0xFFE2D5BA, 0xFFB09D7A, 0.0f, 0xFF1D1712}},
+     {{{true, {0xFFFAF5E8, 0xFFD4C6A9, 1.0f, 0xFFEFB470, 3.0f, 0.0f, 0x00000000, 0x80281606, 5.0f, 3.0f, 0xE6FFFCF4, 0x29503214}, 4.0f, 0xFFF4ECDA, 0xFF9A8866, 0.0f, 0xFFF6EAD3}, {0xFF1D1712, 10.0f, 700, 0.06f, true, "Fraunces"}, 0xFF4A4136, {0xFF6C4924, 0xFF120B06, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0xB3FFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{true, {0xFFFED49B, 0xFFF0D9AE, 1.0f, 0xFFFFC35A, 3.0f, 1.0f, 0xB3FFAA3C, 0x80FF9628, 0.0f, 20.0f, 0xE6FFFCF4, 0x29503214}, 4.0f, 0xFFF4ECDA, 0xFF9A8866, 0.0f, 0xFFF6EAD3}, {0xFF000000, 10.0f, 700, 0.06f, true, "Fraunces"}, 0xFF4A4136, {0xFF6C4924, 0xFF120B06, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0xB3FFFFFF, 1.0f, 0.0f, 0x00000000, 0x00000000}, true}},
+     {{true, {0xFF9D6E39, 0xFF0A0502, 1.0f, 0xFF050302, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0x38FFE6BE, 0x38FFE6BE, 0.0f, 0xFFFFC35A}, {0xFFFFC35A, 11.0f, 700, 0.06f, false, "Fraunces"}, 0xB3FFA032, 0.0f, 0.0f, 6.0f},
+     {{true, {0xFF9D6E39, 0xFF0A0502, 1.0f, 0xFF050302, 3.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0x38FFE6BE, 0x38FFE6BE, 0.0f, 0xFFFFC35A}, {0xFFFFC35A, 11.0f, 700, 0.02f, false, "Arial"}, 0xB3FFA032, 0.0f, 0.0f, 6.0f},
+     {{0xFF3A2416, kBackdrop_studio1973_header, 5}, {0xFF6B3F1E, kBackdrop_studio1973_controlBar, 2}, {0xFF24160D, kBackdrop_studio1973_chain, 2}, {0xFF1D120B, kBackdrop_studio1973_main, 3}, {0xFF120B06, kBackdrop_studio1973_stage, 3}, {0xFF3A1D0C, kBackdrop_studio1973_footer, 3}, {0xFF1A110B, kBackdrop_studio1973_shell, 3}, {0xFF24170F, nullptr, 0}, {0xFF3A2416, kBackdrop_studio1973_modalHeader, 2}, {0xFF3A2416, kBackdrop_studio1973_cheekLeft, 2}, {0xFF3A2416, kBackdrop_studio1973_cheekRight, 2}, {0xFFE2D5BA, kBackdrop_studio1973_keyPlain, 2}, {0x00000000, kBackdrop_studio1973_keyOn, 2}, {0x00000000, kBackdrop_studio1973_keyPrimary, 2}, {0xFFE2D5BA, kBackdrop_studio1973_keyTool, 2}, {0xFFE2D5BA, kBackdrop_studio1973_keyNav, 2}, {0xFFEBE1CB, kBackdrop_studio1973_nodePlain, 2}, {0xFFF0D9AE, kBackdrop_studio1973_nodeSelected, 3}, {0x00000000, kBackdrop_studio1973_presetDisplay, 4}, {0x00000000, kBackdrop_studio1973_tempo, 4}}},
 };
 // clang-format on
 

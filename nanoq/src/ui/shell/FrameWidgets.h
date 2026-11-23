@@ -112,25 +112,47 @@ class PresetPill final : public Pressable
     {
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
-        const auto b = Face(ctx.bounds);
-        cnv.fill_style(mTheme.IsLight() ? mTheme.Input() : el::rgba(17, 17, 24, 255));
-        cnv.fill_round_rect(b, 10.0f);
-        {
-            // The inset shadow along the top edge.
-            auto state = cnv.new_state();
-            cycfi::artist::canvas::linear_gradient shade{b.top_left(), el::point{b.left, b.top + 8.0f}};
-            shade.add_color_stop(0.0f, el::rgba(0, 0, 0, mTheme.IsLight() ? 30 : 110));
-            shade.add_color_stop(1.0f, el::rgba(0, 0, 0, 0));
-            cnv.fill_style(shade);
-            cnv.fill_round_rect(b, 10.0f);
-        }
-        cnv.stroke_style(mHover ? mTheme.Text().opacity(0.14f) : mTheme.Text().opacity(0.06f));
-        cnv.line_width(1.0f);
-        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 10.0f);
+        auto b = Face(ctx.bounds);
+        // A theme with a display of its own (Studio's LCD, Studio 1973's amber glass) draws its
+        // window, and its lettering in the display's ink and glow.
+        const auto& display = mTheme.Controls().presetDisplay;
+        const bool skinned = display.face.drawn;
+        const el::color displayInk = Theme::Argb(display.text.colour);
 
+        if (skinned)
+        {
+            b = DrawKey(cnv, mTheme, b, display.face, mTheme.Controls().backdrops.presetDisplay, false, false);
+
+            if (mHover)
+            {
+                cnv.stroke_style(displayInk.opacity(0.3f));
+                cnv.line_width(1.0f);
+                cnv.stroke_round_rect(b.inset(1.5f, 1.5f), std::max(0.0f, display.face.box.radius - 1.0f));
+            }
+        }
+        else
+        {
+            cnv.fill_style(mTheme.IsLight() ? mTheme.Input() : el::rgba(17, 17, 24, 255));
+            cnv.fill_round_rect(b, 10.0f);
+            {
+                // The inset shadow along the top edge.
+                auto state = cnv.new_state();
+                cycfi::artist::canvas::linear_gradient shade{b.top_left(), el::point{b.left, b.top + 8.0f}};
+                shade.add_color_stop(0.0f, el::rgba(0, 0, 0, mTheme.IsLight() ? 30 : 110));
+                shade.add_color_stop(1.0f, el::rgba(0, 0, 0, 0));
+                cnv.fill_style(shade);
+                cnv.fill_round_rect(b, 10.0f);
+            }
+            cnv.stroke_style(mHover ? mTheme.Text().opacity(0.14f) : mTheme.Text().opacity(0.06f));
+            cnv.line_width(1.0f);
+            cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 10.0f);
+        }
+
+        const el::color ink = skinned ? displayInk : mTheme.Ink();
+        const el::color soft = skinned ? displayInk.opacity(0.72f) : mTheme.TextSecondary();
         const auto heart = HeartRect(b);
         mIcons.Draw(cnv, mFavourite ? "heart-filled" : "heart", heart,
-                    mFavourite ? mTheme.Accent() : (mHoverHeart ? mTheme.Text() : mTheme.TextSecondary()));
+                    mFavourite ? mTheme.Accent() : (mHoverHeart ? (skinned ? ink : mTheme.Text()) : soft));
 
         float right = b.right - 12.0f;
         const float nameLeft = heart.right + 14.0f;
@@ -144,17 +166,26 @@ class PresetPill final : public Pressable
 
             if (chip.left - 10.0f - nameLeft >= mBadgeNameRoom)
             {
-                cnv.fill_style(mTheme.Text().opacity(0.08f));
+                cnv.fill_style(skinned ? displayInk.opacity(0.12f) : mTheme.Text().opacity(0.08f));
                 cnv.fill_round_rect(chip, 5.0f);
-                FillText(cnv, mBadge, badgeFont, mTheme.TextSecondary(), chip, HAlign::Centre);
+                FillText(cnv, mBadge, badgeFont, soft, chip, HAlign::Centre);
                 right = chip.left - 10.0f;
             }
         }
 
-        const auto font = Font(Weight::SemiBold).size(mHeight > 30.0f ? 13.0f : 12.0f);
+        const float size = mHeight > 30.0f ? 13.0f : 12.0f;
+        const auto font = skinned ? ControlFont(display.text, size) : Font(Weight::SemiBold).size(size);
         const el::rect text{nameLeft, b.top, right, b.bottom};
         std::string name = mDirty ? mName + " *" : mName;
-        FillText(cnv, Ellipsize(cnv, name, font, text.width()), font, mTheme.Ink(), text, HAlign::Left);
+
+        if (skinned)
+        {
+            DrawDisplayText(cnv, Ellipsize(cnv, name, font, text.width()), font, display, ink, text, HAlign::Left);
+        }
+        else
+        {
+            FillText(cnv, Ellipsize(cnv, name, font, text.width()), font, ink, text, HAlign::Left);
+        }
     }
 
     bool click(const el::context& ctx, el::mouse_button btn) override

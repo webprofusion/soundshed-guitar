@@ -29,6 +29,7 @@ constexpr std::string_view kInter = "Inter";
 constexpr std::string_view kThemeFaces[][2] = {
     {"Oswald", "Oswald, Inter"},
     {"Archivo", "Archivo, Inter"},
+    {"Fraunces", "Fraunces, Inter"},
 };
 
 std::string_view FamilyList(std::string_view family)
@@ -91,10 +92,13 @@ std::vector<std::string> Theme::Pictures() const
 
     const auto& skin = Controls();
     add(skin.knob.image);
+    add(skin.gaugeFace);
     const auto& b = skin.backdrops;
 
     for (const auto* backdrop :
-         {&b.header, &b.controlBar, &b.chain, &b.main, &b.stage, &b.footer, &b.shell, &b.modal, &b.modalHeader})
+         {&b.header,  &b.controlBar,  &b.chain,     &b.main,         &b.stage,         &b.footer, &b.shell,
+          &b.modal,   &b.modalHeader, &b.cheekLeft, &b.cheekRight,   &b.keyPlain,      &b.keyOn,  &b.keyPrimary,
+          &b.keyTool, &b.keyNav,      &b.nodePlain, &b.nodeSelected, &b.presetDisplay, &b.tempo})
     {
         for (int i = 0; i < backdrop->count; ++i)
         {

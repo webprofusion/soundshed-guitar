@@ -30,10 +30,10 @@ namespace
 {
 using cycfi::artist::canvas;
 
-/// The theme's --radius-md: 6, and 3 in the square-cut Stage and Eleven themes.
+/// The theme's --radius-md: 6, and 3 in the square-cut Stage, Eleven and Studio 1973 themes.
 float RadiusMd(const Theme& theme)
 {
-    return theme.Name() == "stage" || theme.Name() == "high-gain" ? 3.0f : 6.0f;
+    return theme.Name() == "stage" || theme.Name() == "high-gain" || theme.Name() == "studio-1973" ? 3.0f : 6.0f;
 }
 
 /// The meter (.gate-learn-meter): the threshold's range across, the noise floor heard hatched

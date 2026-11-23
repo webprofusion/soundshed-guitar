@@ -62,6 +62,21 @@ bool RunDevCommand(const uic::ClientState& state, uic::UiCommands& commands, con
         return true;
     }
 
+    if (verb == "theme")
+    {
+        // As the theme flyout picks one (the state's theme and the setting): cmd theme studio-1973
+        std::string id;
+        words >> id;
+
+        if (id.empty())
+        {
+            return false;
+        }
+
+        commands.SetTheme(id);
+        return true;
+    }
+
     if (verb == "device")
     {
         // An audioDevice request, as Settings sends it: cmd device setDeviceType {"deviceType":"ASIO"}

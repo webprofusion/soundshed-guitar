@@ -28,6 +28,24 @@ const VU_PEAK_HOLD_MS = 2000;
 // quietest segment, so the number still says something after the ladder has gone dark.
 const VU_READOUT_FLOOR_DBFS = -60;
 
+// The analog gauge a theme can show in place of the ladder (Studio 1973's needle meter):
+// it reads RMS, as a VU meter does, with 0 VU at -18 dBFS (the usual digital alignment) and
+// its end stop at +3 VU. The face is images/themes/studio-1973/vu-face.png, whose sweep is
+// ±VU_GAUGE_SWEEP_DEG (tools/studio-1973-theme-assets/vu-face.mjs).
+const VU_GAUGE_ZERO_DBFS = -18;
+const VU_GAUGE_SWEEP_DEG = 42;
+// Needle ballistics, per 20 Hz frame: a VU needle reaches 99% of a step in about 300 ms,
+// a time constant near 65 ms, so each 50 ms frame closes 1 - e^(-50/65) of the gap.
+const VU_GAUGE_BALLISTIC = 0.54;
+// Smallest needle move worth a repaint: about a third of a degree.
+const VU_GAUGE_MIN_STEP = 0.004;
+
+/** Where a VU needle sits (0 rest, 1 end stop) for an RMS level in dBFS. */
+export function vuGaugeDeflection(rmsDbfs: number): number {
+  if (!isFinite(rmsDbfs)) return 0;
+  return Math.min(1, Math.pow(10, (rmsDbfs - VU_GAUGE_ZERO_DBFS) / 20) / Math.SQRT2);
+}
+
 /**
  * The held peak as a label. Whole dB only — a tenth of a dB is past what anyone reads off
  * a meter at a glance, and "-12.4 dB" needs half again the width of "-12 dB". Overs carry
@@ -58,9 +76,15 @@ export interface VuMeterOptions {
   peakHoldId: string;
   /** Element id of the `.vu-readout` label above the ladder. Optional. */
   readoutId?: string;
+  /**
+   * Element id of the `.vu-gauge` needle meter, which only some themes show. Optional. It is
+   * driven by one custom property, --vu-needle (an angle), which the theme paints with: a
+   * background, never a transform, so a moving needle repaints a 66 x 48 box and nothing else.
+   */
+  gaugeId?: string;
 }
 
-export function createVuMeter({ segmentsId, peakHoldId, readoutId }: VuMeterOptions): VuMeter {
+export function createVuMeter({ segmentsId, peakHoldId, readoutId, gaugeId }: VuMeterOptions): VuMeter {
   // Cached DOM references (populated on first update).
   let segments: HTMLElement[] | null = null;
   let peakHoldEl: HTMLElement | null = null;
@@ -73,6 +97,22 @@ export function createVuMeter({ segmentsId, peakHoldId, readoutId }: VuMeterOpti
   let lastActiveStates: boolean[] | null = null;
   let lastPeakHoldVisible = false;
   let lastPeakHoldTop: string | null = null;
+  let gaugeEl: HTMLElement | null = null;
+  let needle = 0;
+  let lastNeedle = -1;
+
+  // The needle eases toward the RMS level each frame and drops straight to rest when the
+  // frames stop (null), since no later frame would carry it down.
+  function moveNeedle(levels: SignalLevelMetrics | null): void {
+    if (!gaugeEl) return;
+    const target = levels ? vuGaugeDeflection(levels.rmsDbfs) : 0;
+    needle = levels ? needle + (target - needle) * VU_GAUGE_BALLISTIC : 0;
+    if (needle < VU_GAUGE_MIN_STEP && target === 0) needle = 0;
+    if (Math.abs(needle - lastNeedle) < VU_GAUGE_MIN_STEP && !(needle === 0 && lastNeedle !== 0)) return;
+    lastNeedle = needle;
+    const deg = -VU_GAUGE_SWEEP_DEG + 2 * VU_GAUGE_SWEEP_DEG * needle;
+    gaugeEl.style.setProperty("--vu-needle", `${deg.toFixed(2)}deg`);
+  }
 
   function update(levels: SignalLevelMetrics | null): void {
     if (!segments) {
@@ -82,8 +122,11 @@ export function createVuMeter({ segmentsId, peakHoldId, readoutId }: VuMeterOpti
         : [];
       peakHoldEl = document.getElementById(peakHoldId);
       readoutEl = readoutId ? document.getElementById(readoutId) : null;
+      gaugeEl = gaugeId ? document.getElementById(gaugeId) : null;
       lastActiveStates = new Array(segments.length).fill(false);
     }
+
+    moveNeedle(levels);
 
     const writeReadout = (dbfs: number | null): void => {
       if (!readoutEl) return;

@@ -305,12 +305,14 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     // The meters, from the telemetry feed (20 Hz): only a bar that moved is redrawn.
     auto inMeter = std::make_shared<MeterBar>(mTheme);
     inMeter->Vertical(true);
-    mLive.Feed(inMeter,
-               [this](MeterBar& m) { return m.Set(mState.telemetry.input.peakDb, mState.telemetry.input.clipped); });
+    mLive.Feed(inMeter, [this](MeterBar& m) {
+        return m.Set(mState.telemetry.input.peakDb, mState.telemetry.input.clipped, mState.telemetry.input.rmsDb);
+    });
     auto outMeter = std::make_shared<MeterBar>(mTheme);
     outMeter->Vertical(true);
-    mLive.Feed(outMeter,
-               [this](MeterBar& m) { return m.Set(mState.telemetry.output.peakDb, mState.telemetry.output.clipped); });
+    mLive.Feed(outMeter, [this](MeterBar& m) {
+        return m.Set(mState.telemetry.output.peakDb, mState.telemetry.output.clipped, mState.telemetry.output.rmsDb);
+    });
     auto mute = std::make_shared<IconButton>(mTheme, mIcons, mState.outputMuted ? "ui-mute" : "ui-speaker");
     mute->Size(20, 18).IconSize(12).TouchTarget(36);
     mute->onClick = [this] { mSession.Commands().SetOutputMuted(!mState.outputMuted); };

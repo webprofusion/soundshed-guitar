@@ -31,6 +31,9 @@
 - `core/ui/css/themes/high-gain.css` — `.theme-high-gain`, the dark theme as a high-gain amp head
 - `core/ui/images/themes/high-gain/` — its knob, diamond plate, tolex and grille backdrop, rendered by
   `tools/high-gain-theme-assets/high_gain.py`
+- `core/ui/css/themes/studio-1973.css` — `.theme-studio-1973`, the dark theme as a wood-panelled 1970s control room
+- `core/ui/images/themes/studio-1973/` — its walnut, teak, leather and stitching (`tools/studio-1973-theme-assets/textures.py`)
+  and its knob and control-room backdrop (`tools/studio-1973-theme-assets/studio_1973.py`)
 - `core/ui/css/custom-background.css`, `core/ui/ts/visualizerBackground.ts` — the player's own
   effect-panel background, drawn over whichever theme is on
 - `core/ui/ts/themeFlyout.ts`, `core/ui/css/theme-flyout.css` — the footer's Theme button and the
@@ -41,7 +44,7 @@
 
 ## Overview
 
-GuitarFX uses a CSS variable-based theme system with seven active themes (light, dark, vintage/classic, stage, eleven (id high-gain), studio, studio 2003). Theme preference persists via backend settings and is reflected in UI state.
+GuitarFX uses a CSS variable-based theme system with eight active themes (light, dark, vintage/classic, stage, eleven (id high-gain), studio, studio 2003, studio 1973). Theme preference persists via backend settings and is reflected in UI state.
 
 ## Available Themes
 
@@ -54,6 +57,7 @@ GuitarFX uses a CSS variable-based theme system with seven active themes (light,
 | Eleven (id `high-gain`) | `.theme-dark.theme-high-gain` | A modern high-gain amp head: black plate and tolex, black knobs in red arcs, valves glowing behind a grille |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, all moulded plastic, chunky 3D keys, soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, a worn steel case, brushed rails and screws |
+| Studio 1973 | `.theme-dark.theme-studio-1973` | Dark and skeuomorphic: a 1970s control room, walnut and teak veneer, aluminium knobs and keys, a leather armrest, amber lamps |
 
 Legacy persisted values (`default`, `gritty`) are normalized to `dark` (`LEGACY_THEME_NAMES` in `themes.ts`), in the web UI and the native one alike.
 
@@ -138,7 +142,25 @@ shell, and a dialog and its header. Each is its colour and its layers, every pic
 sized and tiled as CSS has it (the film grain, plate, tolex, casing, screws) and every linear and
 radial gradient. Nano Q lays them over its own colour for each surface (`Dressed`,
 `DrawBackdrop`); the effect's shell draws its colour and layers in place of the flattened fill.
-A layer the native side cannot draw stops the capture, so a new kind is noticed.
+A layer the native side cannot draw stops the capture, so a new kind is noticed. A repeating
+linear gradient straight across or down (a dial's scale ticks, an LCD's pixel grid) repeats its
+stops in Nano Q too, its hard stops as solid bands.
+
+Keys, the chain's modules and the displays carry over the same way, for a theme that restyles
+them. The capture reads a dialog's keys (`.btn`, `.btn.active` latched, `.btn-primary`), the
+preset toolbar's (`.preset-action-btn`), the arrows beside the preset (`.preset-nav-btn`), two
+modules (`.signal-node`, one chosen), the preset's display (`.preset-selector` and its name's
+lettering and glow) and the footer's tempo (`.bpm-display`): each as a box, a background (in
+`backdrops`), the side wall its hard box-shadow bands make (how far a key stands proud) and its
+ink (`ControlSkin::keys`, `nodes`, `presetDisplay`, `tempo`). One is `drawn` only where it
+computes to something other than its base theme's (the theme its first class names), so the base
+themes keep Nano Q's own look. Nano Q's `DrawKey` stands the face on its wall, pushes it down when
+pressed, and lightens it on hover; `Button`, `IconButton` (Boxed, Soft, Primary, Accent, Chip,
+Slate, and `Look::Tempo` for the tempo), `PresetPill` and `NodeCard` draw with it. A module keeps
+its category's colour on its border unless the theme's border is the same for every category
+(`fixedBorder`: Stage's modules, Studio 1973's chosen one), and its name takes the theme's
+lettering. So Studio's and Studio 2003's LCD, Eleven's red readout and Studio 1973's amber dial
+and cream keys look in Nano Q as they do on the web.
 
 Type carries over too. The capture reads the page's face and weight (`body`) and a title's
 (`title`, with `titleScale` for `font-size-adjust`), and Nano Q's `Font()` draws in that face:
@@ -152,8 +174,8 @@ needs its cuts made, then an entry in `kThemeFaces` (`nanoq/src/ui/widgets/Theme
 then Nano Q draws it in Inter.
 
 What stays web-only: textures on surfaces Nano Q has no counterpart for (the FX selector panel),
-the stage's tint (`.effect-visualization::before`), repeating gradients, and the player's own
-effect-panel background.
+the stage's tint (`.effect-visualization::before`), repeating gradients at an angle, and the
+player's own effect-panel background.
 
 ## Usage
 
@@ -432,6 +454,70 @@ for metalcore, deathcore and djent: everything black, one hot light source, meta
 - Like Stage, it restates the dark theme's hard-coded blue-greys (effect panel legends,
   resource keys, the chain's add keys) neutral; a new hard-coded colour in a dark-only rule
   needs checking here too.
+
+## Studio 1973: the Dark Theme as a 1970s Control Room
+
+Studio 1973 is the oldest of the studio themes, but it is built on dark, like Stage and
+Eleven (`theme-dark` plus `theme-studio-1973` on the body; `studio-1973.css` and
+`studio-1973-skin.css` load after dark's), because walnut is dark. It is deliberately over
+the top: as much wood as the UI will hold, drawn to look real.
+
+- Wood is the case; what you touch is cream plastic or metal. The room is figured walnut
+  veneer (`walnut.jpg`): the top bar, the page backgrounds and the chain's tray, with a paler
+  teak fascia (`teak.jpg`) under the top bar. The units are a finer, straighter quarter-sawn
+  walnut (`walnut-fine.jpg`, and `walnut-fine-v.jpg` with the grain upright), as a real
+  cabinet would be: the dialog, flyout and picker headers (the metronome's, tuner's and EQ's
+  own header bars included) and the side cheeks either side of the effect panel, drawn by
+  its `::before`/`::after` outside its box so they take no room (left out at compact
+  density). Each veneer is drawn at half its pixel size under a glaze: a gradient that
+  darkens it for the cream ink and adds the lacquer's sheen.
+- Keys and the chain's modules are cream plastic caps (`--s73-ivory`, lighter at the top, a
+  slight dish lit from above) with near-black legends, standing on a plastic side wall and
+  travelling down when pressed. Nothing is outlined: the rim (`--s73-ivory-rim`) is a shade
+  under the face, the wall is the same plastic in shadow, and the only dark is a soft contact
+  shadow on the wood (a hard dark band would read as a drawn outline, in Nano Q too). The
+  effect panel is a black-faced unit with polished trim, and knobs are
+  `knob.png`: solid turned aluminium with a spun face, polished chamfer and fine knurling,
+  framed as Studio's (1.3 skirt diameters across), inside the base knob's amber arc.
+- Amber is light, not paint (`--s73-amber`, `--s73-amber-hot`): the selected module's lamp,
+  latched keys, switches that are on, the value arc and values, and the preset name and
+  tempo, which glow through black glass like a receiver's tuning dial, scale ticks and all.
+  Burnt orange (`--s73-orange`) is the one paint: the primary key, and the thin orange,
+  amber and mustard stripe along the bottom of the top bar.
+- The footer is a padded saddle-leather armrest (`leather.jpg`, a rolled gradient over it)
+  stitched along its top edge (`stitch.png`, repeated).
+- The play page shows `room.jpg`: a 1970s control room out of focus, wood panelling, a
+  wooden console with its meters glowing, kept dim with the light low in the frame. The
+  stage's tint covers all of it, as in Eleven.
+- The input and output meters are moving-coil VU meters (`.vu-gauge`, which the base sheet
+  hides and this skin shows in place of the ladder). `ts/vuMeter.ts` drives them with RMS
+  (0 VU at -18 dBFS, the stop at +3 VU) through VU ballistics, about 300 ms to settle, and
+  writes one custom property, `--vu-needle`, an angle. The needle is a background: a thin
+  conic wedge cut short by a radial mask, so a moving needle repaints its own box and never
+  relayers. The face (`vu-face.png`) is drawn as SVG by
+  `tools/studio-1973-theme-assets/vu-face.mjs` and rasterised at 4x by headless Chrome or
+  Edge. Its geometry (a 66 x 48 face, the pivot 52px down, a 41px needle, ±42°) is repeated
+  in the skin and in Nano Q's `MeterBar`.
+- Type: Fraunces (`css/fonts`, OFL), softness all the way up and the wonky letters on, for
+  names and legends: the nav, the control legends, the preset name, the chain's modules, the
+  effect's title, tabs, groups and knob legends, and dialog titles. Values, lists and body
+  text stay Inter. Nano Q draws the effect panel's title, tabs, groups and legends in it
+  (static cuts at 600, 700 and 800; their STAT table is dropped, or DirectWrite files them
+  under a family named after the pinned axes). Its top bar and chain keep Inter, as they draw
+  in the body face.
+- Nano Q draws the walnut cheeks too: the capture reads the panel's `::before` and `::after`
+  (`cheekWidth`, `cheekRadius`, `backdrops.cheekLeft`/`cheekRight`), and the effect page
+  sets them beside the panel when the stage has room. The black face is the shell's
+  background (the panel only frames it) so the capture sees it. The stripe's three bands are
+  gradient layers sized and placed along the bar's foot, which the capture and Nano Q's
+  `DrawLinear` now carry for every linear gradient (auto is still the whole box).
+- The images are generated. Textures: `blender -b --factory-startup -P
+  tools/studio-1973-theme-assets/textures.py -- [walnut] [walnut-fine] [teak] [leather]` (or plain Python
+  with `--preview <dir>` for PNG previews): numpy fields filtered in the frequency domain, so
+  they tile. Knob and backdrop: `blender -b --factory-startup -P
+  tools/studio-1973-theme-assets/studio_1973.py -- [knob] [room]` (`room preview <file>` for
+  a quick one), which uses `studio_2003.py`'s scene helpers. The VU face: `node
+  tools/studio-1973-theme-assets/vu-face.mjs`.
 
 ## The Player's Own Effect-Panel Background
 

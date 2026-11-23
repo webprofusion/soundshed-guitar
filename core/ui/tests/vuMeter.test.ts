@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createVuMeter } from "../ts/vuMeter.js";
+import { createVuMeter, vuGaugeDeflection } from "../ts/vuMeter.js";
 import type { SignalLevelMetrics } from "../ts/types.js";
 
 const THRESHOLDS = [-3, -6, -9, -12, -18, -24, -36, -48];
@@ -185,5 +185,54 @@ describe("createVuMeter", () => {
     const meter = make("absent");
 
     expect(() => meter.update(levels(-10))).not.toThrow();
+  });
+});
+
+describe("vuGaugeDeflection", () => {
+  it("puts 0 VU (-18 dBFS RMS) at 1/1.413 of the sweep and stops at +3 VU", () => {
+    expect(vuGaugeDeflection(-18)).toBeCloseTo(1 / Math.SQRT2, 5);
+    expect(vuGaugeDeflection(-15)).toBeCloseTo(1, 2);
+    expect(vuGaugeDeflection(0)).toBe(1);
+  });
+
+  it("rests at zero for silence", () => {
+    expect(vuGaugeDeflection(-Infinity)).toBe(0);
+    expect(vuGaugeDeflection(-120)).toBeLessThan(0.001);
+  });
+});
+
+describe("the needle gauge", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div class="vu-segments" id="g-segments"><div class="vu-seg"></div><div class="vu-peak-hold" id="g-peak-hold"></div></div>
+      <div class="vu-gauge" id="g-gauge"><div class="vu-needle"></div></div>`;
+  });
+
+  const needle = (): number =>
+    parseFloat(document.getElementById("g-gauge")?.style.getPropertyValue("--vu-needle") ?? "NaN");
+  const meter = () => createVuMeter({ segmentsId: "g-segments", peakHoldId: "g-peak-hold", gaugeId: "g-gauge" });
+
+  it("eases toward the level rather than jumping to it", () => {
+    const m = meter();
+    m.update(levels(-6)); // RMS -12 dBFS: past 0 VU, against the stop
+    const first = needle();
+    m.update(levels(-6));
+    const second = needle();
+
+    expect(first).toBeGreaterThan(-42);
+    expect(second).toBeGreaterThan(first);
+
+    for (let i = 0; i < 20; i++) m.update(levels(-6));
+
+    expect(needle()).toBeCloseTo(42, 0);
+  });
+
+  it("drops to rest when the frames stop", () => {
+    const m = meter();
+    for (let i = 0; i < 5; i++) m.update(levels(-6));
+
+    m.update(null);
+
+    expect(needle()).toBe(-42);
   });
 });

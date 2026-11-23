@@ -1,0 +1,236 @@
+/* ===== Studio 1973 Theme =====
+ * The third of the studio themes, and the oldest gear: a control room from the early
+ * seventies, as far over the top as wood will go. Oiled walnut veneer across the top, a teak
+ * fascia under it with a black glass dial for the preset name, a recessed walnut tray holding
+ * a row of cream module keys, a padded saddle-leather armrest along the bottom, solid
+ * machined aluminium knobs, and everything that is lit glowing like a bulb behind
+ * amber glass. A thin orange, amber and mustard stripe runs under the top bar.
+ *
+ * Its images are under images/themes/studio-1973/: walnut.jpg (flowing figure, for the
+ * console's big panels), walnut-fine.jpg and walnut-fine-v.jpg (quarter-sawn straight grain for
+ * the units: dialog caps, and the effect panel's side cheeks with the grain upright), walnut-v.jpg,
+ * teak.jpg, leather.jpg and stitch.png from
+ * tools/studio-1973-theme-assets/textures.py, and knob.png and room.jpg (the play page's
+ * backdrop: an old control room, out of focus) from studio_1973.py in the same folder.
+ *
+ * The body carries .theme-dark as well as .theme-studio-1973 (ts/themes.ts), so every
+ * dark-theme rule in the other stylesheets still applies and the theme only restyles what
+ * makes it 1973. This file is its palette, the tokens (which the native UI reads too);
+ * studio-1973-skin.css is the rest of its look.
+ *
+ * The rules of the look:
+ *  - Wood is the case, and what you touch is cream plastic or metal: bars and panels are
+ *    veneer, keys and the chain's modules cream plastic caps, the knobs turned aluminium.
+ *  - Amber is light, not paint: a lamp behind glass (the dial, a latched key, a switch that
+ *    is on, the value arc, the selected module). Burnt orange is the one paint colour, on the
+ *    primary key and the stripe.
+ *  - The light comes from above: lit top edges, shadows falling straight down.
+ *  - Ink is cream on wood and near-black on the keys.
+ */
+
+.theme-studio-1973 {
+  /* Amber, as a bulb behind orange glass. */
+  --color-accent: #f2952e;
+  --color-accent-hover: #ffad4a;
+  --color-accent-dark: #c46418;
+  --color-accent-rgb: 242, 149, 46;
+  --color-primary: #d9622b;
+  --accent-primary: var(--color-accent);
+  --toggle-active: var(--s73-amber);
+
+  /* Walnut in shade: warm, deep brown, never grey. */
+  --bg-primary: #1d120b;
+  --bg-secondary: #22160d;
+  --bg-tertiary: #281a10;
+  --bg-surface: #312116;
+  --bg-elevated: #3a281b;
+
+  --bg-panel: #20140c;
+  --bg-card: #2c1d13;
+  --bg-input: #130b06;
+
+  --bg-dark-primary: #1d120b;
+  --bg-dark-secondary: #22160d;
+  --bg-dark-tertiary: #271910;
+  --bg-dark-surface: #312116;
+
+  --bg-footer: #3a1d0c;
+  --bg-header-dark: #1a100a;
+
+  --bg-fx-primary: #1a100a;
+  --bg-fx-secondary: #21150d;
+  --bg-fx-categories: #150d08;
+
+  /* Cream ink, like silk-screen on a dark fascia. Muted is 7:1 on #281a10. */
+  --text-primary: #f6ead3;
+  --text-secondary: #e6d3b1;
+  --text-tertiary: #d2ba93;
+  --text-muted: #c2a67e;
+
+  --text-dark-primary: #f8eedb;
+  --text-dark-secondary: #eadabc;
+  --text-dark-tertiary: #dbc4a0;
+  --text-dark-muted: #c8ad86;
+  --text-dark-dimmed: #ab9170;
+  --text-dark-disabled: #7f6a52;
+
+  --border-light: #4a3424;
+  --border-medium: #3e2b1d;
+  --border-strong: #34241a;
+  --border-dark: #120b06;
+  --border-darker: #0a0603;
+
+  --border-dark-light: #5a412c;
+  --border-dark-medium: #4a3524;
+  --border-dark-strong: #6a4d34;
+
+  --window-border: #4a3424;
+
+  /* Turned and machined: corners of a few pixels. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+
+  /* Knobs: the rendered aluminium knob inside an amber arc on a dark track. */
+  --control-bg: #3a281b;
+  --control-knob-bg: #c9c3b6;
+  --control-border: #0d0805;
+  --control-indicator: #1a1410;
+  --knob-border-highlight: rgba(255, 244, 222, 0.12);
+  --knob-border-shadow: rgba(0, 0, 0, 0.6);
+  --knob-ring-color: #ffa63c;
+  --knob-ring-start: #c4561a;
+  --knob-ring-end: #ffc35a;
+  --knob-ring-track: #160e08;
+
+  --toggle-bg: #160e08;
+  --toggle-border: #4a3424;
+
+  --shadow-sm: 0 1px 2px rgba(8, 4, 1, 0.6);
+  --shadow-md: 0 3px 8px rgba(8, 4, 1, 0.6);
+  --shadow-lg: 0 8px 20px rgba(8, 4, 1, 0.65);
+  --shadow-xl: 0 16px 40px rgba(8, 4, 1, 0.75);
+
+  --color-preset-bg: #0d0806;
+  --color-preset-border: #3e2b1d;
+  --color-preset-text: #ffbd5c;
+  --amp-glow: radial-gradient(ellipse, rgba(255, 160, 50, 0.34) 0%, transparent 70%);
+
+  --bg-browser-shell: rgba(29, 18, 11, 0.96);
+  --bg-browser-header: rgba(40, 26, 16, 0.97);
+  --bg-browser-sidebar: rgba(32, 20, 12, 0.96);
+  --bg-browser-card: rgba(52, 35, 23, 0.94);
+  --bg-browser-input: rgba(19, 11, 6, 0.97);
+  --bg-browser-hover: rgba(255, 214, 160, 0.07);
+  --bg-browser-selected: rgba(242, 149, 46, 0.18);
+  --border-browser: rgba(106, 77, 52, 0.6);
+  --border-browser-strong: rgba(138, 103, 72, 0.75);
+
+  /* Keys: cream plastic with near-black legends. */
+  --bg-control: #2c1d13;
+  --button-bg: #ebe1cb;
+  --button-text: #1d1712;
+  --button-border: #c9b894;
+  --button-bg-hover: #f5eddc;
+  --button-border-hover: #b5a27d;
+
+  --modal-bg: #24170f;
+  --modal-bg-raised: #2f1f14;
+  --modal-text: #f6ead3;
+  --modal-text-secondary: #e3cfad;
+  --modal-text-muted: #c2a67e;
+  --modal-border: #4a3424;
+  --modal-border-medium: #3e2b1d;
+  --modal-close-hover: rgba(255, 230, 190, 0.08);
+  --modal-input-bg: #130b06;
+  --modal-input-text: #f6ead3;
+  --modal-input-border: #4a3424;
+  --modal-input-placeholder: #9c8366;
+
+  --eq-curve-grid: rgba(255, 220, 170, 0.08);
+  --eq-curve-response: rgba(255, 166, 60, 0.96);
+  --eq-curve-handle-stroke: rgba(255, 240, 214, 0.9);
+  --eq-curve-spectrum-fill-top: rgba(255, 200, 130, 0.16);
+  --eq-curve-spectrum-fill-bottom: rgba(255, 200, 130, 0.02);
+  --eq-curve-spectrum-line: rgba(255, 210, 150, 0.3);
+
+  --performance-plot-line: rgba(255, 166, 60, 0.95);
+  --performance-plot-fill: rgba(255, 166, 60, 0.14);
+  --performance-plot-grid: rgba(255, 220, 170, 0.1);
+
+  --sb-track: #160e08;
+  --sb-track-border: #2c1d13;
+  --sb-thumb: #5a412c;
+  --sb-thumb-border: #6a4d34;
+  --sb-thumb-hover: #7a5a3d;
+  --sb-thumb-hover-border: #8a6a4a;
+
+  /* The chain's modules (css/signal-path/nodes.css): cream plastic caps on a walnut tray. */
+  --node-face: #ebe1cb;
+  --node-sheen: rgb(255 252 244 / 0.5);
+  --node-edge-light: rgb(255 252 244 / 0.9);
+  --node-wall: #a2927a;
+  --node-wall-edge: rgb(10 6 2 / 0.7);
+  --node-shadow: rgb(6 3 1 / 0.8);
+
+  /* Shared pieces of the look. */
+  --s73-amber: #f2952e;
+  --s73-amber-hot: #ffc35a;
+  --s73-amber-deep: #b5520f;
+  --s73-glow: rgb(255 150 40 / 0.5);
+  --s73-orange: #d9622b;
+  --s73-orange-deep: #9e3c12;
+  --s73-mustard: #e8b13a;
+  --s73-cream: #f6ead3;
+  /* The keys' and modules' plastic: a face lighter at the top, its moulded rim (a shade under
+     the face, never a dark outline) and its side wall, the same plastic in shadow. */
+  --s73-ivory: #f3ead7;
+  --s73-ivory-low: #e2d5ba;
+  --s73-ivory-rim: #c9b894;
+  --s73-ivory-wall: #b09d7a;
+  --s73-metal-ink: #1d1712;
+  --s73-metal-ink-soft: #4a4136;
+  --s73-chrome-edge: rgb(255 238 210 / 0.16);
+  --s73-hairline: #4a3424;
+  --s73-card: rgb(29 18 11 / 0.94);
+  --s73-walnut: url("../../images/themes/studio-1973/walnut.jpg");
+  --s73-walnut-v: url("../../images/themes/studio-1973/walnut-v.jpg");
+  /* Quarter-sawn walnut: the tight, straight grain of a unit's veneer (a dialog's cap, the
+     effect panel's cheeks), where the flowing figure above is for the console's big panels. */
+  --s73-walnut-fine: url("../../images/themes/studio-1973/walnut-fine.jpg");
+  --s73-walnut-fine-v: url("../../images/themes/studio-1973/walnut-fine-v.jpg");
+  --s73-teak: url("../../images/themes/studio-1973/teak.jpg");
+  --s73-leather: url("../../images/themes/studio-1973/leather.jpg");
+  --s73-stitch: url("../../images/themes/studio-1973/stitch.png");
+  /* Studio 2003's brushed aluminium, neutral, with a warm glaze laid over it where it is used. */
+  --s73-brushed: url("../../images/themes/studio-2003/brushed.jpg");
+
+  /* Component tokens: read by the component sheets, which fall back to the base look. */
+  --nav-tab-ink: #d8c19c;
+  --nav-tab-ink-hover: #fff4e0;
+  --nav-tab-active-ink: var(--s73-amber-hot);
+  --nav-tab-active-line: var(--s73-amber);
+  --effect-shell-title-ink: #f8eedb;
+  --effect-shell-subtitle-ink: #c8ad86;
+  --eq-visualizer-bg: #150d08;
+  --eq-canvas-bg: #150d08;
+  --fx-header-bg: var(--modal-bg-raised);
+  --toast-bg: var(--bg-elevated);
+  --toast-border: var(--s73-hairline);
+  --toolbar-btn-border: #0d0805;
+  --add-trigger-border: #0d0805;
+  --preset-name-ink-hover: var(--s73-amber-hot);
+  --preset-status-bg: rgb(255 150 40 / 0.14);
+  --parallel-bg: rgba(255, 230, 190, 0.03);
+  --parallel-border: #3e2b1d;
+  --resource-key-bg: var(--bg-input);
+
+  /* The effect panel's wells: pressed into the fascia, dark inside the top edge. */
+  --panel-inset-bg: rgba(10, 6, 3, 0.42);
+  --panel-inset-border: rgba(0, 0, 0, 0.55);
+  --panel-inset-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 230, 190, 0.06);
+}

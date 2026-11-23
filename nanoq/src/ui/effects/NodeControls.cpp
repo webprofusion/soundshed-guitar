@@ -89,10 +89,10 @@ int IndexIn(const std::vector<const LibraryResource*>& list, const guitarfx::Res
     return -1;
 }
 
-/// The theme's --radius-sm and --radius-md: 4 and 6, 2 and 3 in the square-cut Stage and Eleven.
+/// The theme's --radius-sm and --radius-md: 4 and 6, 2 and 3 in the square-cut Stage, Eleven and Studio 1973.
 bool SquareCut(const Theme& theme)
 {
-    return theme.Name() == "stage" || theme.Name() == "high-gain";
+    return theme.Name() == "stage" || theme.Name() == "high-gain" || theme.Name() == "studio-1973";
 }
 
 float RadiusSm(const Theme& theme)

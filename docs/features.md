@@ -529,7 +529,7 @@ Application configuration panel.
 
 **Key files:** `core/ui/ts/theme-switcher.ts`, `core/ui/css/variables.css`
 
-CSS variable-based theming with seven built-in themes (see `docs/theme-system.md`).
+CSS variable-based theming with eight built-in themes (see `docs/theme-system.md`).
 
 | Theme | Class | Description |
 |-------|-------|-------------|
@@ -540,6 +540,7 @@ CSS variable-based theming with seven built-in themes (see `docs/theme-system.md
 | Eleven (id `high-gain`) | `.theme-dark.theme-high-gain` | A high-gain amp head: black diamond plate and tolex, black knobs, red for what is lit, valves glowing behind a grille |
 | Studio | `.theme-light.theme-studio` | Light and skeuomorphic: current studio hardware, moulded plastic with 3D keys under soft light |
 | Studio 2003 | `.theme-light.theme-studio-2003` | Light and skeuomorphic: used studio hardware, with rendered knobs, screws and panels |
+| Studio 1973 | `.theme-dark.theme-studio-1973` | Dark and skeuomorphic: a 1970s control room in walnut and teak, aluminium knobs, a leather armrest, amber lamps |
 
 - All colors use CSS variables (`--color-primary`, `--bg-primary`, `--text-primary`, etc.) — no hardcoded values in components.
 - **Persistence**: Selection stored in `localStorage` and `settings/app.json`.

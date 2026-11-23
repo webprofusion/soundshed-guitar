@@ -562,6 +562,75 @@ inline constexpr ThemeTokens kStudio2003{
     0xffffffff, // sgBoxText
 };
 
+inline constexpr ThemeTokens kStudio1973{
+    0xfff2952e, // accent
+    0xffffad4a, // accentHover
+    0xffc46418, // accentDark
+    0xff68b868, // success
+    0xff6888a8, // info
+    0xffc86868, // error
+    0xffd63031, // warning
+    0xff1d120b, // bgPrimary
+    0xff22160d, // bgSecondary
+    0xff281a10, // bgTertiary
+    0xff312116, // bgSurface
+    0xff3a281b, // bgElevated
+    0xff20140c, // bgPanel
+    0xff2c1d13, // bgCard
+    0xff130b06, // bgInput
+    0xff1a100a, // bgHeader
+    0xff3a1d0c, // bgFooter
+    0xfff6ead3, // textPrimary
+    0xffe6d3b1, // textSecondary
+    0xffd2ba93, // textTertiary
+    0xffc2a67e, // textMuted
+    0xfff8eedb, // textOnDark
+    0xff4a3424, // borderLight
+    0xff3e2b1d, // borderMedium
+    0xff34241a, // borderStrong
+    0xff3a281b, // controlBg
+    0xffc9c3b6, // controlKnobBg
+    0xff0d0805, // controlBorder
+    0xff1a1410, // controlIndicator
+    0xffc4561a, // knobRingStart
+    0xffffc35a, // knobRingEnd
+    0xff160e08, // knobRingTrack
+    0xff160e08, // toggleBg
+    0x14ffdcaa, // eqCurveGrid
+    0xf5ffa63c, // eqCurveResponse
+    0xe6fff0d6, // eqCurveHandleStroke
+    0x29ffc882, // eqCurveSpectrumFillTop
+    0x05ffc882, // eqCurveSpectrumFillBottom
+    0x4dffd296, // eqCurveSpectrumLine
+    0xd1000000, // eqCurveTooltipBg
+    0xffffffff, // eqCurveTooltipText
+    0x1affffff, // overlayLight
+    0xff24170f, // modalBg
+    0xff2f1f14, // modalBgRaised
+    0xff4a3424, // modalBorder
+    0xff3e2b1d, // modalBorderMedium
+    0xfff6ead3, // modalText
+    0xffe3cfad, // modalTextSecondary
+    0xffc2a67e, // modalTextMuted
+    0xffebe1cb, // buttonBg
+    0xffc9b894, // buttonBorder
+    0xfff8eedb, // effectShellTitleInk
+    0xc2e7ecf6, // effectShellValueInk
+    0x06ffffff, // sgSurface
+    0xff8d9097, // sgFret
+    0xffe6e0cf, // sgNut
+    0x6bd6d8e0, // sgCapo
+    0x12ffffff, // sgOpenSlot
+    0xff121720, // sgDotFill
+    0xffc8ccd6, // sgDotEdge
+    0xfff2f3f7, // sgDotText
+    0xff3a3f49, // sgDimFill
+    0xffaab0bc, // sgDimText
+    0x8cdce0ec, // sgBoxLine
+    0xffe6e6ee, // sgBoxDot
+    0xff15151a, // sgBoxText
+};
+
 /// A theme of the web UI (core/ui/ts/themes.ts): its stored name, the name pickers show, whether
 /// it is dark, its colours, and the faces its text and its titles are set in.
 struct ThemeInfo
@@ -583,6 +652,7 @@ inline constexpr ThemeInfo kThemes[] = {
     {"high-gain", "Eleven", true, &kHighGain, "Oswald", "Oswald"},
     {"studio", "Studio", false, &kStudio, "Inter", "Inter"},
     {"studio-2003", "Studio 2003", false, &kStudio2003, "Inter", "Inter"},
+    {"studio-1973", "Studio 1973", true, &kStudio1973, "Inter", "Fraunces"},
 };
 
 /// The theme stored as `name`. A name earlier builds stored is the theme it became; any other is

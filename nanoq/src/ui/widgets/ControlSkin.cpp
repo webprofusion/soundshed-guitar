@@ -185,14 +185,101 @@ void DrawPicture(canvas& cnv, const Theme& theme, el::rect r, const BackdropLaye
     }
 }
 
-void DrawLinear(canvas& cnv, el::rect r, const BackdropLayer& layer)
+// One tile of a linear gradient, filled where it overlaps `r` (the box).
+void DrawLinearTile(canvas& cnv, el::rect tile, el::rect r, const BackdropLayer& layer)
 {
-    // CSS's gradient line: through the centre at the angle (0 up, 90 right, 180 down), as long
-    // as the box's corners reach along it.
+    const auto part = artist::intersection(tile, r);
+
+    if (part.width() <= 0.0f || part.height() <= 0.0f)
+    {
+        return;
+    }
+
+    // A repeating gradient straight across or down (a dial's scale ticks, an LCD's pixel grid):
+    // its stops' pattern again every period along the tile, each band between two stops solid
+    // where they are one colour (hard stops) and graded where not.
+    const int n = layer.stopCount;
+    const float turns = layer.angle / 90.0f;
+
+    if (layer.repeating && n >= 2 && std::abs(turns - std::round(turns)) < 0.001f)
+    {
+        const int quarter = ((static_cast<int>(std::lround(turns)) % 4) + 4) % 4; // 0 up, 1 right, 2 down, 3 left
+        const bool across = quarter == 1 || quarter == 3;
+        const float length = across ? tile.width() : tile.height();
+        const auto at = [&](const guitarfx::uiclient::theme::BackdropStop& s) { return s.px ? s.at : s.at * length; };
+        const float first = at(layer.stops[0]);
+        const float period = at(layer.stops[n - 1]) - first;
+
+        if (period >= 0.5f)
+        {
+            // A band from `from` to `to` along the gradient line, as a rectangle of the tile.
+            const auto band = [&](float from, float to) {
+                switch (quarter)
+                {
+                case 1:
+                    return el::rect{tile.left + from, tile.top, tile.left + to, tile.bottom};
+                case 3:
+                    return el::rect{tile.right - to, tile.top, tile.right - from, tile.bottom};
+                case 2:
+                    return el::rect{tile.left, tile.top + from, tile.right, tile.top + to};
+                default:
+                    return el::rect{tile.left, tile.bottom - to, tile.right, tile.bottom - from};
+                }
+            };
+
+            auto state = cnv.new_state();
+            cnv.begin_path();
+            cnv.add_rect(part);
+            cnv.clip();
+
+            for (float base = first - std::ceil(first / period) * period; base < length; base += period)
+            {
+                for (int i = 0; i + 1 < n; ++i)
+                {
+                    const float from = base + at(layer.stops[i]) - first;
+                    const float to = base + at(layer.stops[i + 1]) - first;
+
+                    if (to <= from || to <= 0.0f || from >= length)
+                    {
+                        continue;
+                    }
+
+                    const auto c0 = layer.stops[i].colour, c1 = layer.stops[i + 1].colour;
+
+                    if (!Visible(c0) && !Visible(c1))
+                    {
+                        continue;
+                    }
+
+                    const auto r0 = band(from, to);
+
+                    if (c0 == c1)
+                    {
+                        cnv.fill_style(Argb(c0));
+                    }
+                    else
+                    {
+                        const auto start = band(from, from), end = band(to, to);
+                        canvas::linear_gradient g{artist::center_point(start), artist::center_point(end)};
+                        g.add_color_stop(0.0f, Argb(c0));
+                        g.add_color_stop(1.0f, Argb(c1));
+                        cnv.fill_style(g);
+                    }
+
+                    cnv.fill_rect(r0);
+                }
+            }
+
+            return;
+        }
+    }
+
+    // CSS's gradient line: through the tile's centre at the angle (0 up, 90 right, 180 down),
+    // as long as the tile's corners reach along it.
     const float a = layer.angle * kPi / 180.0f;
     const float dx = std::sin(a), dy = -std::cos(a);
-    const float length = std::abs(r.width() * dx) + std::abs(r.height() * dy);
-    const auto c = artist::center_point(r);
+    const float length = std::abs(tile.width() * dx) + std::abs(tile.height() * dy);
+    const auto c = artist::center_point(tile);
     canvas::linear_gradient fill{el::point{c.x - dx * length * 0.5f, c.y - dy * length * 0.5f},
                                  el::point{c.x + dx * length * 0.5f, c.y + dy * length * 0.5f}};
 
@@ -202,7 +289,53 @@ void DrawLinear(canvas& cnv, el::rect r, const BackdropLayer& layer)
     }
 
     cnv.fill_style(fill);
-    cnv.fill_rect(r);
+    cnv.fill_rect(part);
+}
+
+void DrawLinear(canvas& cnv, el::rect r, const BackdropLayer& layer)
+{
+    // Sized and placed as a picture is (a band along an edge, say); auto, cover and fit are
+    // the whole box, as a gradient has no size of its own.
+    const float boxW = r.width(), boxH = r.height();
+    const bool sized = layer.sizeMode == 0;
+    float w = sized ? LengthOf(layer.width, layer.widthUnit, boxW) : -1.0f;
+    float h = sized ? LengthOf(layer.height, layer.heightUnit, boxH) : -1.0f;
+    w = w < 0.0f ? boxW : w;
+    h = h < 0.0f ? boxH : h;
+
+    if (w < 0.25f || h < 0.25f)
+    {
+        return;
+    }
+
+    const float x0 = r.left + layer.placeX * (boxW - w) + layer.offsetX;
+    const float y0 = r.top + layer.placeY * (boxH - h) + layer.offsetY;
+
+    if (!layer.repeatX && !layer.repeatY)
+    {
+        DrawLinearTile(cnv, el::rect{x0, y0, x0 + w, y0 + h}, r, layer);
+        return;
+    }
+
+    const auto seen = artist::intersection(r, cnv.clip_extent());
+
+    if (seen.width() <= 0.0f || seen.height() <= 0.0f)
+    {
+        return;
+    }
+
+    const float firstX = layer.repeatX ? x0 - std::ceil((x0 - seen.left) / w) * w : x0;
+    const float firstY = layer.repeatY ? y0 - std::ceil((y0 - seen.top) / h) * h : y0;
+    const float lastX = layer.repeatX ? seen.right : x0 + 0.5f * w;
+    const float lastY = layer.repeatY ? seen.bottom : y0 + 0.5f * h;
+
+    for (float y = firstY; y < lastY; y += h)
+    {
+        for (float x = firstX; x < lastX; x += w)
+        {
+            DrawLinearTile(cnv, el::rect{x, y, x + w, y + h}, r, layer);
+        }
+    }
 }
 
 void DrawRadial(canvas& cnv, el::rect r, const BackdropLayer& layer)
@@ -340,6 +473,80 @@ void DrawControlBox(canvas& cnv, const Theme& theme, el::rect r, const ControlBo
     }
 
     DrawBox(cnv, r, box, scale, radius, [&](float rad) { DrawBackdrop(cnv, theme, r, fill, true, rad); });
+}
+
+el::rect DrawKey(canvas& cnv, const Theme& theme, el::rect bounds, const KeySkin& key, const SurfaceBackdrop& face,
+                 bool hover, bool down, std::uint32_t border)
+{
+    // It stands its wall proud: at rest the face fills the bounds less the wall under it. A press
+    // pushes it down all but a pixel of the wall (the web's :active), a latched key sits its own
+    // press lower.
+    const float wall = std::max(0.0f, key.wall);
+    const float press = down ? std::max(key.press, wall - 1.0f) : key.press;
+    const el::rect rest{bounds.left, bounds.top, bounds.right, bounds.bottom - std::max(0.0f, wall - key.press)};
+    const el::rect r = rest.move(0.0f, press - key.press);
+    const float standing = std::max(0.0f, wall - press);
+    const float rad = std::min(key.box.radius, std::min(r.width(), r.height()) * 0.5f);
+
+    // The wall: the face's shape again, `standing` lower, banded down to its foot; the drop shadow
+    // falls from it.
+    if (standing > 0.0f && (Visible(key.wallTop) || Visible(key.wallBottom)))
+    {
+        auto state = cnv.new_state();
+        const el::rect base = r.move(0.0f, standing);
+
+        if (Visible(key.box.dropColour))
+        {
+            // CSS casts it from the face, which stands `standing` above the wall's foot.
+            cnv.shadow_style(el::point{0.0f, std::max(0.0f, key.box.dropY - standing)}, key.box.dropBlur,
+                             Argb(key.box.dropColour));
+        }
+
+        canvas::linear_gradient bands{el::point{base.left, r.bottom}, el::point{base.left, base.bottom}};
+        bands.add_color_stop(0.0f, Argb(key.wallTop));
+        bands.add_color_stop(1.0f, Argb(key.wallBottom));
+        cnv.fill_style(bands);
+        cnv.begin_path();
+        AddShape(cnv, base, rad);
+        cnv.fill();
+    }
+
+    ControlBox box = key.box;
+
+    if (standing > 0.0f)
+    {
+        box.dropColour = 0; // fallen from the wall
+    }
+
+    if (Visible(border))
+    {
+        box.borderColour = border;
+    }
+
+    DrawControlBox(cnv, theme, r, box, face, 1.0f, rad);
+
+    if (hover && !down)
+    {
+        cnv.begin_path();
+        AddShape(cnv, r, rad);
+        cnv.fill_style(el::rgba(255, 255, 255, 20));
+        cnv.fill();
+    }
+
+    return r;
+}
+
+void DrawDisplayText(canvas& cnv, const std::string& text, const el::font_descr& font, const DisplaySkin& display,
+                     el::color colour, el::rect bounds, HAlign align)
+{
+    auto state = cnv.new_state();
+
+    if (Visible(display.glow) && display.glowBlur > 0.0f)
+    {
+        cnv.shadow_style(el::point{display.glowX, display.glowY}, display.glowBlur, Argb(display.glow));
+    }
+
+    FillText(cnv, text, font, colour, bounds, align);
 }
 
 void DrawBackdrop(canvas& cnv, const Theme& theme, el::rect r, const SurfaceBackdrop& backdrop, bool withColour,

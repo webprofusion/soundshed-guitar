@@ -67,10 +67,10 @@ el::color MatchFill(const Theme& theme)
     return theme.IsLight() ? el::rgba(40, 104, 160, 77) : el::rgba(72, 168, 224, 102);
 }
 
-/// The theme's --radius-sm: 4, and 2 in the square-cut Stage and Eleven themes.
+/// The theme's --radius-sm: 4, and 2 in the square-cut Stage, Eleven and Studio 1973 themes.
 float RadiusSm(const Theme& theme)
 {
-    return theme.Name() == "stage" || theme.Name() == "high-gain" ? 2.0f : 4.0f;
+    return theme.Name() == "stage" || theme.Name() == "high-gain" || theme.Name() == "studio-1973" ? 2.0f : 4.0f;
 }
 
 /// One of the section's buttons (.ir-alignment-controls button): an input-coloured box with a

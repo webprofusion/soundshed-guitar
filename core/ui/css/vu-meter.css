@@ -84,3 +84,10 @@
 .vu-peak-hold.visible {
   opacity: 0.85;
 }
+
+/* The needle meter a theme can show in place of the ladder (Studio 1973). ts/vuMeter.ts keeps
+ * --vu-needle on it, an angle either side of upright; the theme draws the face and paints the
+ * needle from that angle. Hidden unless a theme shows it. */
+.vu-gauge {
+  display: none;
+}

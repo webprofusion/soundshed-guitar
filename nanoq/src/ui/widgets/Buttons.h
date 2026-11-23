@@ -31,6 +31,7 @@ class IconButton final : public Pressable
         Chip,    // the effect header's Presets (.default-effect-shell-chip)
         Primary, // a dialog's confirming button: filled with the accent
         Slate,   // a model slot's previous, next and clear
+        Tempo,   // the footer's tempo (.bpm-display): a display where the theme draws one
     };
 
     IconButton(const Theme& theme, Icons& icons, std::string icon, Look look = Look::Ghost)
@@ -198,9 +199,32 @@ class IconButton final : public Pressable
         el::color fill = el::rgba(0, 0, 0, 0), line = el::rgba(0, 0, 0, 0);
         el::color ink = mTheme.Ink();
 
+        // A theme that draws its own keys (Studio 1973's cream caps) draws these as its web UI's.
+        const auto& skin = mTheme.Controls();
+        const auto* key = SkinnedKey(skin);
+
+        if (key != nullptr)
+        {
+            const auto& face = mLit && mLook != Look::Tempo ? skin.backdrops.keyOn : SkinnedFace(skin);
+            const auto at = DrawKey(cnv, mTheme, b, *key, face, mHover && mEnabled, mDown);
+            ink = Theme::Argb(mLook == Look::Tempo ? skin.tempo.text.colour : key->ink);
+
+            // A chosen ink is for the theme's own surfaces (its secondary text on a dark bar,
+            // say) and can vanish on a key drawn as the web UI's: a pale legend on a cream
+            // cap. It is kept only where it reads against the face as the key's own ink does.
+            if (mHasInk && !mLit && mLook != Look::Tempo && SameSide(mInk, ink))
+            {
+                ink = mInk;
+            }
+
+            DrawContent(cnv, at, mEnabled ? ink : ink.opacity(0.35f), mLook == Look::Tempo ? &skin.tempo : nullptr);
+            return;
+        }
+
         switch (mLook)
         {
         case Look::Ghost:
+        case Look::Tempo:
 
             if (mHover || mLit)
             {
@@ -281,7 +305,77 @@ class IconButton final : public Pressable
             cnv.stroke_round_rect(b.inset(0.5f, 0.5f), radius);
         }
 
-        // Icon, label and caret, centred as one group.
+        DrawContent(cnv, b, ink, nullptr);
+    }
+
+  private:
+    /// Whether two inks are both dark or both light, so both read on the same face.
+    [[nodiscard]] static bool SameSide(el::color a, el::color b)
+    {
+        const auto luma = [](el::color c) { return 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue; };
+        return (luma(a) < 0.5f) == (luma(b) < 0.5f);
+    }
+
+    /// The theme's key for this look, where it draws its own (its web UI's toolbar keys, the
+    /// arrows, the confirming key, a chip, the tempo's display; lit, its latched key).
+    [[nodiscard]] const KeySkin* SkinnedKey(const ControlSkin& skin) const
+    {
+        const KeySkin* key = nullptr;
+
+        switch (mLook)
+        {
+        case Look::Boxed:
+            key = &skin.keys.tool;
+            break;
+        case Look::Soft:
+            key = &skin.keys.nav;
+            break;
+        case Look::Primary:
+        case Look::Accent:
+            key = &skin.keys.primary;
+            break;
+        case Look::Chip:
+        case Look::Slate:
+            key = &skin.keys.plain;
+            break;
+        case Look::Tempo:
+            key = &skin.tempo.face;
+            break;
+        case Look::Ghost:
+            break;
+        }
+
+        if (key != nullptr && mLit && mLook != Look::Tempo)
+        {
+            key = &skin.keys.on;
+        }
+
+        return key != nullptr && key->drawn ? key : nullptr;
+    }
+
+    [[nodiscard]] const SurfaceBackdrop& SkinnedFace(const ControlSkin& skin) const
+    {
+        const auto& b = skin.backdrops;
+
+        switch (mLook)
+        {
+        case Look::Boxed:
+            return b.keyTool;
+        case Look::Soft:
+            return b.keyNav;
+        case Look::Primary:
+        case Look::Accent:
+            return b.keyPrimary;
+        case Look::Tempo:
+            return b.tempo;
+        default:
+            return b.keyPlain;
+        }
+    }
+
+    /// The icon, label and caret in `b`, centred as one group; a display's label glows.
+    void DrawContent(el::canvas& cnv, el::rect b, el::color ink, const DisplaySkin* display) const
+    {
         const auto font = Font(Weight::SemiBold).size(LabelSize());
         const float textW = mLabel.empty() ? 0.0f : el::measure_text(cnv, mLabel, font).x;
         const float iconW = mIcon.empty() ? 0.0f : mIconSize;
@@ -299,7 +393,17 @@ class IconButton final : public Pressable
 
         if (!mLabel.empty())
         {
-            FillText(cnv, mLabel, font, ink, el::rect{x, b.top, x + textW + 1.0f, b.bottom}, HAlign::Left);
+            const el::rect at{x, b.top, x + textW + 1.0f, b.bottom};
+
+            if (display != nullptr)
+            {
+                DrawDisplayText(cnv, mLabel, font, *display, ink, at, HAlign::Left);
+            }
+            else
+            {
+                FillText(cnv, mLabel, font, ink, at, HAlign::Left);
+            }
+
             x += textW;
         }
 
@@ -310,7 +414,6 @@ class IconButton final : public Pressable
         }
     }
 
-  private:
     /// A label is read to work the button: 11 px at the least with touch sizes.
     [[nodiscard]] float LabelSize() const
     {

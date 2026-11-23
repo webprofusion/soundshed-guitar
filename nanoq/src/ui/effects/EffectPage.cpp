@@ -167,6 +167,39 @@ class EffectPanel final : public el::element
     el::color mTint;
 };
 
+/// A cheek beside the panel, outside it (Studio 1973's walnut: the web UI's ::before and ::after
+/// on .node-params-panel), rounded on its outer side only.
+class PanelCheek final : public el::element
+{
+  public:
+    PanelCheek(const Theme& theme, bool left) : mTheme(theme), mLeft(left)
+    {
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const auto& skin = mTheme.Controls();
+        const float r = skin.cheekRadius;
+        auto state = cnv.new_state();
+        // Clipped to the cheek, and to a rounded box reaching past its inner side, so only the
+        // outer corners round.
+        cnv.begin_path();
+        cnv.add_rect(b);
+        cnv.clip();
+        cnv.begin_path();
+        cnv.add_round_rect(
+            mLeft ? el::rect{b.left, b.top, b.right + r, b.bottom} : el::rect{b.left - r, b.top, b.right, b.bottom}, r);
+        cnv.clip();
+        DrawBackdrop(cnv, mTheme, b, mLeft ? skin.backdrops.cheekLeft : skin.backdrops.cheekRight, true);
+    }
+
+  private:
+    const Theme& mTheme;
+    bool mLeft;
+};
+
 /// The stage behind the panel: the page colour and its texture, shaded darker under the panel,
 /// or the theme's own play page (#panel-visualizer: a stage, a grille).
 class EffectBackdrop final : public el::element
@@ -776,8 +809,10 @@ Ptr Shell::BuildEffectPage()
             NoteDrawn(ctx);
             auto& cnv = ctx.canvas;
             const auto b = ctx.bounds;
-            // --radius-sm: 4, and 2 in the square-cut Stage and Eleven themes.
-            const float radius = mTheme.Name() == "stage" || mTheme.Name() == "high-gain" ? 2.0f : 4.0f;
+            // --radius-sm: 4, and 2 in the square-cut Stage, Eleven and Studio 1973 themes.
+            const float radius =
+                mTheme.Name() == "stage" || mTheme.Name() == "high-gain" || mTheme.Name() == "studio-1973" ? 2.0f
+                                                                                                           : 4.0f;
             cnv.fill_style(mOn ? mTheme.Accent().opacity(0.22f) : mTheme.Input());
             cnv.fill_round_rect(b, radius);
             cnv.stroke_style(mOn || mHover ? mTheme.Accent() : mTheme.BorderStrong());
@@ -1177,7 +1212,11 @@ Ptr Shell::BuildEffectPage()
     constexpr float kArtWidth = 300.0f, kArtGap = 12.0f, kArtMinHeight = 200.0f;
     const float artRoom = hasArt ? kArtWidth + kArtGap : 0.0f;
 
-    const float maxPanel = std::max(kPanelMinWidth, stageWidth - 20.0f);
+    // A theme's cheeks stand either side of the panel, outside it, where the stage has room for
+    // them beside the narrowest panel (the web UI drops them at compact density).
+    const float cheekSkin = mTheme.Controls().cheekWidth;
+    const float cheek = cheekSkin > 0.0f && stageWidth - 20.0f - 2.0f * cheekSkin >= kPanelMinWidth ? cheekSkin : 0.0f;
+    const float maxPanel = std::max(kPanelMinWidth, stageWidth - 20.0f - 2.0f * cheek);
     const float minPanel = split ? std::clamp((stageWidth - 20.0f) * 0.5f, kPanelMinWidth, maxPanel) : kPanelMinWidth;
     // The live sections (the analyzer, the spatial panner) want the room too.
     const bool wideSection = !boundary && (node->type == guitarfx::EffectGuids::kInputAnalyzer ||
@@ -1683,7 +1722,15 @@ Ptr Shell::BuildEffectPage()
     auto panel =
         Over(Pad(kPanelPad, kPanelPad, kPanelPad, kPanelPad, body), std::make_shared<EffectPanel>(mTheme, tint));
 
-    Ptr placed = Row({Stretch(), FixedWidth(panelWidth, FixedHeight(panelHeight, panel)), Stretch()});
+    Ptr unit = FixedWidth(panelWidth, FixedHeight(panelHeight, panel));
+
+    if (cheek > 0.0f)
+    {
+        unit = Row({FixedWidth(cheek, FixedHeight(panelHeight, std::make_shared<PanelCheek>(mTheme, true))), unit,
+                    FixedWidth(cheek, FixedHeight(panelHeight, std::make_shared<PanelCheek>(mTheme, false)))});
+    }
+
+    Ptr placed = Row({Stretch(), unit, Stretch()});
     Ptr stage;
 
     if (panelHeight > stageHeight)

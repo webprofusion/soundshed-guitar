@@ -1,5 +1,6 @@
 #include "ui/widgets/Widgets.h"
 
+#include "ui/widgets/ControlSkin.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
 
@@ -7,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <optional>
@@ -164,6 +166,30 @@ void Button::draw(const el::context& ctx)
     const auto b = mFaceHeight > 0.0f && metrics::Touch() ? metrics::Face(ctx.bounds, ctx.bounds.width(), mFaceHeight)
                                                           : ctx.bounds;
     const bool lit = mOn || mSelected;
+
+    // A theme that draws its own keys (Studio 1973's cream caps): its plain, latched or
+    // confirming key, as the web UI's .btn, .btn.active and .btn-primary.
+    if (mStyle != Style::Flat)
+    {
+        const auto& skin = mTheme.Controls();
+        const bool primary = mStyle == Style::Primary;
+        const auto& key = primary ? skin.keys.primary : mOn ? skin.keys.on : skin.keys.plain;
+
+        if (key.drawn)
+        {
+            const auto& face = primary ? skin.backdrops.keyPrimary
+                               : mOn   ? skin.backdrops.keyOn
+                                       : skin.backdrops.keyPlain;
+            // A chosen option (theme, scene) is outlined in the accent, a switch is not.
+            const auto r = DrawKey(cnv, mTheme, b, key, face, mHover && mEnabled, mDown,
+                                   mSelected && !mOn ? Theme::ArgbOf(mTheme.Accent()) : 0u);
+            const el::color ink = Theme::Argb(key.ink).opacity(mEnabled ? 1.0f : 0.4f);
+            const auto font = Font(Weight::Medium).size(mSize);
+            const auto textBounds = r.inset(metrics::kPad * 0.5f, 0.0f);
+            FillText(cnv, Ellipsize(cnv, mText, font, textBounds.width()), font, ink, textBounds, mAlign);
+            return;
+        }
+    }
 
     el::color fill = mTheme.Input();
     el::color line = mTheme.BorderStrong();
@@ -413,14 +439,97 @@ MeterBar::MeterBar(const Theme& theme) : mTheme(theme)
 {
 }
 
+namespace
+{
+// The gauge face's geometry, in its own pixels (66 x 48), from
+// tools/studio-1973-theme-assets/vu-face.mjs: the bezel, the needle's pivot below the window,
+// its length and its sweep either side of upright. The web UI's skin repeats them.
+constexpr float kGaugeFaceW = 66.0f;
+constexpr float kGaugeBezel = 2.0f;
+constexpr float kGaugePivotX = 33.0f;
+constexpr float kGaugePivotY = 52.0f;
+constexpr float kGaugeNeedle = 41.0f;
+constexpr float kGaugeSweep = 42.0f * 3.14159265f / 180.0f;
+// 0 VU at -18 dBFS RMS, the end stop at +3 VU (ts/vuMeter.ts, vuGaugeDeflection).
+constexpr double kGaugeZeroDbfs = -18.0;
+// A VU needle's time constant (99% of a step in about 300 ms), and the smallest move redrawn.
+constexpr double kGaugeTau = 0.065;
+constexpr float kGaugeMinStep = 0.004f;
+
+float GaugeDeflection(double rmsDb)
+{
+    if (!std::isfinite(rmsDb))
+    {
+        return 0.0f;
+    }
+
+    return static_cast<float>(std::min(1.0, std::pow(10.0, (rmsDb - kGaugeZeroDbfs) / 20.0) / std::sqrt(2.0)));
+}
+} // namespace
+
+bool MeterBar::ThemeGauge(const Theme& theme)
+{
+    const auto& skin = theme.Controls();
+    return !skin.gaugeFace.empty() && skin.gaugeWidth > 0.0f && skin.gaugeHeight > 0.0f;
+}
+
+float MeterBar::ColumnWidth(const Theme& theme)
+{
+    return ThemeGauge(theme) ? std::ceil(theme.Controls().gaugeWidth) : 30.0f;
+}
+
 el::view_limits MeterBar::limits(const el::basic_context&) const
 {
     if (mVertical)
     {
-        return {{30.0f, 84.0f}, {30.0f, 84.0f}};
+        const float w = ColumnWidth(mTheme);
+        return {{w, 84.0f}, {w, 84.0f}};
     }
 
     return {{60.0f, 8.0f}, {el::full_extent, 8.0f}};
+}
+
+void MeterBar::DrawGauge(canvas& cnv, el::rect face) const
+{
+    if (const auto image = mTheme.Picture(mTheme.Controls().gaugeFace))
+    {
+        cnv.draw(*image, face);
+    }
+
+    const float s = face.width() / kGaugeFaceW;
+    const el::rect window = face.inset(kGaugeBezel * s, kGaugeBezel * s);
+    const float a = -kGaugeSweep + 2.0f * kGaugeSweep * mNeedleDrawn;
+    const float dx = std::sin(a), dy = -std::cos(a);
+    const el::point pivot{face.left + kGaugePivotX * s, face.top + kGaugePivotY * s};
+    const float length = kGaugeNeedle * s;
+
+    auto state = cnv.new_state();
+    cnv.begin_path();
+    cnv.add_round_rect(window, 1.4f * s);
+    cnv.clip();
+
+    // Its shadow on the card, from a pivot a little down and right, then the needle.
+    cnv.line_cap(canvas::butt);
+    cnv.begin_path();
+    cnv.move_to(el::point{pivot.x + 1.5f * s, pivot.y + 1.0f * s});
+    cnv.line_to(el::point{pivot.x + 1.5f * s + dx * length, pivot.y + 1.0f * s + dy * length});
+    cnv.stroke_style(el::rgba(70, 40, 10, 72));
+    cnv.line_width(1.6f * s);
+    cnv.stroke();
+    cnv.begin_path();
+    cnv.move_to(pivot);
+    cnv.line_to(el::point{pivot.x + dx * length, pivot.y + dy * length});
+    cnv.stroke_style(el::rgba(26, 18, 12, 255));
+    cnv.line_width(0.9f * s);
+    cnv.stroke();
+
+    // The glass: a sheen across the top of the window.
+    canvas::linear_gradient sheen{window.top_left(), el::point{window.left, window.top + window.height() * 0.4f}};
+    sheen.add_color_stop(0.0f, el::rgba(255, 255, 255, 60));
+    sheen.add_color_stop(0.9f, el::rgba(255, 255, 255, 14));
+    sheen.add_color_stop(1.0f, el::rgba(255, 255, 255, 0));
+    cnv.fill_style(sheen);
+    cnv.fill_rect(el::rect{window.left, window.top, window.right, window.top + window.height() * 0.4f});
 }
 
 void MeterBar::draw(const el::context& ctx)
@@ -432,7 +541,7 @@ void MeterBar::draw(const el::context& ctx)
     if (mVertical)
     {
         // The peak over a column of eight segments, lit from the bottom: green, then amber in
-        // the top two, red when it clips.
+        // the top two, red when it clips. Or the theme's needle gauge under the same number.
         std::string text = "-\xE2\x88\x9E dB"; // -inf
 
         if (mPeakDb > -60.0)
@@ -444,6 +553,15 @@ void MeterBar::draw(const el::context& ctx)
 
         FillText(cnv, text, Font(Weight::SemiBold).size(9.0f), mTheme.TextSecondary(),
                  el::rect{b.left - 6.0f, b.top, b.right + 6.0f, b.top + 12.0f}, Text::Align::Centre);
+
+        if (Gauge())
+        {
+            const auto& skin = mTheme.Controls();
+            const float left = std::round((b.left + b.right - skin.gaugeWidth) * 0.5f);
+            DrawGauge(cnv, el::rect{left, b.top + 16.0f, left + skin.gaugeWidth, b.top + 16.0f + skin.gaugeHeight});
+            return;
+        }
+
         constexpr int kSegments = 8;
         const float level = static_cast<float>(std::clamp((mPeakDb + 60.0) / 60.0, 0.0, 1.0));
         const int lit = static_cast<int>(std::ceil(level * kSegments - 0.01f));
@@ -483,16 +601,38 @@ void MeterBar::draw(const el::context& ctx)
     cnv.fill_round_rect(lit, b.height() * 0.5f);
 }
 
-bool MeterBar::Set(double peakDb, bool clipped)
+bool MeterBar::Set(double peakDb, bool clipped, double rmsDb)
 {
     // Quarter-decibel steps are invisible (a whole decibel, read as a number); skipping them
     // saves a redraw per frame.
-    const bool changed = std::abs(peakDb - mPeakDb) >= (mVertical ? 1.0 : 0.25) || clipped != mClipped;
+    bool changed = std::abs(peakDb - mPeakDb) >= (mVertical ? 1.0 : 0.25) || clipped != mClipped;
 
     if (changed)
     {
         mPeakDb = peakDb;
         mClipped = clipped;
+    }
+
+    if (Gauge())
+    {
+        // The needle closes on the level by the share of the gap a VU needle covers in the
+        // time since the last frame, and is redrawn once it has moved a third of a degree.
+        const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        const double dt = mNeedleAt < 0.0 ? 0.05 : std::clamp(now - mNeedleAt, 0.0, 1.0);
+        mNeedleAt = now;
+        const float target = GaugeDeflection(rmsDb);
+        mNeedle += (target - mNeedle) * static_cast<float>(1.0 - std::exp(-dt / kGaugeTau));
+
+        if (target == 0.0f && mNeedle < kGaugeMinStep)
+        {
+            mNeedle = 0.0f;
+        }
+
+        if (std::abs(mNeedle - mNeedleDrawn) >= kGaugeMinStep || (mNeedle == 0.0f && mNeedleDrawn != 0.0f))
+        {
+            mNeedleDrawn = mNeedle;
+            changed = true;
+        }
     }
 
     return changed;

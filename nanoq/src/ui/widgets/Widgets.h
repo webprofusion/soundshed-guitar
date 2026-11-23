@@ -388,7 +388,8 @@ class GroupHeading : public el::element
 };
 
 /// A level bar: -60 dB to 0 dB, with a clip tint. Horizontal, or with Vertical() the web UI's
-/// Controls strip meter: a column of segments under the peak in dB.
+/// Controls strip meter: a column of segments under the peak in dB, or, where the theme draws
+/// its meters as needle gauges (ControlSkin::gaugeFace, Studio 1973), a VU meter reading RMS.
 class MeterBar : public el::element, public Drawn
 {
   public:
@@ -403,14 +404,29 @@ class MeterBar : public el::element, public Drawn
     el::view_limits limits(const el::basic_context& ctx) const override;
     void draw(const el::context& ctx) override;
 
-    /// Returns true if the bar changed enough to be worth a redraw.
-    bool Set(double peakDb, bool clipped);
+    /// Returns true if the bar changed enough to be worth a redraw. A gauge's needle reads
+    /// `rmsDb` and moves with a VU meter's ballistics, so it eases between frames.
+    bool Set(double peakDb, bool clipped, double rmsDb = -120.0);
+
+    /// Whether the theme draws vertical meters as gauges, and how wide one is.
+    [[nodiscard]] static bool ThemeGauge(const Theme& theme);
+    [[nodiscard]] static float ColumnWidth(const Theme& theme);
 
   private:
+    [[nodiscard]] bool Gauge() const
+    {
+        return mVertical && ThemeGauge(mTheme);
+    }
+
+    void DrawGauge(cycfi::artist::canvas& cnv, el::rect face) const;
+
     const Theme& mTheme;
     double mPeakDb = -120.0;
     bool mClipped = false;
     bool mVertical = false;
+    float mNeedle = 0.0f;
+    float mNeedleDrawn = 0.0f;
+    double mNeedleAt = -1.0;
 };
 
 /// One row of a list: text at the left, a muted secondary text at the right. With `heading` it

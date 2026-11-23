@@ -19,7 +19,10 @@ using guitarfx::uiclient::theme::Backdrops;
 using guitarfx::uiclient::theme::ControlBox;
 using guitarfx::uiclient::theme::ControlSkin;
 using guitarfx::uiclient::theme::ControlText;
+using guitarfx::uiclient::theme::DisplaySkin;
+using guitarfx::uiclient::theme::KeySkin;
 using guitarfx::uiclient::theme::KnobSkin;
+using guitarfx::uiclient::theme::NodeSkin;
 using guitarfx::uiclient::theme::SwitchSkin;
 
 /// Draws `r` as the web UI draws the box: its drop shadow and hard ring outside, its background
@@ -65,6 +68,19 @@ void DrawControlText(cycfi::artist::canvas& cnv, std::string text, const Control
 /// its face (flat, a radial gradient or the theme's picture), the still tick under it and the
 /// pointer that turns.
 void DrawKnob(cycfi::artist::canvas& cnv, const Theme& theme, el::point centre, float diameter, float value);
+
+/// A key standing in `bounds` as the theme draws it (a KeySkin that is `drawn`): its side wall
+/// along the foot, the face over it with `face` (its Backdrops entry) and its box, lightened when
+/// `hover`, pushed down its wall when `down` (and a latched key by its own press). `border`, when
+/// visible, replaces the box's border colour (a module's category). Returns where the face is,
+/// for its legend.
+el::rect DrawKey(cycfi::artist::canvas& cnv, const Theme& theme, el::rect bounds, const KeySkin& key,
+                 const SurfaceBackdrop& face, bool hover, bool down, std::uint32_t border = 0);
+
+/// A display's lettering (the preset's name, the tempo) in `colour`, with the theme's glow round
+/// it where it has one.
+void DrawDisplayText(cycfi::artist::canvas& cnv, const std::string& text, const el::font_descr& font,
+                     const DisplaySkin& display, el::color colour, el::rect bounds, HAlign align);
 
 /// A switch in `track` (the web's 36 by 20 slot, scaled to it), `on` from 0 (off) to 1 (on): the
 /// slot and thumb blend between the two states as it slides.

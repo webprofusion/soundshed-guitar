@@ -924,8 +924,8 @@ function formatLatencyValue(stats: DSPPerformanceStats | null | undefined): stri
 // The control bar carries two of these. The input meter shows the raw signal ahead of
 // the IN knob; the output meter shows the final mix after master gain and auto-level,
 // so it tracks the OUT knob and reads silence while the output is muted.
-const inputVuMeter = createVuMeter({ segmentsId: "vu-segments", peakHoldId: "vu-peak-hold", readoutId: "input-vu-readout" });
-const outputVuMeter = createVuMeter({ segmentsId: "output-vu-segments", peakHoldId: "output-vu-peak-hold", readoutId: "output-vu-readout" });
+const inputVuMeter = createVuMeter({ segmentsId: "vu-segments", peakHoldId: "vu-peak-hold", readoutId: "input-vu-readout", gaugeId: "input-vu-gauge" });
+const outputVuMeter = createVuMeter({ segmentsId: "output-vu-segments", peakHoldId: "output-vu-peak-hold", readoutId: "output-vu-readout", gaugeId: "output-vu-gauge" });
 
 // Cache for signal diagnostics view to prevent unnecessary DOM updates.
 let signalDiagnosticsLastInputPeakText: string | null = null;

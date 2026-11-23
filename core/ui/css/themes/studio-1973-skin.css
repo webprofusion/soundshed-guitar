@@ -1,0 +1,864 @@
+/* ===== Studio 1973 Theme: skin =====
+ * Everything in the theme's look that is not one of its colour tokens: component rules, and any
+ * pictures, textures, type and shape. Only the web UI draws these. The palette (the tokens) and
+ * the theme's description are in studio-1973.css, which loads first (ts/themes.ts).
+ *
+ * Wood is drawn as its veneer picture under a glaze: a gradient laid over it that darkens it
+ * for the ink on top and adds the lacquer's sheen (lighter at the top edge, where the light
+ * falls). The pictures are drawn at half their pixel size, so the grain stays crisp.
+ */
+
+/* The textures below replace the dark theme's film grain on the same bars. */
+body.theme-studio-1973 .film-grain {
+  background-image: none;
+}
+
+/* ===== Type: a soft, heavy seventies serif for titles and legends =====
+ * Fraunces (css/fonts, OFL) with its softness all the way up and its wonky letters on: the
+ * rounded, fat-serifed face of the period's record sleeves and fascia badges. It is for names
+ * and legends only (the nav, the control legends, the preset name, the chain's modules, the
+ * effect's title, tabs, groups and knob legends, dialog titles); values, lists and body text
+ * stay Inter, which reads better small. Loaded only when something uses it. */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/Fraunces-VariableFont_SOFT,WONK,opsz,wght.latin.woff2") format("woff2");
+}
+
+.theme-studio-1973 :is(
+    .nav-tab,
+    .control-stack-label,
+    .toggle-label,
+    .knob-label,
+    .preset-chooser-label,
+    .node-name,
+    .default-effect-shell-title-text,
+    .node-param-tab,
+    .node-param-group-title,
+    .node-param-label,
+    .modal-header h2,
+    .modal-header h3
+  ) {
+  font-family: "Fraunces", "Inter", system-ui, sans-serif;
+  font-variation-settings: "SOFT" 100, "WONK" 1;
+}
+
+body.theme-studio-1973 {
+  background:
+    linear-gradient(180deg, rgba(14, 8, 4, 0.72) 0%, rgba(14, 8, 4, 0.8) 100%),
+    var(--s73-walnut) 0 0 / 512px 256px repeat,
+    var(--bg-primary);
+}
+
+/* ===== The top bar: oiled walnut, a chrome trim, and the stripe under it ===== */
+body.theme-studio-1973 .icon-bar {
+  background:
+    /* The stripe: burnt orange, amber and mustard, along the bottom edge. One band per layer,
+       as the native UI's capture takes gradients of a few stops. */
+    linear-gradient(var(--s73-orange), var(--s73-orange)) left bottom 4px / 100% 2px no-repeat,
+    linear-gradient(var(--s73-amber), var(--s73-amber)) left bottom 2px / 100% 2px no-repeat,
+    linear-gradient(var(--s73-mustard), var(--s73-mustard)) left bottom / 100% 2px no-repeat,
+    /* Lacquer: a soft sheen across the top, the wood a little darker toward the trim. */
+    linear-gradient(180deg, rgba(255, 228, 190, 0.14) 0%, rgba(255, 228, 190, 0.03) 35%, rgba(12, 6, 2, 0.3) 100%),
+    var(--s73-walnut) 0 0 / 512px 256px repeat,
+    #3a2416;
+  border-bottom: 1px solid #0d0703;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 205, 0.22),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+  position: relative;
+  z-index: 3;
+}
+
+/* At compact density the bar is a rail down the side, where a stripe along its foot would be a
+   stub; the stripe runs down its inner edge instead. */
+html[data-density="compact"] body.theme-studio-1973 .icon-bar {
+  background:
+    linear-gradient(var(--s73-orange), var(--s73-orange)) right 4px top / 2px 100% no-repeat,
+    linear-gradient(var(--s73-amber), var(--s73-amber)) right 2px top / 2px 100% no-repeat,
+    linear-gradient(var(--s73-mustard), var(--s73-mustard)) right top / 2px 100% no-repeat,
+    linear-gradient(90deg, rgba(255, 228, 190, 0.1) 0%, rgba(12, 6, 2, 0.3) 100%),
+    var(--s73-walnut-v) 0 0 / 128px 512px repeat,
+    #3a2416;
+}
+
+.theme-studio-1973 .nav-tab {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.75);
+}
+
+.theme-studio-1973 .nav-tab.active {
+  text-shadow:
+    0 0 10px var(--s73-glow),
+    0 1px 1px rgba(0, 0, 0, 0.6);
+}
+
+.theme-studio-1973 .nav-settings-btn {
+  border-color: rgba(0, 0, 0, 0.5) !important;
+  color: #e6d3b1 !important;
+}
+
+/* ===== The fascia: teak, a step paler than the walnut round it ===== */
+body.theme-studio-1973 .control-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 226, 180, 0.12) 0%, rgba(40, 18, 4, 0.18) 45%, rgba(24, 10, 2, 0.42) 100%),
+    var(--s73-teak) 0 0 / 512px 256px repeat,
+    #6b3f1e;
+  border-bottom: 1px solid #0d0703;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 196, 0.25),
+    0 3px 8px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 2;
+}
+
+/* Silk-screened legends: cream, with the faint shadow of ink standing on a lacquered face. */
+.theme-studio-1973 .control-stack-label,
+.theme-studio-1973 .toggle-label,
+.theme-studio-1973 .knob-label {
+  color: var(--s73-cream);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+}
+
+/* ===== The chain: a walnut tray let into the console, its modules standing in it ===== */
+body.theme-studio-1973 .signal-path-bar {
+  background:
+    linear-gradient(180deg, rgba(8, 4, 1, 0.7) 0, rgba(8, 4, 1, 0.42) 16px, rgba(8, 4, 1, 0.5) 100%),
+    var(--s73-walnut) 0 64px / 512px 256px repeat,
+    #24160d;
+  border-bottom: 1px solid #0d0703;
+  box-shadow: inset 0 -1px 0 rgba(255, 230, 190, 0.08);
+}
+
+.theme-studio-1973 .signal-path-resize-handle {
+  background: #160d07;
+  border-top-color: #2c1d13;
+}
+
+.theme-studio-1973 .signal-path-nodes {
+  --signal-route-main: #8a7a62;
+  --signal-route-surface: #1b110a;
+}
+
+/* Each module is a cream plastic cap with a lit top edge, like the keys; its category colour
+   stays on its border and icon. The shared shape keeps its size, so nothing in the chain
+   moves. The side wall is the plastic's: a pale chamfer, then bands darkening down to a soft
+   contact shadow on the wood (no hard dark band, which reads as a drawn outline). */
+.theme-studio-1973 .signal-node {
+  --node-raised:
+    inset 0 1px 0 var(--node-edge-light),
+    inset 0 -1px 0 rgb(80 50 20 / 0.16),
+    0 1px 0 #f4ecda,
+    0 2px 0 #c4b496,
+    0 3px 0 #a8977a,
+    0 4px 0 #9a8866,
+    0 5px 3px rgb(40 22 6 / 0.5),
+    0 8px 12px color-mix(in srgb, var(--node-shadow) 55%, transparent),
+    0 20px 40px -10px var(--node-shadow);
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 244, 0.6) 0%, rgba(255, 252, 244, 0) 40%, rgba(90, 60, 20, 0.1) 100%),
+    linear-gradient(180deg, var(--s73-ivory) 0%, var(--s73-ivory-low) 100%),
+    var(--node-face);
+}
+
+.theme-studio-1973 .signal-node:hover {
+  border-color: #fff3dc;
+}
+
+.theme-studio-1973 .node-name {
+  color: var(--s73-metal-ink);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.theme-studio-1973 .node-type,
+.theme-studio-1973 .node-label {
+  color: var(--s73-metal-ink-soft);
+}
+
+/* The icon sits in a dark jewel set into the cap, lit in the category's colour. */
+.theme-studio-1973 .signal-node:not(.has-thumb) .node-icon {
+  background:
+    radial-gradient(circle at 50% 35%,
+      color-mix(in srgb, var(--node-accent-strong) 38%, #1b120b) 0%,
+      #120b06 78%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* Selected: the lamp behind the cap comes on. The plastic glows warm through, its edge and a
+   halo amber. */
+.theme-studio-1973 .signal-node.selected {
+  border-color: var(--s73-amber-hot);
+  background:
+    radial-gradient(120% 90% at 50% 110%, rgb(255 170 60 / 0.45) 0%, rgb(255 170 60 / 0) 70%),
+    linear-gradient(180deg, rgba(255, 252, 244, 0.6) 0%, rgba(255, 252, 244, 0) 40%),
+    linear-gradient(180deg, #fbefd6 0%, #f0d9ae 100%),
+    #f0d9ae;
+  box-shadow:
+    0 0 0 1px rgb(255 170 60 / 0.7),
+    0 0 20px -2px var(--s73-glow),
+    var(--node-raised);
+}
+
+.theme-studio-1973 .signal-node.selected .node-name {
+  color: #000000;
+}
+
+.theme-studio-1973 .signal-node:focus:not(.selected) {
+  border-color: #fff3dc;
+  box-shadow: var(--node-raised);
+}
+
+.theme-studio-1973 .signal-node:focus-visible {
+  outline: 2px solid var(--s73-amber-hot);
+  outline-offset: 2px;
+}
+
+/* ===== The pages: dark walnut panelling ===== */
+body.theme-studio-1973 .main-content {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 200, 140, 0.05) 0%, rgba(0, 0, 0, 0) 60%),
+    linear-gradient(180deg, rgba(14, 8, 4, 0.7) 0%, rgba(14, 8, 4, 0.78) 100%),
+    var(--s73-walnut) 0 0 / 512px 256px repeat,
+    var(--bg-primary);
+}
+
+/* ===== The play page: the effect in front of the control room ===== */
+/* The console and its meters glow low in the picture; the top and the edges are taken down
+   further, so the text round the panel always reads. */
+body.theme-studio-1973 #panel-visualizer {
+  background:
+    linear-gradient(180deg, rgba(10, 6, 3, 0.7) 0%, rgba(10, 6, 3, 0) 32%),
+    radial-gradient(140% 110% at 50% 75%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.55) 100%),
+    url("../../images/themes/studio-1973/room.jpg") center bottom / cover no-repeat,
+    #120b06;
+}
+
+.theme-studio-1973 .effect-visualization {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* The stage's tint covers the whole picture, not just its floor, so there is no seam. The id
+   keeps this ahead of the compact layout's `min-height: 0`. */
+body.theme-studio-1973 #panel-visualizer .effect-visualization {
+  min-height: 100%;
+}
+
+/* ===== The effect panel: a black-faced unit in a walnut sleeve =====
+ * The face is dark anodised aluminium, its brushing just visible, with a polished trim along
+ * the top and bottom. Walnut cheeks stand either side of it, outside its box, so they take
+ * no room from the controls.
+ * The panel is the frame and its shadow; the face is the shell inside it, which fills it, so
+ * the native UI (Nano Q), which reads the shell's background and the cheeks' (the panel's
+ * ::before and ::after, tools/capture-native-controls.mjs), draws the same unit. */
+.theme-studio-1973 .effect-visualization .node-params-panel {
+  border: 1px solid #050302;
+  border-radius: 4px;
+  background: #1a110b;
+  box-shadow:
+    0 0 0 1px rgba(255, 230, 190, 0.05),
+    0 22px 56px rgba(0, 0, 0, 0.75);
+}
+
+.theme-studio-1973 .effect-visualization .node-params-panel::before,
+.theme-studio-1973 .effect-visualization .node-params-panel::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 16px;
+  background:
+    linear-gradient(90deg, rgba(255, 228, 190, 0.18) 0%, rgba(255, 228, 190, 0) 35%, rgba(0, 0, 0, 0) 65%, rgba(0, 0, 0, 0.45) 100%),
+    var(--s73-walnut-fine-v) 0 0 / 256px 512px repeat,
+    #3a2416;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 205, 0.25),
+    0 22px 56px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.theme-studio-1973 .effect-visualization .node-params-panel::before {
+  left: -17px;
+  border-radius: 6px 0 0 6px;
+}
+
+.theme-studio-1973 .effect-visualization .node-params-panel::after {
+  right: -17px;
+  border-radius: 0 6px 6px 0;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 35%, rgba(255, 228, 190, 0) 65%, rgba(255, 228, 190, 0.14) 100%),
+    var(--s73-walnut-fine-v) 96px 0 / 256px 512px repeat,
+    #3a2416;
+}
+
+/* A small window or a phone has no room beside the panel for the cheeks. */
+html[data-density="compact"] .theme-studio-1973 .effect-visualization .node-params-panel::before,
+html[data-density="compact"] .theme-studio-1973 .effect-visualization .node-params-panel::after {
+  content: none;
+}
+
+/* Elsewhere (a dialog's effect, say) the shell is a plain dark card. */
+.theme-studio-1973 .default-effect-shell {
+  border: 1px solid #050302;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 236, 205, 0.05) 0%, rgba(255, 236, 205, 0) 120px),
+    var(--s73-card);
+  box-shadow: inset 0 1px 0 var(--s73-chrome-edge);
+}
+
+/* In the sleeve it is the black face, with its polished trims. */
+.theme-studio-1973 .effect-visualization .node-params-panel .default-effect-shell {
+  border-color: transparent;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(255, 236, 205, 0.06) 0%, rgba(255, 236, 205, 0) 120px),
+    linear-gradient(180deg, rgba(22, 14, 9, 0.93), rgba(16, 10, 6, 0.95)),
+    var(--s73-brushed) 0 0 / 512px 128px repeat,
+    #1a110b;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 240, 215, 0.22),
+    inset 0 -2px 0 rgba(255, 240, 215, 0.1);
+}
+
+.theme-studio-1973 .default-effect-shell .default-effect-section {
+  border: 1px solid var(--panel-inset-border);
+  border-radius: 4px;
+  background: var(--panel-inset-bg);
+  box-shadow: var(--panel-inset-shadow);
+}
+
+/* The groups of controls are wells too, cut as square as the rest of the face. */
+.theme-studio-1973 .default-effect-shell .node-param-group-block {
+  border-radius: 5px;
+}
+
+.theme-studio-1973 .default-effect-shell-equipment-panel {
+  border-radius: 4px;
+  border-color: #050302;
+  background: #0d0805;
+}
+
+.theme-studio-1973 .default-effect-shell-equipment-image {
+  border-radius: 3px;
+}
+
+.theme-studio-1973 .default-effect-shell .node-param-tabs,
+.theme-studio-1973 .node-param-tabs {
+  background: transparent;
+  border-bottom-color: #3e2b1d;
+}
+
+.theme-studio-1973 .default-effect-shell .node-resource-selector > label,
+.theme-studio-1973 .default-effect-shell .node-param-label,
+.theme-studio-1973 .default-effect-shell .node-param-group-title {
+  color: #d2ba93;
+}
+
+.theme-studio-1973 .default-effect-shell .node-param-group-title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.theme-studio-1973 .default-effect-shell-chip-presets {
+  border-color: #050302;
+  background: #130b06;
+  color: var(--s73-cream);
+}
+
+/* ===== Pop-ups, lists and dialogs: walnut-capped cabinets ===== */
+.theme-studio-1973 .modal-content,
+.theme-studio-1973 .fx-flyout,
+.theme-studio-1973 .fx-selector-panel {
+  border-color: #0d0703;
+}
+
+.theme-studio-1973 .modal-content,
+.theme-studio-1973 .fx-flyout {
+  box-shadow:
+    inset 0 1px 0 var(--s73-chrome-edge),
+    var(--shadow-xl);
+}
+
+/* The metronome, tuner and EQ cards have their own header bars; they take the same cap. */
+.theme-studio-1973 .modal-header,
+.theme-studio-1973 .metronome-card-header,
+.theme-studio-1973 .tuner-header,
+.theme-studio-1973 .eq-modal-header,
+.theme-studio-1973 .fx-flyout-header,
+.theme-studio-1973 .fx-selector-header {
+  background:
+    linear-gradient(180deg, rgba(255, 228, 190, 0.12) 0%, rgba(12, 6, 2, 0.35) 100%),
+    var(--s73-walnut-fine) 0 0 / 512px 256px repeat,
+    #3a2416;
+  border-bottom: 1px solid #0d0703;
+  box-shadow: inset 0 1px 0 rgba(255, 236, 205, 0.2);
+  color: var(--s73-cream);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+}
+
+.theme-studio-1973 .fx-item {
+  background: linear-gradient(180deg, #392719 0%, #2b1c12 100%);
+  border-color: #0d0703;
+  box-shadow: inset 0 1px 0 rgba(255, 230, 190, 0.08);
+}
+
+.theme-studio-1973 .fx-item:hover {
+  border-color: var(--s73-amber);
+  background: linear-gradient(180deg, #45301f 0%, #342317 100%);
+}
+
+.theme-studio-1973 .notification-toast {
+  box-shadow: var(--shadow-lg);
+}
+
+/* The Jam page: the dark theme draws its cards and search key in blue; here they are walnut
+   record sleeves and an amber key. */
+.theme-studio-1973 .jam-result-card {
+  border-color: #0d0703;
+  background: linear-gradient(180deg, #33231a 0%, #24170f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 230, 190, 0.08),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.theme-studio-1973 .jam-result-actions {
+  border-top-color: rgba(255, 230, 190, 0.08);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.theme-studio-1973 .jam-meta-chip {
+  border-color: rgba(255, 190, 110, 0.25);
+  background: rgba(255, 170, 70, 0.07);
+  color: #d8c19c;
+}
+
+.theme-studio-1973 #jam-search-button {
+  border-color: #4a1c06;
+  background: linear-gradient(180deg, #e2703a 0%, #c4541f 100%);
+  color: #fff4e0;
+  text-shadow: 0 1px 0 rgba(80, 24, 0, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 180, 0.6),
+    0 2px 0 #6e2a0c,
+    0 4px 8px rgba(0, 0, 0, 0.45);
+}
+
+.theme-studio-1973 .parallel-branch {
+  box-shadow: none;
+}
+
+/* ===== The armrest: padded saddle leather, stitched along its top edge ===== */
+body.theme-studio-1973 .footer-bar {
+  --footer-fg: #ecd9b8;
+  --footer-fg-strong: #fff4e0;
+  --footer-divider: rgba(0, 0, 0, 0.35);
+  --footer-field-bg: rgba(20, 10, 4, 0.72);
+  --footer-field-border: rgba(0, 0, 0, 0.55);
+  --footer-field-border-hover: #c98a46;
+  --footer-on-bg: color-mix(in srgb, var(--s73-amber) 26%, #1c0e05);
+
+  background:
+    var(--s73-stitch) 0 5px / 8px 4px repeat-x,
+    /* The padding's roll: light along the crown, falling away to the seam underneath. */
+    linear-gradient(180deg, rgba(0, 0, 0, 0.3) 0, rgba(255, 220, 170, 0.16) 30%, rgba(0, 0, 0, 0.05) 60%, rgba(0, 0, 0, 0.45) 100%),
+    var(--s73-leather) 0 0 / 256px 256px repeat,
+    var(--bg-footer);
+  border-top: 1px solid #0d0703;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.18),
+    0 -3px 8px rgba(0, 0, 0, 0.45);
+}
+
+.theme-studio-1973 .footer-bar :is(button, span, label) {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.55);
+}
+
+/* ===== Controls =====
+ * Knobs, switches, keys, the dial and the meters, after the surfaces above.
+ */
+
+/* ===== Knobs: turned aluminium inside an amber arc =====
+ * images/themes/studio-1973/knob.png: a solid aluminium knob, its face spun in fine rings, a
+ * polished chamfer round it and fine knurling down its sides, its shadow baked in; 1.3 of its
+ * diameters across, as Studio's, so the base knob's arc shows round it. The body is still and
+ * only the engraved line turns, so the highlights stay where the light is. A custom layout's
+ * own knob art (an image, or the Pedal, Amp and Minimal styles) is left alone. */
+.theme-studio-1973 .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal)::before {
+  inset: -1px;
+  border: 0;
+  border-radius: 0;
+  background: url("../../images/themes/studio-1973/knob.png") center / 100% 100% no-repeat;
+  box-shadow: none;
+}
+
+/* The pointer: a black line engraved into the face, in from its edge. */
+.theme-studio-1973 .knob:not([data-custom-knob-image="true"], .custom-knob-pedal, .custom-knob-amp, .custom-knob-minimal) .knob-indicator {
+  top: 21%;
+  width: 4.5%;
+  min-width: 2px;
+  height: 14%;
+  border-radius: 99px;
+  background: #15100c;
+  box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.55);
+  transform-origin: 50% 207.1%; /* (50% - 21%) / 14% */
+}
+
+.theme-studio-1973 .knob::after {
+  background: #5a412c;
+}
+
+.theme-studio-1973 .knob-value,
+.theme-studio-1973 .node-param-value {
+  color: var(--s73-amber-hot);
+  text-shadow: 0 0 6px rgb(255 150 40 / 0.35);
+}
+
+/* ===== Keys: cream plastic caps =====
+ * Each key stands 2px proud: a cream face with a lit chamfer, a plastic side wall, then a
+ * soft shadow. Pressed, it travels down by the wall's height; a latched key stays down and
+ * its lamp lights it amber. `translate` rather than `transform`, so a key's own transform is
+ * left alone. */
+.theme-studio-1973 .btn,
+.theme-studio-1973 .preset-action-btn,
+.theme-studio-1973 .preset-nav-btn,
+.theme-studio-1973 .eq-icon-btn,
+.theme-studio-1973 .default-effect-shell-chip,
+.theme-studio-1973 .effect-visualization-toolbar-btn,
+.theme-studio-1973 .resource-nav-btn,
+.theme-studio-1973 .default-effect-shell .resource-nav-btn,
+.theme-studio-1973 .default-effect-shell .resource-clear-btn,
+.theme-studio-1973 .default-effect-shell .resource-browse-btn,
+.theme-studio-1973 .default-effect-shell .resource-picker-btn,
+.theme-studio-1973 .default-effect-shell .blend-open-btn,
+.theme-studio-1973 .custom-layout-resource-selector .resource-nav-btn,
+.theme-studio-1973 .signal-add-btn,
+.theme-studio-1973 .signal-path-add-menu-trigger {
+  --s73-key-wall: var(--s73-ivory-wall);
+  /* No dark outline: moulded plastic has no drawn edge. The border is the face's own rim, a
+     shade under the face; the wall below it is the same plastic in shadow, and the dark is
+     only the soft contact shadow on the wood. */
+  border: 1px solid var(--s73-ivory-rim) !important;
+  background:
+    /* A slight dish across the face, lit from above: a glossy band at the top, the face
+       curving away into its own shade at the bottom. */
+    linear-gradient(180deg, rgba(255, 253, 247, 0.8) 0%, rgba(255, 253, 247, 0.15) 30%, rgba(255, 253, 247, 0) 55%, rgba(120, 90, 50, 0.12) 100%),
+    linear-gradient(180deg, var(--s73-ivory) 0%, var(--s73-ivory-low) 100%),
+    var(--s73-ivory-low) !important;
+  color: var(--s73-metal-ink) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 2px rgba(140, 110, 70, 0.25),
+    0 1px 0 var(--s73-ivory-low),
+    0 2px 0 var(--s73-key-wall),
+    0 3px 3px rgba(40, 22, 6, 0.5),
+    0 6px 10px rgba(0, 0, 0, 0.3);
+  transition: translate 0.06s ease, box-shadow 0.06s ease;
+}
+
+.theme-studio-1973 .btn:hover,
+.theme-studio-1973 .preset-action-btn:hover,
+.theme-studio-1973 .preset-nav-btn:hover,
+.theme-studio-1973 .eq-icon-btn:hover,
+.theme-studio-1973 .default-effect-shell-chip:hover,
+.theme-studio-1973 .effect-visualization-toolbar-btn:hover,
+.theme-studio-1973 .resource-nav-btn:hover,
+.theme-studio-1973 .default-effect-shell .resource-nav-btn:hover,
+.theme-studio-1973 .default-effect-shell .resource-clear-btn:hover,
+.theme-studio-1973 .default-effect-shell .resource-browse-btn:hover,
+.theme-studio-1973 .default-effect-shell .resource-picker-btn:hover,
+.theme-studio-1973 .default-effect-shell .blend-open-btn:hover,
+.theme-studio-1973 .custom-layout-resource-selector .resource-nav-btn:hover,
+.theme-studio-1973 .signal-add-btn:hover,
+.theme-studio-1973 .signal-path-add-menu-trigger:hover {
+  border-color: var(--s73-ivory-rim) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.85) 0%, rgba(255, 253, 247, 0.2) 30%, rgba(255, 253, 247, 0) 55%, rgba(120, 90, 50, 0.08) 100%),
+    linear-gradient(180deg, #f9f2e3 0%, #ebdfc5 100%),
+    #ebdfc5 !important;
+  color: #000000 !important;
+}
+
+.theme-studio-1973 .btn:active,
+.theme-studio-1973 .preset-action-btn:active,
+.theme-studio-1973 .preset-nav-btn:active,
+.theme-studio-1973 .eq-icon-btn:active,
+.theme-studio-1973 .default-effect-shell-chip:active,
+.theme-studio-1973 .effect-visualization-toolbar-btn:active,
+.theme-studio-1973 .resource-nav-btn:active,
+.theme-studio-1973 .signal-add-btn:active,
+.theme-studio-1973 .signal-path-add-menu-trigger:active,
+.theme-studio-1973 .effect-visualization-toolbar-btn.is-active,
+.theme-studio-1973 .eq-icon-btn.active,
+.theme-studio-1973 .btn.active {
+  translate: 0 2px;
+  box-shadow:
+    inset 0 1px 2px rgba(80, 50, 20, 0.3),
+    0 1px 0 var(--s73-key-wall),
+    0 1px 2px rgba(40, 22, 6, 0.45);
+}
+
+/* Latched on: the lamp behind the key lights its face amber. */
+.theme-studio-1973 .effect-visualization-toolbar-btn.is-active,
+.theme-studio-1973 .eq-icon-btn.active,
+.theme-studio-1973 .btn.active,
+.theme-studio-1973 .signal-path-add-menu-trigger[aria-expanded="true"] {
+  border-color: var(--s73-amber-deep) !important;
+  background:
+    radial-gradient(120% 100% at 50% 40%, rgba(255, 236, 170, 0.75) 0%, rgba(255, 236, 170, 0) 70%),
+    linear-gradient(180deg, #ffc35a 0%, #f2952e 100%) !important;
+  color: #2a1404 !important;
+  box-shadow:
+    inset 0 1px 2px rgba(120, 50, 0, 0.35),
+    0 1px 0 #8a4a14,
+    0 0 12px -2px var(--s73-glow) !important;
+}
+
+/* The primary key: burnt orange enamel, cream legend. */
+.theme-studio-1973 .btn-primary,
+.theme-studio-1973 .preset-action-btn-primary {
+  --s73-key-wall: #94380f;
+  border-color: #a8461a !important;
+  background:
+    linear-gradient(180deg, rgba(255, 226, 190, 0.5) 0%, rgba(255, 226, 190, 0.1) 30%, rgba(255, 226, 190, 0) 55%, rgba(90, 20, 0, 0.12) 100%),
+    linear-gradient(180deg, #e2703a 0%, #c4541f 100%) !important;
+  color: #fff4e0 !important;
+  text-shadow: 0 1px 0 rgba(80, 24, 0, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 180, 0.7),
+    inset 0 -1px 2px rgba(90, 24, 0, 0.3),
+    0 1px 0 #b14a1a,
+    0 2px 0 var(--s73-key-wall),
+    0 3px 3px rgba(40, 14, 2, 0.5),
+    0 6px 10px rgba(0, 0, 0, 0.3);
+}
+
+.theme-studio-1973 .btn-primary:hover,
+.theme-studio-1973 .preset-action-btn-primary:hover {
+  border-color: #a8461a !important;
+  background:
+    linear-gradient(180deg, rgba(255, 226, 190, 0.55) 0%, rgba(255, 226, 190, 0.12) 30%, rgba(255, 226, 190, 0) 55%),
+    linear-gradient(180deg, #ee7c44 0%, #d25e26 100%) !important;
+  color: #ffffff !important;
+}
+
+.theme-studio-1973 .btn-primary svg,
+.theme-studio-1973 .preset-action-btn-primary svg {
+  color: #fff4e0;
+}
+
+.theme-studio-1973 .effect-visualization-toolbar-btn.bypassed {
+  color: #8a2a10 !important;
+}
+
+/* A disabled key cannot be pressed, so it does not look pressed either. */
+.theme-studio-1973 .btn:disabled,
+.theme-studio-1973 .preset-action-btn:disabled,
+.theme-studio-1973 .preset-nav-btn:disabled {
+  translate: none;
+}
+
+/* ===== Switches: a slot in the face, a chrome bat in it, amber when on ===== */
+.theme-studio-1973 .toggle-slider {
+  background: #0f0905;
+  border-color: #050302;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.85),
+    0 1px 0 rgba(255, 230, 190, 0.08);
+}
+
+.theme-studio-1973 .toggle-slider:before {
+  background: linear-gradient(180deg, #faf6ee 0%, #c9c2b4 55%, #9d968a 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+.theme-studio-1973 .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(180deg, #d0721e 0%, #ffad4a 100%);
+  border-color: var(--s73-amber-deep);
+  box-shadow:
+    inset 0 1px 3px rgba(90, 30, 0, 0.5),
+    0 0 10px -2px var(--s73-glow);
+}
+
+.theme-studio-1973 .default-effect-shell-toggle {
+  border-color: #050302;
+  background: #0f0905;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.theme-studio-1973 .default-effect-shell-toggle:not(.bypassed) {
+  border-color: var(--s73-amber-deep);
+  background: linear-gradient(180deg, #ffad4a 0%, #d0721e 100%);
+  color: #2a1404;
+  box-shadow: 0 0 12px -2px var(--s73-glow);
+}
+
+.theme-studio-1973 .default-effect-shell-toggle-track {
+  background: linear-gradient(180deg, #faf6ee 0%, #c9c2b4 55%, #9d968a 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+/* ===== The dial: black glass, lit amber from behind =====
+ * The preset name and tempo glow through smoked glass like the tuning dial of a receiver,
+ * with its scale printed faintly along the bottom and the reflection of the room across the
+ * top of the glass. */
+.theme-studio-1973 .preset-selector,
+body.theme-studio-1973 .footer-bar .bpm-display {
+  border: 1px solid #050302;
+  border-radius: 3px;
+  background:
+    /* The reflection across the glass. */
+    linear-gradient(180deg, rgba(255, 245, 230, 0.09) 0%, rgba(255, 245, 230, 0.02) 46%, rgba(255, 245, 230, 0) 50%),
+    /* The dial scale: fine ticks along the bottom, every fifth one longer. */
+    repeating-linear-gradient(90deg, rgba(255, 180, 80, 0.32) 0 1px, transparent 1px 30px) left bottom / 100% 6px no-repeat,
+    repeating-linear-gradient(90deg, rgba(255, 180, 80, 0.2) 0 1px, transparent 1px 6px) left bottom / 100% 3px no-repeat,
+    /* The lamp behind, brightest in the middle. */
+    radial-gradient(90% 160% at 50% 55%, #3a1a06 0%, #170a03 60%, #0a0502 100%);
+  box-shadow:
+    inset 0 1px 5px rgba(0, 0, 0, 0.9),
+    inset 0 0 0 1px rgba(255, 200, 120, 0.05),
+    0 1px 0 rgba(255, 230, 190, 0.22);
+  color: var(--s73-amber-hot);
+}
+
+.theme-studio-1973 .preset-chooser-label {
+  color: var(--s73-amber-hot);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-shadow:
+    0 0 6px rgb(255 160 50 / 0.7),
+    0 0 16px rgb(255 120 20 / 0.35);
+}
+
+.theme-studio-1973 .preset-chooser-label:hover {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-shadow:
+    0 0 6px rgb(255 160 50 / 0.85),
+    0 0 18px rgb(255 120 20 / 0.45);
+}
+
+.theme-studio-1973 .preset-favorite {
+  border-right-color: #3a1a06;
+}
+
+.theme-studio-1973 .preset-selector-status {
+  color: var(--s73-amber-hot);
+}
+
+body.theme-studio-1973 .footer-bar .bpm-display {
+  font-weight: 700;
+  text-shadow: 0 0 6px rgb(255 160 50 / 0.7);
+}
+
+/* ===== Meters: moving-coil VU meters, lamp-lit behind glass =====
+   The ladder gives way to a needle meter (ts/vuMeter.ts keeps --vu-needle on .vu-gauge). The
+   face is vu-face.png from tools/studio-1973-theme-assets/vu-face.mjs, which sets the geometry
+   repeated here: a 66 x 48 face, a 2px bezel, the pivot 52px down (below the window), a 41px
+   needle. The needle is a background (a thin conic wedge cut short by a mask), so a moving
+   needle repaints its own box and never relayers. It is zoomed to 1.2 to sit with the knobs; the
+   picture is drawn at 4x, so it stays sharp. */
+.theme-studio-1973 .vu-meter {
+  width: 80px;
+}
+
+.theme-studio-1973 .vu-segments {
+  display: none;
+}
+
+.theme-studio-1973 .vu-gauge {
+  --vu-needle: -42deg;
+  display: block;
+  zoom: 1.2;
+  position: relative;
+  width: 66px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: url("../../images/themes/studio-1973/vu-face.png") 0 0 / 100% 100%;
+  box-shadow:
+    0 0 0 1px #050302,
+    0 1px 0 1px rgba(255, 230, 190, 0.12),
+    0 3px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* Inside the bezel; the pivot is at 31px 50px from here. The second wedge is the needle's
+   shadow on the card, from a pivot a little down and right. */
+.theme-studio-1973 .vu-needle {
+  position: absolute;
+  inset: 2px;
+  border-radius: 1.4px;
+  background:
+    conic-gradient(
+      from calc(var(--vu-needle) - 1.2deg) at 31px 50px,
+      transparent 0deg,
+      #1a120c 0.5deg,
+      #1a120c 1.9deg,
+      transparent 2.4deg
+    ),
+    conic-gradient(
+      from calc(var(--vu-needle) - 1.6deg) at 32.5px 51px,
+      transparent 0deg,
+      rgb(70 40 10 / 0.28) 0.8deg,
+      rgb(70 40 10 / 0.28) 2.4deg,
+      transparent 3.2deg
+    );
+  -webkit-mask: radial-gradient(circle at 31px 50px, #000 40.5px, transparent 41px);
+  mask: radial-gradient(circle at 31px 50px, #000 40.5px, transparent 41px);
+}
+
+/* The glass: a sheen across the top and the lamp's warmth pooling low. */
+.theme-studio-1973 .vu-gauge::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 1.4px;
+  pointer-events: none;
+  background:
+    linear-gradient(162deg, rgb(255 255 255 / 0.26) 0, rgb(255 255 255 / 0.07) 36%, transparent 37%),
+    radial-gradient(ellipse at 50% 115%, rgb(255 170 60 / 0.2), transparent 62%);
+}
+
+/* ===== Fields: recessed into the face ===== */
+.theme-studio-1973 select,
+.theme-studio-1973 input[type="text"],
+.theme-studio-1973 input[type="search"],
+.theme-studio-1973 input[type="number"],
+.theme-studio-1973 textarea {
+  border-color: #050302;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.75),
+    0 1px 0 rgba(255, 230, 190, 0.08);
+}
+
+/* The model and IR name: a recessed dark field. The base mixes the accent into a blue-grey,
+   which goes muddy under amber; the amber stays for its edge on hover. */
+.theme-studio-1973 .default-effect-shell .resource-picker-label {
+  border-color: #050302;
+  background: var(--bg-input);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 230, 190, 0.08);
+}
+
+.theme-studio-1973 .resource-picker-label {
+  border-color: #050302;
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 230, 190, 0.08);
+}
+
+.theme-studio-1973 .resource-picker-label:hover,
+.theme-studio-1973 .default-effect-shell .resource-picker-label:hover {
+  border-color: var(--s73-amber);
+  background: #1c110a;
+}

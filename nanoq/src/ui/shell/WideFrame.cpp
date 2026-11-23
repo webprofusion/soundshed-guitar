@@ -297,7 +297,9 @@ Ptr Shell::BuildHeader()
                         FixedHeight(36, Row({Pad(0, 3, 0, 3, prev), HGap(8), pill, HGap(8), Pad(0, 3, 0, 3, next)})),
                         std::make_shared<el::element>()}));
 
-    auto meterColumn = [](Ptr meter, Ptr below) {
+    // As wide as the ladder, or the theme's needle gauge (Studio 1973's VU meters).
+    const float meterWidth = MeterBar::ColumnWidth(mTheme);
+    auto meterColumn = [meterWidth](Ptr meter, Ptr below) {
         std::vector<Ptr> parts{VGap(26), FixedHeight(84, std::move(meter))};
 
         if (below)
@@ -308,7 +310,7 @@ Ptr Shell::BuildHeader()
         }
 
         parts.push_back(std::make_shared<el::element>());
-        return FixedWidth(30, Col(parts));
+        return FixedWidth(meterWidth, Col(parts));
     };
     auto cellsAt = [](std::vector<Ptr> list) {
         auto row = std::make_shared<el::htile_composite>();
@@ -445,8 +447,14 @@ Ptr Shell::BuildTempoControls(bool withTap)
     auto& commands = mSession.Commands();
     char bpm[32];
     std::snprintf(bpm, sizeof(bpm), "%.1f BPM", mState.metronome.bpm);
-    auto tempo = std::make_shared<IconButton>(mTheme, mIcons, "");
-    tempo->Size(64, 26).Label(bpm, 11.0f).Ink(mTheme.Text());
+    // A display where the theme draws one (Studio's LCD, Studio 1973's amber glass).
+    auto tempo = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Tempo);
+    tempo->Size(64, 26).Label(bpm, 11.0f);
+
+    if (!mTheme.Controls().tempo.face.drawn)
+    {
+        tempo->Ink(mTheme.Text());
+    }
     tempo->onClick = [this] { OpenMetronome(); };
 
     std::vector<Ptr> parts{tempo};
