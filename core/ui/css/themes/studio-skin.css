@@ -497,11 +497,6 @@ body.theme-studio .modal-content {
   border-radius: 6px;
 }
 
-/* The keys above stand 3px proud and throw a shadow; give the display room below them. */
-html:not([data-density="compact"]) body.theme-studio .preset-selector-row {
-  margin-top: 8px;
-}
-
 .theme-studio .preset-chooser-label {
   color: var(--studio-lcd-ink);
   font-weight: 700;

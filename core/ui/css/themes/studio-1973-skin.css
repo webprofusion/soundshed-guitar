@@ -730,11 +730,6 @@ body.theme-studio-1973 .footer-bar .bpm-display {
   color: var(--s73-amber-hot);
 }
 
-/* The keys above stand proud and throw a shadow; give the dial room below them, as Studio does. */
-html:not([data-density="compact"]) body.theme-studio-1973 .preset-selector-row {
-  margin-top: 8px;
-}
-
 .theme-studio-1973 .preset-chooser-label {
   color: var(--s73-amber-hot);
   font-weight: 700;

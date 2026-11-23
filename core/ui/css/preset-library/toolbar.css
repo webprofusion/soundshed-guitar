@@ -65,6 +65,12 @@
   max-width: 100%;
 }
 
+/* Room between the keys above and the preset display, so a key's shadow (or a theme's
+ * raised keys) never crowds it. Compact density lays the two side by side instead. */
+html:not([data-density="compact"]) .preset-selector-row {
+  margin-top: 8px;
+}
+
 .preset-toolbar {
   display: flex;
   align-items: center;
