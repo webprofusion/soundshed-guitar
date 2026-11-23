@@ -271,9 +271,6 @@ html[data-density="compact"] .practice-tool-waveform {
   in its place; the neck and everything under it take lines of their own.
 */
 html[data-density="compact"] .jam-scales-panel.active {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   container-type: size;
 }
 

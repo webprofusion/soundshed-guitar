@@ -60,8 +60,11 @@
   flex: 1 1 auto;
 }
 
+/* The guide scrolls inside its section, as the other Jam sections do: the panel round it clips. */
 .jam-scales-panel.active {
-  min-height: 420px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .jam-search-row {
