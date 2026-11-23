@@ -11,9 +11,10 @@ import { uiState } from "../state.js";
 import { escapeHtml, findResourceById } from "../utils.js";
 import { getPlaySvg } from "../iconAssets.js";
 import { DOUBLE_CLICK_SELECTS_ATTR, formatBytes, formatGearDescription, getResourceTags, normalizeNamArchitectureBadge, renderResourceMetaParts, splitTagValues } from "./helpers.js";
-import { libraryThumbnailAttr, libraryThumbnailImage } from "./libraryThumbnails.js";
+import { libraryThumbnailAttr, libraryThumbnailSlot } from "./libraryThumbnails.js";
 import { renderTone3000Card } from "./tone3000Card.js";
 import type { FolderListingFile, ResourceType } from "./types.js";
+import type { LibraryResource } from "../types.js";
 
 /** What a row needs to know about the tab around it. */
 export interface FolderRowState {
@@ -96,7 +97,7 @@ export function renderFolderTagFilters(bar: HTMLElement | null, availableTags: s
  * The Tone3000 details to show for a file: what a lookup found this session, or else its library
  * entry's, when that came from Tone3000 or was matched there.
  */
-function folderFileTone3000Details(file: FolderListingFile, state: FolderRowState): Record<string, string> | undefined {
+export function folderFileTone3000Details(file: FolderListingFile, state: FolderRowState): Record<string, string> | undefined {
   const found = state.tone3000?.metadataFor(file.path);
   if (found) {
     return found;
@@ -134,7 +135,14 @@ export function renderFolderFileDetails(file: FolderListingFile, state?: FolderR
     `;
 }
 
-export function renderFolderFileRow(file: FolderListingFile, state: FolderRowState): string {
+/** The library entry for a file that is in the library. */
+export function folderFileLibraryEntry(file: FolderListingFile): LibraryResource | undefined {
+  const match = folderFileLibraryMatch(file);
+  return match.id ? findResourceById(uiState.resourceLibrary[file.resourceType] ?? [], match.id) : undefined;
+}
+
+/** One file's row; `groupMember` draws it under its tone's header (folderGroups.ts). */
+export function renderFolderFileRow(file: FolderListingFile, state: FolderRowState, groupMember = false): string {
   const metadata = file.metadata ?? {};
   const match = folderFileLibraryMatch(file);
   // The type only says something when it is not what the browser was opened for:
@@ -170,15 +178,17 @@ export function renderFolderFileRow(file: FolderListingFile, state: FolderRowSta
     ? `<button class="resource-browser-action-icon-btn resource-browser-folder-select-preview${isSelected ? " is-active" : ""}" type="button" ${DOUBLE_CLICK_SELECTS_ATTR} data-path="${escapeHtml(file.path)}" title="Select in effect (does not close modal)" aria-label="Select in effect" aria-pressed="${isSelected ? "true" : "false"}">${getPlaySvg()}</button>`
     : `<span class="resource-browser-item-action-spacer" aria-hidden="true"></span>`;
 
-  // A file in the library shows its entry's tone picture, as the Library tab does.
+  // A file in the library shows its entry's tone picture, as the Library tab does; one that is not
+  // shows the picture of the Tone3000 tone a lookup matched it to (or its own metadata names).
   const libraryEntry = match.id ? findResourceById(uiState.resourceLibrary[file.resourceType] ?? [], match.id) : undefined;
+  const tone3000Picture = (state.tone3000 ? folderFileTone3000Details(file, state)?.imageUrl : undefined) ?? metadata.imageUrl;
   const isExpanded = state.expandedPath === file.path;
   const detailsBtn = `<button class="resource-browser-action-icon-btn resource-browser-item-details-btn" type="button" data-path="${escapeHtml(file.path)}" title="${isExpanded ? "Hide details" : "Show details"}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="File details">ℹ</button>`;
   const editBtn = `<button class="resource-browser-action-icon-btn resource-browser-item-edit-btn" type="button" data-path="${escapeHtml(file.path)}" data-resource-type="${escapeHtml(file.resourceType)}" title="Edit name, category and tags" aria-label="Edit resource"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg></button>`;
 
   return `
-      <div class="resource-browser-folder-entry${isExpanded ? " is-details-expanded" : ""}${isPreviewing ? " is-previewing" : ""}" data-kind="file" data-path="${escapeHtml(file.path)}">
-        <div class="results-item resource-browser-item resource-browser-folder-file-row"${libraryThumbnailAttr(file.resourceType, libraryEntry)}>${libraryThumbnailImage(file.resourceType, libraryEntry)}
+      <div class="resource-browser-folder-entry${groupMember ? " is-group-member" : ""}${isExpanded ? " is-details-expanded" : ""}${isPreviewing ? " is-previewing" : ""}" data-kind="file" data-path="${escapeHtml(file.path)}">
+        <div class="results-item resource-browser-item resource-browser-folder-file-row"${libraryThumbnailAttr(file.resourceType, libraryEntry)}>${libraryThumbnailSlot(file.resourceType, libraryEntry, tone3000Picture)}
           <div class="results-item-main resource-browser-item-info">
             <div class="results-item-title resource-browser-item-title">${escapeHtml(file.name)}</div>
             <div class="results-item-meta resource-browser-item-meta">${metaParts}</div>

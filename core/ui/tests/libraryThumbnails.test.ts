@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   libraryThumbnailAttr,
-  libraryThumbnailImage,
+  libraryThumbnailSlot,
   onResourceThumbnails,
   resetLibraryThumbnailsForTests,
 } from "../ts/resourceBrowser/libraryThumbnails.js";
@@ -41,14 +41,22 @@ describe("resource browser tone thumbnails", () => {
 
   it("leaves a resource that did not come from Tone3000 as it was", async () => {
     expect(libraryThumbnailAttr("nam", resource("local", { gearMake: "Fender" }))).toBe("");
-    expect(libraryThumbnailImage("nam", resource("local", { gearMake: "Fender" }))).toBe("");
+    // It still keeps the picture slot, empty, so its title lines up with pictured rows.
+    expect(libraryThumbnailSlot("nam", resource("local", { gearMake: "Fender" }))).toContain("is-placeholder");
     await settle();
     expect(sent).toEqual([]);
   });
 
+  it("fills the slot from a picture the caller has, https only, when the library knows none", () => {
+    expect(libraryThumbnailSlot("nam", undefined, PICTURE)).toContain(`src="${PICTURE}"`);
+    expect(libraryThumbnailSlot("nam", undefined, PICTURE)).toContain(`referrerpolicy="no-referrer"`);
+    expect(libraryThumbnailSlot("nam", undefined, "http://example.com/a.jpg")).toContain("is-placeholder");
+    expect(libraryThumbnailSlot("nam", undefined, "javascript:alert(1)")).toContain("is-placeholder");
+  });
+
   it("asks once for the rows drawn, and shows a cached file through the editor's route", async () => {
     const rows = [resource("tone3000:1", { provider: "tone3000", toneId: "10" }), resource("tone3000:2", { provider: "tone3000" })];
-    document.body.innerHTML = rows.map((r) => `<div class="row"${libraryThumbnailAttr("nam", r)}><span>info</span></div>`).join("");
+    document.body.innerHTML = rows.map((r) => `<div class="row"${libraryThumbnailAttr("nam", r)}>${libraryThumbnailSlot("nam", r)}<span>info</span></div>`).join("");
     rows.forEach((r) => libraryThumbnailAttr("nam", r)); // drawn again: not asked again
     await settle();
 
@@ -67,8 +75,13 @@ describe("resource browser tone thumbnails", () => {
     const image = document.querySelector<HTMLImageElement>("[data-thumb-for='nam:tone3000:1'] > img.resource-browser-item-thumb");
     expect(image?.getAttribute("src")).toBe(`resource-thumbnails/${KEY}.jpg`);
     expect(document.querySelectorAll("img").length).toBe(1);
-    expect(libraryThumbnailImage("nam", rows[0])).toContain(`resource-thumbnails/${KEY}.jpg`);
-    expect(libraryThumbnailImage("nam", rows[1])).toBe("");
+    // The picture took the empty box's place: one slot per row, still first.
+    const first = document.querySelector("[data-thumb-for='nam:tone3000:1']")!;
+    expect(first.querySelectorAll(".resource-browser-item-thumb").length).toBe(1);
+    expect(first.firstElementChild?.tagName).toBe("IMG");
+    expect(document.querySelectorAll(".resource-browser-item-thumb.is-placeholder").length).toBe(1);
+    expect(libraryThumbnailSlot("nam", rows[0])).toContain(`resource-thumbnails/${KEY}.jpg`);
+    expect(libraryThumbnailSlot("nam", rows[1])).toContain("is-placeholder");
   });
 
   it("downloads a missing thumbnail without credentials and hands it to the engine", async () => {

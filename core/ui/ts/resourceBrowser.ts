@@ -20,7 +20,7 @@ import { DEFAULT_RESOURCE_CONTEXT_KEY, RESOURCE_FAVORITES_SETTING } from "./reso
 import { LibraryPackGrouping } from "./resourceBrowser/libraryPacks.js";
 import { NavigationLists } from "./resourceBrowser/navigationListing.js";
 import { copyLibraryResourcePath, renderLibraryItemDetailsPanel } from "./resourceBrowser/libraryDetails.js";
-import { libraryThumbnailAttr, libraryThumbnailImage } from "./resourceBrowser/libraryThumbnails.js";
+import { libraryThumbnailAttr, libraryThumbnailSlot } from "./resourceBrowser/libraryThumbnails.js";
 import { TONE3000_IR_GEAR_OPTIONS, slotImportCategory, slotLibraryCategoryHint, slotStateKey, slotTitle, slotTone3000IrGear } from "./resourceBrowser/slot.js";
 import { tone3000PreviewPayload } from "./resourceBrowser/tone3000Navigation.js";
 import { Tone3000Tab } from "./resourceBrowser/tone3000Tab.js";
@@ -1334,7 +1334,7 @@ export class ResourceBrowserModal {
         const entryClass = `resource-browser-library-entry${isDetailsExpanded ? " is-details-expanded" : ""}`;
         return `
           <div class="${escapeHtml(entryClass)}" data-source="library">
-            <div class="${selectedClass} resource-browser-item-row" data-resource-id="${escapeHtml(res.id)}"${libraryThumbnailAttr(resourceType, res)}>${libraryThumbnailImage(resourceType, res)}
+            <div class="${selectedClass} resource-browser-item-row" data-resource-id="${escapeHtml(res.id)}"${libraryThumbnailAttr(resourceType, res)}>${libraryThumbnailSlot(resourceType, res)}
               <div class="results-item-main resource-browser-item-info">
                 <div class="results-item-title resource-browser-item-title">${escapeHtml(title)}</div>
                 <div class="results-item-meta resource-browser-item-meta">${metaParts}</div>

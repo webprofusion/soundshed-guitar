@@ -16,7 +16,9 @@
  *   finds, a picture or none, goes to the engine too, so the next session does not ask.
  *
  * Everything known is kept in memory for the session, so reopening the browser asks nothing.
- * Rows that arrive before their picture are patched in place when it comes. The native UIs do
+ * Every row keeps a fixed picture slot on its left, as the Tone3000 tab's rows do
+ * (`libraryThumbnailSlot`); one drawn before its picture shows an empty box there, which is
+ * swapped for the picture in place when it comes. The native UIs do
  * the same through core/src/uiclient/ResourceThumbnails.h.
  */
 
@@ -78,7 +80,24 @@ export function libraryThumbnailSrc(resourceType: string, resourceId: string): s
 }
 
 function imageMarkup(src: string): string {
-  return `<img class="resource-browser-item-thumb" src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" />`;
+  // A remote picture (a Folder file's Tone3000 match) is loaded as the details card loads it.
+  const referrer = /^https:\/\//.test(src) ? ` referrerpolicy="no-referrer"` : "";
+  return `<img class="resource-browser-item-thumb" src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async"${referrer} />`;
+}
+
+/** The empty box a row's picture slot shows until (unless) a picture is known. */
+const PLACEHOLDER_MARKUP = `<span class="resource-browser-item-thumb is-placeholder" aria-hidden="true"></span>`;
+
+/**
+ * A row's fixed picture slot, as the Tone3000 tab's rows have: the resource's tone picture when
+ * one is known, else `fallbackSrc` (an https picture the caller already has, such as a Folder
+ * file's Tone3000 match), else an empty box of the same size that the picture replaces when it
+ * arrives. Every row gets the slot, so titles line up whether or not a row has a picture.
+ */
+export function libraryThumbnailSlot(resourceType: string, resource: LibraryResource | undefined | null, fallbackSrc?: string): string {
+  const src = (resource && isThumbnailCandidate(resource) ? libraryThumbnailSrc(resourceType, resource.id) : null)
+    ?? (fallbackSrc && /^https:\/\//.test(fallbackSrc.trim()) ? fallbackSrc.trim() : null);
+  return src ? imageMarkup(src) : PLACEHOLDER_MARKUP;
 }
 
 /**
@@ -92,12 +111,6 @@ export function libraryThumbnailAttr(resourceType: string, resource: LibraryReso
   }
   requestLibraryThumbnails(resourceType, [resource.id]);
   return ` data-thumb-for="${escapeHtml(resourceKey(resourceType, resource.id))}"`;
-}
-
-/** The picture's markup for a row, when it is already known; else empty. */
-export function libraryThumbnailImage(resourceType: string, resource: LibraryResource | undefined | null): string {
-  const src = resource && isThumbnailCandidate(resource) ? libraryThumbnailSrc(resourceType, resource.id) : null;
-  return src ? imageMarkup(src) : "";
 }
 
 /** Asks the engine which pictures these resources show, once a session each (batched). */
@@ -189,7 +202,7 @@ function patchRows(): void {
     return;
   }
   document.querySelectorAll<HTMLElement>("[data-thumb-for]").forEach((row) => {
-    if (row.querySelector(":scope > .resource-browser-item-thumb")) {
+    if (row.querySelector(":scope > img.resource-browser-item-thumb")) {
       return;
     }
     const key = keyByResource.get(row.dataset.thumbFor ?? "");
@@ -197,13 +210,12 @@ function patchRows(): void {
     if (!src) {
       return;
     }
-    // A pack's header keeps its chevron first.
-    const chevron = row.querySelector(":scope > .resource-browser-pack-chevron");
-    if (chevron) {
-      chevron.insertAdjacentHTML("afterend", imageMarkup(src));
-    } else {
-      row.insertAdjacentHTML("afterbegin", imageMarkup(src));
+    const placeholder = row.querySelector(":scope > .resource-browser-item-thumb.is-placeholder");
+    if (placeholder) {
+      placeholder.outerHTML = imageMarkup(src);
+      return;
     }
+    row.insertAdjacentHTML("afterbegin", imageMarkup(src));
   });
 }
 

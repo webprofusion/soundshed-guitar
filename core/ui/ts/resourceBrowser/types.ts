@@ -88,9 +88,21 @@ export interface FolderListing {
   truncated?: boolean;
 }
 
+/** Files in one folder that turned out to come from the same tone (folderGroups.ts). */
+export interface FolderFileGroup {
+  /** `tone:<id>`; what a click on its header toggles. */
+  key: string;
+  title: string;
+  /** The tone's details, from whichever member has them. */
+  metadata: Record<string, string>;
+  files: FolderListingFile[];
+}
+
 export type FolderVirtualEntry =
   | { key: string; kind: "dir"; dir: FolderListingDir }
-  | { key: string; kind: "file"; file: FolderListingFile };
+  | { key: string; kind: "group"; group: FolderFileGroup; open: boolean; holdsSelected: boolean }
+  /** `groupMember`: drawn under its group's header. */
+  | { key: string; kind: "file"; file: FolderListingFile; groupMember?: boolean };
 
 export interface PersistedResourceBrowserState {
   activeTab: ResourceBrowserTab;

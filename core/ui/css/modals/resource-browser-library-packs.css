@@ -1,5 +1,6 @@
-/* Resource browser, Library tab: models from one pack as one collapsible group
-   (resourceBrowser/libraryPacks.ts), and the toolbar button that turns grouping off. */
+/* Resource browser: models from one pack as one collapsible group (the Library tab,
+   resourceBrowser/libraryPacks.ts; the Folder tab's tones, resourceBrowser/folderGroups.ts),
+   and the toolbar button that turns Library grouping off. */
 
 .resource-browser-group-toggle.is-active {
   background: var(--bg-browser-hover);
@@ -12,14 +13,15 @@
   gap: 2px;
 }
 
-/* Drawn like a folder row: the pack's name and how many models it holds. */
+/* Drawn as the Tone3000 tab draws a tone (.resource-browser-tone-header): the picture slot on
+   the left where every row has it, the title over a meta line, the chevron on the right. */
 .resource-browser-pack-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
-  min-height: 36px;
-  padding: 5px 12px;
+  min-height: 44px;
+  padding: 6px 6px 6px 8px;
   border: none;
   border-radius: var(--radius-md);
   background: var(--rb-row-bg);
@@ -35,52 +37,72 @@
   background: var(--bg-browser-hover);
 }
 
-.resource-browser-pack-chevron {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  background-color: var(--modal-text-muted);
-  -webkit-mask: url("/images/icons/chevron-right.svg") center / contain no-repeat;
-  mask: url("/images/icons/chevron-right.svg") center / contain no-repeat;
-  transition: transform 0.15s ease;
-}
-
-.resource-browser-pack.is-open .resource-browser-pack-chevron {
-  transform: rotate(90deg);
-}
-
-.resource-browser-pack-header > .resource-browser-item-thumb {
-  width: 24px;
-  height: 24px;
+.resource-browser-pack-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .resource-browser-pack-title {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.resource-browser-pack-count {
-  flex: none;
-  padding: 0 7px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-browser-input);
+/* The same one dot-separated line a row's meta is. */
+.resource-browser-pack-meta {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
   color: var(--modal-text-muted);
-  font-size: 10px;
-  line-height: 18px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-browser-pack-meta > * + *::before {
+  content: "·";
+  margin: 0 6px;
+  opacity: 0.6;
+}
+
+/* .resource-browser-tone-expand: down while closed, up while open. */
+.resource-browser-pack-expand {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--modal-text-muted);
+}
+
+.resource-browser-pack-expand svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s ease;
+}
+
+.resource-browser-pack-header[aria-expanded="true"] .resource-browser-pack-expand svg {
+  transform: rotate(180deg);
 }
 
 /* A closed pack still says it holds what is loaded, by the selected rows' own tint. */
-.resource-browser-pack.holds-selected:not(.is-open) .resource-browser-pack-header {
+.resource-browser-pack.holds-selected:not(.is-open) .resource-browser-pack-header,
+.resource-browser-folder-group-entry.holds-selected:not(.is-open) .resource-browser-pack-header {
   background: var(--bg-browser-selected);
 }
 
-/* The pack's models sit a step in, under its name. */
+/* A group's models are not indented, so their pictures line up with every other row's; a bar
+   down their left edge says which group they are in. */
 .resource-browser-pack-items {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 16px;
+}
+
+.resource-browser-pack-items > * > .resource-browser-item-row,
+.resource-browser-folder-entry.is-group-member > .resource-browser-folder-file-row {
+  box-shadow: inset 2px 0 0 var(--border-browser);
 }

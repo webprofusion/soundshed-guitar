@@ -610,6 +610,17 @@
   background: var(--bg-browser-input);
 }
 
+/* Library and Folder rows keep the Tone3000 tab's picture column: the same fixed slot on the
+   left, an empty box where a row has no picture (libraryThumbnails.ts), and the same insets. */
+.resource-browser-modal .resource-browser-item-row,
+.resource-browser-modal .resource-browser-folder-file-row {
+  padding: 6px 6px 6px 8px;
+}
+
+span.resource-browser-item-thumb {
+  display: block;
+}
+
 .resource-browser-tone-info {
   flex: 1;
   min-width: 0;

@@ -189,6 +189,7 @@ set(TEST_SOURCES
     ScaleGuideTests.cpp
     ScaleGuideListenTests.cpp
     ScaleGuideUiClientTests.cpp
+    FolderToneGroupTests.cpp
     TransposeBenchmark.cpp
     TransposeEffectTests.cpp
     WahEffectTests.cpp
@@ -348,6 +349,8 @@ target_link_libraries(JamPracticeToolTests PRIVATE SoundshedUiClient)
 # The Scale Guide's engine half, and the native UIs' half (uiclient/ScaleGuide.h).
 target_link_libraries(ScaleGuideTests PRIVATE SoundshedUiClient)
 target_link_libraries(ScaleGuideUiClientTests PRIVATE SoundshedUiClient)
+# The Folder tab's tone groups (uiclient/FolderToneLookup.h), against folderGroups.ts.
+target_link_libraries(FolderToneGroupTests PRIVATE SoundshedUiClient)
 # The save dialog's preset inspector (uiclient/PresetInspect.h), against the web UI's validate.ts.
 target_link_libraries(PresetInspectTests PRIVATE SoundshedUiClient)
 # The settings flyouts' parameter rows (uiclient/ParamFormat.h), against flyoutParamControls.ts.

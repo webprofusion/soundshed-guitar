@@ -10,8 +10,9 @@
 
 import { getAppSetting, updateAppSetting } from "../appSettingsStore.js";
 import type { LibraryResource } from "../types.js";
-import { escapeHtml } from "../utils.js";
-import { isThumbnailCandidate, libraryThumbnailAttr, libraryThumbnailImage } from "./libraryThumbnails.js";
+import { groupCountLabel, renderGroupHeader, sharedCreator } from "./groupHeader.js";
+import { getResourceCreator } from "./helpers.js";
+import { isThumbnailCandidate, libraryThumbnailAttr, libraryThumbnailSlot } from "./libraryThumbnails.js";
 import { LIBRARY_GROUP_PACKS_SETTING } from "./settings.js";
 
 export interface LibraryPack {
@@ -175,15 +176,25 @@ export class LibraryPackGrouping {
         // A Tone3000 tone's group shows the tone's picture, as its models do (libraryThumbnails.ts).
         const pictured = options.resourceType ? entry.items.find((item) => isThumbnailCandidate(item)) : undefined;
         const thumbAttr = pictured ? libraryThumbnailAttr(options.resourceType!, pictured) : "";
-        const thumbImage = pictured ? libraryThumbnailImage(options.resourceType!, pictured) : "";
+        // Drawn as the Tone3000 tab draws a tone: picture, title over "by … · N models", and the
+        // chevron on the right, so the pictures line up with the rows outside any group.
+        const header = renderGroupHeader({
+          key: pack.key,
+          title: pack.title,
+          meta: [
+            (() => {
+              const creator = sharedCreator(entry.items.map((item) => getResourceCreator(item)));
+              return creator ? `by ${creator}` : "";
+            })(),
+            groupCountLabel(entry.items.length, options.resourceType),
+          ],
+          open,
+          thumbAttr,
+          thumbSlot: libraryThumbnailSlot(options.resourceType ?? "", pictured),
+        });
         return `
           <div class="resource-browser-pack${open ? " is-open" : ""}${holdsSelected ? " holds-selected" : ""}">
-            <button class="resource-browser-pack-header" type="button" data-pack-key="${escapeHtml(pack.key)}"
-                    aria-expanded="${open ? "true" : "false"}" title="${escapeHtml(pack.title)}"${thumbAttr}>
-              <span class="resource-browser-pack-chevron" aria-hidden="true"></span>${thumbImage}
-              <span class="resource-browser-pack-title">${escapeHtml(pack.title)}</span>
-              <span class="resource-browser-pack-count">${entry.items.length}</span>
-            </button>
+            ${header}
             ${open ? `<div class="resource-browser-pack-items">${rows}</div>` : ""}
           </div>`;
       })

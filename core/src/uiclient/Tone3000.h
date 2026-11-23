@@ -74,6 +74,8 @@ template <typename T> struct Page
 /// Models whose content hash (models/ContentHash.h) is `contentHash`, oldest first: reposts of
 /// one file share it.
 [[nodiscard]] std::string ModelLookupPath(const std::string& contentHash);
+/// One tone by its id.
+[[nodiscard]] std::string TonePath(const std::string& toneId);
 [[nodiscard]] std::string Url(const std::string& path);
 
 /// A URL Tone3000 gave on its own API (a model's `model_url`,

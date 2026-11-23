@@ -74,6 +74,7 @@ void UiSession::PostToUi(std::function<void()> fn)
 UiSession::~UiSession()
 {
     *mAlive = false;
+    mFolderLookup.reset();
     mTones.reset();
     mLink.SendRequest(R"({"type":"uiVisibility","visible":false})");
     mLink.SetViewAttached(false);

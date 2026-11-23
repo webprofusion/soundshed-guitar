@@ -9,6 +9,8 @@
 // - Folder: the folders the user added (the web UI's setting, so both products share them),
 //   listed by the engine (listResourceFolder). A file is heard where it is; OK adds it to the
 //   library in place (saveLocalLibraryResource), or picks the library entry it already is.
+//   "Look up details" finds which Tone3000 tone listed files come from, ten a time, and files of
+//   one tone are drawn as one group (uiclient/FolderToneLookup.h).
 // - Tone 3000: a search by gear, sort and architecture; a tone opens to its models; Select
 //   downloads one, stores it in the library and loads it (ToneService::ImportTone3000).
 
@@ -19,6 +21,7 @@
 
 #include "dsp/EffectGuids.h"
 #include "uiclient/FeatureFlags.h"
+#include "uiclient/FolderToneLookup.h"
 #include "uiclient/NodeLabels.h"
 #include "uiclient/ResourceIndex.h"
 #include "uiclient/ResourceThumbnails.h"
@@ -75,6 +78,10 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         std::map<std::string, bool> openPacks; // a pack the user opened or closed
         std::string filter;                    // Folder
         std::string rootId;
+        // The files the Folder list shows after its filter: what "Look up details" looks up.
+        std::vector<ResourceFolderListing::File> listedFiles;
+        std::shared_ptr<IconButton> lookupButton;
+        std::function<void()> updateLookupButton;
         std::string t3Query, t3Gear, t3Sort = "downloads-all-time", t3Arch;
         int t3Page = 1, t3Pages = 1;
         bool t3Loading = false;
@@ -220,6 +227,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                                                     ResourceMetaLine(*r, b->resourceType, b->category.empty()));
             row->selected = r->id == b->selectedId || (!b->selectedPath.empty() && r->filePath == b->selectedPath);
             row->picture = [b, id = r->id] { return b->thumbnailFor ? b->thumbnailFor(id) : nullptr; };
+            row->pictureSlot = true;
             row->star = IsResourceFavorite(mState, r->id) ? 1 : 0;
             row->onStar = [this, refillList, id = r->id] {
                 mSession.Commands().SetResourceFavorite(id, !IsResourceFavorite(mState, id));
@@ -288,16 +296,19 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 const bool open = toggled != b->openPacks.end()
                                       ? toggled->second
                                       : (holdsSelected || !b->query.empty() || b->favouritesOnly);
-                auto head = std::make_shared<BrowserRow>(mTheme, mIcons, entry.pack->title, "");
-                head->heading = true;
-                head->icon = open ? "ui-caret" : "ui-chevron-right";
-                head->note = std::to_string(entry.items.size());
-                std::vector<std::string> members;
+                // Drawn as a Tone3000 result's tone is: picture, title over "by … · N models",
+                // and the chevron on the right, so its picture lines up with every row's.
+                std::vector<std::string> members, creators;
 
                 for (const auto* r : entry.items)
                 {
                     members.push_back(r->id);
+                    creators.push_back(CreatorOf(r->metadata));
                 }
+
+                auto head = std::make_shared<BrowserRow>(
+                    mTheme, mIcons, entry.pack->title, GroupMetaLine(creators, entry.items.size(), b->resourceType));
+                head->note = open ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
 
                 // The first of its models with a tone picture lends it to the group's caption.
                 head->picture = [b, members]() -> std::shared_ptr<artist::image> {
@@ -311,6 +322,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
                     return nullptr;
                 };
+                head->pictureSlot = true;
                 head->onClick = [b, refillList, key, open] {
                     b->openPacks[key] = !open;
                     refillList();
@@ -322,7 +334,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                     for (const auto* r : entry.items)
                     {
                         auto row = rowFor(r, NameWithinPack(r->name.empty() ? r->id : r->name, *entry.pack));
-                        row->indent = true;
+                        row->groupMember = true;
                         rows.push_back(row);
                     }
                 }
@@ -625,6 +637,12 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             rows.push_back(row);
         }
 
+        // Files known to come from the same tone (a lookup's, or their library entries') are one
+        // group, as the web UI's folderGroups.ts draws them.
+        auto& lookup = mSession.FolderLookup();
+        std::vector<const ResourceFolderListing::File*> shown;
+        b->listedFiles.clear();
+
         for (const auto& file : listing.files)
         {
             if (file.resourceType != b->resourceType ||
@@ -633,8 +651,19 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 continue;
             }
 
+            shown.push_back(&file);
+            b->listedFiles.push_back(file);
+        }
+
+        const auto https = [](const std::string& url) { return url.rfind("https://", 0) == 0 ? url : std::string(); };
+        const auto libraryIdOf = [b](const ResourceFolderListing::File& file) {
+            return file.inLibrary && file.resourceType == b->resourceType ? file.libraryId : std::string();
+        };
+
+        const auto fileRow = [&](const ResourceFolderListing::File& file, bool member) {
             auto row = std::make_shared<BrowserRow>(mTheme, mIcons, file.name, Describe(file.metadata, ""));
             row->selected = !b->selectedPath.empty() && b->selectedPath == file.path;
+            row->groupMember = member;
 
             if (file.inLibrary)
             {
@@ -642,11 +671,26 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 row->noteColour = mTheme.Success();
             }
 
-            // A file in the library shows its entry's tone picture, as the Library tab does.
-            if (file.inLibrary && !file.libraryId.empty() && file.resourceType == b->resourceType)
+            // A file in the library shows its entry's tone picture, as the Library tab does; else
+            // the picture of the tone a lookup matched it to, or its own metadata names (https only),
+            // as folderRows.ts does.
+            const auto* details = lookup.DetailsFor(file);
+            auto remotePicture = details != nullptr ? https(MetaText(*details, "imageUrl")) : std::string();
+            remotePicture = remotePicture.empty() ? https(MetaText(file.metadata, "imageUrl")) : remotePicture;
+            const auto libraryId = libraryIdOf(file);
+            row->pictureSlot = true;
+
+            if (!libraryId.empty())
             {
-                inLibrary.push_back(file.libraryId);
-                row->picture = [b, id = file.libraryId] { return b->thumbnailFor ? b->thumbnailFor(id) : nullptr; };
+                inLibrary.push_back(libraryId);
+            }
+
+            if (!libraryId.empty() || !remotePicture.empty())
+            {
+                row->picture = [this, b, libraryId, remotePicture]() -> std::shared_ptr<artist::image> {
+                    auto image = !libraryId.empty() && b->thumbnailFor ? b->thumbnailFor(libraryId) : nullptr;
+                    return image || remotePicture.empty() ? image : RemoteImage(remotePicture);
+                };
             }
 
             row->onClick = [preview, refillList, path = file.path] {
@@ -657,12 +701,96 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 preview({}, path);
                 CloseOverlay();
             };
-            rows.push_back(row);
+            return row;
+        };
+
+        const auto grouped =
+            GroupFolderFiles(shown, [&lookup](const ResourceFolderListing::File& f) { return lookup.DetailsFor(f); });
+
+        for (const auto& item : grouped.items)
+        {
+            if (item.file != nullptr)
+            {
+                rows.push_back(fileRow(*item.file, false));
+                continue;
+            }
+
+            const auto& group = grouped.groups[item.group];
+            const bool holdsSelected =
+                !b->selectedPath.empty() &&
+                std::any_of(group.files.begin(), group.files.end(),
+                            [b](const ResourceFolderListing::File* f) { return f->path == b->selectedPath; });
+            const auto toggled = b->openPacks.find(group.key);
+            const bool open =
+                toggled != b->openPacks.end() ? toggled->second : (holdsSelected || !b->filter.empty());
+
+            // The tone's title, else what its models' library names share, else its gear, else the
+            // first file's name; "gear · by creator · N models"; a member's picture, else the tone's.
+            std::vector<std::string> names, memberIds;
+
+            for (const auto* f : group.files)
+            {
+                const auto id = libraryIdOf(*f);
+                const auto* entry = id.empty() ? nullptr : mState.FindLibraryResource(f->resourceType, id);
+                names.push_back(entry != nullptr ? entry->name : std::string());
+
+                if (!id.empty())
+                {
+                    memberIds.push_back(id);
+                }
+            }
+
+            auto title = group.title.empty() ? SharedTonePrefix(names) : group.title;
+            const auto gearMake = MetaText(group.metadata, "gearMake");
+            const auto gearModel = MetaText(group.metadata, "gearModel");
+            const auto gear = !gearModel.empty() && Lower(gearModel).rfind(Lower(gearMake), 0) == 0
+                                  ? gearModel
+                                  : gearMake + (gearMake.empty() || gearModel.empty() ? "" : " ") + gearModel;
+            title = title.empty() ? gear : title;
+            title = title.empty() ? group.files.front()->name : title;
+
+            auto category = MetaText(group.metadata, "tone3000Category");
+            category = category.empty() ? MetaText(group.metadata, "gear") : category;
+            const auto line = GroupMetaLine({FolderGroupCreator(group.metadata)}, group.files.size(), b->resourceType);
+            auto head = std::make_shared<BrowserRow>(mTheme, mIcons, title,
+                                                     category.empty() ? line : category + " \xC2\xB7 " + line);
+            head->note = open ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
+            head->pictureSlot = true;
+            head->picture = [this, b, memberIds,
+                             tonePicture = https(MetaText(group.metadata, "imageUrl"))]() -> std::shared_ptr<artist::image> {
+                for (const auto& id : memberIds)
+                {
+                    if (auto image = b->thumbnailFor ? b->thumbnailFor(id) : nullptr)
+                    {
+                        return image;
+                    }
+                }
+
+                return tonePicture.empty() ? nullptr : RemoteImage(tonePicture);
+            };
+            head->onClick = [b, refillList, key = group.key, open] {
+                b->openPacks[key] = !open;
+                refillList();
+            };
+            rows.push_back(head);
+
+            if (open)
+            {
+                for (const auto* f : group.files)
+                {
+                    rows.push_back(fileRow(*f, true));
+                }
+            }
         }
 
         if (b->thumbnails)
         {
             b->thumbnails->Request(b->resourceType, inLibrary);
+        }
+
+        if (b->updateLookupButton)
+        {
+            b->updateLookupButton();
         }
 
         if (rows.empty())
@@ -773,8 +901,102 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                                                            std::to_string(files) + (files == 1 ? " file" : " files"),
                                    10.5f);
         counts->Colour(mTheme.TextMuted()).Fixed(true);
+        std::vector<Ptr> second{up, HGap(10), where, HGap(10), counts};
+
+        // "Look up details" goes to Tone3000 (through Soundshed's relay), so only with that on.
+        b->lookupButton.reset();
+
+        if (IsFeatureEnabled(mState, Feature::Tone3000) && !b->rootId.empty())
+        {
+            auto lookUp = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+            lookUp->Size(150, 30).Label("Look up details", 11.0f);
+            lookUp->onClick = [this, b, refillList, alive = std::weak_ptr<bool>(mAlive)] {
+                auto& folderLookup = mSession.FolderLookup();
+
+                if (folderLookup.Running())
+                {
+                    return;
+                }
+
+                // Each file done regroups the list (a match joins its tone's group); the label counts.
+                const auto changed = [weak = b->self, refillList, alive] {
+                    if (const auto st = weak.lock(); st && alive.lock())
+                    {
+                        refillList();
+
+                        if (st->updateLookupButton)
+                        {
+                            st->updateLookupButton();
+                        }
+                    }
+                };
+                folderLookup.Start(b->listedFiles, changed,
+                                   [this, changed, alive](const FolderToneLookup::Summary& summary) {
+                                       if (!alive.lock())
+                                       {
+                                           return;
+                                       }
+
+                                       changed();
+
+                                       if (!summary.error.empty())
+                                       {
+                                           ShowToast("Lookup failed", summary.error, true);
+                                           return;
+                                       }
+
+                                       if (summary.looked == 0)
+                                       {
+                                           return;
+                                       }
+
+                                       const auto more = summary.remaining > 0
+                                                             ? " Look up again for the next " +
+                                                                   std::to_string(std::min(summary.remaining,
+                                                                                           FolderToneLookup::kBatch)) +
+                                                                   "."
+                                                             : std::string();
+                                       ShowToast(summary.found > 0 ? "Details found" : "No details found",
+                                                 std::to_string(summary.found) + " of " +
+                                                     std::to_string(summary.looked) +
+                                                     (summary.looked == 1 ? " file" : " files") +
+                                                     " matched a published tone." + more,
+                                                 false);
+                                   });
+            };
+            b->lookupButton = lookUp;
+            second.push_back(HGap(10));
+            second.push_back(lookUp);
+        }
+
         return Col({FixedHeight(30, Row({rootButton, HGap(6), remove, HGap(6), add, HGap(8), b->filterElement})),
-                    VGap(8), FixedHeight(30, Row({up, HGap(10), where, HGap(10), counts}))});
+                    VGap(8), FixedHeight(30, Row(second))});
+    };
+    // The button's label and state: what it would do, or how far a lookup has got.
+    b->updateLookupButton = [this, b] {
+        if (!b->lookupButton)
+        {
+            return;
+        }
+
+        const auto& folderLookup = mSession.FolderLookup();
+        const auto pending =
+            std::count_if(b->listedFiles.begin(), b->listedFiles.end(),
+                          [&folderLookup](const ResourceFolderListing::File& f) { return folderLookup.NeedsLookup(f); });
+
+        if (folderLookup.Running())
+        {
+            const auto total = folderLookup.Total();
+            const auto at = std::min(folderLookup.Done() + 1, total);
+            b->lookupButton->Label("Looking up " + std::to_string(at) + " of " + std::to_string(total) + "...", 11.0f)
+                .Disabled(true);
+        }
+        else
+        {
+            b->lookupButton->Label("Look up details", 11.0f).Disabled(pending == 0);
+        }
+
+        mSession.View().refresh();
     };
 
     // ── Tone 3000 ───────────────────────────────────────────────────────────────
@@ -837,6 +1059,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                                  (tone.platform.empty() ? "" : " \xC2\xB7 " + tone.platform);
             auto row = std::make_shared<BrowserRow>(mTheme, mIcons, tone.title, detail);
             row->picture = [this, url = tone.imageUrl] { return RemoteImage(url); };
+            row->pictureSlot = true; // .resource-browser-tone-image, or its placeholder
             row->note = b->t3Open == tone.id ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
             row->onClick = [this, b, tone, refillList] {
                 if (b->t3Open == tone.id)

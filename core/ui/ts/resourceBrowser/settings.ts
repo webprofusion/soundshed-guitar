@@ -36,4 +36,5 @@ export const FOLDER_VIRTUAL_OVERSCAN = 6;
 
 export const FOLDER_VIRTUAL_ESTIMATED_DIR_HEIGHT = 36;
 
-export const FOLDER_VIRTUAL_ESTIMATED_FILE_HEIGHT = 44;
+/** A file row: the 36 px picture slot plus its 6 px insets (resource-browser.css). */
+export const FOLDER_VIRTUAL_ESTIMATED_FILE_HEIGHT = 48;

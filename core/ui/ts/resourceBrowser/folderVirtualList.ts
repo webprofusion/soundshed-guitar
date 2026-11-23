@@ -11,7 +11,8 @@
 import { escapeHtml } from "../utils.js";
 import { renderIcon } from "../iconAssets.js";
 import type { FolderRowState } from "./folderRows.js";
-import { renderFolderFileRow } from "./folderRows.js";
+import { folderFileLibraryEntry, renderFolderFileRow } from "./folderRows.js";
+import { renderFolderGroupHeader } from "./folderGroups.js";
 import {
   FOLDER_VIRTUAL_ESTIMATED_DIR_HEIGHT,
   FOLDER_VIRTUAL_ESTIMATED_FILE_HEIGHT,
@@ -63,6 +64,7 @@ export class FolderVirtualList {
     const measured = this.measuredHeights.get(entry.key);
     if (measured) return measured;
     if (entry.kind === "dir") return FOLDER_VIRTUAL_ESTIMATED_DIR_HEIGHT;
+    if (entry.kind === "group") return FOLDER_VIRTUAL_ESTIMATED_FILE_HEIGHT;
     return FOLDER_VIRTUAL_ESTIMATED_FILE_HEIGHT + (this.host.getExpandedPath() === entry.file.path ? 140 : 0);
   }
 
@@ -113,7 +115,8 @@ export class FolderVirtualList {
   }
 
   private renderEntry(entry: FolderVirtualEntry, rowState: FolderRowState): string {
-    if (entry.kind === "file") return renderFolderFileRow(entry.file, rowState);
+    if (entry.kind === "file") return renderFolderFileRow(entry.file, rowState, entry.groupMember);
+    if (entry.kind === "group") return renderFolderGroupHeader(entry, folderFileLibraryEntry);
     return `
       <div class="resource-browser-folder-entry" data-kind="dir" data-path="${escapeHtml(entry.dir.path)}">
         <div class="results-item resource-browser-item resource-browser-folder-dir-row">

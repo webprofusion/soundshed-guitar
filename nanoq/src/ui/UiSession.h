@@ -11,6 +11,7 @@
 #include "ui/debug/DevDriver.h"
 #include "ui/widgets/Theme.h"
 #include "ui/UiLink.h"
+#include "uiclient/FolderToneLookup.h"
 #include "uiclient/ToneService.h"
 #include "uiclient/UiClient.h"
 #include "uiclient/UiCommands.h"
@@ -76,6 +77,18 @@ class UiSession
         return *mTones;
     }
 
+    /// The resource browser Folder tab's "Look up details" and what it found, kept for the session
+    /// (core/src/uiclient/FolderToneLookup.h).
+    [[nodiscard]] guitarfx::uiclient::FolderToneLookup& FolderLookup()
+    {
+        if (!mFolderLookup)
+        {
+            mFolderLookup = std::make_unique<guitarfx::uiclient::FolderToneLookup>(mClient, *mTones);
+        }
+
+        return *mFolderLookup;
+    }
+
     /// Runs `fn` on the UI thread at the next pump. Any thread.
     void PostToUi(std::function<void()> fn);
 
@@ -118,5 +131,7 @@ class UiSession
     std::shared_ptr<PostQueue> mPosted = std::make_shared<PostQueue>();
     // Last: destroyed first, so its workers stop before anything they post to goes.
     std::unique_ptr<guitarfx::uiclient::ToneService> mTones;
+    // After the tone service: its lookups go through it, so it goes first.
+    std::unique_ptr<guitarfx::uiclient::FolderToneLookup> mFolderLookup;
 };
 } // namespace nanoq::ui

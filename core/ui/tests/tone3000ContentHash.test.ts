@@ -15,7 +15,7 @@ const { uiState } = await import("../ts/state.js");
 const { downloadTone3000ResourceByReference, lookupTone3000ModelsByContentHash } = await import("../ts/tone3000.js");
 const { applyTone3000Match, canLookUpOnTone3000, findTone3000ByContentHash, withTone3000Match } = await import("../ts/tone3000ContentHash.js");
 const { renderLibraryItemDetailsPanel } = await import("../ts/resourceBrowser/libraryDetails.js");
-const { renderFolderFileDetails } = await import("../ts/resourceBrowser/folderRows.js");
+const { renderFolderFileDetails, renderFolderFileRow } = await import("../ts/resourceBrowser/folderRows.js");
 const folderTone3000 = await import("../ts/resourceBrowser/folderTone3000.js");
 const { renderTone3000Card } = await import("../ts/resourceBrowser/tone3000Card.js");
 
@@ -226,8 +226,10 @@ describe("Tone3000 content hash lookup", () => {
     it("asks the engine for the hash, finds the tone, and shows and keeps the match", async () => {
       serve({
         "models/lookup": () => json({ data: [model(579453, 57741)] }),
-        "tones/57741": () => json(tone(57741, "Vox AC30 + Boosters (A2)")),
+        "tones/57741": () => json({ ...tone(57741, "Vox AC30 + Boosters (A2)"), images: ["https://cdn.tone3000.com/p.jpg"] }),
       });
+      // Before the lookup the row keeps an empty picture slot.
+      expect(renderFolderFileRow(file(), state(true))).toContain("resource-browser-item-thumb is-placeholder");
       const button = document.createElement("button");
       const done = vi.fn();
       const lookup = folderTone3000.lookUpFolderFileOnTone3000(button, file(), done);
@@ -241,6 +243,10 @@ describe("Tone3000 content hash lookup", () => {
       const panel = renderFolderFileDetails(file(), state(true));
       expect(panel).toContain("Vox AC30 + Boosters (A2)");
       expect(panel).not.toContain("tone3000-lookup-btn");
+      // The file's row now shows the matched tone's picture in its slot.
+      const row = renderFolderFileRow(file(), state(true));
+      expect(row).toContain('<img class="resource-browser-item-thumb" src="https://cdn.tone3000.com/p.jpg"');
+      expect(row).not.toContain("is-placeholder");
       // Nothing is written to the library for a file it does not have.
       expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updateLibraryResource" }));
     });

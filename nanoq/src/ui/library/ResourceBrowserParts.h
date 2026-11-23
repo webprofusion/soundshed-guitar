@@ -79,10 +79,9 @@ inline std::shared_ptr<artist::image> CachedThumbnail(const std::string& path)
     return it->second;
 }
 
-/// "by creator · A2 · gear", the line under an entry's name.
-inline std::string Describe(const nlohmann::json& metadata, const std::string& category)
+/// Who made it: the recorded creator, else the uploader, else what the file itself says.
+inline std::string CreatorOf(const nlohmann::json& metadata)
 {
-    std::vector<std::string> parts;
     auto creator = MetaText(metadata, "creatorName");
 
     if (creator.empty())
@@ -94,6 +93,45 @@ inline std::string Describe(const nlohmann::json& metadata, const std::string& c
     {
         creator = MetaText(metadata, "modeled_by");
     }
+
+    return creator;
+}
+
+/// A group's line, as a Tone3000 result's: "by creator · 3 models". The creator only when every
+/// member names the same one (groupHeader.ts sharedCreator).
+inline std::string GroupMetaLine(const std::vector<std::string>& creators, std::size_t count,
+                                 const std::string& resourceType)
+{
+    std::string shared;
+    bool mixed = false;
+
+    for (const auto& creator : creators)
+    {
+        if (creator.empty())
+        {
+            continue;
+        }
+
+        if (shared.empty())
+        {
+            shared = creator;
+        }
+        else if (creator != shared)
+        {
+            mixed = true;
+        }
+    }
+
+    const std::string noun = resourceType == "ir" ? "IR" : "model";
+    auto text = std::to_string(count) + " " + noun + (count == 1 ? "" : "s");
+    return !shared.empty() && !mixed ? "by " + shared + " \xC2\xB7 " + text : text;
+}
+
+/// "by creator · A2 · gear", the line under an entry's name.
+inline std::string Describe(const nlohmann::json& metadata, const std::string& category)
+{
+    std::vector<std::string> parts;
+    const auto creator = CreatorOf(metadata);
 
     if (!creator.empty())
     {
@@ -207,12 +245,15 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
 
     std::string icon;                                        // ui-folder, a chevron...
     std::function<std::shared_ptr<artist::image>()> picture; // a tone's picture, read as it draws (it may arrive later)
-    std::string note;                                        // muted text at the right ("In library")
+    // A fixed picture slot at the left, as the web UI's Library, Folder and Tone3000 rows have:
+    // the picture when there is one, else an empty box of the same size, so titles line up.
+    bool pictureSlot = false;
+    std::string note;                                      // muted text at the right ("In library")
     el::color noteColour;
     std::string button; // a button at the right ("Select")
     bool selected = false;
-    bool heading = false; // a group's caption
-    bool indent = false;  // a model under its tone
+    bool indent = false;      // a model under its tone (the Tone3000 tab's)
+    bool groupMember = false; // a model under its pack's row: not indented, a bar down its left edge
     int star = -1;        // -1: none; 0 or 1: the favourite star, off or on
     std::function<void()> onClick, onDouble, onButton, onStar, onMenu;
 
@@ -229,8 +270,35 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        const float h = heading ? 30.0f : (mDetail.empty() ? 36.0f : 44.0f);
+        // The slot's 36 px square plus the web rows' 6 px insets (.resource-browser-item-row).
+        const float h = pictureSlot ? 48.0f : (mDetail.empty() ? 36.0f : 44.0f);
         return {{100.0f, h}, {el::full_extent, h}};
+    }
+
+    /// The picture slot's square, centred on the row's middle, starting at `left`.
+    static el::rect SlotRect(const el::rect& row, float left)
+    {
+        const float cy = row.top + row.height() * 0.5f;
+        return el::rect{left, cy - kSlotSize * 0.5f, left + kSlotSize, cy + kSlotSize * 0.5f};
+    }
+
+    /// Draws the picture into `r`, or the empty box where there is none.
+    void DrawSlot(artist::canvas& cnv, const el::rect& r, const std::shared_ptr<artist::image>& image) const
+    {
+        auto state = cnv.new_state();
+        cnv.begin_path();
+        cnv.add_round_rect(r, 4.0f);
+
+        if (image)
+        {
+            cnv.clip();
+            DrawImageCovering(cnv, *image, r);
+        }
+        else
+        {
+            cnv.fill_style(mTheme.Input()); // .resource-browser-item-thumb's --bg-browser-input
+            cnv.fill();
+        }
     }
 
     void draw(const el::context& ctx) override
@@ -238,43 +306,6 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
         auto& cnv = ctx.canvas;
         auto b = ctx.bounds;
         bounds = b;
-
-        if (heading)
-        {
-            cnv.fill_style(
-                mTheme.DarkOr(el::rgba(255, 255, 255, mHover ? 14 : 8), mTheme.Text().opacity(mHover ? 0.08f : 0.05f)));
-            cnv.fill_round_rect(b.inset(0.0f, 2.0f), 6.0f);
-            mIcons.Draw(cnv, icon.empty() ? "ui-chevron-right" : icon,
-                        el::rect{b.left + 10.0f, b.top + 9.0f, b.left + 22.0f, b.top + 21.0f}, mTheme.TextSecondary());
-            float titleLeft = b.left + 30.0f;
-
-            // A Tone3000 tone's group shows the tone's picture after the chevron, as the web UI's.
-            if (const auto image = picture ? picture() : nullptr)
-            {
-                const el::rect r{titleLeft, b.top + 5.0f, titleLeft + 20.0f, b.top + 25.0f};
-                auto state = cnv.new_state();
-                cnv.begin_path();
-                cnv.add_round_rect(r, 3.0f);
-                cnv.clip();
-                DrawImageCovering(cnv, *image, r);
-                titleLeft = r.right + 8.0f;
-            }
-
-            FillText(cnv, mTitle, Font(Weight::SemiBold).size(12.5f), mTheme.Ink(),
-                     el::rect{titleLeft, b.top, b.right - 60.0f, b.bottom}, HAlign::Left);
-
-            if (!note.empty())
-            {
-                const auto font = Font(Weight::SemiBold).size(9.5f);
-                const float w = el::measure_text(cnv, note, font).x + 14.0f;
-                const el::rect pill{b.right - 12.0f - w, b.top + 7.0f, b.right - 12.0f, b.bottom - 7.0f};
-                cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 22), mTheme.Panel()));
-                cnv.fill_round_rect(pill, 8.0f);
-                FillText(cnv, note, font, mTheme.TextSecondary(), pill, HAlign::Centre);
-            }
-
-            return;
-        }
 
         if (indent)
         {
@@ -294,9 +325,27 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
             cnv.stroke_round_rect(face.inset(0.5f, 0.5f), 6.0f);
         }
 
+        if (groupMember)
+        {
+            // .resource-browser-pack-items' inset bar: in the group, its picture still lined up.
+            auto state = cnv.new_state();
+            cnv.begin_path();
+            cnv.add_round_rect(face, 6.0f);
+            cnv.clip();
+            cnv.fill_style(mTheme.Border());
+            cnv.fill_rect(el::rect{face.left, face.top, face.left + 2.0f, face.bottom});
+        }
+
         float x = face.left + 12.0f;
 
-        if (const auto image = picture ? picture() : nullptr)
+        if (pictureSlot)
+        {
+            // The web rows' 8 px inset and 12 px gap.
+            const auto r = SlotRect(face, face.left + 8.0f);
+            DrawSlot(cnv, r, picture ? picture() : nullptr);
+            x = r.right + 12.0f;
+        }
+        else if (const auto image = picture ? picture() : nullptr)
         {
             const el::rect r{x - 2.0f, face.top + 4.0f, x + face.height() - 10.0f, face.bottom - 4.0f};
             auto state = cnv.new_state();
@@ -503,6 +552,8 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
     }
 
   private:
+    static constexpr float kSlotSize = 36.0f; // .resource-browser-item-thumb
+
     const Theme& mTheme;
     Icons& mIcons;
     std::string mTitle, mDetail;

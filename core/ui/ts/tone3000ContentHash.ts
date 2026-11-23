@@ -45,20 +45,35 @@ export async function findTone3000ByContentHash(resource: LibraryResource): Prom
 /**
  * The Tone3000 model with this content hash, and its tone, or null when Tone3000 has none it
  * shows. A file not in the library (the Folder tab's) has a hash but no row to look it up by.
+ *
+ * `toneCache` is for a batch of lookups (the Folder tab's "Look up details"): a tone read for one
+ * file is not asked for again, and a file whose model is also in a tone already found prefers that
+ * tone, so files uploaded together end up in one group.
  */
-export async function findTone3000ByHash(contentHash: string | undefined, preferredToneId?: string): Promise<Tone3000ContentHashMatch | null> {
+export async function findTone3000ByHash(
+  contentHash: string | undefined,
+  preferredToneId?: string,
+  toneCache?: Map<string, Tone3000Tone | null>,
+): Promise<Tone3000ContentHashMatch | null> {
   if (!isContentHash(contentHash)) {
     return null;
   }
   const models = await lookupTone3000ModelsByContentHash(contentHash);
   // Try each model in preference order until one's tone can be read (a repost's tone may be private).
-  const first = chooseContentHashMatch(models, preferredToneId);
+  const preferred = preferredToneId?.trim() ? models.find((model) => String(model.tone_id ?? "") === preferredToneId.trim()) : undefined;
+  const known = toneCache ? models.find((model) => model.tone_id != null && toneCache.get(String(model.tone_id))) : undefined;
+  const first = preferred ?? known ?? chooseContentHashMatch(models, preferredToneId);
   const ordered = first ? [first, ...models.filter((model) => model !== first)] : [];
   for (const model of ordered) {
     if (model.tone_id == null) {
       continue;
     }
-    const tone = await fetchTone3000Tone(model.tone_id);
+    const key = String(model.tone_id);
+    let tone = toneCache?.get(key);
+    if (tone === undefined) {
+      tone = await fetchTone3000Tone(model.tone_id);
+      toneCache?.set(key, tone);
+    }
     if (tone) {
       return { tone, model, others: models.length - 1 };
     }

@@ -155,6 +155,11 @@ std::string ModelLookupPath(const std::string& contentHash)
     return "/models/lookup?content_hash=" + tones::EncodeQueryValue(contentHash) + "&page=1&page_size=25";
 }
 
+std::string TonePath(const std::string& toneId)
+{
+    return "/tones/" + tones::EncodeQueryValue(toneId);
+}
+
 std::string Url(const std::string& path)
 {
     return std::string(kProxyBase) + path;

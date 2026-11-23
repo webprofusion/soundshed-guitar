@@ -861,6 +861,9 @@ struct ClientState
     std::map<std::string, ResourceImport> resourceImports; // by request id (Topic::Resources)
     ResourceFolderListing resourceFolder;                  // the folder last listed (Topic::ResourceFolders)
     std::string pickedResourceFolder;                      // a folder the user just picked to add, until taken
+    /// Folder files' content hashes the engine worked out (resourceFileContentHash), by
+    /// FolderPathKey; "" when the file could not be read (Topic::ResourceFolders).
+    std::map<std::string, std::string> resourceFileHashes;
 
     [[nodiscard]] const EffectTypeInfo* FindEffectType(const std::string& type) const;
     [[nodiscard]] const PresetSummary* FindPresetSummary(const std::string& id) const;

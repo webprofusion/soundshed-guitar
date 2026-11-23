@@ -4,7 +4,10 @@
  */
 
 #include "uiclient/UiClient.h"
+#include "uiclient/FolderToneLookup.h"
 #include "uiclient/ResourceThumbnails.h"
+
+#include "models/ContentHash.h"
 #include "uiclient/UiClientParsing.h"
 #include "uiclient/ThemeTokens.generated.h"
 
@@ -169,6 +172,14 @@ void UiClient::RegisterLibraryHandlers()
         mState.resourceFolder = {};
         mState.resourceFolder.path = m.value("path", "");
         mState.resourceFolder.error = m.value("message", std::string("The folder could not be read"));
+        Notify(Topic::ResourceFolders);
+    });
+
+    On("resourceFileContentHash", [this](const nlohmann::json& m) {
+        // hashResourceFile's answer, for the Folder tab's lookups (FolderToneLookup.h).
+        const auto hash = m.value("contentHash", std::string());
+        mState.resourceFileHashes[FolderPathKey(m.value("path", std::string()))] =
+            IsContentHash(hash) ? hash : std::string();
         Notify(Topic::ResourceFolders);
     });
 

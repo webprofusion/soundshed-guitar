@@ -18,8 +18,17 @@ import { escapeHtml } from "../utils.js";
 import { isDoubleClickExempt } from "./helpers.js";
 import { getActiveRoot, getActiveRootId, getFolderLastLocations, getFolderRoots, normalizeFolderPath, rememberFolderLocation, resolveFolderStartLocation, setActiveRootId, setFolderLastLocations, setFolderRoots } from "./folderRoots.js";
 import type { FolderRowState } from "./folderRows.js";
-import { folderFileLibraryMatch, getFolderFileTags, renderFolderTagFilters } from "./folderRows.js";
-import { canLookUpFolderFile, folderFileTone3000Metadata, lookUpFolderFileOnTone3000 } from "./folderTone3000.js";
+import { folderFileLibraryMatch, folderFileTone3000Details, getFolderFileTags, renderFolderTagFilters } from "./folderRows.js";
+import { folderFilesInListOrder, folderVirtualEntries, groupFolderFiles } from "./folderGroups.js";
+import {
+  canLookUpFolderFile,
+  FOLDER_LOOKUP_BATCH,
+  folderFileTone3000Metadata,
+  isFolderLookupRunning,
+  lookUpFolderFileOnTone3000,
+  lookUpFolderFiles,
+  needsFolderLookup,
+} from "./folderTone3000.js";
 import { FolderVirtualList } from "./folderVirtualList.js";
 import { DEFAULT_RESOURCE_CONTEXT_KEY } from "./settings.js";
 import type { FolderListing, FolderListingFile, FolderVirtualEntry, ResourceBrowserOptions, ResourceNavigationState, ResourceType } from "./types.js";
@@ -100,7 +109,9 @@ export class FolderTab {
     this.folderTagFilterBar = document.getElementById("resource-browser-folder-tag-filters");
     this.folderStatus = document.getElementById("resource-browser-folder-status");
     this.folderList = document.getElementById("resource-browser-folder-list");
+    this.folderLookupBtn = document.getElementById("resource-browser-folder-lookup") as HTMLButtonElement | null;
 
+    this.folderLookupBtn?.addEventListener("click", () => void this.lookUpListedFiles());
     this.folderAddBtn?.addEventListener("click", () => this.requestAddFolder());
     this.folderRemoveBtn?.addEventListener("click", () => this.removeActiveFolderRoot());
     this.folderRootSelect?.addEventListener("change", () => this.onFolderRootChanged());
@@ -160,6 +171,17 @@ export class FolderTab {
   private folderStatus: HTMLElement | null = null;
 
   folderList: HTMLElement | null = null;
+
+  private folderLookupBtn: HTMLButtonElement | null = null;
+
+  /** The files the list shows after its filters: what "Look up details" looks up. */
+  private listedFiles: FolderListingFile[] = [];
+
+  /** "Looking up 3 of 10…" while a batch runs. */
+  private lookupProgress = "";
+
+  /** Tone groups the user opened (true) or closed (false); otherwise the default rule applies. */
+  private readonly groupToggles = new Map<string, boolean>();
 
   // Folder tab state
   folderCurrentPath = "";
@@ -458,6 +480,8 @@ export class FolderTab {
     if (!this.folderList) return;
     if (this.folderLoading) return;
 
+    this.listedFiles = [];
+    this.updateLookupButton();
     const activeRoot = getActiveRoot();
     if (!activeRoot) {
       this.folderList.innerHTML = `<div class="resource-browser-empty">No folder selected. Click \u201CAdd Folder\u201D to browse a folder of NAM/IR/WAV files.</div>`;
@@ -495,17 +519,26 @@ export class FolderTab {
         return Array.from(this.folderTagFilters).every((tag) => tags.includes(tag));
       })
       : filesByQuery;
+    // Files known to come from the same tone (a lookup's, or their library entries') are one group.
+    const rowState = this.folderRowState();
+    const items = groupFolderFiles(files, (file) => folderFileTone3000Details(file, rowState));
+    this.listedFiles = files;
     this.virtualList.setEntries([
       ...dirs.map((dir): FolderVirtualEntry => ({ key: `dir:${dir.path}`, kind: "dir", dir })),
-      ...files.map((file): FolderVirtualEntry => ({ key: `file:${file.path}`, kind: "file", file })),
+      ...folderVirtualEntries(items, {
+        toggled: this.groupToggles,
+        openAll: Boolean(query) || this.folderTagFilters.size > 0,
+        selectedPath: this.selectedFolderPath,
+      }),
     ]);
     if (resetVirtualScroll && this.folderList) {
       this.folderList.scrollTop = 0;
     }
+    this.updateLookupButton();
 
     this.folderNavigationStates.set(this.folderContextKey, {
       resourceType: this.host.getOptions()?.resourceType ?? "nam",
-      items: files
+      items: folderFilesInListOrder(items)
         .filter((file) => file.resourceType === this.host.getOptions()?.resourceType)
         .map((file) => {
           const match = folderFileLibraryMatch(file);
@@ -540,10 +573,64 @@ export class FolderTab {
     this.virtualList.renderWindow();
   }
 
+  /**
+   * "Look up details": shown with the Tone3000 feature on (the lookups go there), and offered
+   * while some listed file has not been looked up; says how far a batch has got while it runs.
+   */
+  private updateLookupButton(): void {
+    const button = this.folderLookupBtn;
+    if (!button) {
+      return;
+    }
+    const enabled = isFeatureEnabled(Features.Tone3000);
+    button.hidden = !enabled;
+    if (!enabled) {
+      return;
+    }
+    const running = isFolderLookupRunning();
+    const pending = this.listedFiles.filter(needsFolderLookup).length;
+    button.disabled = running || pending === 0;
+    button.textContent = running ? this.lookupProgress || "Looking up…" : "Look up details";
+    button.title = pending === 0
+      ? "Every file listed here has been looked up"
+      : `Find out who made the files listed here and which tone they belong to (${Math.min(pending, FOLDER_LOOKUP_BATCH)} of ${pending} file${pending === 1 ? "" : "s"} this time)`;
+  }
+
+  private async lookUpListedFiles(): Promise<void> {
+    if (isFolderLookupRunning()) {
+      return;
+    }
+    const files = [...this.listedFiles];
+    this.lookupProgress = "Looking up…";
+    this.updateLookupButton();
+    await lookUpFolderFiles(files, (done, total) => {
+      this.lookupProgress = `Looking up ${Math.min(done + 1, total)} of ${total}…`;
+      // A match regroups the list as it comes; one whose file is in the library changes that tab too.
+      if (done > 0) {
+        this.host.renderLibraryList();
+        this.renderFolderList();
+      } else {
+        this.updateLookupButton();
+      }
+    });
+    this.lookupProgress = "";
+    this.renderFolderList();
+  }
+
   private handleFolderClick(event: Event): void {
     const options = this.host.getOptions();
     const target = event.target as HTMLElement | null;
     if (!target) return;
+
+    const groupHeader = target.closest(".resource-browser-pack-header") as HTMLElement | null;
+    if (groupHeader) {
+      const key = groupHeader.dataset.packKey ?? "";
+      if (key) {
+        this.groupToggles.set(key, groupHeader.getAttribute("aria-expanded") !== "true");
+        this.renderFolderList();
+      }
+      return;
+    }
 
     const favBtn = target.closest(".resource-browser-item-fav-toggle") as HTMLButtonElement | null;
     if (favBtn) {
@@ -623,7 +710,7 @@ export class FolderTab {
     if (!target || !options) {
       return;
     }
-    if (isDoubleClickExempt(target) || target.closest('[data-kind="dir"]')) {
+    if (isDoubleClickExempt(target) || target.closest('[data-kind="dir"], [data-kind="group"]')) {
       return;
     }
 

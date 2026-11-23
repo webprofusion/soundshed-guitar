@@ -863,6 +863,37 @@ void ToneService::Tone3000ModelsByContentHash(const std::string& contentHash, Mo
             });
 }
 
+void ToneService::Tone3000Tone(const std::string& toneId, ToneCallback callback)
+{
+    Request("GET", tone3000::Url(tone3000::TonePath(toneId)), {}, false, [callback](const HttpResult& result) {
+        if (result.status == 403 || result.status == 404)
+        {
+            callback(std::nullopt, {});
+            return;
+        }
+
+        if (result.status != 200)
+        {
+            callback(std::nullopt, result.status == 0 ? result.error
+                                                      : "tone lookup failed (" + std::to_string(result.status) + ")");
+            return;
+        }
+
+        const auto body = nlohmann::json::parse(result.body, nullptr, false);
+
+        if (body.is_discarded() || !body.is_object())
+        {
+            callback(std::nullopt, {});
+            return;
+        }
+
+        // The relay may wrap the tone ({ "data": {...} }) as it wraps a page.
+        const auto& tone = body.contains("data") && body["data"].is_object() ? body["data"] : body;
+        auto parsed = tone3000::ParseTone(tone);
+        callback(parsed.id.empty() ? std::nullopt : std::optional<tone3000::Tone>(std::move(parsed)), {});
+    });
+}
+
 void ToneService::FetchRemoteRef(const tone3000::RemoteRef& ref,
                                  std::function<void(const std::string&, const std::string&)> done)
 {
