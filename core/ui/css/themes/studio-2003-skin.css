@@ -476,6 +476,11 @@ body.theme-studio-2003 .modal-content {
   border-radius: 3px;
 }
 
+/* The keys above stand proud and throw a shadow; give the display room below them, as Studio does. */
+html:not([data-density="compact"]) body.theme-studio-2003 .preset-selector-row {
+  margin-top: 8px;
+}
+
 .theme-studio-2003 .preset-chooser-label {
   color: var(--studio-lcd-ink);
   font-weight: 700;
