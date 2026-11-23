@@ -20,6 +20,54 @@ int RoundUp8(int n)
     return (n + 7) & ~7;
 }
 
+// A short copy without a call: vectors, then single floats.
+GUITARFX_FWN_INLINE void CopyFloats(float* d, const float* s, int n)
+{
+    int f = 0;
+
+    for (; f + 8 <= n; f += 8)
+    {
+        Store(d + f, Load(s + f));
+    }
+
+    for (; f < n; ++f)
+    {
+        d[f] = s[f];
+    }
+}
+
+// A GEMM's input rows: for each tap, one row per channel, channelStride floats apart. Rows are
+// taken tap-major, row t * channels + c, which is the packed weights' input order. tapBase is the
+// caller's row buffer, with room for taps * channels pointers: Gemm lists a single tap's rows in it.
+struct Rows
+{
+    const float** tapBase;
+    int taps = 1;
+    int channels = 1;
+    std::ptrdiff_t channelStride = 0;
+};
+
+// A tap of only a few channels makes too short an inner loop, so a GEMM over fewer channels than
+// this takes every row as a tap of its own.
+constexpr int kMinTapChannels = 4;
+
+// How many rows of each tap a caller lists: all of them when they become taps of their own.
+int ListedChannels(int channels)
+{
+    return channels < kMinTapChannels ? channels : 1;
+}
+
+// The Rows for taps listed with ListedChannels(channels) rows each.
+Rows ListedRows(const float** rows, int taps, int channels, std::ptrdiff_t channelStride)
+{
+    if (channels < kMinTapChannels)
+    {
+        return Rows{rows, taps * channels, 1, 0};
+    }
+
+    return Rows{rows, taps, channels, channelStride};
+}
+
 int NextPow2(int v)
 {
     int p = 1;
@@ -89,9 +137,10 @@ template <int FT> GUITARFX_FWN_INLINE void RowStore(float* outRow, V8 a0, V8 a1,
     }
 }
 
-template <int OT, int FT>
-GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* bias, const float* const* inRows,
-                                  int nin, float* out, int outStride, int o0, int f0, bool accumulate)
+template <int OT, int FT, bool Flat>
+GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* bias, const float* const* tapBase,
+                                  int taps, int channels, std::ptrdiff_t channelStride, float* out, int outStride,
+                                  int o0, int f0, bool accumulate)
 {
     static_assert((OT == 1 || OT == 2 || OT == 4) && FT >= 1 && FT <= 3, "the named rows cover 4 x 3");
     float* const tile = out + o0 * outStride + f0;
@@ -110,40 +159,49 @@ GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* b
         RowInit<FT>(a30, a31, a32, bias, o0 + 3, tile + 3 * outStride, accumulate);
     }
 
-    for (int i = 0; i < nin; ++i)
+    const float* w = weights + o0;
+
+    if constexpr (Flat)
     {
-        const float* x = inRows[i] + f0;
-        const V8 x0 = Load(x);
-        V8 x1 = x0;
-        V8 x2 = x0;
+        channels = 1;
+    }
 
-        if constexpr (FT > 1)
+    for (int t = 0; t < taps; ++t)
+    {
+        const float* x = tapBase[t] + f0;
+
+        for (int c = 0; c < channels; ++c, x += channelStride, w += nout)
         {
-            x1 = Load(x + 8);
-        }
+            const V8 x0 = Load(x);
+            V8 x1 = x0;
+            V8 x2 = x0;
 
-        if constexpr (FT > 2)
-        {
-            x2 = Load(x + 16);
-        }
-
-        const float* w = weights + i * nout + o0;
-
-        if constexpr (OT == 4)
-        {
-            const float32x4_t w4 = vld1q_f32(w);
-            RowFma<FT, 0>(a00, a01, a02, w4, x0, x1, x2);
-            RowFma<FT, 1>(a10, a11, a12, w4, x0, x1, x2);
-            RowFma<FT, 2>(a20, a21, a22, w4, x0, x1, x2);
-            RowFma<FT, 3>(a30, a31, a32, w4, x0, x1, x2);
-        }
-        else
-        {
-            RowFma<FT, 0>(a00, a01, a02, vld1q_dup_f32(w), x0, x1, x2);
-
-            if constexpr (OT > 1)
+            if constexpr (FT > 1)
             {
-                RowFma<FT, 0>(a10, a11, a12, vld1q_dup_f32(w + 1), x0, x1, x2);
+                x1 = Load(x + 8);
+            }
+
+            if constexpr (FT > 2)
+            {
+                x2 = Load(x + 16);
+            }
+
+            if constexpr (OT == 4)
+            {
+                const float32x4_t w4 = vld1q_f32(w);
+                RowFma<FT, 0>(a00, a01, a02, w4, x0, x1, x2);
+                RowFma<FT, 1>(a10, a11, a12, w4, x0, x1, x2);
+                RowFma<FT, 2>(a20, a21, a22, w4, x0, x1, x2);
+                RowFma<FT, 3>(a30, a31, a32, w4, x0, x1, x2);
+            }
+            else
+            {
+                RowFma<FT, 0>(a00, a01, a02, vld1q_dup_f32(w), x0, x1, x2);
+
+                if constexpr (OT > 1)
+                {
+                    RowFma<FT, 0>(a10, a11, a12, vld1q_dup_f32(w + 1), x0, x1, x2);
+                }
             }
         }
     }
@@ -162,9 +220,10 @@ GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* b
     }
 }
 #else
-template <int OT, int FT>
-GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* bias, const float* const* inRows,
-                                  int nin, float* out, int outStride, int o0, int f0, bool accumulate)
+template <int OT, int FT, bool Flat>
+GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* bias, const float* const* tapBase,
+                                  int taps, int channels, std::ptrdiff_t channelStride, float* out, int outStride,
+                                  int o0, int f0, bool accumulate)
 {
     V8 acc[OT][FT];
 
@@ -178,25 +237,34 @@ GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* b
         }
     }
 
-    for (int i = 0; i < nin; ++i)
+    const float* w = weights + o0;
+
+    if constexpr (Flat)
     {
-        const float* x = inRows[i] + f0;
-        V8 xv[FT];
+        channels = 1;
+    }
 
-        for (int ft = 0; ft < FT; ++ft)
+    for (int t = 0; t < taps; ++t)
+    {
+        const float* x = tapBase[t] + f0;
+
+        for (int c = 0; c < channels; ++c, x += channelStride, w += nout)
         {
-            xv[ft] = Load(x + 8 * ft);
-        }
-
-        const float* w = weights + i * nout + o0;
-
-        for (int oo = 0; oo < OT; ++oo)
-        {
-            const V8 wv = Broadcast(w + oo);
+            V8 xv[FT];
 
             for (int ft = 0; ft < FT; ++ft)
             {
-                acc[oo][ft] = Fma(wv, xv[ft], acc[oo][ft]);
+                xv[ft] = Load(x + 8 * ft);
+            }
+
+            for (int oo = 0; oo < OT; ++oo)
+            {
+                const V8 wv = Broadcast(w + oo);
+
+                for (int ft = 0; ft < FT; ++ft)
+                {
+                    acc[oo][ft] = Fma(wv, xv[ft], acc[oo][ft]);
+                }
             }
         }
     }
@@ -211,51 +279,94 @@ GUITARFX_FWN_INLINE void GemmTile(const float* weights, int nout, const float* b
 }
 #endif
 
-template <int FT>
-GUITARFX_FWN_INLINE void GemmFrames(const float* weights, int nout, const float* bias, const float* const* inRows,
-                                    int nin, float* out, int outStride, int f0, bool accumulate)
+template <int FT, bool Flat>
+GUITARFX_FWN_INLINE void GemmFrames(const float* weights, int nout, const float* bias, const float* const* tapBase,
+                                    int taps, int channels, std::ptrdiff_t channelStride, float* out, int outStride,
+                                    int f0, bool accumulate)
 {
     int o0 = 0;
 
     for (; o0 + kTileOutputs <= nout; o0 += kTileOutputs)
     {
-        GemmTile<kTileOutputs, FT>(weights, nout, bias, inRows, nin, out, outStride, o0, f0, accumulate);
+        GemmTile<kTileOutputs, FT, Flat>(weights, nout, bias, tapBase, taps, channels, channelStride, out, outStride,
+                                         o0, f0, accumulate);
     }
 
     for (; o0 + 2 <= nout; o0 += 2)
     {
-        GemmTile<2, FT>(weights, nout, bias, inRows, nin, out, outStride, o0, f0, accumulate);
+        GemmTile<2, FT, Flat>(weights, nout, bias, tapBase, taps, channels, channelStride, out, outStride, o0, f0,
+                              accumulate);
     }
 
     for (; o0 < nout; ++o0)
     {
-        GemmTile<1, FT>(weights, nout, bias, inRows, nin, out, outStride, o0, f0, accumulate);
+        GemmTile<1, FT, Flat>(weights, nout, bias, tapBase, taps, channels, channelStride, out, outStride, o0, f0,
+                              accumulate);
     }
 }
 
-// A matrix times a list of input rows, over padded frames (a multiple of 8). A dilated conv
-// passes K * C rows, one per tap and channel, each a pointer into a ring.
-void Gemm(const float* weights, int nout, const float* bias, const float* const* inRows, int nin, float* out,
-          int outStride, int padded, bool accumulate)
+template <bool Flat>
+void GemmOver(const float* weights, int nout, const float* bias, const float* const* tapBase, int taps, int channels,
+              std::ptrdiff_t channelStride, float* out, int outStride, int padded, bool accumulate)
 {
     int f0 = 0;
+    int wide = padded / (8 * kTileVectors);
 
-    for (; f0 + 8 * kTileVectors <= padded; f0 += 8 * kTileVectors)
+    // Never end on a lone 8-frame vector: its tile has too few independent accumulators to cover
+    // the multiply-add latency, and ran at about half speed. 24 + 8 becomes 16 + 16.
+    if (kTileVectors > 2 && wide > 0 && padded - wide * 8 * kTileVectors == 8)
     {
-        GemmFrames<kTileVectors>(weights, nout, bias, inRows, nin, out, outStride, f0, accumulate);
+        --wide;
+    }
+
+    for (; f0 < wide * 8 * kTileVectors; f0 += 8 * kTileVectors)
+    {
+        GemmFrames<kTileVectors, Flat>(weights, nout, bias, tapBase, taps, channels, channelStride, out, outStride, f0,
+                                       accumulate);
     }
 
     if constexpr (kTileVectors > 2)
     {
         for (; f0 + 16 <= padded; f0 += 16)
         {
-            GemmFrames<2>(weights, nout, bias, inRows, nin, out, outStride, f0, accumulate);
+            GemmFrames<2, Flat>(weights, nout, bias, tapBase, taps, channels, channelStride, out, outStride, f0,
+                                accumulate);
         }
     }
 
     for (; f0 < padded; f0 += 8)
     {
-        GemmFrames<1>(weights, nout, bias, inRows, nin, out, outStride, f0, accumulate);
+        GemmFrames<1, Flat>(weights, nout, bias, tapBase, taps, channels, channelStride, out, outStride, f0,
+                            accumulate);
+    }
+}
+
+// A matrix times input rows (see Rows), over padded frames (a multiple of 8). A dilated conv
+// passes its taps' rows in a ring, from Ring::TapBases.
+void Gemm(const float* weights, int nout, const float* bias, Rows in, float* out, int outStride, int padded,
+          bool accumulate)
+{
+    // A single tap of a few channels (see kMinTapChannels): list its rows in place.
+    if (in.taps == 1 && in.channels > 1 && in.channels < kMinTapChannels)
+    {
+        const float* const base = in.tapBase[0];
+
+        for (int c = 1; c < in.channels; ++c)
+        {
+            in.tapBase[c] = base + c * in.channelStride;
+        }
+
+        in = ListedRows(in.tapBase, 1, in.channels, in.channelStride);
+    }
+
+    if (in.channels == 1)
+    {
+        GemmOver<true>(weights, nout, bias, in.tapBase, in.taps, 1, 0, out, outStride, padded, accumulate);
+    }
+    else
+    {
+        GemmOver<false>(weights, nout, bias, in.tapBase, in.taps, in.channels, in.channelStride, out, outStride, padded,
+                        accumulate);
     }
 }
 } // namespace
@@ -297,40 +408,51 @@ void FusedWaveNet::Ring::Allocate(int rows, int lookback, int paddedMax)
 
 void FusedWaveNet::Ring::Write(const float* source, int sourceStride, int rows, int frames, int paddedMax)
 {
+    // All padded frames in one straight run of vector copies from writePos; the row's mirror tail
+    // makes room (rowStride = size + paddedMax). The columns past `frames` are the oldest history,
+    // which nothing reads again before the next write replaces it: a tap that reaches them is
+    // feeding a padded lane. Then the two copies are squared for the real frames only: frames that
+    // ran past size into the mirror go back to the front, and frames written in the first
+    // paddedMax columns go to the mirror.
+    const int padded = RoundUp8(frames);
+    const int overflow = writePos + frames - size;
+    const int mirrored = std::min(writePos + frames, paddedMax) - writePos;
+
     for (int c = 0; c < rows; ++c)
     {
         float* row = history.data() + static_cast<std::size_t>(c) * rowStride;
         const float* s = source + static_cast<std::size_t>(c) * sourceStride;
-        const int first = std::min(frames, size - writePos);
-        std::memcpy(row + writePos, s, sizeof(float) * static_cast<std::size_t>(first));
+        float* d = row + writePos;
 
-        if (first < frames)
+        for (int f = 0; f < padded; f += 8)
         {
-            std::memcpy(row, s + first, sizeof(float) * static_cast<std::size_t>(frames - first));
+            Store(d + f, Load(s + f));
         }
 
-        // Keep the mirror of the first paddedMax columns current.
-        const int lo = first < frames ? 0 : writePos;
-        const int hi = first < frames ? frames - first : writePos + frames;
-
-        if (lo < paddedMax)
+        if (overflow > 0)
         {
-            std::memcpy(row + size + lo, row + lo,
-                        sizeof(float) * static_cast<std::size_t>(std::min(hi, paddedMax) - lo));
+            CopyFloats(row, row + size, overflow);
+        }
+
+        if (mirrored > 0)
+        {
+            CopyFloats(row + size + writePos, s, mirrored);
         }
     }
 }
 
-// Rows for a causal K-tap conv at this dilation: tap k reads (K - 1 - k) * dilation frames back.
-void FusedWaveNet::Ring::TapRows(const float** rows, int channels, int kernelSize, int dilation) const
+// The first `channels` rows of each tap of a causal K-tap conv at this dilation, tap-major: tap k
+// reads (K - 1 - k) * dilation frames back. With channels = 1 that is one base per tap, and the
+// GEMM finds channel c rowStride * c further on.
+void FusedWaveNet::Ring::TapBases(const float** bases, int kernelSize, int dilation, int channels) const
 {
     for (int k = 0; k < kernelSize; ++k)
     {
-        const int start = (writePos - (kernelSize - 1 - k) * dilation) & mask;
+        const float* base = history.data() + ((writePos - (kernelSize - 1 - k) * dilation) & mask);
 
-        for (int i = 0; i < channels; ++i)
+        for (int c = 0; c < channels; ++c, base += rowStride)
         {
-            rows[k * channels + i] = history.data() + static_cast<std::size_t>(i) * rowStride + start;
+            *bases++ = base;
         }
     }
 }
@@ -514,14 +636,11 @@ void FusedWaveNet::ProcessChunk(const NAM_SAMPLE* input, NAM_SAMPLE* output, con
         }
         else
         {
-            for (int i = 0; i < weights.inputSize; ++i)
-            {
-                rows[i] = previous->current.data() + static_cast<std::size_t>(i) * rowBytes;
-            }
+            rows[0] = previous->current.data();
         }
 
-        Gemm(weights.rechannel.data(), channels, nullptr, rows, weights.inputSize, state.current.data(), stride, padded,
-             false);
+        Gemm(weights.rechannel.data(), channels, nullptr, Rows{rows, 1, weights.inputSize, stride},
+             state.current.data(), stride, padded, false);
 
         // The head accumulator starts at zero, or at the previous array's head output.
         if (previous == nullptr)
@@ -545,10 +664,10 @@ void FusedWaveNet::ProcessChunk(const NAM_SAMPLE* input, NAM_SAMPLE* output, con
             }
 
             layerState.ring.Write(state.current.data(), stride, channels, frames, stride);
-            layerState.ring.TapRows(rows, channels, layer.kernelSize, layerState.dilation);
+            layerState.ring.TapBases(rows, layer.kernelSize, layerState.dilation, ListedChannels(channels));
             float* conv = state.conv.data();
-            Gemm(layer.conv.data(), channels, layer.convBias.data(), rows, layer.kernelSize * channels, conv, stride,
-                 padded, false);
+            Gemm(layer.conv.data(), channels, layer.convBias.data(),
+                 ListedRows(rows, layer.kernelSize, channels, layerState.ring.rowStride), conv, stride, padded, false);
 
             // Input mixin, activation and head sum, in one pass.
             const V8 slope = Set1(layer.slope);
@@ -580,13 +699,9 @@ void FusedWaveNet::ProcessChunk(const NAM_SAMPLE* input, NAM_SAMPLE* output, con
             }
 
             // layer1x1 residual, in place on the residual stream.
-            for (int i = 0; i < channels; ++i)
-            {
-                rows[i] = conv + static_cast<std::size_t>(i) * rowBytes;
-            }
-
-            Gemm(layer.layer1x1.data(), channels, layer.layer1x1Bias.data(), rows, channels, state.current.data(),
-                 stride, padded, true);
+            rows[0] = conv;
+            Gemm(layer.layer1x1.data(), channels, layer.layer1x1Bias.data(), Rows{rows, 1, channels, stride},
+                 state.current.data(), stride, padded, true);
             layerState.ring.Advance(frames);
         }
 
@@ -599,18 +714,18 @@ void FusedWaveNet::ProcessChunk(const NAM_SAMPLE* input, NAM_SAMPLE* output, con
             }
 
             state.headRing.Write(state.headSum.data(), stride, channels, frames, stride);
-            state.headRing.TapRows(rows, channels, weights.headKernelSize, mTimeScale);
+            state.headRing.TapBases(rows, weights.headKernelSize, mTimeScale, ListedChannels(channels));
         }
         else
         {
-            for (int i = 0; i < channels; ++i)
-            {
-                rows[i] = state.headSum.data() + static_cast<std::size_t>(i) * rowBytes;
-            }
+            rows[0] = state.headSum.data();
         }
 
-        Gemm(weights.head.data(), weights.headSize, weights.hasHeadBias ? weights.headBias.data() : nullptr, rows,
-             weights.headKernelSize * channels, state.headOut.data(), stride, padded, false);
+        const Rows headRows = weights.headKernelSize > 1
+                                  ? ListedRows(rows, weights.headKernelSize, channels, state.headRing.rowStride)
+                                  : Rows{rows, 1, channels, stride};
+        Gemm(weights.head.data(), weights.headSize, weights.hasHeadBias ? weights.headBias.data() : nullptr, headRows,
+             state.headOut.data(), stride, padded, false);
 
         if (weights.headKernelSize > 1)
         {

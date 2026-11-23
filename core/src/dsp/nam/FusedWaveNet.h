@@ -185,7 +185,7 @@ class FusedWaveNet final : public ::nam::DSP
 
         void Allocate(int rows, int lookback, int paddedMax);
         void Write(const float* source, int sourceStride, int rows, int frames, int paddedMax);
-        void TapRows(const float** rows, int channels, int kernelSize, int dilation) const;
+        void TapBases(const float** bases, int kernelSize, int dilation, int channels) const;
         void Fill(const float* source, int sourceStride, int rows);
 
         void Advance(int frames)
