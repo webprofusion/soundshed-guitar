@@ -164,14 +164,11 @@
                     <div class="sg-summary-section">
                       <span class="sg-label" id="sg-info-label">Chords</span>
                       <div class="sg-info" id="sg-info"></div>
-                      <div class="sg-match" id="sg-match" hidden>
-                        <span class="sg-meter" aria-hidden="true"><span class="sg-meter-fill" id="sg-meter-fill"></span><span class="sg-meter-threshold" id="sg-meter-threshold"></span></span>
-                        <span class="sg-match-text" id="sg-match-text" aria-live="polite">Waiting for a strum</span>
-                        <span class="sg-segmented sg-segmented-small" role="group" aria-label="Match strictness">
-                          <button type="button" class="sg-segment" data-sg-match="easy">Easy</button>
-                          <button type="button" class="sg-segment" data-sg-match="normal">Normal</button>
-                          <button type="button" class="sg-segment" data-sg-match="strict">Strict</button>
-                        </span>
+                      <!-- The chord wheel (ts/scaleGuide/chordWheel.ts): what LISTEN hears, note by note,
+                           and the ring a strum must fill to land. -->
+                      <div class="sg-ear" id="sg-ear" hidden>
+                        <svg class="sg-wheel" id="sg-wheel" viewBox="-52 -52 104 104" role="img" aria-label="Chord wheel: the notes heard, the chord's own labelled. Fill the centre to the dashed ring and the chord lands."></svg>
+                        <p class="sg-ear-hint">Fill the ring with the chord's notes. It tightens as chords land and eases off when they don't.</p>
                       </div>
                     </div>
                     <!-- What LISTEN hears whatever is showing (ts/scaleGuide/heardView.ts): the chord in

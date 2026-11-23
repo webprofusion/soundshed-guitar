@@ -8,8 +8,9 @@
 
 import { postMessage } from "../bridge.js";
 import type { IncomingPayload } from "../messages/types.js";
+import { wheelRadius } from "./chordWheel.js";
 import { heardChange, parseHeard, resetHeardForTests, showHeard, shownHeard } from "./heardView.js";
-import { matchChord, NoteFollower, readingMidi, StrumGate } from "./listen.js";
+import { ChordEar, matchChord, NoteFollower, readingMidi, StrumGate } from "./listen.js";
 import { noteReadout, setReadout, showMatch, showNotes } from "./listenView.js";
 import { isScaleGuidePlaying, isScaleGuideSounding } from "./playback.js";
 import type { ScaleGuideSettings, ScaleGuideView } from "./types.js";
@@ -26,6 +27,7 @@ export interface ListenHost {
 let sentListen: { enabled: boolean; chroma: boolean } | null = null;
 const follower = new NoteFollower();
 const strums = new StrumGate();
+const ear = new ChordEar();
 let matchSignature = "";
 let flashUntil = 0;
 let round = 1;
@@ -62,6 +64,12 @@ export function syncListening(host: ListenHost): void {
   postMessage({ type: "tuner", action: "listen", enabled, chroma });
   follower.reset();
   strums.reset();
+
+  // Each visit to the guide starts the ear at its middle.
+  if (!enabled) {
+    ear.reset();
+  }
+
   matchSignature = "";
   const root = element<HTMLElement>("scale-guide");
 
@@ -97,7 +105,7 @@ export function renderListen(host: ListenHost): void {
   const readout = element<HTMLElement>("sg-live");
   const listening = Boolean(sentListen?.enabled && view);
   const chordMode = view?.mode === "chord";
-  element<HTMLElement>("sg-match")?.toggleAttribute("hidden", !listening || !chordMode);
+  element<HTMLElement>("sg-ear")?.toggleAttribute("hidden", !listening || !chordMode);
   const roundLabel = element<HTMLElement>("sg-round");
 
   if (roundLabel) {
@@ -115,7 +123,7 @@ export function renderListen(host: ListenHost): void {
   // The guide's own Play lights the notes it sounds: hearing them too would mark each one all over the neck.
   const heard = listening && !chordMode && (state.listenEverywhere || !isScaleGuidePlaying()) ? [follower.current, ...follower.trail] : [];
   showNotes(neck, view, { labels: state.labels, leftHanded: state.leftHanded, width: neck.clientWidth }, heard, state.listenEverywhere);
-  showMatch(root, view, null, state.match);
+  showMatch(root, view, null, ear.rule, state.labels);
 
   if (!listening) {
     readout.hidden = true;
@@ -183,19 +191,21 @@ export function onListenReading(host: ListenHost, payload: IncomingPayload): boo
     return true;
   }
 
-  const strictness = host.settings().match;
-  const match = level > StrumGate.QUIET_DB - 2 ? matchChord(chroma, view.tones[0]?.pitchClass ?? 0, view.tones, strictness) : null;
+  const loud = level > StrumGate.QUIET_DB - 2;
+  const match = loud ? matchChord(chroma, view.tones[0]?.pitchClass ?? 0, view.tones, ear.rule) : null;
 
   if (strums.push(level, Boolean(match?.ok))) {
+    ear.landed();
     onCleanChord(host);
     return true;
   }
 
-  const signature = match ? `${Math.round(match.share * 100)}|${match.heard.join()}|${match.missing.join()}|${match.ok}` : "quiet";
+  const eased = ear.push(loud, Boolean(match?.ok));
+  const signature = match ? `${match.spread.map((share) => Math.round(share * 40)).join()}|${match.missing.join()}|${match.ok}|${ear.tightness}` : "quiet";
 
-  if (root && signature !== matchSignature && performance.now() > flashUntil) {
+  if (root && (eased || signature !== matchSignature) && performance.now() > flashUntil) {
     matchSignature = signature;
-    showMatch(root, view, match, strictness);
+    showMatch(root, view, match, ear.rule, host.settings().labels);
   }
 
   return true;
@@ -207,6 +217,7 @@ function onCleanChord(host: ListenHost): void {
   const progression = host.view()?.progression;
   flashUntil = performance.now() + 700;
   matchSignature = "";
+  landedPulse();
 
   if (progression) {
     if (progression.step === progression.chords.length - 1) {
@@ -228,11 +239,32 @@ function onCleanChord(host: ListenHost): void {
   }
 }
 
+/** The wheel's ring pulses as a chord lands, and shows the tighter target it now asks for. */
+function landedPulse(): void {
+  const wheel = document.getElementById("sg-wheel");
+
+  if (!wheel) {
+    return;
+  }
+
+  wheel.classList.remove("landed");
+  // A layout read restarts the pulse when chords land close together.
+  wheel.getBoundingClientRect();
+  wheel.classList.add("landed");
+  wheel.querySelector(".sg-wheel-target")?.setAttribute("r", String(Math.round(wheelRadius(ear.rule.share) * 10) / 10));
+}
+
+/** For tests: how tight the ear is now. */
+export function earTightnessForTests(): number {
+  return ear.tightness;
+}
+
 /** For tests: forget everything, as on a fresh page. */
 export function resetListenForTests(): void {
   sentListen = null;
   follower.reset();
   strums.reset();
+  ear.reset();
   matchSignature = "";
   flashUntil = 0;
   resetRound();

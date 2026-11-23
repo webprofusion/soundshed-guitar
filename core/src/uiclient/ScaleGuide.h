@@ -37,7 +37,6 @@ struct Settings
     int position = 0;
     int capo = 0;
     bool leftHanded = false;
-    std::string match = "normal";        ///< "easy", "normal" or "strict"
     std::string arpeggioStyle = "sweep"; ///< "sweep", "two" or "box"
     int arpeggioStrings = 0;             ///< from the highest string; 0 for the default
     bool arpeggioSlides = false;         ///< a progression's arpeggios joined by slides
@@ -117,16 +116,61 @@ struct ChordTone
 
 struct ChordMatch
 {
-    double share = 0.0;      ///< the chord's tones' share of the chroma
-    std::vector<bool> heard; ///< per tone, in the order given
+    double share = 0.0;              ///< the chord's tones' share of the chroma
+    std::array<double, 12> spread{}; ///< each pitch class's share of the chroma, C first
+    std::vector<bool> heard;         ///< per tone, in the order given
     std::vector<int> missing;
     bool ok = false;
 };
 
-/// Whether `chroma` is the chord, at a strictness of "easy", "normal" or "strict": its tones hold
-/// the strictness's share, and each (bar a plain 5th) reads its level.
+/// What a strum has to reach: the chord tones' share of the chroma, and each tone's own level.
+struct EarRule
+{
+    double share = 0.7;
+    double tone = 0.05;
+};
+
+/// The rule at a tightness from 0 to 1. Both ends were measured on GuitarSet's labelled strums
+/// (docs/plans/scale-guide.md, LISTEN notes): 0 passes 92 % of well played chords, 1 passes 75 %.
+[[nodiscard]] EarRule EarRuleAt(double tightness);
+
+/// How closely LISTEN holds a strum to its chord, set by the playing rather than picked: each chord
+/// that lands tightens it a step, and a stretch of sound with none landing eases it off, so it
+/// settles near the edge of how cleanly the chords are being played (the web UI's ChordEar).
+class ChordEar
+{
+  public:
+    static constexpr double kStart = 0.5;
+    static constexpr double kTighten = 0.1;
+    static constexpr double kEase = 0.2;
+    /// About four seconds of playing (readings come every ~43 ms) with no chord landing.
+    static constexpr int kStruggleReadings = 90;
+
+    [[nodiscard]] double Tightness() const
+    {
+        return mTightness;
+    }
+
+    [[nodiscard]] EarRule Rule() const
+    {
+        return EarRuleAt(mTightness);
+    }
+
+    /// A chord landed.
+    void Landed();
+    /// One reading that did not land; true when the ear eased off. Quiet readings do not count.
+    bool Push(bool loud, bool ok);
+    void Reset();
+
+  private:
+    double mTightness = kStart;
+    int mStruggle = 0;
+};
+
+/// Whether `chroma` is the chord: its tones hold the rule's share, and each (bar a plain 5th)
+/// reads its level.
 [[nodiscard]] ChordMatch MatchChord(const std::array<float, 12>& chroma, int rootPitchClass,
-                                    const std::vector<ChordTone>& tones, const std::string& strictness);
+                                    const std::vector<ChordTone>& tones, const EarRule& rule);
 
 /// A clean strum: three clean readings in a row (~130 ms); the next needs a jump in level after a
 /// short lockout (~340 ms).

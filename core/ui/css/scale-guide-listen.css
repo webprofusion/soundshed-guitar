@@ -193,61 +193,117 @@
   opacity: 0.25;
 }
 
-.sg-match {
+/* ── The chord wheel (ts/scaleGuide/chordWheel.ts) ── */
+.sg-ear {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-top: 6px;
+  gap: 14px;
+  margin-top: 8px;
 }
 
-.sg-match[hidden] {
+.sg-ear[hidden] {
   display: none;
 }
 
-.sg-meter {
-  position: relative;
-  width: 200px;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--sg-surface-raised);
-  overflow: hidden;
+.sg-wheel {
+  flex: none;
+  width: 104px;
+  height: 104px;
+  overflow: visible;
 }
 
-.sg-meter-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0;
-  border-radius: 4px;
-  background: var(--text-muted);
-  transition: width 120ms linear;
-}
-
-.sg-meter-fill.ok {
-  background: var(--color-success);
-}
-
-.sg-meter-threshold {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 2px;
-  background: var(--text-primary);
-  opacity: 0.6;
-}
-
-.sg-match-text {
-  min-width: 96px;
+.sg-ear-hint {
+  margin: 0;
+  max-width: 220px;
   font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.sg-wheel-rim {
+  fill: none;
+  stroke: var(--sg-line);
+  stroke-width: 1;
+}
+
+.sg-wheel-spoke {
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.sg-wheel-stray {
+  stroke: var(--sg-line-strong);
+}
+
+.sg-wheel-tone {
+  stroke: var(--text-secondary);
+}
+
+.sg-wheel-spoke.sg-wheel-root {
+  stroke: var(--color-accent);
+}
+
+.sg-wheel-spoke.missing {
+  stroke: var(--sg-mute);
+}
+
+.sg-wheel-label {
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: var(--text-secondary);
 }
 
-.sg-segmented-small .sg-segment {
-  padding: 4px 10px;
-  font-size: 12px;
+.sg-wheel-label.sg-wheel-root {
+  fill: var(--color-accent);
+}
+
+.sg-wheel-label.missing {
+  fill: var(--sg-mute);
+}
+
+.sg-wheel-fill {
+  fill: var(--text-muted);
+  opacity: 0.55;
+  transition: r 90ms linear;
+}
+
+.sg-wheel.ok .sg-wheel-fill {
+  fill: var(--color-success);
+  opacity: 0.9;
+}
+
+.sg-wheel-target {
+  fill: none;
+  stroke: var(--text-primary);
+  stroke-width: 1.2;
+  stroke-dasharray: 2.5 2;
+  opacity: 0.7;
+  transition: r 300ms ease-out;
+}
+
+.sg-wheel.landed .sg-wheel-target {
+  animation: sg-wheel-landed 600ms ease-out;
+}
+
+@keyframes sg-wheel-landed {
+  from {
+    stroke: var(--color-success);
+    stroke-width: 3;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sg-wheel-fill,
+  .sg-wheel-target {
+    transition: none;
+  }
+
+  .sg-wheel.landed .sg-wheel-target {
+    animation: none;
+  }
 }
 
 .sg-pill.heard {

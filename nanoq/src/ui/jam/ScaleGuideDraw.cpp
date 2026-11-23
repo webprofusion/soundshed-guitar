@@ -709,6 +709,153 @@ void RunTabView::draw(const el::context& ctx)
     }
 }
 
+namespace
+{
+// The wheel's geometry, as chordWheel.ts draws it in a 104 px box.
+constexpr float kSpokeFrom = 19.0f;
+constexpr float kSpokeReach = 17.0f;
+constexpr float kWheelLabelAt = 44.0f;
+constexpr float kFillRadius = 15.0f;
+constexpr double kFillFloor = 0.3;
+constexpr double kFullSpoke = 0.3;
+
+float WheelRadius(double share)
+{
+    return kFillRadius * static_cast<float>(std::clamp((share - kFillFloor) / (1.0 - kFillFloor), 0.0, 1.0));
+}
+
+float SpokeEnd(double share)
+{
+    return kSpokeFrom + kSpokeReach * static_cast<float>(std::clamp(share / kFullSpoke, 0.0, 1.0));
+}
+} // namespace
+
+ChordWheelView::ChordWheelView(const Theme& theme, std::vector<Tone> tones, double target)
+    : mTheme(theme), mTones(std::move(tones)), mTarget(target)
+{
+}
+
+el::view_limits ChordWheelView::limits(const el::basic_context&) const
+{
+    return {{kSize, kSize}, {kSize, kSize}};
+}
+
+bool ChordWheelView::Set(const std::optional<Reading>& reading, double target, bool landed)
+{
+    const auto same = [](const std::optional<Reading>& a, const std::optional<Reading>& b) {
+        if (a.has_value() != b.has_value())
+        {
+            return false;
+        }
+
+        if (!a)
+        {
+            return true;
+        }
+
+        // A change too small to move a spoke a pixel is no change.
+        for (std::size_t i = 0; i < 12; ++i)
+        {
+            if (std::abs(SpokeEnd(a->spread[i]) - SpokeEnd(b->spread[i])) >= 0.5f)
+            {
+                return false;
+            }
+        }
+
+        return std::abs(WheelRadius(a->share) - WheelRadius(b->share)) < 0.5f && a->missing == b->missing &&
+               a->ok == b->ok;
+    };
+
+    if (same(reading, mReading) && target == mTarget && landed == mLanded)
+    {
+        return false;
+    }
+
+    mReading = reading;
+    mTarget = target;
+    mLanded = landed;
+    return true;
+}
+
+void ChordWheelView::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds;
+    const float cx = (b.left + b.right) * 0.5f;
+    const float cy = (b.top + b.bottom) * 0.5f;
+    const int root = mTones.empty() ? 0 : mTones.front().pitchClass;
+    const auto missing = [&](int pitchClass) {
+        return mReading &&
+               std::find(mReading->missing.begin(), mReading->missing.end(), pitchClass) != mReading->missing.end();
+    };
+    const el::color mute = mTheme.Error();
+
+    cnv.stroke_style(mTheme.ScaleGuide().boxLine.opacity(0.3f));
+    cnv.line_width(1.0f);
+    Circle(cnv, cx, cy, kSpokeFrom + kSpokeReach + 2.0f);
+    cnv.stroke();
+
+    cnv.line_cap(cycfi::artist::canvas::round);
+    cnv.line_width(5.0f);
+
+    for (int step = 0; step < 12; ++step)
+    {
+        const int pitchClass = (root + step) % 12;
+        const auto tone = std::find_if(mTones.begin(), mTones.end(),
+                                       [pitchClass](const Tone& t) { return t.pitchClass == pitchClass; });
+        const bool chordTone = tone != mTones.end();
+        const float angle = static_cast<float>(step) * 3.14159265f / 6.0f;
+        const float sx = std::sin(angle);
+        const float sy = -std::cos(angle);
+        const float end = SpokeEnd(mReading ? mReading->spread[static_cast<std::size_t>(pitchClass)] : 0.0);
+        el::color ink = chordTone ? (step == 0 ? mTheme.Accent() : mTheme.TextSecondary())
+                                  : mTheme.ScaleGuide().boxLine.opacity(0.45f);
+
+        if (chordTone && missing(pitchClass))
+        {
+            ink = mute;
+        }
+
+        cnv.stroke_style(ink);
+        // A zero-length line draws nothing with every backend: a quiet spoke is a dot.
+        Line(cnv, cx + sx * kSpokeFrom, cy + sy * kSpokeFrom, cx + sx * std::max(end, kSpokeFrom + 0.01f),
+             cy + sy * std::max(end, kSpokeFrom + 0.01f));
+
+        if (chordTone)
+        {
+            const float lx = cx + sx * kWheelLabelAt;
+            const float ly = cy + sy * kWheelLabelAt;
+            FillText(cnv, tone->label, Font(Weight::SemiBold).size(10.0f), ink,
+                     {lx - 14.0f, ly - 7.0f, lx + 14.0f, ly + 7.0f}, HAlign::Centre);
+        }
+    }
+
+    cnv.line_cap(cycfi::artist::canvas::butt);
+    const float fill = mReading ? WheelRadius(mReading->share) : 0.0f;
+
+    if (fill > 0.0f)
+    {
+        cnv.fill_style(mReading->ok ? mTheme.Success().opacity(0.9f) : mTheme.TextMuted().opacity(0.55f));
+        Circle(cnv, cx, cy, fill);
+        cnv.fill();
+    }
+
+    // The target: a dashed ring, drawn as short arcs; bright and heavy for a moment as a chord lands.
+    const float ring = WheelRadius(mTarget);
+    cnv.stroke_style(mLanded ? mTheme.Success() : mTheme.Text().opacity(0.7f));
+    cnv.line_width(mLanded ? 3.0f : 1.2f);
+    constexpr int kDashes = 16;
+
+    for (int dash = 0; dash < kDashes; ++dash)
+    {
+        const float from = static_cast<float>(dash) * 2.0f * 3.14159265f / kDashes;
+        cnv.begin_path();
+        cnv.arc(cx, cy, ring, from, from + 0.55f * 2.0f * 3.14159265f / kDashes);
+        cnv.stroke();
+    }
+}
+
 ChordTabView::ChordTabView(const Theme& theme, GuideShape shape, std::vector<int> openMidi,
                            std::vector<std::string> stringNames, int rootPitchClass)
     : mTheme(theme), mShape(std::move(shape)), mOpenMidi(std::move(openMidi)), mStringNames(std::move(stringNames)),

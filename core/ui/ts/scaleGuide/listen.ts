@@ -5,14 +5,69 @@
  * input's energy per pitch class, C first) in Chords mode.
  */
 
-export type Strictness = "easy" | "normal" | "strict";
+/** What a strum has to reach: the chord tones' share of the chroma, and each tone's own level. */
+export interface EarRule {
+  share: number;
+  tone: number;
+}
 
-/** How much of the chroma the chord's tones must hold, and how strong each must be. */
-export const STRICTNESS: Readonly<Record<Strictness, { share: number; tone: number }>> = {
-  easy: { share: 0.6, tone: 0.03 },
-  normal: { share: 0.7, tone: 0.05 },
-  strict: { share: 0.8, tone: 0.07 },
-};
+/**
+ * The rule at a tightness from 0 to 1. Both ends were measured on GuitarSet's labelled strums
+ * (docs/plans/scale-guide.md, LISTEN notes): 0 passes 92 % of well played chords, 1 passes 75 %
+ * and rarely takes the relative major or minor for the chord.
+ */
+export function earRule(tightness: number): EarRule {
+  const t = Math.min(1, Math.max(0, tightness));
+  return { share: 0.6 + 0.2 * t, tone: 0.03 + 0.04 * t };
+}
+
+/**
+ * How closely LISTEN holds a strum to its chord, set by the playing rather than picked: each chord
+ * that lands tightens it a step, and a stretch of sound with none landing eases it off, so it
+ * settles near the edge of how cleanly the chords are being played.
+ */
+export class ChordEar {
+  static readonly START = 0.5;
+  static readonly TIGHTEN = 0.1;
+  static readonly EASE = 0.2;
+  /** About four seconds of playing (readings come every ~43 ms) with no chord landing. */
+  static readonly STRUGGLE_READINGS = 90;
+  tightness = ChordEar.START;
+  private struggle = 0;
+
+  get rule(): EarRule {
+    return earRule(this.tightness);
+  }
+
+  /** A chord landed. */
+  landed(): void {
+    this.tightness = Math.min(1, this.tightness + ChordEar.TIGHTEN);
+    this.struggle = 0;
+  }
+
+  /** One reading that did not land; true when the ear eased off. Quiet readings do not count. */
+  push(loud: boolean, ok: boolean): boolean {
+    if (!loud || ok) {
+      return false;
+    }
+
+    this.struggle += 1;
+
+    if (this.struggle < ChordEar.STRUGGLE_READINGS) {
+      return false;
+    }
+
+    this.struggle = 0;
+    const before = this.tightness;
+    this.tightness = Math.max(0, this.tightness - ChordEar.EASE);
+    return this.tightness !== before;
+  }
+
+  reset(): void {
+    this.tightness = ChordEar.START;
+    this.struggle = 0;
+  }
+}
 
 const NOTE_PITCH_CLASSES: Readonly<Record<string, number>> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
@@ -41,6 +96,8 @@ export interface ChordTone {
 export interface ChordMatch {
   /** The chord's tones' share of the chroma, 0-1. */
   share: number;
+  /** Each pitch class's share of the chroma, C first. */
+  spread: number[];
   /** Per tone, in the order given: heard strongly enough. */
   heard: boolean[];
   /** The tones that must sound and do not. */
@@ -49,11 +106,10 @@ export interface ChordMatch {
 }
 
 /**
- * Whether `chroma` is the chord: its tones hold at least the strictness's share, and each tone (bar
- * a plain 5th, which a chord can lose) reads at least the strictness's level.
+ * Whether `chroma` is the chord: its tones hold at least the rule's share, and each tone (bar a
+ * plain 5th, which a chord can lose) reads at least the rule's level.
  */
-export function matchChord(chroma: readonly number[], rootPitchClass: number, tones: readonly ChordTone[], strictness: Strictness): ChordMatch {
-  const rule = STRICTNESS[strictness];
+export function matchChord(chroma: readonly number[], rootPitchClass: number, tones: readonly ChordTone[], rule: EarRule): ChordMatch {
   const total = chroma.reduce((sum, value) => sum + value, 0);
   const at = (pitchClass: number): number => (total > 0 ? (chroma[((pitchClass % 12) + 12) % 12] ?? 0) / total : 0);
   const intervals = [...new Set(tones.map((tone) => (((tone.pitchClass - rootPitchClass) % 12) + 12) % 12))];
@@ -62,7 +118,8 @@ export function matchChord(chroma: readonly number[], rootPitchClass: number, to
   const heard = tones.map((tone) => at(tone.pitchClass) >= rule.tone);
   const optional = (tone: ChordTone): boolean => tone.interval === "5" && intervals.length > 2;
   const missing = tones.filter((tone, index) => !heard[index] && !optional(tone)).map((tone) => tone.pitchClass);
-  return { share, heard, missing, ok: total > 0 && share >= rule.share && missing.length === 0 };
+  const spread = Array.from({ length: 12 }, (_, pitchClass) => at(pitchClass));
+  return { share, spread, heard, missing, ok: total > 0 && share >= rule.share && missing.length === 0 };
 }
 
 /**

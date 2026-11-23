@@ -12,6 +12,8 @@ vi.mock("../ts/appSettingsStore.js", () => ({
 }));
 
 import { boxBaseFret, renderChordBoxSvg } from "../ts/scaleGuide/chordBox";
+import { ChordEar } from "../ts/scaleGuide/listen";
+import { earTightnessForTests } from "../ts/scaleGuide/listenController";
 import { renderChordTabSvg } from "../ts/scaleGuide/chordTab";
 import { dotLabel, neckDrawingWidth, noteMarkersSvg, noteX, renderNeckSvg } from "../ts/scaleGuide/neck";
 import { onScaleGuideCatalog, onScaleGuideReading, onScaleGuideView, renderScaleGuidePanel, resetScaleGuideForTests } from "../ts/scaleGuide/panel";
@@ -445,15 +447,26 @@ describe("scale guide panel", () => {
     settingsStore.set(SCALE_GUIDE_SETTING, { ...DEFAULT_SETTINGS, mode: "chord", progression: "b:pop", position: 1 });
     renderScaleGuidePanel();
     onScaleGuideView({ type: "scaleGuideView", requestId: lastViewRequest().requestId, view: progressionView(0) });
-    expect(document.getElementById("sg-match")?.hidden).toBe(false);
+    expect(document.getElementById("sg-ear")?.hidden).toBe(false);
     const clean = { type: "tunerUpdate", detected: false, levelDb: -18, chroma: [0.4, 0, 0, 0, 0.3, 0, 0, 0.28, 0, 0, 0, 0.02] };
     const before = lastViewRequest().requestId;
+    onScaleGuideReading(clean);
+    // The wheel: twelve spokes, the chord's notes labelled, the centre filled past the ring.
+    expect(document.querySelectorAll("#sg-wheel .sg-wheel-spoke")).toHaveLength(12);
+    expect(document.querySelectorAll("#sg-wheel .sg-wheel-label")).toHaveLength(3);
+    expect(document.getElementById("sg-wheel")?.classList.contains("ok")).toBe(true);
+    const fill = Number(document.querySelector("#sg-wheel .sg-wheel-fill")?.getAttribute("r"));
+    const ring = Number(document.querySelector("#sg-wheel .sg-wheel-target")?.getAttribute("r"));
+    expect(fill).toBeGreaterThan(ring);
 
-    for (let i = 0; i < 5; i += 1) {
-      onScaleGuideReading({ ...clean, levelDb: i === 0 ? -18 : -19 });
+    for (let i = 1; i < 5; i += 1) {
+      onScaleGuideReading({ ...clean, levelDb: -19 });
     }
 
     expect(lastViewRequest().requestId).toBeGreaterThan(before);
+    // Landing it tightened the ear, and the ring with it.
+    expect(earTightnessForTests()).toBeGreaterThan(ChordEar.START);
+    expect(Number(document.querySelector("#sg-wheel .sg-wheel-target")?.getAttribute("r"))).toBeGreaterThan(ring);
     expect(lastViewRequest().request).toMatchObject({ step: 1, previousFrets: OPEN_C.frets });
     expect(document.getElementById("sg-live")?.textContent).toContain("Clean");
   });

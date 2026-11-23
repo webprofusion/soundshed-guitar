@@ -21,7 +21,6 @@ export const DEFAULT_SETTINGS: Readonly<ScaleGuideSettings> = {
   position: 0,
   capo: 0,
   leftHanded: false,
-  match: "normal",
   arpeggioStyle: "sweep",
   arpeggioStrings: 0,
   arpeggioSlides: false,
@@ -33,7 +32,6 @@ const LABELS: readonly ScaleGuideLabels[] = ["name", "interval", "degree", "none
 const MODES: readonly ScaleGuideMode[] = ["scale", "chord", "arpeggio"];
 const ARPEGGIO_STYLES: readonly ArpeggioStyle[] = ["sweep", "two", "box"];
 const MAX_STRINGS = 8;
-const MATCHES: readonly ScaleGuideSettings["match"][] = ["easy", "normal", "strict"];
 const ID = /^[\w-]{1,32}$/;
 const PROGRESSION = /^[bu]:[\w-]{1,32}$/;
 
@@ -60,7 +58,6 @@ export function normalizeSettings(value: unknown): ScaleGuideSettings {
     position: wholeNumber(stored.position, defaults.position, 0, 99),
     capo: wholeNumber(stored.capo, defaults.capo, 0, MAX_CAPO),
     leftHanded: typeof stored.leftHanded === "boolean" ? stored.leftHanded : defaults.leftHanded,
-    match: MATCHES.includes(stored.match as ScaleGuideSettings["match"]) ? (stored.match as ScaleGuideSettings["match"]) : defaults.match,
     arpeggioStyle: ARPEGGIO_STYLES.includes(stored.arpeggioStyle as ArpeggioStyle) ? (stored.arpeggioStyle as ArpeggioStyle) : defaults.arpeggioStyle,
     arpeggioStrings: wholeNumber(stored.arpeggioStrings, defaults.arpeggioStrings, 0, MAX_STRINGS),
     arpeggioSlides: typeof stored.arpeggioSlides === "boolean" ? stored.arpeggioSlides : defaults.arpeggioSlides,

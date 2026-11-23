@@ -195,7 +195,7 @@ function change(patch: Partial<ScaleGuideSettings>): void {
   }
 
   // Labels, handedness and LISTEN's settings only change how the same model is drawn.
-  const redrawOnly = Object.keys(patch).every((key) => ["labels", "leftHanded", "match", "listenEverywhere", "playVolume"].includes(key));
+  const redrawOnly = Object.keys(patch).every((key) => ["labels", "leftHanded", "listenEverywhere", "playVolume"].includes(key));
 
   if (redrawOnly && view) {
     renderView();
@@ -255,7 +255,7 @@ function bindEvents(root: HTMLElement): void {
     }
 
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-match],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-arp-slides],[data-sg-play],[data-sg-play-scale]",
+      "[data-sg-mode],[data-sg-labels],[data-sg-position],[data-sg-chord-root],[data-sg-goto],[data-sg-step],[data-sg-remove],[data-sg-arp-style],[data-sg-arp-strings],[data-sg-arp-slides],[data-sg-play],[data-sg-play-scale]",
     );
 
     if (!target || !root.contains(target)) {
@@ -274,9 +274,7 @@ function bindEvents(root: HTMLElement): void {
       return;
     }
 
-    if (data.sgMatch) {
-      change({ match: data.sgMatch as ScaleGuideSettings["match"] });
-    } else if (isArpeggioStyle(data.sgArpStyle)) {
+    if (isArpeggioStyle(data.sgArpStyle)) {
       change({ arpeggioStyle: data.sgArpStyle });
     } else if (data.sgArpStrings !== undefined) {
       change({ arpeggioStrings: Number(data.sgArpStrings) });
@@ -546,10 +544,6 @@ function renderControls(): void {
   document.querySelectorAll<HTMLElement>("#scale-guide [data-sg-labels]").forEach((button) => {
     button.classList.toggle("active", button.dataset.sgLabels === labels);
     button.setAttribute("aria-pressed", String(button.dataset.sgLabels === labels));
-  });
-  document.querySelectorAll<HTMLElement>("#scale-guide [data-sg-match]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.sgMatch === state.match);
-    button.setAttribute("aria-pressed", String(button.dataset.sgMatch === state.match));
   });
 
   const keyLabel = element<HTMLElement>("sg-key-label");

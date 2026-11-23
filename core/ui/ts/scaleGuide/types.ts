@@ -178,8 +178,6 @@ export interface ScaleGuideSettings {
   position: number;
   capo: number;
   leftHanded: boolean;
-  /** How closely a strum has to match its chord. */
-  match: "easy" | "normal" | "strict";
   arpeggioStyle: ArpeggioStyle;
   /** How many strings an arpeggio plays, from the highest; 0 for the default. */
   arpeggioStrings: number;

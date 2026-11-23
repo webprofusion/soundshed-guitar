@@ -125,8 +125,9 @@ struct SectionNav
     std::string help;               // a help card under the side list
 };
 
-class WebViewSlot; // JamPage.cpp
-class ScaleNeck;   // ScaleGuideDraw.h
+class WebViewSlot;    // JamPage.cpp
+class ScaleNeck;      // ScaleGuideDraw.h
+class ChordWheelView; // ScaleGuideDraw.h
 class RunTabView;
 class ProgressionTabView;
 class NodeCard;  // NodeCard.h
@@ -753,6 +754,9 @@ class Shell
     std::uint64_t mScaleGuideReadings = 0;
     guitarfx::uiclient::scaleguide::NoteFollower mScaleGuideFollower;
     guitarfx::uiclient::scaleguide::StrumGate mScaleGuideStrums;
+    guitarfx::uiclient::scaleguide::ChordEar mScaleGuideEar; // how closely a strum must match: set by the playing
+    std::weak_ptr<ChordWheelView> mScaleGuideWheel;
+    double mScaleGuideLandedUntil = 0.0; // the wheel's ring shows a chord landing until then
     int mScaleGuideRound = 1, mScaleGuideClean = 0;
     guitarfx::uiclient::scaleguide::Heard mScaleGuideHeard; // as the Heard column shows it
     std::weak_ptr<Text> mScaleGuideHeardChord, mScaleGuideHeardTrail, mScaleGuideHeardKey;

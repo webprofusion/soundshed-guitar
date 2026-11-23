@@ -14,27 +14,6 @@ const std::regex kProgression("^[bu]:[\\w-]{1,32}$");
 const std::regex kNumeralStart("^[b#]?(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)");
 constexpr std::size_t kMaxNumeralLength = 16;
 
-struct Strictness
-{
-    double share;
-    double tone;
-};
-
-Strictness RuleFor(const std::string& strictness)
-{
-    if (strictness == "easy")
-    {
-        return {0.60, 0.03};
-    }
-
-    if (strictness == "strict")
-    {
-        return {0.80, 0.07};
-    }
-
-    return {0.70, 0.05};
-}
-
 int Wrap(int value)
 {
     return ((value % 12) + 12) % 12;
@@ -103,7 +82,6 @@ Settings ParseSettings(const nlohmann::json& stored)
     s.position = IntField(stored, "position", s.position, 0, 99);
     s.capo = IntField(stored, "capo", s.capo, 0, kMaxCapo);
     s.leftHanded = BoolField(stored, "leftHanded", s.leftHanded);
-    s.match = OneOf(stored, "match", s.match, {"easy", "normal", "strict"});
     s.arpeggioStyle = OneOf(stored, "arpeggioStyle", s.arpeggioStyle, {"sweep", "two", "box"});
     s.arpeggioStrings = IntField(stored, "arpeggioStrings", s.arpeggioStrings, 0, kMaxArpeggioStrings);
     s.arpeggioSlides = BoolField(stored, "arpeggioSlides", s.arpeggioSlides);
@@ -124,7 +102,6 @@ nlohmann::json SettingsJson(const Settings& s)
             {"position", s.position},
             {"capo", s.capo},
             {"leftHanded", s.leftHanded},
-            {"match", s.match},
             {"arpeggioStyle", s.arpeggioStyle},
             {"arpeggioStrings", s.arpeggioStrings},
             {"arpeggioSlides", s.arpeggioSlides},
@@ -270,10 +247,45 @@ std::optional<int> ReadingMidi(const std::string& noteName, int octave)
     return (octave + 1) * 12 + pitchClass;
 }
 
-ChordMatch MatchChord(const std::array<float, 12>& chroma, int rootPitchClass, const std::vector<ChordTone>& tones,
-                      const std::string& strictness)
+EarRule EarRuleAt(double tightness)
 {
-    const auto rule = RuleFor(strictness);
+    const double t = std::clamp(tightness, 0.0, 1.0);
+    return {0.60 + 0.20 * t, 0.03 + 0.04 * t};
+}
+
+void ChordEar::Landed()
+{
+    mTightness = std::min(1.0, mTightness + kTighten);
+    mStruggle = 0;
+}
+
+bool ChordEar::Push(bool loud, bool ok)
+{
+    if (!loud || ok)
+    {
+        return false;
+    }
+
+    if (++mStruggle < kStruggleReadings)
+    {
+        return false;
+    }
+
+    mStruggle = 0;
+    const double before = mTightness;
+    mTightness = std::max(0.0, mTightness - kEase);
+    return mTightness != before;
+}
+
+void ChordEar::Reset()
+{
+    mTightness = kStart;
+    mStruggle = 0;
+}
+
+ChordMatch MatchChord(const std::array<float, 12>& chroma, int rootPitchClass, const std::vector<ChordTone>& tones,
+                      const EarRule& rule)
+{
     double total = 0.0;
 
     for (const float value : chroma)
@@ -310,6 +322,11 @@ ChordMatch MatchChord(const std::array<float, 12>& chroma, int rootPitchClass, c
 
     ChordMatch match;
     match.share = shareOf(intervals);
+
+    for (int pitchClass = 0; pitchClass < 12; ++pitchClass)
+    {
+        match.spread[static_cast<std::size_t>(pitchClass)] = at(pitchClass);
+    }
 
     for (const auto& tone : tones)
     {

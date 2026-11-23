@@ -1122,6 +1122,28 @@ Ptr Shell::BuildScaleGuide(float width)
 
     std::vector<Ptr> summaryColumns = {Stretch(identity), HGap(18),
                                        Stretch(Col({Label(mTheme, middleLabel), VGap(6), Row(pills)}), 1.6)};
+
+    // Chords: the wheel LISTEN draws what it hears on, and the ring a strum must fill.
+    if (chordMode && !tones.empty())
+    {
+        std::vector<ChordWheelView::Tone> wheelTones;
+
+        for (const auto& t : tones)
+        {
+            wheelTones.push_back(
+                {t.value("pitchClass", 0), settings.labels == "name" ? t.value("name", "") : t.value("interval", "")});
+        }
+
+        auto wheel = std::make_shared<ChordWheelView>(mTheme, std::move(wheelTones), mScaleGuideEar.Rule().share);
+        mScaleGuideWheel = wheel;
+        summaryColumns.push_back(HGap(18));
+        summaryColumns.push_back(Middle(wheel));
+    }
+    else
+    {
+        mScaleGuideWheel.reset();
+    }
+
     // What LISTEN heard, beside the rest on a wide page, under it on a narrow one.
     const auto heard = ScaleGuideHeardColumn(chordMode);
     const bool heardBeside = heard && width >= 900.0f;
@@ -1387,6 +1409,13 @@ void Shell::SyncScaleGuideListen()
         mScaleGuideFollower.Reset();
         mScaleGuideStrums.Reset();
         mScaleGuideReadout.clear();
+
+        // Each visit to the guide starts the ear at its middle.
+        if (!wanted)
+        {
+            mScaleGuideEar.Reset();
+        }
+
         mScaleGuideHeard = {};
         Mark(kPage);
         return;
@@ -1474,9 +1503,35 @@ void Shell::SyncScaleGuideListen()
 
     const int root = chordTones.empty() ? 0 : chordTones.front().pitchClass;
     const bool loud = tuner.levelDb > sg::StrumGate::kQuietDb - 2.0;
-    const auto match = loud ? sg::MatchChord(tuner.chroma, root, chordTones, settings.match) : sg::ChordMatch{};
+    const auto match = loud ? sg::MatchChord(tuner.chroma, root, chordTones, mScaleGuideEar.Rule()) : sg::ChordMatch{};
+    const bool landed = mScaleGuideStrums.Push(tuner.levelDb, loud && match.ok);
 
-    if (mScaleGuideStrums.Push(tuner.levelDb, loud && match.ok))
+    if (landed)
+    {
+        mScaleGuideEar.Landed();
+        mScaleGuideLandedUntil = UiSession::Now() + 0.7;
+    }
+    else
+    {
+        mScaleGuideEar.Push(loud, match.ok);
+    }
+
+    if (const auto wheel = mScaleGuideWheel.lock())
+    {
+        std::optional<ChordWheelView::Reading> reading;
+
+        if (loud)
+        {
+            reading = ChordWheelView::Reading{match.spread, match.share, match.missing, match.ok};
+        }
+
+        if (wheel->Set(reading, mScaleGuideEar.Rule().share, UiSession::Now() < mScaleGuideLandedUntil))
+        {
+            mSession.Repaint(*wheel);
+        }
+    }
+
+    if (landed)
     {
         if (mScaleGuideView.contains("progression"))
         {
@@ -1514,7 +1569,7 @@ void Shell::SyncScaleGuideListen()
         }
     }
 
-    setReadout(missing.empty() ? "Clean " + std::to_string(static_cast<int>(std::lround(match.share * 100.0))) + "%"
+    setReadout(missing.empty() ? "Play " + mScaleGuideView.value("title", "")
                                : mScaleGuideView.value("title", "") + "  missing " + missing);
 }
 } // namespace nanoq::ui

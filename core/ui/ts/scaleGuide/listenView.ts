@@ -1,15 +1,15 @@
 /**
  * What LISTEN changes on the page (panel.ts decides when): the played note and its trail on the
- * neck, the readout beside the tabs, and in Chords mode the match meter and which tones were heard.
+ * neck, the readout beside the tabs, and in Chords mode the chord wheel and which tones were heard.
  * Each writes only what it is given, so the caller keeps DOM writes to the readings that change
  * something.
  */
 
 import { escapeHtml } from "../utils.js";
-import type { ChordMatch, Strictness } from "./listen.js";
-import { STRICTNESS } from "./listen.js";
+import { chordWheelMarkup, updateChordWheel } from "./chordWheel.js";
+import type { ChordMatch, EarRule } from "./listen.js";
 import { noteMarkersSvg, type NeckOptions } from "./neck.js";
-import type { ScaleGuideView } from "./types.js";
+import type { ScaleGuideLabels, ScaleGuideView } from "./types.js";
 
 const SHARP_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const FLAT_NAMES = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
@@ -68,24 +68,20 @@ export function noteReadout(view: ScaleGuideView, midi: number): { html: string;
     : { html: `<b>${escapeHtml(note.name)}</b><span>outside the ${what}</span>`, state: "out" };
 }
 
-/** The match meter, the tones heard or missing, and the readout, for one chroma reading (null: quiet). */
-export function showMatch(root: HTMLElement, view: ScaleGuideView, match: ChordMatch | null, strictness: Strictness): void {
-  const fill = root.querySelector<HTMLElement>("#sg-meter-fill");
-  const threshold = root.querySelector<HTMLElement>("#sg-meter-threshold");
-  const text = root.querySelector<HTMLElement>("#sg-match-text");
-  const percent = match ? Math.round(match.share * 100) : 0;
+/** The chord wheel, the tones heard or missing, and the readout, for one chroma reading (null: quiet). */
+export function showMatch(root: HTMLElement, view: ScaleGuideView, match: ChordMatch | null, rule: EarRule, labels: ScaleGuideLabels): void {
+  const wheel = root.querySelector<SVGSVGElement>("#sg-wheel");
 
-  if (fill) {
-    fill.style.width = `${percent}%`;
-    fill.classList.toggle("ok", Boolean(match?.ok));
-  }
+  if (wheel) {
+    // Drawn afresh only for a new chord or labels; each reading then moves what is there.
+    const drawn = `${view.tones.map((tone) => `${tone.pitchClass}${tone.name}${tone.interval}`).join()}|${labels}`;
 
-  if (threshold) {
-    threshold.style.left = `${STRICTNESS[strictness].share * 100}%`;
-  }
+    if (wheel.dataset.drawn !== drawn) {
+      wheel.dataset.drawn = drawn;
+      wheel.innerHTML = chordWheelMarkup(view, labels, rule);
+    }
 
-  if (text) {
-    text.textContent = match ? `Clean ${percent}%` : "Waiting for a strum";
+    updateChordWheel(wheel, match, rule);
   }
 
   root.querySelectorAll<HTMLElement>("#sg-info .sg-pill").forEach((pill, index) => {

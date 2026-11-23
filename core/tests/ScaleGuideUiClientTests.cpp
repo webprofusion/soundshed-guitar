@@ -8,6 +8,7 @@
 #include "uiclient/ScaleGuide.h"
 
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -117,12 +118,51 @@ void TestUiClient()
     chroma[0] = 0.4f;
     chroma[4] = 0.3f;
     chroma[7] = 0.25f;
-    Expect(sg::MatchChord(chroma, 0, cMajor, "normal").ok, "a clean C major matches");
+    const auto middle = sg::EarRuleAt(sg::ChordEar::kStart);
+    const auto clean = sg::MatchChord(chroma, 0, cMajor, middle);
+    Expect(clean.ok, "a clean C major matches");
+    double spread = 0.0;
+
+    for (const double share : clean.spread)
+    {
+        spread += share;
+    }
+
+    Expect(std::abs(spread - 1.0) < 1e-6 && clean.spread[0] > clean.spread[4], "the spread covers the chroma");
     chroma[4] = 0.005f;
-    const auto noThird = sg::MatchChord(chroma, 0, cMajor, "normal");
+    const auto noThird = sg::MatchChord(chroma, 0, cMajor, middle);
     Expect(!noThird.ok && noThird.missing == std::vector<int>({4}), "a missing third is named");
     chroma[3] = 0.3f;
-    Expect(!sg::MatchChord(chroma, 0, cMajor, "easy").ok, "C minor is not C major");
+    Expect(!sg::MatchChord(chroma, 0, cMajor, sg::EarRuleAt(0.0)).ok, "C minor is not C major");
+
+    // The ear: measured ends, the middle where the old default was, tightening and easing as the web's does.
+    Expect(std::abs(sg::EarRuleAt(0.0).share - 0.6) < 1e-9 && std::abs(sg::EarRuleAt(1.0).share - 0.8) < 1e-9 &&
+               std::abs(middle.share - 0.7) < 1e-9 && std::abs(middle.tone - 0.05) < 1e-9 &&
+               sg::EarRuleAt(5.0).share == sg::EarRuleAt(1.0).share,
+           "the ear's rule runs between its measured ends");
+    sg::ChordEar ear;
+    ear.Landed();
+    ear.Landed();
+    Expect(std::abs(ear.Tightness() - 0.7) < 1e-9, "landed chords tighten the ear");
+    bool eased = false;
+
+    for (int i = 0; i < sg::ChordEar::kStruggleReadings * 2; ++i)
+    {
+        eased = ear.Push(false, false) || ear.Push(true, true) || eased;
+    }
+
+    Expect(!eased && std::abs(ear.Tightness() - 0.7) < 1e-9, "quiet or matching readings never ease it");
+    int easedAt = -1;
+
+    for (int i = 0; i < sg::ChordEar::kStruggleReadings && easedAt < 0; ++i)
+    {
+        easedAt = ear.Push(true, false) ? i : -1;
+    }
+
+    Expect(easedAt == sg::ChordEar::kStruggleReadings - 1 && std::abs(ear.Tightness() - 0.5) < 1e-9,
+           "a stretch of playing that never lands eases it");
+    ear.Reset();
+    Expect(ear.Tightness() == sg::ChordEar::kStart, "a reset starts it at the middle");
 
     sg::StrumGate gate;
     int hits = 0;

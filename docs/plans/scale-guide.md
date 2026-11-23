@@ -352,9 +352,18 @@ web do no music theory.
 
 - Readings come about every 43 ms. A note shows once it reads the same twice, goes after four
   silent readings, and the last two stay as a fading trail (`NoteFollower` in listen.ts).
-- Chord match, per strictness (Easy / Normal / Strict): the chord's tones hold 60 / 70 / 80 % of
-  the chroma and each tone bar a plain 5th reads 3 / 5 / 7 %. Three clean readings in a row
-  (~130 ms) count; the next count needs a 3 dB jump in level after a lockout of eight readings
+- Chord match: the chord's tones hold a share of the chroma and each tone bar a plain 5th reads a
+  level, set by the *ear* (`ChordEar`, listen.ts and uiclient/ScaleGuide.h) rather than picked:
+  tightness 0 asks 60 % and 3 %, 1 asks 80 % and 7 %, linearly between (0.5, where each visit
+  starts, is the 70 % / 5 % rule the measurements below call the middle). Each chord that lands
+  tightens it 0.1; about four seconds of sound with none landing (90 readings) eases it 0.2;
+  quiet never moves it. Shown on the *chord wheel* (chordWheel.ts, Nano Q `ChordWheelView`): the
+  twelve notes round a circle, root at the top, each spoke as long as that note's share, the
+  chord's notes labelled and lit (red when missing), the centre filling with the chord's share,
+  and a dashed ring at the share the ear asks for. The 2026-11-23 rework replaced a bar with a
+  threshold tick and an Easy / Normal / Strict picker, too close to another product's. The ear's
+  settling point is a design choice, not measured on real practice.
+- Three clean readings in a row (~130 ms) count; the next count needs a 3 dB jump in level after a lockout of eight readings
   (~340 ms), and the level history restarts at each count so a ringing strum can't re-arm on the
   quiet before it.
 - The chroma leaves out peaks that are a strong lower peak's 3rd, 5th, 6th or 7th harmonic. They
@@ -362,9 +371,9 @@ web do no music theory.
   held under 80 %.
 - Measured on GuitarSet (six players, pickup signal, annotated chords; 3,889 well played strums),
   fitting on three players and checking on the other three. On the check players, correct chords
-  pass 92 / 86 / 75 %; asked for the parallel major or minor instead, the chord is accepted 3.8 /
-  1.2 / 0.6 % of the time, and for the relative major or minor 10.6 / 6.9 / 3.7 %. The relative
-  pair is the hardest: the two chords share two of their three notes.
+  pass 92 / 86 / 75 % at tightness 0 / 0.5 / 1; asked for the parallel major or minor instead, the
+  chord is accepted 3.8 / 1.2 / 0.6 % of the time, and for the relative major or minor 10.6 / 6.9
+  / 3.7 %. The relative pair is the hardest: the two chords share two of their three notes.
 - Not measured: LISTEN's single-note following, electric guitars through a DI, and a player
   following a progression from start to finish in the app.
 

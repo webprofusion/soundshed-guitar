@@ -12,6 +12,7 @@
 
 #include <elements.hpp>
 
+#include <array>
 #include <functional>
 #include <optional>
 #include <string>
@@ -220,6 +221,48 @@ class ChordTabView final : public el::element, public Drawn
     int mRootPitchClass;
     /// The strings that sound, lowest first: the picked half.
     std::vector<int> mPicked;
+};
+
+/// The chord wheel (the web UI's chordWheel.ts): what LISTEN hears in Chords, round the twelve notes
+/// with the chord's root at the top. Each note's spoke grows with its share of the sound, the chord's
+/// own notes labelled and lit, the rest grey; the centre fills as the chord's notes take over, and
+/// the dashed ring is what a strum must fill to land (uiclient ChordEar).
+class ChordWheelView final : public el::element, public Drawn
+{
+  public:
+    struct Tone
+    {
+        int pitchClass = 0;
+        std::string label;
+    };
+
+    /// What one reading shows: each note's share of the sound (C first), the chord's share, the
+    /// chord's notes that are missing, and whether it matches.
+    struct Reading
+    {
+        std::array<double, 12> spread{};
+        double share = 0.0;
+        std::vector<int> missing;
+        bool ok = false;
+    };
+
+    static constexpr float kSize = 104.0f;
+
+    ChordWheelView(const Theme& theme, std::vector<Tone> tones, double target);
+
+    el::view_limits limits(const el::basic_context& ctx) const override;
+    void draw(const el::context& ctx) override;
+
+    /// One reading (nullopt: quiet), the share a strum must reach, and whether a chord has just
+    /// landed; true when what it draws changed.
+    bool Set(const std::optional<Reading>& reading, double target, bool landed);
+
+  private:
+    const Theme& mTheme;
+    std::vector<Tone> mTones;
+    std::optional<Reading> mReading;
+    double mTarget;
+    bool mLanded = false;
 };
 
 /// A progression's arpeggios as one diagram (the web UI's runTab.ts with a flow): it runs on to new
