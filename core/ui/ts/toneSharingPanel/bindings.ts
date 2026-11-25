@@ -118,8 +118,11 @@ export function bindBrowseActions(): void {
     if ((button.dataset.action === "approve" || button.dataset.action === "reject") && browseState.mode === "review") {
       try {
         const action = button.dataset.action === "approve" ? "approve" : "reject";
-        await moderateTarget(kind, id, action);
-        setUploadStatus(`${kind === "item" ? "Preset" : "Pack"} ${action === "approve" ? "approved" : "rejected"}.`);
+        const result = await moderateTarget(kind, id, action);
+        if (!result) {
+          return;
+        }
+        setUploadStatus(`${kind === "item" ? "Preset" : "Pack"} ${action === "approve" ? "approved" : "rejected"}.${result.authorNotified ? " The creator was emailed." : ""}`);
         await loadBrowse();
       } catch (error) {
         setUploadStatus(`Moderation failed: ${(error as Error).message}`);

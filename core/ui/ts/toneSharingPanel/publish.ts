@@ -3,6 +3,7 @@
  * the consent gate, and the upload itself.
  */
 
+import { showConfirm } from "../dialogs.js";
 import { showNotification } from "../notifications.js";
 import { summarizeSignalChainIssues, validatePresetSignalChain } from "../signalPath/chainValidation.js";
 import { uiState } from "../state.js";
@@ -10,11 +11,15 @@ import { apiFetch } from "./api.js";
 import { loadBrowse, loadMine } from "./browse.js";
 import { ensurePublishConsent } from "./consent.js";
 import { element, setUploadStatus } from "./dom.js";
-import { createToneSharingPresetItem, hasPublishableSignalChain } from "./itemUpload.js";
+import { createToneSharingPresetItem, findPublishedItemForPreset, hasPublishableSignalChain, updateToneSharingPresetItem, type PublishedItemMatch } from "./itemUpload.js";
 import { addItemToExistingPack, loadMyDraftPacksForSelect, openPackModal } from "./packEditor.js";
 import { getPresetToneSharingOrigin } from "./presetLinks.js";
 import { copyToneSharingShareLink } from "./shareLinks.js";
 import { toneSharingState } from "./state.js";
+import type { ToneSharingItem } from "./types.js";
+
+const PUBLISH_BUTTON_LABEL = "Upload + Publish";
+const UPDATE_BUTTON_LABEL = "Update Published Preset";
 
 let publishItemInFlight = false;
 
@@ -72,9 +77,15 @@ export function openToneSharingPublishPresetModal(defaultTitle?: string, default
 
   const publishButton = element<HTMLButtonElement>("tone-sharing-upload-item");
   const origin = getPresetToneSharingOrigin(activePreset);
+  // Published from this preset before: publishing again updates that item.
+  const alreadyPublished = activePreset ? findPublishedItemForPreset(activePreset, toneSharingState.myItems) : null;
   if (publishButton) {
     publishButton.disabled = false;
     publishButton.title = "";
+    publishButton.textContent = alreadyPublished?.match === "preset" ? UPDATE_BUTTON_LABEL : PUBLISH_BUTTON_LABEL;
+  }
+  if (alreadyPublished?.match === "preset") {
+    setUploadStatus(`Already on Tone Sharing as "${alreadyPublished.item.title}": publishing again updates it, keeping its link, downloads and ratings.`);
   }
   if (origin?.republishBlocked) {
     setUploadStatus("This preset came from Tone Sharing. Use Save As to create a local copy before publishing.");
@@ -186,13 +197,47 @@ export async function uploadAndPublishItem(): Promise<void> {
     return;
   }
 
+  // Re-publishing a preset updates the item it already is. An older item with the same name but
+  // no link to this preset is only a guess, so the user is asked.
+  let existing: PublishedItemMatch | null;
+  try {
+    const mine = await apiFetch<{ items: ToneSharingItem[] }>("/items/me/list");
+    toneSharingState.myItems = mine.items;
+    existing = findPublishedItemForPreset(activePreset, mine.items);
+  } catch {
+    existing = findPublishedItemForPreset(activePreset, toneSharingState.myItems);
+  }
+  if (existing?.match === "title") {
+    const update = await showConfirm(
+      `You already have "${existing.item.title}" on Tone Sharing.\n\nUpdate it with this preset? Its link, downloads and ratings are kept.\n\nTo publish this as a separate preset, give it a different name first.`,
+      "Update Published Preset",
+      { ok: "Update" },
+    );
+    if (!update) {
+      setUploadStatus("Not published.");
+      return;
+    }
+  }
+
   setUploadStatus("Building & uploading archive...");
-  setPublishItemBusy(true, "Uploading preset for approval...");
+  setPublishItemBusy(true, existing ? "Updating preset..." : "Uploading preset...");
 
   try {
-    const item = await createToneSharingPresetItem(activePreset, { title, description, tags: selectedTags });
+    const meta = { title, description, tags: selectedTags };
+    let updated: boolean;
+    let item: ToneSharingItem;
+    if (existing) {
+      item = await updateToneSharingPresetItem(existing.item.id, activePreset, meta);
+      updated = true;
+    } else {
+      const created = await createToneSharingPresetItem(activePreset, meta);
+      item = created;
+      updated = created.updatedExisting;
+    }
 
-    await apiFetch(`/items/${item.id}/publish`, { method: "POST" });
+    const published = await apiFetch<{ moderationStatus?: string }>(`/items/${item.id}/publish`, { method: "POST" });
+    // Live at once, unless the creator is held for review (or an older server, which says nothing).
+    const live = (published?.moderationStatus ?? "approved") === "approved";
 
     let shareCopied = false;
     try {
@@ -208,22 +253,25 @@ export async function uploadAndPublishItem(): Promise<void> {
     setPublishItemBusy(false, "Uploading preset for approval...");
     closeToneSharingPublishPresetModal(true);
 
-    const shareNote = shareCopied
-      ? " Share link copied (it will open once approved)."
-      : " Open the item card and press Share to copy the public link once approved.";
+    const shareNote = live
+      ? (shareCopied ? " Share link copied." : " Open the item card and press Share to copy its link.")
+      : (shareCopied ? " Share link copied (it opens once approved)." : " Open the item card and press Share to copy the link once approved.");
+    const outcome = updated
+      ? (live ? "Published preset updated." : "Preset updated and submitted for review. It is listed once a moderator approves it.")
+      : (live ? "Preset published." : "Preset submitted for review. It is listed once a moderator approves it.");
 
     if (addToNewPack) {
       await openPackModal(undefined, item.id);
-      setUploadStatus(`Preset submitted for moderator approval.${shareNote}`);
+      setUploadStatus(`${outcome}${shareNote}`);
     } else if (assignPackId) {
       try {
         await addItemToExistingPack(assignPackId, item.id);
-        setUploadStatus(`Submitted for approval and added to pack.${shareNote}`);
+        setUploadStatus(`${outcome} Added to the pack.${shareNote}`);
       } catch (error) {
-        setUploadStatus(`Submitted for approval but pack update failed: ${(error as Error).message}.${shareNote}`);
+        setUploadStatus(`${outcome} The pack update failed: ${(error as Error).message}.${shareNote}`);
       }
     } else {
-      setUploadStatus(`Preset submitted for moderator approval.${shareNote}`);
+      setUploadStatus(`${outcome}${shareNote}`);
     }
 
     await Promise.all([loadBrowse(), loadMine()]);

@@ -146,6 +146,11 @@ export async function renderFeedRows(rows: ToneSharingRow[], requestVersion = br
             ? "tone-sharing-card-item-description tone-sharing-card-item-description--pack"
             : "tone-sharing-card-item-description";
           const moderationBadge = buildModerationBadge(item.moderationStatus);
+          // Only the creator's own lists and the admin's carry a note; public listings never do.
+          const moderationNoteText = item.moderationNote?.notes?.trim() ?? "";
+          const moderationNoteMarkup = moderationNoteText
+            ? `<div class="tone-sharing-card-moderation-note"><span class="tone-sharing-card-moderation-note-label">Moderator</span>${escapeHtml(moderationNoteText)}</div>`
+            : "";
           const itemStats = SHOW_TONE_SHARING_STATS && item.kind === "item"
             ? [
                 `<span class="tone-sharing-card-stat"><span class="tone-sharing-card-stat-label">Fav</span><strong>${formatCompactMetric(item.favoriteCount)}</strong></span>`,
@@ -181,6 +186,7 @@ export async function renderFeedRows(rows: ToneSharingRow[], requestVersion = br
                       </div>
                       ${itemStats ? `<div class="tone-sharing-card-item-stats">${itemStats}</div>` : ""}
                       ${safeDescription ? `<div class="${descriptionClass}">${safeDescription}</div>` : ""}
+                      ${moderationNoteMarkup}
                       ${bottomMetaMarkup}
                     </div>
                     <div class="tone-sharing-card-item-actions">
@@ -382,6 +388,7 @@ export function buildSingleRow(title: string, entries: Array<{ id: string; title
       type: entry.type ?? null,
       featured: Boolean((entry as ToneSharingItem | ToneSharingPack).featured),
       moderationStatus: (entry as ToneSharingItem | ToneSharingPack).moderationStatus,
+      moderationNote: (entry as ToneSharingItem | ToneSharingPack).moderationNote ?? null,
       creatorEmail: (entry as ToneSharingItem | ToneSharingPack).creatorEmail ?? null,
       creatorDisplayName: (entry as ToneSharingItem | ToneSharingPack).creatorDisplayName ?? null,
       creatorHandle: (entry as ToneSharingItem | ToneSharingPack).creatorHandle ?? null,

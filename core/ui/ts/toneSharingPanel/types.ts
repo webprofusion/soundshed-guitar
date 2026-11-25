@@ -16,6 +16,29 @@ export type ToneSharingUser = {
   avatarUrl?: string | null;
 };
 
+/** A moderator's latest note on a tone: only ever sent to its creator and to admins. */
+export type ToneSharingModerationNote = {
+  action: string;
+  notes: string;
+  createdAt: string;
+};
+
+/** What `/admin/creators/:userId` says about a creator (admins only). */
+export type ToneSharingCreatorModeration = {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  handle: string | null;
+  /** Everything they publish waits in the Review Queue. */
+  requiresReview: boolean;
+  notes: string | null;
+  setAt: string | null;
+  setBy: string | null;
+  /** How many of their presets and packs are in each moderation status. */
+  items: Record<string, number>;
+  packs: Record<string, number>;
+};
+
 export type ToneSharingItem = {
   id: string;
   title: string;
@@ -23,6 +46,9 @@ export type ToneSharingItem = {
   featured?: boolean;
   creatorUserId?: string | null;
   moderationStatus?: string;
+  moderationNote?: ToneSharingModerationNote | null;
+  /** The creator's local preset this was published from (only sent to its creator). */
+  sourcePresetId?: string | null;
   creatorEmail?: string | null;
   creatorDisplayName?: string | null;
   creatorHandle?: string | null;
@@ -48,6 +74,7 @@ export type ToneSharingPack = {
   featured?: boolean;
   creatorUserId?: string | null;
   moderationStatus?: string;
+  moderationNote?: ToneSharingModerationNote | null;
   creatorEmail?: string | null;
   creatorDisplayName?: string | null;
   creatorHandle?: string | null;
@@ -85,6 +112,7 @@ export type ToneSharingRow = {
     type: string | null;
     featured?: boolean;
     moderationStatus?: string;
+    moderationNote?: ToneSharingModerationNote | null;
     creatorEmail?: string | null;
     creatorDisplayName?: string | null;
     creatorHandle?: string | null;

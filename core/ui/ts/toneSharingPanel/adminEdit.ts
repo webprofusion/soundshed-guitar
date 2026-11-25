@@ -1,6 +1,8 @@
 /**
  * Admin tools for anyone's published tones: editing a preset's or pack's details,
- * featuring it on the home page, and deleting it.
+ * featuring it on the home page, deleting it, and moderating it: unpublishing,
+ * rejecting or approving it with a note to its creator, and holding the creator so
+ * what they publish next waits in the Review Queue.
  *
  * The server checks the admin role on every one of these calls; hiding the buttons
  * from other users is only so they are not offered something that would fail.
@@ -10,7 +12,7 @@ import { showConfirm } from "../dialogs.js";
 import { STANDARD_TAGS, renderTagChips } from "../presetTags.js";
 import { escapeHtml } from "../utils.js";
 import { apiFetch, isToneSharingAdmin } from "./api.js";
-import { deleteAsset } from "./assets.js";
+import { deleteAsset, sendModeration, type ModerationAction } from "./assets.js";
 import { element, setText, setUploadStatus } from "./dom.js";
 import { canFeature } from "./format.js";
 import { buildPackImageVariants } from "./images.js";
@@ -18,7 +20,7 @@ import { uploadToneSharingAsset } from "./itemUpload.js";
 import { clearPackDetail, viewPack } from "./packDetail.js";
 import { requestBrowseReload } from "./refresh.js";
 import { browseCollections, browseState } from "./state.js";
-import type { ToneSharingItem, ToneSharingPack, ToneSharingPackDetails } from "./types.js";
+import type { ToneSharingCreatorModeration, ToneSharingItem, ToneSharingModerationNote, ToneSharingPack, ToneSharingPackDetails } from "./types.js";
 
 type AdminTarget = { kind: "item" | "pack"; id: string };
 
@@ -26,6 +28,9 @@ type AdminEditSession = AdminTarget & {
   title: string;
   featured: boolean;
   approved: boolean;
+  /** draft, pending_review, approved or rejected. */
+  status: string;
+  creatorUserId: string | null;
   /** The pack's presets as loaded, in order; empty for an item. */
   packItemIds: string[];
 };
@@ -74,11 +79,198 @@ export async function confirmAndDelete(target: AdminTarget, title: string): Prom
 /** A message replaces the status line, an empty one clears it; none leaves it as it is. */
 function setBusy(busy: boolean, message?: string): void {
   saving = busy;
-  for (const id of ["tone-sharing-admin-edit-save", "tone-sharing-admin-edit-delete", "tone-sharing-admin-edit-cancel", "tone-sharing-admin-edit-close"]) {
+  for (const id of ["tone-sharing-admin-edit-save", "tone-sharing-admin-edit-delete", "tone-sharing-admin-edit-cancel", "tone-sharing-admin-edit-close", ...MODERATION_BUTTON_IDS]) {
     const button = element<HTMLButtonElement>(id);
     if (button) button.disabled = busy;
   }
   if (message !== undefined) setText("tone-sharing-admin-edit-status", message);
+}
+
+const MODERATION_BUTTONS: Record<ModerationAction, string> = {
+  unpublish: "tone-sharing-admin-edit-unpublish",
+  reject: "tone-sharing-admin-edit-reject",
+  approve: "tone-sharing-admin-edit-approve",
+  note: "tone-sharing-admin-edit-send-note",
+};
+const MODERATION_BUTTON_IDS = Object.values(MODERATION_BUTTONS);
+
+/** Which verdicts make sense from a status: only live content is unpublished, only waiting content rejected. */
+export function moderationActionsFor(status: string): ModerationAction[] {
+  switch (status) {
+    case "approved":
+      return ["unpublish", "note"];
+    case "pending_review":
+      return ["approve", "reject", "note"];
+    default:
+      return ["approve", "note"];
+  }
+}
+
+function syncModerationButtons(): void {
+  const offered = new Set(session ? moderationActionsFor(session.status) : []);
+  for (const [action, id] of Object.entries(MODERATION_BUTTONS) as Array<[ModerationAction, string]>) {
+    const button = element<HTMLButtonElement>(id);
+    if (button) button.hidden = !offered.has(action);
+  }
+}
+
+const NOTE_ACTION_LABELS: Record<string, string> = {
+  approve: "approved",
+  reject: "rejected",
+  unpublish: "unpublished",
+  note: "note",
+};
+
+/** A server timestamp ("2026-11-25 10:00:00", UTC) as a local date. */
+function formatServerDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value.replace(" ", "T")}Z`);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString();
+}
+
+function describeLastNote(note: ToneSharingModerationNote | null | undefined): string {
+  if (!note?.notes) {
+    return "";
+  }
+  const when = formatServerDate(note.createdAt);
+  return `Last note (${NOTE_ACTION_LABELS[note.action] ?? note.action}${when ? `, ${when}` : ""}): ${note.notes}`;
+}
+
+function describeCounts(counts: Record<string, number>, noun: string): string {
+  const parts = [
+    ["approved", "live"],
+    ["pending_review", "waiting"],
+    ["draft", "draft"],
+    ["rejected", "rejected"],
+  ]
+    .filter(([status]) => (counts[status] ?? 0) > 0)
+    .map(([status, label]) => `${counts[status]} ${label}`);
+  return parts.length ? `${noun}: ${parts.join(", ")}` : "";
+}
+
+function renderCreatorHold(creator: ToneSharingCreatorModeration | null, message?: string): void {
+  const checkbox = element<HTMLInputElement>("tone-sharing-admin-edit-hold");
+  if (checkbox) {
+    checkbox.checked = Boolean(creator?.requiresReview);
+    checkbox.disabled = !creator;
+  }
+  if (message !== undefined || !creator) {
+    setText("tone-sharing-admin-edit-hold-hint", message ?? "");
+    return;
+  }
+  const since = formatServerDate(creator.setAt);
+  const state = creator.requiresReview
+    ? `Everything they publish waits in the Review Queue${since ? ` (since ${since})` : ""}. What is already live stays live.`
+    : "What they publish goes live at once.";
+  const counts = [describeCounts(creator.items, "Presets"), describeCounts(creator.packs, "Packs")].filter(Boolean).join(" · ");
+  setText("tone-sharing-admin-edit-hold-hint", counts ? `${state} ${counts}.` : state);
+}
+
+async function loadCreatorHold(target: AdminEditSession): Promise<void> {
+  if (!target.creatorUserId) {
+    renderCreatorHold(null, "The creator is not known for this tone.");
+    return;
+  }
+  renderCreatorHold(null, "Loading creator...");
+  try {
+    const { creator } = await apiFetch<{ creator: ToneSharingCreatorModeration }>(`/admin/creators/${encodeURIComponent(target.creatorUserId)}`);
+    if (session !== target) return;
+    renderCreatorHold(creator);
+  } catch (error) {
+    if (session !== target) return;
+    renderCreatorHold(null, `Creator review setting unavailable: ${(error as Error).message}`);
+  }
+}
+
+async function setCreatorHold(requiresReview: boolean): Promise<void> {
+  const current = session;
+  const checkbox = element<HTMLInputElement>("tone-sharing-admin-edit-hold");
+  if (!current?.creatorUserId || !checkbox) {
+    return;
+  }
+  checkbox.disabled = true;
+  setText("tone-sharing-admin-edit-hold-hint", requiresReview ? "Holding the creator for review..." : "Releasing the creator...");
+  try {
+    const { creator } = await apiFetch<{ creator: ToneSharingCreatorModeration }>(`/admin/creators/${encodeURIComponent(current.creatorUserId)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ requiresReview }),
+    });
+    if (session !== current) return;
+    renderCreatorHold(creator);
+    setUploadStatus(requiresReview ? "Creator held: what they publish now waits for review." : "Creator released: what they publish goes live at once.");
+  } catch (error) {
+    if (session !== current) return;
+    checkbox.checked = !requiresReview;
+    checkbox.disabled = false;
+    setText("tone-sharing-admin-edit-hold-hint", `Could not change it: ${(error as Error).message}`);
+  }
+}
+
+const MODERATION_DONE: Record<ModerationAction, string> = {
+  approve: "Approved",
+  reject: "Rejected",
+  unpublish: "Unpublished",
+  note: "Note sent",
+};
+
+const MODERATION_WORKING: Record<ModerationAction, string> = {
+  approve: "Approving",
+  reject: "Rejecting",
+  unpublish: "Unpublishing",
+  note: "Sending note",
+};
+
+async function applyModeration(action: ModerationAction): Promise<void> {
+  if (!session || saving) {
+    return;
+  }
+  const current = session;
+  const noteInput = element<HTMLTextAreaElement>("tone-sharing-admin-edit-note");
+  const notes = noteInput?.value.trim() ?? "";
+  const notifyAuthor = element<HTMLInputElement>("tone-sharing-admin-edit-notify")?.checked ?? true;
+  const noun = current.kind === "item" ? "preset" : "pack";
+  const title = element<HTMLInputElement>("tone-sharing-admin-edit-name")?.value.trim() || current.title;
+
+  if (action === "note" && !notes) {
+    setText("tone-sharing-admin-edit-status", "Write a note to send.");
+    noteInput?.focus();
+    return;
+  }
+  if (action === "unpublish" || action === "reject") {
+    const consequence = action === "unpublish"
+      ? `It stops being listed or downloadable for anyone but its creator, leaves the featured rows and goes back to their drafts. If they publish it again it waits in the Review Queue.`
+      : `It is not listed. If they publish it again it waits in the Review Queue.`;
+    const telling = notifyAuthor
+      ? (notes ? "The creator is emailed your note." : "The creator is emailed, without a note.")
+      : (notes ? "The creator is not emailed; they see your note in My Content." : "The creator is not told.");
+    const confirmed = await showConfirm(
+      `${action === "unpublish" ? "Unpublish" : "Reject"} the ${noun} "${title}"?\n\n${consequence}\n\n${telling}`,
+      `${action === "unpublish" ? "Unpublish" : "Reject"} ${current.kind === "item" ? "Preset" : "Pack"}`,
+      { ok: action === "unpublish" ? "Unpublish" : "Reject" },
+    );
+    if (!confirmed || session !== current) {
+      return;
+    }
+  }
+
+  setBusy(true, `${MODERATION_WORKING[action]}...`);
+  try {
+    const { authorNotified } = await sendModeration(current.kind, current.id, action, { notes, notifyAuthor });
+    const message = `${MODERATION_DONE[action]}.${authorNotified ? " The creator was emailed." : ""}`;
+    setUploadStatus(`${current.kind === "item" ? "Preset" : "Pack"} "${title}": ${message}`);
+    if (action === "note") {
+      if (noteInput) noteInput.value = "";
+      setText("tone-sharing-admin-edit-last-note", describeLastNote({ action, notes, createdAt: new Date().toISOString() }));
+      setBusy(false, message);
+      return;
+    }
+    setBusy(false);
+    closeAdminEditModal(true);
+    await refreshAfterAdminChange();
+  } catch (error) {
+    setBusy(false, `${MODERATION_WORKING[action]} failed: ${(error as Error).message}`);
+  }
 }
 
 function describeStatus(target: ToneSharingItem | ToneSharingPack): string {
@@ -129,6 +321,13 @@ export async function openAdminEditModal(target: AdminTarget): Promise<void> {
   if (imageInput) imageInput.value = "";
   const itemsHost = element<HTMLElement>("tone-sharing-admin-edit-items");
   if (itemsHost) itemsHost.innerHTML = "";
+  const noteInput = element<HTMLTextAreaElement>("tone-sharing-admin-edit-note");
+  if (noteInput) noteInput.value = "";
+  const notifyCheckbox = element<HTMLInputElement>("tone-sharing-admin-edit-notify");
+  if (notifyCheckbox) notifyCheckbox.checked = true;
+  setText("tone-sharing-admin-edit-last-note", "");
+  renderCreatorHold(null, "");
+  syncModerationButtons();
   setBusy(true, "Loading...");
   modal.style.display = "flex";
 
@@ -159,19 +358,24 @@ export async function openAdminEditModal(target: AdminTarget): Promise<void> {
       title: record.title,
       featured: Boolean(record.featured),
       approved: canFeature(record.moderationStatus),
+      status: record.moderationStatus ?? "approved",
+      creatorUserId: record.creatorUserId ?? null,
       packItemIds,
     };
     if (nameInput) nameInput.value = record.title;
     if (descriptionInput) descriptionInput.value = record.description ?? "";
     setText("tone-sharing-admin-edit-meta", describeStatus(record));
+    setText("tone-sharing-admin-edit-last-note", describeLastNote(record.moderationNote));
     syncFeaturedControl();
+    syncModerationButtons();
     setBusy(false, "");
+    void loadCreatorHold(session);
   } catch (error) {
     setBusy(false, `Load failed: ${(error as Error).message}`);
-    const save = element<HTMLButtonElement>("tone-sharing-admin-edit-save");
-    const remove = element<HTMLButtonElement>("tone-sharing-admin-edit-delete");
-    if (save) save.disabled = true;
-    if (remove) remove.disabled = true;
+    for (const id of ["tone-sharing-admin-edit-save", "tone-sharing-admin-edit-delete", ...MODERATION_BUTTON_IDS]) {
+      const button = element<HTMLButtonElement>(id);
+      if (button) button.disabled = true;
+    }
   }
 }
 
@@ -299,6 +503,14 @@ export function bindAdminEditModal(): void {
   });
   element<HTMLButtonElement>("tone-sharing-admin-edit-delete")?.addEventListener("click", () => {
     void deleteFromModal();
+  });
+  for (const [action, id] of Object.entries(MODERATION_BUTTONS) as Array<[ModerationAction, string]>) {
+    element<HTMLButtonElement>(id)?.addEventListener("click", () => {
+      void applyModeration(action);
+    });
+  }
+  element<HTMLInputElement>("tone-sharing-admin-edit-hold")?.addEventListener("change", (event) => {
+    void setCreatorHold((event.currentTarget as HTMLInputElement).checked);
   });
   element<HTMLButtonElement>("tone-sharing-admin-edit-cancel")?.addEventListener("click", () => {
     closeAdminEditModal();

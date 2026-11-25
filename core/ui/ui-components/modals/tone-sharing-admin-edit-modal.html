@@ -21,6 +21,27 @@
             <span>Featured</span>
             <span class="tone-sharing-status" id="tone-sharing-admin-edit-featured-hint"></span>
           </label>
+          <div class="tone-sharing-admin-moderation">
+            <span class="tone-sharing-label">Moderation</span>
+            <label for="tone-sharing-admin-edit-note">Note to the creator</label>
+            <textarea id="tone-sharing-admin-edit-note" rows="3" maxlength="2000" placeholder="For example: this isn't up to the standard we list. The output clips and there's no description."></textarea>
+            <label class="tone-sharing-admin-edit-check">
+              <input id="tone-sharing-admin-edit-notify" type="checkbox" checked />
+              <span>Email the creator (they also see the note in My Content)</span>
+            </label>
+            <div class="tone-sharing-status" id="tone-sharing-admin-edit-last-note"></div>
+            <div class="tone-sharing-admin-moderation-actions">
+              <button id="tone-sharing-admin-edit-unpublish" type="button" class="btn btn-secondary">Unpublish</button>
+              <button id="tone-sharing-admin-edit-reject" type="button" class="btn btn-secondary">Reject</button>
+              <button id="tone-sharing-admin-edit-approve" type="button" class="btn btn-secondary">Approve</button>
+              <button id="tone-sharing-admin-edit-send-note" type="button" class="btn btn-secondary">Send Note Only</button>
+            </div>
+            <label class="tone-sharing-admin-edit-check">
+              <input id="tone-sharing-admin-edit-hold" type="checkbox" />
+              <span>Review this creator's tones before they go live</span>
+            </label>
+            <div class="tone-sharing-status" id="tone-sharing-admin-edit-hold-hint"></div>
+          </div>
           <div class="tone-sharing-pack-items-section tone-sharing-admin-edit-pack-only">
             <div class="tone-sharing-pack-items-header">
               <span class="tone-sharing-label">Presets in Pack</span>

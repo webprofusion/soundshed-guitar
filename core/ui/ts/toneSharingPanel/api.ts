@@ -17,6 +17,19 @@ export function getApiOrigin(): string {
   }
 }
 
+/** A refusal from the tone sharing API: its error code and anything else it sent (a `packId`, say). */
+export class ToneSharingApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | null,
+    readonly details: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "ToneSharingApiError";
+  }
+}
+
 export function isToneSharingAdmin(): boolean {
   return toneSharingState.user?.role === "admin";
 }
@@ -129,7 +142,8 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
     const message = typeof errorMessage === "string" && errorMessage.trim()
       ? errorMessage
       : `Request failed (${response.status})`;
-    throw new Error(message);
+    const details = errorPayload && typeof errorPayload === "object" ? errorPayload as Record<string, unknown> : {};
+    throw new ToneSharingApiError(message, response.status, typeof details.code === "string" ? details.code : null, details);
   }
 
   return payload.data as T;

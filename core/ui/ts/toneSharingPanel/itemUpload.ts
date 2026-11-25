@@ -5,6 +5,11 @@
  * Creating an item does not submit it. Until `/items/{id}/publish` is called it
  * stays a draft only its creator sees, so a pack can gather drafts and submit
  * them with itself.
+ *
+ * An item remembers the local preset it was published from (`sourcePresetId`), so
+ * publishing that preset again updates the item instead of making a second one.
+ * Items from before that have no key; they are matched by title, and the first
+ * update gives them one.
  */
 
 import { clonePreset } from "../state.js";
@@ -57,17 +62,18 @@ export async function uploadPresetArchives(preset: Preset): Promise<{ payloadAss
   return { payloadAssetId, privatePayloadAssetId };
 }
 
+export type PresetItemMeta = { title: string; description: string; tags?: string[] };
+
 /**
- * Uploads the preset's public and private archives and creates an item for them.
- * The item is left a draft; the caller decides whether to submit it.
+ * Uploads the preset's public and private archives and creates an item for them, keyed to the
+ * preset. When the creator already has an item for this preset (published from another device,
+ * say), the server updates that one instead. The item is left as it was, or a draft when new; the
+ * caller decides whether to submit it.
  */
-export async function createToneSharingPresetItem(
-  preset: Preset,
-  meta: { title: string; description: string; tags?: string[] },
-): Promise<ToneSharingItem> {
+export async function createToneSharingPresetItem(preset: Preset, meta: PresetItemMeta): Promise<ToneSharingItem & { updatedExisting: boolean }> {
   const { payloadAssetId, privatePayloadAssetId } = await uploadPresetArchives(preset);
 
-  const result = await apiFetch<{ item: ToneSharingItem }>("/items", {
+  const result = await apiFetch<{ item: ToneSharingItem; updated?: boolean }>("/items", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -76,8 +82,64 @@ export async function createToneSharingPresetItem(
       description: meta.description,
       tags: meta.tags && meta.tags.length > 0 ? meta.tags : undefined,
       payloadAssetId,
-      privatePayloadAssetId
+      privatePayloadAssetId,
+      sourcePresetId: preset.id,
+    })
+  });
+  return { ...result.item, updatedExisting: result.updated === true };
+}
+
+/** Uploads the preset's archives again and puts them, and its details, on the user's existing item. */
+export async function updateToneSharingPresetItem(itemId: string, preset: Preset, meta: PresetItemMeta): Promise<ToneSharingItem> {
+  const { payloadAssetId, privatePayloadAssetId } = await uploadPresetArchives(preset);
+  const result = await apiFetch<{ item: ToneSharingItem }>(`/items/${encodeURIComponent(itemId)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      title: meta.title,
+      description: meta.description,
+      tags: meta.tags ?? [],
+      payloadAssetId,
+      privatePayloadAssetId,
+      sourcePresetId: preset.id,
     })
   });
   return result.item;
+}
+
+export type PublishedItemMatch = {
+  item: ToneSharingItem;
+  /** "preset": published from this very preset. "title": an older item with the same name and no key, a guess to confirm. */
+  match: "preset" | "title";
+};
+
+const TITLE_MATCH_RANK: Record<string, number> = { approved: 0, pending_review: 1, draft: 2, rejected: 3 };
+
+function normalizeTitle(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+/**
+ * The user's item this preset is already published as: the one keyed to it, or else an older
+ * unkeyed item with the same title (live ones first). `includeRejected` false leaves rejected
+ * items out of the title guess.
+ */
+export function findPublishedItemForPreset(
+  preset: Preset,
+  myItems: readonly ToneSharingItem[],
+  options: { includeRejected?: boolean } = {},
+): PublishedItemMatch | null {
+  const keyed = myItems.find((item) => item.sourcePresetId === preset.id);
+  if (keyed) {
+    return { item: keyed, match: "preset" };
+  }
+  const title = normalizeTitle(preset.name || preset.id);
+  if (!title) {
+    return null;
+  }
+  const candidates = myItems
+    .filter((item) => !item.sourcePresetId && normalizeTitle(item.title) === title)
+    .filter((item) => options.includeRejected !== false || item.moderationStatus !== "rejected")
+    .sort((a, b) => (TITLE_MATCH_RANK[a.moderationStatus ?? ""] ?? 1) - (TITLE_MATCH_RANK[b.moderationStatus ?? ""] ?? 1));
+  return candidates[0] ? { item: candidates[0], match: "title" } : null;
 }

@@ -13,17 +13,38 @@ import { requestBrowseRefreshAfterInstall } from "./refresh.js";
 import { toneSharingState } from "./state.js";
 import type { ToneSharingItem, ToneSharingPackDetails } from "./types.js";
 
-export async function moderateTarget(kind: "item" | "pack", id: string, action: "approve" | "reject"): Promise<void> {
-  // Cancel still rejects, without a reason, as it did when this was window.prompt().
-  const notes = action === "reject"
-    ? ((await showPrompt("Optional rejection reason", "", { title: "Reject" })) ?? "").trim()
-    : "";
+export type ModerationAction = "approve" | "reject" | "unpublish" | "note";
+
+/**
+ * An admin's verdict on a preset or pack. The note is shown to the creator on the tone and, unless
+ * `notifyAuthor` is false, emailed to them; true comes back when the email was sent.
+ */
+export async function sendModeration(
+  kind: "item" | "pack",
+  id: string,
+  action: ModerationAction,
+  options: { notes?: string; notifyAuthor?: boolean } = {},
+): Promise<{ authorNotified: boolean }> {
   const endpoint = kind === "item" ? `/items/${id}/moderate` : `/packs/${id}/moderate`;
-  await apiFetch(endpoint, {
+  const result = await apiFetch<{ authorNotified?: boolean }>(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action, notes: notes || undefined }),
+    body: JSON.stringify({ action, notes: options.notes?.trim() || undefined, notifyAuthor: options.notifyAuthor ?? true }),
   });
+  return { authorNotified: Boolean(result?.authorNotified) };
+}
+
+/** The Review Queue's approve and reject buttons; a rejection asks for a reason for the creator. */
+export async function moderateTarget(kind: "item" | "pack", id: string, action: "approve" | "reject"): Promise<{ authorNotified: boolean } | null> {
+  let notes = "";
+  if (action === "reject") {
+    const entered = await showPrompt("Why is it not being listed? The creator is emailed this and sees it in My Content. Leave it empty to reject without a reason.", "", { title: "Reject", okLabel: "Reject", multiline: true });
+    if (entered === null) {
+      return null;
+    }
+    notes = entered.trim();
+  }
+  return sendModeration(kind, id, action, { notes });
 }
 
 function hasInstallStateChanged(beforeInstalledSnapshot: string, beforePresetCount: number): boolean {

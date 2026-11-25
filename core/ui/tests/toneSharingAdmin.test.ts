@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiFetch = vi.fn();
 const deleteAsset = vi.fn();
+const sendModeration = vi.fn();
 const showConfirm = vi.fn();
 const requestBrowseReload = vi.fn();
 let admin = true;
@@ -14,7 +15,7 @@ vi.mock("../ts/toneSharingPanel/api.js", async (importOriginal) => ({
   apiFetch,
   isToneSharingAdmin: () => admin,
 }));
-vi.mock("../ts/toneSharingPanel/assets.js", () => ({ deleteAsset }));
+vi.mock("../ts/toneSharingPanel/assets.js", () => ({ deleteAsset, sendModeration }));
 vi.mock("../ts/dialogs.js", () => ({ showConfirm }));
 vi.mock("../ts/toneSharingPanel/refresh.js", () => ({ requestBrowseReload, setBrowseLoaders: vi.fn() }));
 
@@ -39,6 +40,7 @@ beforeEach(() => {
 afterEach(() => {
   apiFetch.mockReset();
   deleteAsset.mockReset();
+  sendModeration.mockReset();
   showConfirm.mockReset();
   requestBrowseReload.mockReset();
   browseState.mode = "items";
@@ -161,5 +163,124 @@ describe("admin card buttons", () => {
     expect(actions()).toContain("feature");
     expect(actions()).toContain("delete");
     expect(actions()).not.toContain("admin-delete");
+  });
+});
+
+describe("admin moderation", () => {
+  const creator = (requiresReview: boolean) => ({
+    userId: "u1", email: "c@example.com", displayName: "Creator", handle: null,
+    requiresReview, notes: null, setAt: requiresReview ? "2026-11-25 10:00:00" : null, setBy: requiresReview ? "admin" : null,
+    items: { approved: 3, pending_review: 1 }, packs: {},
+  });
+  const visibleModerationButtons = () => Array.from(document.querySelectorAll<HTMLButtonElement>(".tone-sharing-admin-moderation-actions button"))
+    .filter((button) => !button.hidden)
+    .map((button) => button.id.replace("tone-sharing-admin-edit-", ""));
+  const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function serve(status: string, held = false, extra: (path: string, init?: RequestInit) => unknown = () => ({})) {
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/items/itm-1" && !init) {
+        return { item: { id: "itm-1", title: "Tone", creatorUserId: "u1", moderationStatus: status, moderationNote: { action: "note", notes: "Earlier note", createdAt: "2026-11-20 09:00:00" } } };
+      }
+      if (path === "/admin/creators/u1" && !init) {
+        return { creator: creator(held) };
+      }
+      return extra(path, init);
+    });
+  }
+
+  it("offers only the verdicts that fit the status", async () => {
+    serve("approved");
+    await openAdminEditModal({ kind: "item", id: "itm-1" });
+    expect(visibleModerationButtons()).toEqual(["unpublish", "send-note"]);
+    expect(byId("tone-sharing-admin-edit-last-note").textContent).toContain("Earlier note");
+
+    serve("pending_review");
+    await openAdminEditModal({ kind: "item", id: "itm-1" });
+    expect(visibleModerationButtons()).toEqual(["reject", "approve", "send-note"]);
+  });
+
+  it("unpublishes with a note after confirmation, then closes and reloads", async () => {
+    serve("approved");
+    sendModeration.mockResolvedValue({ authorNotified: true });
+    await openAdminEditModal({ kind: "item", id: "itm-1" });
+    byId<HTMLTextAreaElement>("tone-sharing-admin-edit-note").value = "Not good enough to be listed.";
+
+    showConfirm.mockResolvedValueOnce(false);
+    byId<HTMLButtonElement>("tone-sharing-admin-edit-unpublish").click();
+    await settle();
+    expect(sendModeration).not.toHaveBeenCalled();
+
+    showConfirm.mockResolvedValueOnce(true);
+    byId<HTMLButtonElement>("tone-sharing-admin-edit-unpublish").click();
+    await settle();
+    await settle();
+    expect(showConfirm.mock.calls[1][0]).toContain("emailed your note");
+    expect(sendModeration).toHaveBeenCalledWith("item", "itm-1", "unpublish", { notes: "Not good enough to be listed.", notifyAuthor: true });
+    expect(byId("tone-sharing-admin-edit-modal").style.display).toBe("none");
+    expect(requestBrowseReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a note only when there is one, without emailing when unticked, and stays open", async () => {
+    serve("approved");
+    sendModeration.mockResolvedValue({ authorNotified: false });
+    await openAdminEditModal({ kind: "item", id: "itm-1" });
+
+    byId<HTMLButtonElement>("tone-sharing-admin-edit-send-note").click();
+    await settle();
+    expect(sendModeration).not.toHaveBeenCalled();
+    expect(byId("tone-sharing-admin-edit-status").textContent).toBe("Write a note to send.");
+
+    byId<HTMLTextAreaElement>("tone-sharing-admin-edit-note").value = "Please add a description.";
+    byId<HTMLInputElement>("tone-sharing-admin-edit-notify").checked = false;
+    byId<HTMLButtonElement>("tone-sharing-admin-edit-send-note").click();
+    await settle();
+    expect(sendModeration).toHaveBeenCalledWith("item", "itm-1", "note", { notes: "Please add a description.", notifyAuthor: false });
+    expect(byId("tone-sharing-admin-edit-modal").style.display).toBe("flex");
+    expect(byId<HTMLTextAreaElement>("tone-sharing-admin-edit-note").value).toBe("");
+    expect(byId("tone-sharing-admin-edit-last-note").textContent).toContain("Please add a description.");
+  });
+
+  it("holds the creator for review, and puts the box back when that fails", async () => {
+    let failPut = false;
+    serve("approved", false, (path, init) => {
+      if (path === "/admin/creators/u1" && init?.method === "PUT") {
+        if (failPut) throw new Error("offline");
+        return { creator: creator(JSON.parse(init.body as string).requiresReview) };
+      }
+      return {};
+    });
+    await openAdminEditModal({ kind: "item", id: "itm-1" });
+    await settle();
+    const hold = byId<HTMLInputElement>("tone-sharing-admin-edit-hold");
+    expect(hold.checked).toBe(false);
+    expect(hold.disabled).toBe(false);
+    expect(byId("tone-sharing-admin-edit-hold-hint").textContent).toContain("goes live at once");
+    expect(byId("tone-sharing-admin-edit-hold-hint").textContent).toContain("Presets: 3 live, 1 waiting");
+
+    hold.checked = true;
+    hold.dispatchEvent(new Event("change"));
+    await settle();
+    expect(patchBodies("/admin/creators/u1")).toEqual([{ requiresReview: true }]);
+    expect(byId("tone-sharing-admin-edit-hold-hint").textContent).toContain("waits in the Review Queue");
+
+    failPut = true;
+    hold.checked = false;
+    hold.dispatchEvent(new Event("change"));
+    await settle();
+    expect(hold.checked).toBe(true);
+    expect(byId("tone-sharing-admin-edit-hold-hint").textContent).toContain("offline");
+  });
+
+  it("shows a moderator's note on the creator's own card, escaped", async () => {
+    browseState.mode = "mine";
+    await renderFeedRows([{
+      id: "r", slug: "r", title: "Row",
+      items: [{ id: "itm-1", kind: "item", title: "T", type: "preset", moderationStatus: "draft", moderationNote: { action: "unpublish", notes: "<b>clips</b>", createdAt: "" } }],
+    }]);
+    const note = document.querySelector(".tone-sharing-card-moderation-note");
+    expect(note?.textContent).toBe("Moderator<b>clips</b>");
+    expect(note?.querySelector("b")).toBeNull();
   });
 });

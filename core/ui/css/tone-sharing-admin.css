@@ -43,3 +43,62 @@
 .tone-sharing-card-btn[data-pack-action="feature"].is-active .tone-sharing-btn-icon path {
   fill: currentColor;
 }
+
+/* Unpublishing, rejecting or approving with a note to the creator, and holding the creator for review. */
+.tone-sharing-admin-moderation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-medium);
+}
+
+.tone-sharing-admin-moderation > label:not(.tone-sharing-admin-edit-check) {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tone-sharing-admin-moderation textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.tone-sharing-admin-edit-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.tone-sharing-admin-moderation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tone-sharing-admin-moderation-actions button[hidden] {
+  display: none;
+}
+
+/* What a moderator said, on the creator's own cards (My Content) and in the Review Queue. */
+.tone-sharing-card-moderation-note {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border-medium);
+  padding-left: 6px;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+
+.tone-sharing-card-moderation-note-label {
+  font-weight: 700;
+  margin-right: 4px;
+  color: var(--text-primary);
+}

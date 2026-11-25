@@ -7,10 +7,11 @@
  */
 
 import type { Preset } from "../types.js";
-import { apiFetch } from "./api.js";
+import { showConfirm } from "../dialogs.js";
+import { apiFetch, ToneSharingApiError } from "./api.js";
 import { loadBrowse, loadMine } from "./browse.js";
 import { ensurePublishConsent } from "./consent.js";
-import { element, setText } from "./dom.js";
+import { element, setText, setUploadStatus } from "./dom.js";
 import { clearFolderPackSession, countFolderPackUploads, getFolderPackSession, renderFolderPackSelection, resolveFolderPackItemIds, startFolderPackSession } from "./folderPack.js";
 import { buildPackImageVariants } from "./images.js";
 import { uploadToneSharingAsset } from "./itemUpload.js";
@@ -162,6 +163,13 @@ export async function loadMyDraftPacksForSelect(): Promise<void> {
   }
 }
 
+/** The user's pack with this title (case and surrounding space ignored), as the server matches it. */
+export async function findMyPackByTitle(title: string): Promise<ToneSharingPack | null> {
+  const wanted = title.trim().toLowerCase();
+  const data = await apiFetch<{ packs: ToneSharingPack[] }>("/packs/me/list");
+  return data.packs.find((pack) => pack.title.trim().toLowerCase() === wanted) ?? null;
+}
+
 export async function addItemToExistingPack(packId: string, itemId: string): Promise<void> {
   const details = await apiFetch<ToneSharingPackDetails>(`/packs/${packId}`);
   const existingIds = details.items.map((item) => item.itemId);
@@ -205,6 +213,30 @@ export async function savePack(publish: boolean): Promise<void> {
     return;
   }
 
+  // A creator has one pack per title: making the same pack again updates the one already there.
+  if (!editingPackId) {
+    let sameTitle: ToneSharingPack | null = null;
+    try {
+      sameTitle = await findMyPackByTitle(title);
+    } catch (error) {
+      setText("tone-sharing-pack-status", `Could not check your packs: ${(error as Error).message}`);
+      return;
+    }
+    if (sameTitle) {
+      const update = await showConfirm(
+        `You already have a pack called "${sameTitle.title}".\n\nUpdate it with these presets? Its link and downloads are kept, and presets you have not checked are taken out of it.\n\nTo make a separate pack, give it a different title.`,
+        "Update Pack",
+        { ok: "Update" },
+      );
+      if (!update) {
+        setText("tone-sharing-pack-status", "Not saved.");
+        return;
+      }
+      editingPackId = sameTitle.id;
+    }
+  }
+  const updatingPack = editingPackId !== null;
+
   if (uploadCount > 0) {
     try {
       await ensurePublishConsent();
@@ -242,11 +274,21 @@ export async function savePack(publish: boolean): Promise<void> {
       });
       packId = editingPackId;
     } else {
-      const pack = await apiFetch<{ pack: ToneSharingPack }>("/packs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, description, thumbnailAssetId })
-      });
+      let pack: { pack: ToneSharingPack };
+      try {
+        pack = await apiFetch<{ pack: ToneSharingPack }>("/packs", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title, description, thumbnailAssetId })
+        });
+      } catch (error) {
+        // Made since the check above (another device): save again and it is updated.
+        if (error instanceof ToneSharingApiError && error.code === "PACK_EXISTS" && typeof error.details.packId === "string") {
+          editingPackId = error.details.packId;
+          throw new Error(`${error.message} Press ${publish ? "Publish" : "Save"} again to update it.`);
+        }
+        throw error;
+      }
       packId = pack.pack.id;
       editingPackId = packId;
     }
@@ -263,8 +305,13 @@ export async function savePack(publish: boolean): Promise<void> {
       for (const itemId of itemIds.filter((id) => draftIds.has(id))) {
         await apiFetch(`/items/${itemId}/publish`, { method: "POST" });
       }
-      await apiFetch(`/packs/${packId}/publish`, { method: "POST" });
-      setText("tone-sharing-pack-status", "Pack submitted for moderator approval.");
+      const published = await apiFetch<{ moderationStatus?: string }>(`/packs/${packId}/publish`, { method: "POST" });
+      const live = (published?.moderationStatus ?? "approved") === "approved";
+      const outcome = updatingPack
+        ? (live ? "Published pack updated." : "Pack updated and submitted for review. It is listed once a moderator approves it.")
+        : (live ? "Pack published." : "Pack submitted for review. It is listed once a moderator approves it.");
+      setText("tone-sharing-pack-status", outcome);
+      setUploadStatus(outcome);
       setPublishPackBusy(false, "Publishing pack...");
       closePackModal(true);
     } else {
