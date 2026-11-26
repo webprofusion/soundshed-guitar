@@ -39,11 +39,22 @@ const VU_GAUGE_SWEEP_DEG = 42;
 const VU_GAUGE_BALLISTIC = 0.54;
 // Smallest needle move worth a repaint: about a third of a degree.
 const VU_GAUGE_MIN_STEP = 0.004;
+// The red peak dot: it rides the red dBFS scale under the VU arc, on the same sweep with full
+// scale (0 dBFS) at the end stop, so -3 dBFS sits under 0 VU and it reaches the stop only when
+// the signal clips. It jumps to a new peak at once and falls back like a peak programme meter,
+// 20 dB in 1.7 s, so a transient stays readable after the frame that carried it.
+const VU_PEAK_FALL_DB_PER_S = 20 / 1.7;
 
 /** Where a VU needle sits (0 rest, 1 end stop) for an RMS level in dBFS. */
 export function vuGaugeDeflection(rmsDbfs: number): number {
   if (!isFinite(rmsDbfs)) return 0;
   return Math.min(1, Math.pow(10, (rmsDbfs - VU_GAUGE_ZERO_DBFS) / 20) / Math.SQRT2);
+}
+
+/** Where the red peak dot sits (0 rest, 1 end stop) for a sample peak in dBFS. */
+export function vuPeakDeflection(peakDbfs: number): number {
+  if (!isFinite(peakDbfs)) return 0;
+  return Math.min(1, Math.pow(10, peakDbfs / 20));
 }
 
 /**
@@ -78,8 +89,9 @@ export interface VuMeterOptions {
   readoutId?: string;
   /**
    * Element id of the `.vu-gauge` needle meter, which only some themes show. Optional. It is
-   * driven by one custom property, --vu-needle (an angle), which the theme paints with: a
-   * background, never a transform, so a moving needle repaints a 66 x 48 box and nothing else.
+   * driven by two custom properties, angles the theme paints with: --vu-needle for the VU
+   * needle and --vu-peak for the red peak dot. Backgrounds, never transforms, so a moving
+   * needle repaints a 66 x 48 box and nothing else.
    */
   gaugeId?: string;
 }
@@ -100,6 +112,12 @@ export function createVuMeter({ segmentsId, peakHoldId, readoutId, gaugeId }: Vu
   let gaugeEl: HTMLElement | null = null;
   let needle = 0;
   let lastNeedle = -1;
+  let peakDotDbfs = -Infinity;
+  let peakDotAt = 0;
+  let lastPeakDot = -1;
+
+  const angle = (deflection: number): string =>
+    `${(-VU_GAUGE_SWEEP_DEG + 2 * VU_GAUGE_SWEEP_DEG * deflection).toFixed(2)}deg`;
 
   // The needle eases toward the RMS level each frame and drops straight to rest when the
   // frames stop (null), since no later frame would carry it down.
@@ -108,10 +126,24 @@ export function createVuMeter({ segmentsId, peakHoldId, readoutId, gaugeId }: Vu
     const target = levels ? vuGaugeDeflection(levels.rmsDbfs) : 0;
     needle = levels ? needle + (target - needle) * VU_GAUGE_BALLISTIC : 0;
     if (needle < VU_GAUGE_MIN_STEP && target === 0) needle = 0;
-    if (Math.abs(needle - lastNeedle) < VU_GAUGE_MIN_STEP && !(needle === 0 && lastNeedle !== 0)) return;
-    lastNeedle = needle;
-    const deg = -VU_GAUGE_SWEEP_DEG + 2 * VU_GAUGE_SWEEP_DEG * needle;
-    gaugeEl.style.setProperty("--vu-needle", `${deg.toFixed(2)}deg`);
+    if (Math.abs(needle - lastNeedle) >= VU_GAUGE_MIN_STEP || (needle === 0 && lastNeedle !== 0)) {
+      lastNeedle = needle;
+      gaugeEl.style.setProperty("--vu-needle", angle(needle));
+    }
+
+    // The peak dot: up to the frame's peak at once, otherwise down at the fall rate for the
+    // time since the last frame, and to rest with the frames.
+    const now = performance.now();
+    const elapsedS = peakDotAt > 0 ? Math.min(1, Math.max(0, (now - peakDotAt) / 1000)) : 0.05;
+    peakDotAt = now;
+    const framePeak = levels && isFinite(levels.peakDbfs) ? levels.peakDbfs : -Infinity;
+    peakDotDbfs = levels ? Math.max(framePeak, peakDotDbfs - VU_PEAK_FALL_DB_PER_S * elapsedS) : -Infinity;
+    let peak = vuPeakDeflection(peakDotDbfs);
+    if (peak < VU_GAUGE_MIN_STEP) peak = 0;
+    if (Math.abs(peak - lastPeakDot) >= VU_GAUGE_MIN_STEP || (peak === 0 && lastPeakDot !== 0)) {
+      lastPeakDot = peak;
+      gaugeEl.style.setProperty("--vu-peak", angle(peak));
+    }
   }
 
   function update(levels: SignalLevelMetrics | null): void {

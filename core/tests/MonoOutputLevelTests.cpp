@@ -114,7 +114,10 @@ void TestMixer()
     Expect(Near(l, 0.5f), "a mono signal reaches a mono output at its input level");
 
     // The output meter reads what the one channel gets.
+    // A snapshot first: a reading covers every block since the last one, and the stereo runs
+    // above were metered too.
     mixer.SetSignalDiagnosticsEnabled(true);
+    (void)mixer.GetSignalDiagnosticsSnapshot();
     std::tie(l, r) = Run(mixer, 0.5f, 0.5f, false);
     const auto snapshot = mixer.GetSignalDiagnosticsSnapshot();
     Expect(Near(static_cast<float>(snapshot.output.peak), 0.5f, 1e-3f),

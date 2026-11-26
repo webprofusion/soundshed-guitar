@@ -443,18 +443,23 @@ namespace
 {
 // The gauge face's geometry, in its own pixels (66 x 48), from
 // tools/studio-1973-theme-assets/vu-face.mjs: the bezel, the needle's pivot below the window,
-// its length and its sweep either side of upright. The web UI's skin repeats them.
+// its length and its sweep either side of upright, and the radius of the red peak scale's line,
+// which the peak dot rides. The web UI's skin repeats them.
 constexpr float kGaugeFaceW = 66.0f;
 constexpr float kGaugeBezel = 2.0f;
 constexpr float kGaugePivotX = 33.0f;
 constexpr float kGaugePivotY = 52.0f;
 constexpr float kGaugeNeedle = 41.0f;
 constexpr float kGaugeSweep = 42.0f * 3.14159265f / 180.0f;
+constexpr float kGaugePeakR = 31.5f;
 // 0 VU at -18 dBFS RMS, the end stop at +3 VU (ts/vuMeter.ts, vuGaugeDeflection).
 constexpr double kGaugeZeroDbfs = -18.0;
 // A VU needle's time constant (99% of a step in about 300 ms), and the smallest move redrawn.
 constexpr double kGaugeTau = 0.065;
 constexpr float kGaugeMinStep = 0.004f;
+// The red peak dot: the sample peak on the same sweep with 0 dBFS at the end stop, so -3 dBFS
+// sits under 0 VU, falling 20 dB in 1.7 s (ts/vuMeter.ts, vuPeakDeflection).
+constexpr double kGaugePeakFallDbPerS = 20.0 / 1.7;
 
 float GaugeDeflection(double rmsDb)
 {
@@ -464,6 +469,17 @@ float GaugeDeflection(double rmsDb)
     }
 
     return static_cast<float>(std::min(1.0, std::pow(10.0, (rmsDb - kGaugeZeroDbfs) / 20.0) / std::sqrt(2.0)));
+}
+
+float GaugePeakDeflection(double peakDb)
+{
+    if (!std::isfinite(peakDb))
+    {
+        return 0.0f;
+    }
+
+    const float d = static_cast<float>(std::min(1.0, std::pow(10.0, peakDb / 20.0)));
+    return d < kGaugeMinStep ? 0.0f : d;
 }
 } // namespace
 
@@ -498,8 +514,6 @@ void MeterBar::DrawGauge(canvas& cnv, el::rect face) const
 
     const float s = face.width() / kGaugeFaceW;
     const el::rect window = face.inset(kGaugeBezel * s, kGaugeBezel * s);
-    const float a = -kGaugeSweep + 2.0f * kGaugeSweep * mNeedleDrawn;
-    const float dx = std::sin(a), dy = -std::cos(a);
     const el::point pivot{face.left + kGaugePivotX * s, face.top + kGaugePivotY * s};
     const float length = kGaugeNeedle * s;
 
@@ -508,7 +522,26 @@ void MeterBar::DrawGauge(canvas& cnv, el::rect face) const
     cnv.add_round_rect(window, 1.4f * s);
     cnv.clip();
 
-    // Its shadow on the card, from a pivot a little down and right, then the needle.
+    // The red peak dot on the peak scale's line, then the black needle over it, each with its
+    // shadow on the card a little down and right first.
+    const float peakA = -kGaugeSweep + 2.0f * kGaugeSweep * mPeakDotDrawn;
+    const el::point dot{pivot.x + std::sin(peakA) * kGaugePeakR * s, pivot.y - std::cos(peakA) * kGaugePeakR * s};
+    cnv.begin_path();
+    cnv.add_circle(cycfi::artist::circle(el::point{dot.x + 0.6f * s, dot.y + 0.8f * s}, 1.5f * s));
+    cnv.fill_style(el::rgba(70, 40, 10, 60));
+    cnv.fill();
+    const el::point glint{dot.x - 0.3f * s, dot.y - 0.3f * s};
+    canvas::radial_gradient bead{glint, 0.0f, glint, 1.5f * s};
+    bead.add_color_stop(0.0f, el::rgba(240, 100, 76, 255));
+    bead.add_color_stop(0.55f, el::rgba(195, 40, 28, 255));
+    bead.add_color_stop(1.0f, el::rgba(142, 24, 16, 255));
+    cnv.begin_path();
+    cnv.add_circle(cycfi::artist::circle(dot, 1.3f * s));
+    cnv.fill_style(bead);
+    cnv.fill();
+
+    const float a = -kGaugeSweep + 2.0f * kGaugeSweep * mNeedleDrawn;
+    const float dx = std::sin(a), dy = -std::cos(a);
     cnv.line_cap(canvas::butt);
     cnv.begin_path();
     cnv.move_to(el::point{pivot.x + 1.5f * s, pivot.y + 1.0f * s});
@@ -631,6 +664,16 @@ bool MeterBar::Set(double peakDb, bool clipped, double rmsDb)
         if (std::abs(mNeedle - mNeedleDrawn) >= kGaugeMinStep || (mNeedle == 0.0f && mNeedleDrawn != 0.0f))
         {
             mNeedleDrawn = mNeedle;
+            changed = true;
+        }
+
+        // The peak needle rises to a new peak at once and otherwise falls at its own rate.
+        mPeakDotDb = std::max(peakDb, mPeakDotDb - kGaugePeakFallDbPerS * dt);
+        const float peak = GaugePeakDeflection(mPeakDotDb);
+
+        if (std::abs(peak - mPeakDotDrawn) >= kGaugeMinStep || (peak == 0.0f && mPeakDotDrawn != 0.0f))
+        {
+            mPeakDotDrawn = peak;
             changed = true;
         }
     }

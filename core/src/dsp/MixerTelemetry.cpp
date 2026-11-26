@@ -6,17 +6,12 @@
 
 namespace guitarfx
 {
-MixerTelemetry::LevelStats MixerTelemetry::ComputeLevels(const float* left, const float* right, int numSamples) noexcept
+void MixerTelemetry::Accumulate(Span& span, const float* left, const float* right, int numSamples) noexcept
 {
-    LevelStats stats;
-
     if (numSamples <= 0)
     {
-        return stats;
+        return;
     }
-
-    double sumSquares = 0.0;
-    std::size_t sampleCount = 0;
 
     for (const float* channel : {left, right})
     {
@@ -25,28 +20,28 @@ MixerTelemetry::LevelStats MixerTelemetry::ComputeLevels(const float* left, cons
             continue;
         }
 
+        float peak = 0.0f;
+        double sumSquares = 0.0;
+
         for (int i = 0; i < numSamples; ++i)
         {
             const float value = channel[i];
             const float absValue = std::abs(value);
-            stats.peak = std::max(stats.peak, static_cast<double>(absValue));
+            peak = std::max(peak, absValue);
             sumSquares += static_cast<double>(value) * static_cast<double>(value);
 
             if (absValue > 1.0f)
             {
-                ++stats.clipCount;
+                ++span.clipCount;
             }
         }
 
-        sampleCount += static_cast<std::size_t>(numSamples);
+        span.peak = std::max(span.peak, static_cast<double>(peak));
+        span.sumSquares += sumSquares;
+        span.samples += static_cast<std::uint64_t>(numSamples);
     }
 
-    if (sampleCount > 0)
-    {
-        stats.rms = std::sqrt(sumSquares / static_cast<double>(sampleCount));
-    }
-
-    return stats;
+    span.frames += static_cast<std::uint64_t>(numSamples);
 }
 
 MixerTelemetry::LevelStats MixerTelemetry::ReadLevels(const AtomicLevelStats& source) noexcept
@@ -56,13 +51,6 @@ MixerTelemetry::LevelStats MixerTelemetry::ReadLevels(const AtomicLevelStats& so
     stats.rms = source.rms.load(std::memory_order_relaxed);
     stats.clipCount = source.clipCount.load(std::memory_order_relaxed);
     return stats;
-}
-
-void MixerTelemetry::WriteLevels(AtomicLevelStats& destination, const LevelStats& source) noexcept
-{
-    destination.peak.store(source.peak, std::memory_order_relaxed);
-    destination.rms.store(source.rms, std::memory_order_relaxed);
-    destination.clipCount.store(source.clipCount, std::memory_order_relaxed);
 }
 
 void MixerTelemetry::Record(Stage stage, const float* left, const float* right, int numSamples) noexcept
@@ -84,7 +72,23 @@ void MixerTelemetry::Record(Stage stage, const float* left, const float* right, 
         return;
     }
 
-    WriteLevels(*destination, ComputeLevels(left, right, numSamples));
+    // A snapshot since the last block, or a span nobody has read for a long while, starts a
+    // new span. A snapshot landing between this check and the stores below moves this one
+    // block out of the next span; at 20 Hz that is a rare, single block.
+    Span& span = destination->span;
+    const std::uint32_t taken = mSnapshotsTaken.load(std::memory_order_acquire);
+
+    if (taken != span.taken || span.frames >= kMaxSpanFrames)
+    {
+        span = Span{};
+        span.taken = taken;
+    }
+
+    Accumulate(span, left, right, numSamples);
+    destination->peak.store(span.peak, std::memory_order_relaxed);
+    destination->rms.store(span.samples > 0 ? std::sqrt(span.sumSquares / static_cast<double>(span.samples)) : 0.0,
+                           std::memory_order_relaxed);
+    destination->clipCount.store(span.clipCount, std::memory_order_relaxed);
 }
 
 MixerTelemetry::Snapshot MixerTelemetry::GetSnapshot() const noexcept
@@ -93,6 +97,7 @@ MixerTelemetry::Snapshot MixerTelemetry::GetSnapshot() const noexcept
     snapshot.rawInput = ReadLevels(mRawInputLevels);
     snapshot.input = ReadLevels(mInputLevels);
     snapshot.output = ReadLevels(mOutputLevels);
+    mSnapshotsTaken.fetch_add(1, std::memory_order_release);
     return snapshot;
 }
 

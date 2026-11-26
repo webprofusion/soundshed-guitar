@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 using namespace guitarfx;
 
@@ -25,6 +26,67 @@ int main()
     {
         std::cerr << "Mixer level accumulation changed\n";
         return 1;
+    }
+
+    // The span runs from one snapshot to the next: a loud block followed by quiet ones still
+    // reads as the loud peak, and the RMS and clips cover every block in between.
+    {
+        MixerTelemetry span;
+        const float loud[] = {0.9f, -1.2f};
+        const float quiet[] = {0.1f, -0.1f};
+
+        span.Record(MixerTelemetry::Stage::Output, loud, nullptr, 2);
+
+        for (int i = 0; i < 3; ++i)
+        {
+            span.Record(MixerTelemetry::Stage::Output, quiet, nullptr, 2);
+        }
+
+        const auto first = span.GetSnapshot();
+        const double meanSquare = (0.81 + 1.44 + 6 * 0.01) / 8.0;
+
+        if (std::abs(first.output.peak - 1.2) > 1e-6 || first.output.clipCount != 1 ||
+            std::abs(first.output.rms - std::sqrt(meanSquare)) > 1e-6)
+        {
+            std::cerr << "A block between two snapshots was lost (peak " << first.output.peak << ")\n";
+            return 1;
+        }
+
+        // No block since: the same reading again, not silence.
+        const auto repeat = span.GetSnapshot();
+
+        if (repeat.output.peak != first.output.peak || repeat.output.rms != first.output.rms)
+        {
+            std::cerr << "A snapshot with no new block did not repeat the last one\n";
+            return 1;
+        }
+
+        // The next block starts a new span.
+        span.Record(MixerTelemetry::Stage::Output, quiet, nullptr, 2);
+        const auto next = span.GetSnapshot();
+
+        if (std::abs(next.output.peak - 0.1) > 1e-6 || next.output.clipCount != 0 ||
+            std::abs(next.output.rms - 0.1) > 1e-6)
+        {
+            std::cerr << "A snapshot did not start a new span (peak " << next.output.peak << ")\n";
+            return 1;
+        }
+
+        // A span nobody reads starts again once it is long, so a stale peak does not wait for
+        // the next reader.
+        span.Record(MixerTelemetry::Stage::Input, loud, nullptr, 2);
+        std::vector<float> silence(4096, 0.0f);
+
+        for (int i = 0; i < 17; ++i)
+        {
+            span.Record(MixerTelemetry::Stage::Input, silence.data(), nullptr, static_cast<int>(silence.size()));
+        }
+
+        if (span.GetSnapshot().input.peak != 0.0)
+        {
+            std::cerr << "An unread span kept its peak past the cap\n";
+            return 1;
+        }
     }
 
     SignalGraphExecutor::NodeSignalLevel source;

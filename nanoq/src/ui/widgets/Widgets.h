@@ -389,7 +389,8 @@ class GroupHeading : public el::element
 
 /// A level bar: -60 dB to 0 dB, with a clip tint. Horizontal, or with Vertical() the web UI's
 /// Controls strip meter: a column of segments under the peak in dB, or, where the theme draws
-/// its meters as needle gauges (ControlSkin::gaugeFace, Studio 1973), a VU meter reading RMS.
+/// its meters as needle gauges (ControlSkin::gaugeFace, Studio 1973), a VU meter reading RMS
+/// with a red peak dot riding the scale under its arc.
 class MeterBar : public el::element, public Drawn
 {
   public:
@@ -405,7 +406,8 @@ class MeterBar : public el::element, public Drawn
     void draw(const el::context& ctx) override;
 
     /// Returns true if the bar changed enough to be worth a redraw. A gauge's needle reads
-    /// `rmsDb` and moves with a VU meter's ballistics, so it eases between frames.
+    /// `rmsDb` and moves with a VU meter's ballistics, so it eases between frames; its red peak
+    /// dot jumps to `peakDb` and falls back like a peak programme meter.
     bool Set(double peakDb, bool clipped, double rmsDb = -120.0);
 
     /// Whether the theme draws vertical meters as gauges, and how wide one is.
@@ -427,6 +429,8 @@ class MeterBar : public el::element, public Drawn
     float mNeedle = 0.0f;
     float mNeedleDrawn = 0.0f;
     double mNeedleAt = -1.0;
+    double mPeakDotDb = -120.0;
+    float mPeakDotDrawn = 0.0f;
 };
 
 /// One row of a list: text at the left, a muted secondary text at the right. With `heading` it

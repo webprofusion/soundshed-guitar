@@ -492,12 +492,16 @@ the top: as much wood as the UI will hold, drawn to look real.
 - The input and output meters are moving-coil VU meters (`.vu-gauge`, which the base sheet
   hides and this skin shows in place of the ladder). `ts/vuMeter.ts` drives them with RMS
   (0 VU at -18 dBFS, the stop at +3 VU) through VU ballistics, about 300 ms to settle, and
-  writes one custom property, `--vu-needle`, an angle. The needle is a background: a thin
-  conic wedge cut short by a radial mask, so a moving needle repaints its own box and never
-  relayers. The face (`vu-face.png`) is drawn as SVG by
-  `tools/studio-1973-theme-assets/vu-face.mjs` and rasterised at 4x by headless Chrome or
-  Edge. Its geometry (a 66 x 48 face, the pivot 52px down, a 41px needle, ±42°) is repeated
-  in the skin and in Nano Q's `MeterBar`.
+  writes one custom property, `--vu-needle`, an angle. A red peak dot, `--vu-peak`, rides
+  the red dBFS scale printed just under the VU arc, on the same sweep with 0 dBFS at the stop
+  (so -3 dBFS sits under 0 VU, where the red zone starts): it jumps to a new peak at once and
+  falls back 20 dB in 1.7 s, as a peak programme meter does. The needle is a background (a
+  thin conic wedge cut short by a radial mask) and the dot a radial gradient placed with
+  `sin()` and `cos()`, so both repaint their own box and never relayer. The face
+  (`vu-face.png`) is drawn as SVG by `tools/studio-1973-theme-assets/vu-face.mjs` and
+  rasterised at 4x by headless Chrome or Edge. Its geometry (a 66 x 48 face, the pivot 52px
+  down, a 41px needle, ±42°, the peak scale's line 31.5px from the pivot) is repeated in the
+  skin and in Nano Q's `MeterBar`.
 - Type: Fraunces (`css/fonts`, OFL), softness all the way up and the wonky letters on, for
   names and legends: the nav, the control legends, the preset name, the chain's modules, the
   effect's title, tabs, groups and knob legends, and dialog titles. Values, lists and body

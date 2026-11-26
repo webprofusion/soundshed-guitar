@@ -761,11 +761,13 @@ body.theme-studio-1973 .footer-bar .bpm-display {
 }
 
 /* ===== Meters: moving-coil VU meters, lamp-lit behind glass =====
-   The ladder gives way to a needle meter (ts/vuMeter.ts keeps --vu-needle on .vu-gauge). The
-   face is vu-face.png from tools/studio-1973-theme-assets/vu-face.mjs, which sets the geometry
-   repeated here: a 66 x 48 face, a 2px bezel, the pivot 52px down (below the window), a 41px
-   needle. The needle is a background (a thin conic wedge cut short by a mask), so a moving
-   needle repaints its own box and never relayers. It is zoomed to 1.2 to sit with the knobs; the
+   The ladder gives way to a needle meter (ts/vuMeter.ts keeps --vu-needle, the VU needle, and
+   --vu-peak, the red peak dot, on .vu-gauge). The face is vu-face.png from
+   tools/studio-1973-theme-assets/vu-face.mjs, which sets the geometry repeated here: a 66 x 48
+   face, a 2px bezel, the pivot 52px down (below the window), a 41px needle, and the red peak
+   scale's line 31.5px from the pivot, which the dot rides. The needle is a background (a thin
+   conic wedge cut short by a mask) and the dot a radial gradient placed by sin() and cos(), so
+   both repaint their own box and never relayer. It is zoomed to 1.2 to sit with the knobs; the
    picture is drawn at 4x, so it stays sharp. */
 .theme-studio-1973 .vu-meter {
   width: 80px;
@@ -777,6 +779,7 @@ body.theme-studio-1973 .footer-bar .bpm-display {
 
 .theme-studio-1973 .vu-gauge {
   --vu-needle: -42deg;
+  --vu-peak: -42deg;
   display: block;
   zoom: 1.2;
   position: relative;
@@ -791,9 +794,12 @@ body.theme-studio-1973 .footer-bar .bpm-display {
     0 3px 6px rgba(0, 0, 0, 0.6);
 }
 
-/* Inside the bezel; the pivot is at 31px 50px from here. The second wedge is the needle's
-   shadow on the card, from a pivot a little down and right. */
+/* Inside the bezel; the pivot is at 31px 50px from here. The black VU needle over the red peak
+   dot, which sits on the peak scale's line, then their shadows on the card, a little down and
+   right. */
 .theme-studio-1973 .vu-needle {
+  --vu-dot-x: calc(31px + 31.5px * sin(var(--vu-peak)));
+  --vu-dot-y: calc(50px - 31.5px * cos(var(--vu-peak)));
   position: absolute;
   inset: 2px;
   border-radius: 1.4px;
@@ -805,12 +811,24 @@ body.theme-studio-1973 .footer-bar .bpm-display {
       #1a120c 1.9deg,
       transparent 2.4deg
     ),
+    radial-gradient(
+      circle 1.5px at calc(var(--vu-dot-x) - 0.3px) calc(var(--vu-dot-y) - 0.3px),
+      #f0644c 0,
+      #c3281c 0.8px,
+      #8e1810 1.3px,
+      transparent 1.5px
+    ),
     conic-gradient(
       from calc(var(--vu-needle) - 1.6deg) at 32.5px 51px,
       transparent 0deg,
       rgb(70 40 10 / 0.28) 0.8deg,
       rgb(70 40 10 / 0.28) 2.4deg,
       transparent 3.2deg
+    ),
+    radial-gradient(
+      circle 1.9px at calc(var(--vu-dot-x) + 0.6px) calc(var(--vu-dot-y) + 0.8px),
+      rgb(70 40 10 / 0.3) 0.9px,
+      transparent 1.9px
     );
   -webkit-mask: radial-gradient(circle at 31px 50px, #000 40.5px, transparent 41px);
   mask: radial-gradient(circle at 31px 50px, #000 40.5px, transparent 41px);

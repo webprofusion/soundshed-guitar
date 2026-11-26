@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { createVuMeter, vuGaugeDeflection } from "../ts/vuMeter.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createVuMeter, vuGaugeDeflection, vuPeakDeflection } from "../ts/vuMeter.js";
 import type { SignalLevelMetrics } from "../ts/types.js";
 
 const THRESHOLDS = [-3, -6, -9, -12, -18, -24, -36, -48];
@@ -201,6 +201,19 @@ describe("vuGaugeDeflection", () => {
   });
 });
 
+describe("vuPeakDeflection", () => {
+  it("puts full scale at the end stop and -3 dBFS under 0 VU, where the red zone starts", () => {
+    expect(vuPeakDeflection(0)).toBe(1);
+    expect(vuPeakDeflection(3)).toBe(1);
+    expect(vuPeakDeflection(-3)).toBeCloseTo(vuGaugeDeflection(-18), 2);
+    expect(vuPeakDeflection(-6)).toBeCloseTo(0.5, 2);
+  });
+
+  it("rests at zero for silence", () => {
+    expect(vuPeakDeflection(-Infinity)).toBe(0);
+  });
+});
+
 describe("the needle gauge", () => {
   beforeEach(() => {
     document.body.innerHTML = `
@@ -210,6 +223,8 @@ describe("the needle gauge", () => {
 
   const needle = (): number =>
     parseFloat(document.getElementById("g-gauge")?.style.getPropertyValue("--vu-needle") ?? "NaN");
+  const peakDot = (): number =>
+    parseFloat(document.getElementById("g-gauge")?.style.getPropertyValue("--vu-peak") ?? "NaN");
   const meter = () => createVuMeter({ segmentsId: "g-segments", peakHoldId: "g-peak-hold", gaugeId: "g-gauge" });
 
   it("eases toward the level rather than jumping to it", () => {
@@ -234,5 +249,53 @@ describe("the needle gauge", () => {
     m.update(null);
 
     expect(needle()).toBe(-42);
+    expect(peakDot()).toBe(-42);
+  });
+
+  describe("the red peak dot", () => {
+    let clock = 1000;
+
+    beforeEach(() => {
+      clock = 1000;
+      vi.spyOn(performance, "now").mockImplementation(() => clock);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // One 20 Hz frame later.
+    const frame = (m: ReturnType<typeof meter>, peakDbfs: number): void => {
+      clock += 50;
+      m.update(levels(peakDbfs));
+    };
+
+    it("jumps to the frame's peak on the first frame", () => {
+      const m = meter();
+
+      frame(m, -6); // half the sweep: upright
+
+      expect(peakDot()).toBeCloseTo(0, 0);
+    });
+
+    it("falls 20 dB in 1.7 s rather than dropping with the signal", () => {
+      const m = meter();
+      frame(m, -6);
+
+      frame(m, -60);
+      expect(peakDot()).toBeGreaterThan(-5); // 0.6 dB down after one frame
+
+      for (let i = 0; i < 33; i++) frame(m, -60); // 1.7 s in all
+      const expected = -42 + 84 * vuPeakDeflection(-26);
+      expect(peakDot()).toBeCloseTo(expected, 0);
+    });
+
+    it("pins against the stop when the signal clips", () => {
+      const m = meter();
+
+      frame(m, 0.5);
+
+      expect(peakDot()).toBe(42);
+    });
   });
 });

@@ -2,15 +2,16 @@
  * Studio 1973's analog VU meter face: images/themes/studio-1973/vu-face.png.
  *
  * Draws the face as SVG (a lamp-lit cream card behind a black bezel, the -20..+3 VU scale with
- * its red zone, the percentage scale under it and the VU legend) and has a headless Chrome or
- * Edge rasterise it at 4x, so the web UI and the native UI (Nano Q) draw the same picture. The
- * needle is not in it: each UI draws that over the face, pivoting below the window (PIVOT).
+ * its red zone, the red dBFS peak scale under it and the VU and PEAK legends) and has a headless
+ * Chrome or Edge rasterise it at 4x, so the web UI and the native UI (Nano Q) draw the same
+ * picture. The moving parts are not in it: each UI draws the VU needle, pivoting below the
+ * window (PIVOT), and the red peak dot, which rides the peak scale's line (PEAK_R).
  *
  *   node tools/studio-1973-theme-assets/vu-face.mjs [--svg <file>]   (--svg also keeps the SVG)
  *
  * The geometry is in CSS pixels of the 66 x 48 face; the skin (css/themes/studio-1973-skin.css)
- * and the native gauge (nanoq/src/ui/widgets/Widgets.cpp, MeterBar) repeat PIVOT, NEEDLE_R and
- * SWEEP_DEG, so change them together.
+ * and the native gauge (nanoq/src/ui/widgets/Widgets.cpp, MeterBar) repeat PIVOT, NEEDLE_R,
+ * SWEEP_DEG and PEAK_R, so change them together.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -26,17 +27,21 @@ const interTtf = path.join(repo, 'core/ui/css/fonts/Inter-VariableFont_opsz,wght
 const W = 66;
 const H = 48;
 const SCALE = 4;
-/** The needle's pivot, below the window as on the real thing. */
+/** The VU needle's pivot, below the window as on the real thing. */
 const PIVOT = { x: 33, y: 52 };
 /** Half the sweep, either side of upright. */
 const SWEEP_DEG = 42;
 const ARC_R = 36;
 const NEEDLE_R = 41;
+/** The peak scale's line, under the VU arc: the red peak dot rides it. */
+const PEAK_R = ARC_R - 4.5;
 
 /** Needle position (0..1) of a level in VU: 0 VU is 1/1.413 of the way, +3 VU the end stop. */
 const deflection = (vu) => Math.pow(10, vu / 20) / Math.SQRT2;
 const angleOf = (d) => (-SWEEP_DEG + 2 * SWEEP_DEG * Math.min(1, Math.max(0, d))) * (Math.PI / 180);
 const at = (r, a) => [PIVOT.x + r * Math.sin(a), PIVOT.y - r * Math.cos(a)];
+/** The peak dot's angle for a sample peak in dBFS: the same sweep, full scale at the stop. */
+const peakAngle = (dbfs) => angleOf(Math.pow(10, dbfs / 20));
 const f = (n) => n.toFixed(3);
 
 function arc(r, a0, a1) {
@@ -95,23 +100,30 @@ function face() {
       `<line x1="${f(x0)}" y1="${f(y0)}" x2="${f(x1)}" y2="${f(y1)}" stroke="${vu > 0 ? '#b01e14' : '#1b130c'}" stroke-width="0.4"/>`,
     );
   }
-  // The percentage scale under the arc, ticks only, 0..100 in tens.
-  parts.push(`<path d="${arc(ARC_R - 4.5, lo, zero)}" stroke="#3a2c20" stroke-width="0.35" fill="none"/>`);
-  for (let p = 0; p <= 100; p += 10) {
-    const a = angleOf((p / 100) * deflection(0));
-    const [x0, y0] = at(ARC_R - 4.5, a);
-    const [x1, y1] = at(ARC_R - (p % 50 === 0 ? 7 : 6), a);
+  // The peak scale under the arc, in red, for the red peak dot that rides its line: dBFS on
+  // the same sweep law with full scale at the end stop (ts/vuMeter.ts, vuPeakDeflection), so
+  // -3 dBFS sits under 0 VU, where the red zone starts. Ticks hang inside the line, so the dot
+  // never hides a number.
+  parts.push(`<path d="${arc(PEAK_R, peakAngle(-20), peakAngle(0))}" stroke="#b01e14" stroke-width="0.35" fill="none"/>`);
+  for (const db of [-20, -15, -10, -8, -6, -5, -4, -3, -2, -1, 0]) {
+    const labelled = [-20, -10, -6, -3, 0].includes(db);
+    const a = peakAngle(db);
+    const [x0, y0] = at(PEAK_R, a);
+    const [x1, y1] = at(PEAK_R - (labelled ? 2.4 : 1.5), a);
     parts.push(
-      `<line x1="${f(x0)}" y1="${f(y0)}" x2="${f(x1)}" y2="${f(y1)}" stroke="#3a2c20" stroke-width="0.35"/>`,
+      `<line x1="${f(x0)}" y1="${f(y0)}" x2="${f(x1)}" y2="${f(y1)}" stroke="#b01e14" stroke-width="${labelled ? 0.45 : 0.35}"/>`,
     );
+    if (labelled) {
+      const [tx, ty] = at(PEAK_R - 5.2, a);
+      parts.push(
+        `<text x="${f(tx)}" y="${f(ty + 1.1)}" font-size="3.1" fill="#b01e14" text-anchor="middle" transform="rotate(${f((a * 180) / Math.PI)} ${f(tx)} ${f(ty)})">${db === 0 ? '0' : String(-db)}</text>`,
+      );
+    }
   }
-  parts.push(
-    `<text x="${f(at(ARC_R - 10.5, angleOf(0.08))[0])}" y="${f(at(ARC_R - 10.5, angleOf(0.08))[1] + 1)}" font-size="3" fill="#3a2c20" text-anchor="middle">0</text>`,
-    `<text x="${f(at(ARC_R - 10.5, angleOf(deflection(0)))[0])}" y="${f(at(ARC_R - 10.5, angleOf(deflection(0)))[1] + 1)}" font-size="3" fill="#3a2c20" text-anchor="middle">100</text>`,
-  );
   // The legend, and the tiny "-" and "+" either end.
   parts.push(
     `<text x="${PIVOT.x}" y="36.5" font-size="8.6" font-weight="800" letter-spacing="0.2" fill="#1b130c" text-anchor="middle">VU</text>`,
+    `<text x="${PIVOT.x}" y="41.4" font-size="2.9" font-weight="700" letter-spacing="0.35" fill="#b01e14" text-anchor="middle">PEAK</text>`,
     `<text x="7.6" y="44.2" font-size="5.4" font-weight="700" fill="#1b130c" text-anchor="middle">−</text>`,
     `<text x="58.4" y="44.2" font-size="5.4" font-weight="700" fill="#b01e14" text-anchor="middle">+</text>`,
   );
