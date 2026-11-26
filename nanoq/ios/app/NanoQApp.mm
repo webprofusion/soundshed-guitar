@@ -52,6 +52,26 @@ UIColor* BackdropColour()
 {
     return [UIColor colorWithRed:0x11 / 255.0 green:0x11 / 255.0 blue:0x16 / 255.0 alpha:1.0];
 }
+
+// Posted by the editor's view once its first frame is on screen (nanoq/ios/elements_host/base_view.mm).
+NSString* const kFirstFrameNotification = @"NanoQFirstFramePresented";
+
+// The audio session and the plugin's activation take half a second of the main thread on an iPad
+// mini 2, which the first frame used to wait behind. They start kAudioAfterFirstFrame after it,
+// once the UI has taken in the engine's state (the first frame comes before most of it), or after
+// kAudioStartLimit if the first frame is slow to come (its shaders compiling, or no view: a launch
+// into the background), whichever is first.
+constexpr double kAudioAfterFirstFrame = 1.0;
+constexpr double kAudioStartLimit = 3.0;
+
+void StartAudioOnce()
+{
+    static bool started = false;
+    if (started || !gAudio)
+        return;
+    started = true;
+    gAudio->Start();
+}
 } // namespace
 
 // ── The view controller ──────────────────────────────────────────────────────────
@@ -62,6 +82,8 @@ UIColor* BackdropColour()
 @implementation NanoQViewController
 {
     UIView* mEditorParent;
+    UIActivityIndicatorView* mLoading;
+    id mFirstFrameObserver;
     bool mAttached;
 }
 
@@ -72,7 +94,52 @@ UIColor* BackdropColour()
     mEditorParent = [[UIView alloc] initWithFrame:root.bounds];
     mEditorParent.backgroundColor = BackdropColour();
     [root addSubview:mEditorParent];
+
+    // Over the editor until it has drawn: its first frame can take seconds when its shaders have
+    // to be compiled again, and an empty window looks like a hang.
+    UIActivityIndicatorViewStyle style;
+    if (@available(iOS 13.0, *))
+        style = UIActivityIndicatorViewStyleLarge;
+    else
+        style = UIActivityIndicatorViewStyleWhiteLarge;
+    mLoading = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:style];
+    mLoading.color = [UIColor colorWithWhite:0.75 alpha:1.0];
+    mLoading.hidesWhenStopped = YES;
+    mLoading.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin |
+                                UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    mLoading.center = CGPointMake(CGRectGetMidX(root.bounds), CGRectGetMidY(root.bounds));
+    [root addSubview:mLoading];
+    [mLoading startAnimating];
+
+    __weak NanoQViewController* weakSelf = self;
+    mFirstFrameObserver =
+        [[NSNotificationCenter defaultCenter] addObserverForName:kFirstFrameNotification
+                                                          object:nil
+                                                           queue:[NSOperationQueue mainQueue]
+                                                      usingBlock:^(NSNotification*) {
+                                                          [weakSelf firstFramePresented];
+                                                      }];
     self.view = root;
+}
+
+- (void)firstFramePresented
+{
+    [mLoading stopAnimating];
+    [mLoading removeFromSuperview];
+    mLoading = nil;
+    if (mFirstFrameObserver)
+        [[NSNotificationCenter defaultCenter] removeObserver:mFirstFrameObserver];
+    mFirstFrameObserver = nil;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(kAudioAfterFirstFrame * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                       StartAudioOnce();
+                   });
+}
+
+- (void)dealloc
+{
+    if (mFirstFrameObserver)
+        [[NSNotificationCenter defaultCenter] removeObserver:mFirstFrameObserver];
 }
 
 // The editor fills the safe area: clear of the status bar, the home indicator and a phone's
@@ -156,7 +223,14 @@ API_AVAILABLE(ios(13.0))
     {
         gHost->LoadState(StatePath().fileSystemRepresentation);
         gAudio = std::make_unique<nanoq::ios::AudioIO>(*gHost);
-        gAudio->Start();
+        // After the first frame (see StartAudioOnce); at once with no window to draw.
+        if (application.applicationState == UIApplicationStateBackground)
+            StartAudioOnce();
+        else
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(kAudioStartLimit * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                               StartAudioOnce();
+                           });
     }
 
     if (@available(iOS 13.0, *))

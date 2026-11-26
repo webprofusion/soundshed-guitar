@@ -43,6 +43,7 @@
 # include <SkCanvas.h>
 # include <SkColorSpace.h>
 # include <SkImage.h>
+# include <SkPixmap.h>
 # include <SkSurface.h>
 # include <ganesh/GrBackendSurface.h>
 # include <ganesh/GrDirectContext.h>
@@ -54,11 +55,13 @@
 # include <ganesh/GrContextOptions.h>
 # include <SkData.h>
 # include <SkMilestone.h>
+# include <algorithm>
 # include <cstdio>
 # include <memory>
 # include <string>
 # include <unordered_map>
 # include <unistd.h>
+# include "shader_warmup.h"
 #elif !defined(ARTIST_QUARTZ_2D)
 # error The UIKit host draws with Artist's Skia or Quartz 2D backend only
 #endif
@@ -79,6 +82,18 @@ namespace nanoq::ios
    void AppLog(NSString* format, ...) NS_FORMAT_FUNCTION(1, 2);
 }
 
+// Posted on the main thread once the view has put its first frame on screen:
+// the app covers the view until then and starts the audio after it
+// (nanoq/ios/app/NanoQApp.mm).
+static NSString* const k_first_frame_notification = @"NanoQFirstFramePresented";
+
+// The dark theme's bgPrimary (ThemeTokens.generated.h), as the launch screen
+// and the app's backdrop are: what shows before the first frame.
+static UIColor* backdrop_colour()
+{
+   return [UIColor colorWithRed : 0x11 / 255.0 green : 0x11 / 255.0 blue : 0x16 / 255.0 alpha : 1.0];
+}
+
 #if defined(ARTIST_SKIA)
 ///////////////////////////////////////////////////////////////////////////////
 // Skia's Metal pipelines, kept from one launch to the next.
@@ -87,13 +102,18 @@ namespace nanoq::ios
 // and has Metal compile it, through iOS's shader compiler service, on the main
 // thread in the middle of a redraw: on an iPad mini 2, 0.2 to 1.2 s a time.
 // Skia keeps each shader's Metal source here (its persistent cache), so a
-// later launch skips writing it, and precompiles what earlier launches met,
-// one a frame while there is nothing to draw (see on_tick), before a redraw
-// needs it; Metal's own cache of compiled shaders then serves the compile.
+// later launch skips writing it. At launch shader_warmup compiles what earlier
+// launches met on background threads, so Metal's own cache of compiled
+// shaders (in the app's Caches folder, which iOS may empty) serves the
+// compile; until it is done the window is drawn on the CPU (see render_cpu),
+// and then the pipelines are precompiled into Skia one a frame while there
+// is nothing to draw (see on_tick).
 //
-// One file in the app's Caches folder: a header naming the Skia milestone,
-// the GPU and the iOS version, any of which changing discards it, then each
-// pipeline's key and data, each with its length.
+// One file in Application Support, out of the backup: kept in Caches, it went
+// whenever Metal's did, and then there was nothing to compile ahead. A header
+// naming the Skia milestone, the GPU and the iOS version, any of which
+// changing discards it, then each pipeline's key and data, each with its
+// length.
 namespace
 {
    class shader_cache final : public GrContextOptions::PersistentCache
@@ -102,13 +122,23 @@ namespace
 
       explicit shader_cache(id<MTLDevice> device)
       {
-         NSString* caches = NSSearchPathForDirectoriesInDomains(
-            NSCachesDirectory, NSUserDomainMask, YES).firstObject;
-         _path = [caches stringByAppendingPathComponent : @"skia-shaders.bin"].UTF8String;
+         auto* files = [NSFileManager defaultManager];
+         NSURL* support = [files URLsForDirectory : NSApplicationSupportDirectory
+                                        inDomains : NSUserDomainMask].firstObject;
+         [files createDirectoryAtURL : support withIntermediateDirectories : YES attributes : nil error : nil];
+         NSURL* url = [support URLByAppendingPathComponent : @"skia-shaders.bin"];
+         // Where earlier builds kept it.
+         NSURL* old = [[files URLsForDirectory : NSCachesDirectory inDomains : NSUserDomainMask].firstObject
+            URLByAppendingPathComponent : @"skia-shaders.bin"];
+         if (![files fileExistsAtPath : url.path] && [files fileExistsAtPath : old.path])
+            [files moveItemAtURL : old toURL : url error : nil];
+         _path = url.fileSystemRepresentation;
          _header = "Soundshed Nano Q: Skia m" + std::to_string(SK_MILESTONE) + " shaders for "
             + device.name.UTF8String + " on iOS "
             + [UIDevice currentDevice].systemVersion.UTF8String + "\n";
          read();
+         // A cache, not a document: nothing to restore to another device.
+         [url setResourceValue : @YES forKey : NSURLIsExcludedFromBackupKey error : nil];
       }
 
       sk_sp<SkData> load(SkData const& key) override
@@ -123,6 +153,20 @@ namespace
          auto& entry = _entries[k];
          entry = SkData::MakeWithCopy(data.data(), data.size());
          append(k, *entry);
+      }
+
+      // The data of the pipelines earlier launches stored, in the order they
+      // were first met, for shader_warmup.
+      std::vector<std::string> earlier_data() const
+      {
+         std::vector<std::string> out;
+         out.reserve(_earlier.size());
+         for (auto const& k : _earlier)
+         {
+            auto const& d = _entries.at(k);
+            out.emplace_back(static_cast<char const*>(d->data()), d->size());
+         }
+         return out;
       }
 
       // The pipelines earlier launches stored, one at a time, to precompile.
@@ -382,6 +426,17 @@ namespace
    // Skia's pipelines kept between launches, and those of earlier launches
    // precompiled so far (see shader_cache and on_tick).
    std::unique_ptr<shader_cache>    _shaders;
+   // The same, compiled on background threads from launch. Until they are,
+   // the window is drawn on the CPU (see render_cpu) into _cpu_surface and
+   // shown in _cpu_layer, over the Metal layer: a frame on the GPU before
+   // then compiles each pipeline it meets here, on the main thread.
+   std::unique_ptr<nanoq::ios::shader_warmup> _warmup;
+   sk_sp<SkSurface>                 _cpu_surface;
+   CALayer*                         _cpu_layer;
+   double                           _cpu_last_present;
+   double                           _cpu_deadline;
+   int                              _cpu_frames;
+   double                           _cpu_ms;
    bool                             _precompiling;
    int                              _precompiled;
    int                              _precompile_failed;
@@ -390,6 +445,7 @@ namespace
    // The window as last drawn (see drawRect:).
    CGContextRef                     _backing;
 #endif
+   bool                             _presented;
 }
 
 - (void) on_tick;
@@ -455,6 +511,13 @@ namespace
    backend.fDevice.retain((__bridge GrMTLHandle) _device);
    backend.fQueue.retain((__bridge GrMTLHandle) _queue);
    _shaders = std::make_unique<shader_cache>(_device);
+   _warmup = std::make_unique<nanoq::ios::shader_warmup>(_device, _shaders->earlier_data());
+   _cpu_last_present = 0;
+   // Past this the GPU draws whatever the warm-up has not reached, compiling
+   // it as it goes (see warming).
+   _cpu_deadline = CACurrentMediaTime() + 60.0;
+   _cpu_frames = 0;
+   _cpu_ms = 0;
    _precompiling = _shaders->earlier() != 0;
    _precompiled = _precompile_failed = 0;
    _precompile_ms = 0;
@@ -476,7 +539,8 @@ namespace
    // drawRect: covers all of the area it is given, from its own bitmap.
    self.clearsContextBeforeDrawing = NO;
 #endif
-   self.backgroundColor = [UIColor blackColor];
+   _presented = false;
+   self.backgroundColor = backdrop_colour();
    self.multipleTouchEnabled = YES;
    self.clipsToBounds = YES;
 
@@ -513,6 +577,7 @@ namespace
    _view = nullptr;
 #if defined(ARTIST_SKIA)
    _surface.reset();
+   _cpu_surface.reset();
    if (_gr_context)
       _gr_context->releaseResourcesAndAbandonContext();
    _gr_context.reset();
@@ -526,11 +591,28 @@ namespace
    if (_view)
       _view->poll();
 #if defined(ARTIST_SKIA)
+   // The shaders are ready: the GPU takes over, with all of the window.
+   if (_cpu_surface && ![self warming])
+   {
+      _needs_render = true;
+      _pending_full = true;
+   }
    if (_needs_render)
       [self render];
-   else if (_precompiling && _surface)
+   // After the background warm-up, so each is a hit in Metal's cache rather
+   // than a compile on the main thread.
+   else if (_precompiling && _surface && (!_warmup || _warmup->finished()))
       [self precompile_one];
 #endif
+}
+
+// Once, after the first frame went to the screen.
+- (void) first_frame_presented
+{
+   if (_presented)
+      return;
+   _presented = true;
+   [[NSNotificationCenter defaultCenter] postNotificationName : k_first_frame_notification object : nil];
 }
 
 #if defined(ARTIST_SKIA)
@@ -642,9 +724,9 @@ namespace
 
 // Draws an area of the window into the surface that keeps it, clipped to it
 // (Elements draws only what meets the clip).
-- (void) draw_surface : (CGRect) area
+- (void) draw_surface : (SkSurface*) surface area : (CGRect) area
 {
-   SkCanvas* sk = _surface->getCanvas();
+   SkCanvas* sk = surface->getCanvas();
    sk->save();
    sk->scale(_scale, _scale);
    sk->clipRect(SkRect::MakeXYWH(area.origin.x, area.origin.y, area.size.width, area.size.height));
@@ -654,6 +736,107 @@ namespace
       _view->draw(cnv);
    }
    sk->restore();
+}
+
+// What was invalidated, into `surface`: the whole window, a few areas each
+// apart, or the union of many.
+- (void) draw_pending : (SkSurface*) surface
+{
+   auto rects = std::move(_pending_rects);
+   _pending_rects.clear();
+   if (_pending_full)
+   {
+      [self draw_surface : surface area : self.bounds];
+   }
+   else if (rects.size() > 8)
+   {
+      auto all = rects.front();
+      for (auto const& r : rects)
+         all = CGRectUnion(all, r);
+      [self draw_surface : surface area : all];
+   }
+   else
+   {
+      for (auto const& r : rects)
+         [self draw_surface : surface area : r];
+   }
+   _pending_full = false;
+}
+
+// Whether the window is still drawn on the CPU: the warm-up is not done and
+// still getting somewhere. The GPU taking over early compiles what is left on
+// the main thread, seconds of a frozen window (3.3 s, 20 s into a cold
+// launch on an iPad mini 2), where the CPU's frames are only slow; but a
+// compile that hangs, or a warm-up that never ends, must not keep them.
+- (bool) warming
+{
+   return _warmup && !_warmup->finished() && _warmup->idle_seconds() < 5.0 &&
+      CACurrentMediaTime() < _cpu_deadline;
+}
+
+// While the shaders warm up: Skia draws on the CPU, no pipeline to compile,
+// and the window goes to a layer over the Metal one as an image. A copy of
+// the whole window a frame, and the warm-up, the audio and this share an
+// iPad mini 2's two cores, so six or seven frames a second at most: what
+// comes in between waits for the next.
+- (void) render_cpu
+{
+   auto const now = CACurrentMediaTime();
+   if (_cpu_surface && now - _cpu_last_present < 0.15)
+   {
+      _needs_render = true;
+      return;
+   }
+   auto const size = self.bounds.size;
+   int const w = int(std::ceil(size.width * _scale));
+   int const h = int(std::ceil(size.height * _scale));
+   if (w <= 0 || h <= 0)
+      return;
+   if (!_cpu_surface || _cpu_surface->width() != w || _cpu_surface->height() != h)
+   {
+      _cpu_surface = SkSurfaces::Raster(SkImageInfo::Make(w, h, kBGRA_8888_SkColorType, kPremul_SkAlphaType));
+      _pending_full = true;
+      if (!_cpu_surface)
+         return;
+   }
+
+   [self draw_pending : _cpu_surface.get()];
+
+   SkPixmap pixels;
+   if (!_cpu_surface->peekPixels(&pixels))
+      return;
+   auto data = CFDataCreate(nullptr, static_cast<UInt8 const*>(pixels.addr()), CFIndex(pixels.computeByteSize()));
+   auto provider = CGDataProviderCreateWithCFData(data);
+   auto space = CGColorSpaceCreateDeviceRGB();
+   auto image = CGImageCreate(size_t(w), size_t(h), 8, 32, pixels.rowBytes(), space,
+      uint32_t(kCGBitmapByteOrder32Little) | uint32_t(kCGImageAlphaPremultipliedFirst),
+      provider, nullptr, false, kCGRenderingIntentDefault);
+   CGColorSpaceRelease(space);
+   CGDataProviderRelease(provider);
+   CFRelease(data);
+   if (!image)
+      return;
+
+   [CATransaction begin];
+   [CATransaction setDisableActions : YES];
+   if (!_cpu_layer)
+   {
+      _cpu_layer = [CALayer layer];
+      _cpu_layer.opaque = YES;
+      [self.layer addSublayer : _cpu_layer];
+   }
+   _cpu_layer.contentsScale = _scale;
+   _cpu_layer.frame = self.bounds;
+   _cpu_layer.contents = (__bridge id) image;
+   [CATransaction commit];
+   CGImageRelease(image);
+
+   auto const done = CACurrentMediaTime();
+   _cpu_last_present = done;
+   ++_cpu_frames;
+   _cpu_ms += (done - now) * 1000;
+   if (!_presented)
+      [self first_frame_presented];
 }
 
 // Once a frame (from on_tick), when something was invalidated: the areas
@@ -673,6 +856,20 @@ namespace
    {
       _needs_render = true;
       return;
+   }
+
+   if ([self warming])
+   {
+      [self render_cpu];
+      return;
+   }
+   // The first frame on the GPU since the CPU's: all of the window, and the
+   // CPU's layer comes down after it (below).
+   bool const switched = _cpu_surface != nullptr;
+   if (switched)
+   {
+      _cpu_surface.reset();
+      _pending_full = true;
    }
 
    auto layer = (CAMetalLayer*) self.layer;
@@ -695,27 +892,9 @@ namespace
          return;
    }
 
-   auto rects = std::move(_pending_rects);
-   _pending_rects.clear();
-   auto const full = _pending_full || rects.size() > 8;
+   auto const full = _pending_full || _pending_rects.size() > 8;
    auto const t0 = CACurrentMediaTime();
-   if (_pending_full)
-   {
-      [self draw_surface : self.bounds];
-   }
-   else if (rects.size() > 8)
-   {
-      auto all = rects.front();
-      for (auto const& r : rects)
-         all = CGRectUnion(all, r);
-      [self draw_surface : all];
-   }
-   else
-   {
-      for (auto const& r : rects)
-         [self draw_surface : r];
-   }
-   _pending_full = false;
+   [self draw_pending : _surface.get()];
    auto const t1 = CACurrentMediaTime();
 
    id<CAMetalDrawable> drawable = [layer nextDrawable];
@@ -739,6 +918,30 @@ namespace
    }
    id<MTLCommandBuffer> present = [_queue commandBuffer];
    [present presentDrawable : drawable];
+   if (_cpu_layer)
+   {
+      // The CPU's frame comes down once the GPU's is drawn, a little later
+      // than that, so the window never shows the layer under it empty.
+      __weak ElementsView* weak_self = self;
+      [present addCompletedHandler : ^(id<MTLCommandBuffer>) {
+         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(0.05 * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+               ElementsView* strong_self = weak_self;
+               if (strong_self && !strong_self->_cpu_surface)
+               {
+                  [strong_self->_cpu_layer removeFromSuperlayer];
+                  strong_self->_cpu_layer = nil;
+               }
+            });
+      }];
+   }
+   if (switched)
+   {
+      nanoq::ios::AppLog(
+         @"Skia: on the GPU after %d frames on the CPU (%.0f ms drawing them); %zu shaders %s in %.0f ms (%d failed)",
+         _cpu_frames, _cpu_ms, _warmup->size(), _warmup->finished() ? "warmed" : "not all warmed",
+         _warmup->elapsed_ms(), _warmup->failed());
+   }
    [present commit];
 
    // A redraw that held the main thread for long, to the log: there is no
@@ -746,6 +949,8 @@ namespace
    // submitting is Skia sending it to Metal, where building a pipeline for
    // the first time shows (see shader_cache).
    auto const t2 = CACurrentMediaTime();
+   if (!_presented)
+      [self first_frame_presented];
    if (t2 - t0 > 0.1)
    {
       nanoq::ios::AppLog(@"Slow redraw (%s): recording %.0f ms, submitting %.0f ms",
@@ -811,6 +1016,12 @@ namespace
 {
    if (!_view)
       return;
+   // On screen when this transaction commits.
+   if (!_presented)
+   {
+      __weak ElementsView* weak_self = self;
+      dispatch_async(dispatch_get_main_queue(), ^{ [weak_self first_frame_presented]; });
+   }
    auto context = UIGraphicsGetCurrentContext();
    auto rects = std::move(_pending_rects);
    _pending_rects.clear();

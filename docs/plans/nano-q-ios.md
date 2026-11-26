@@ -235,14 +235,41 @@ has Metal build a pipeline for it, through iOS's shader compiler service (`GrCom
 and `newRenderPipelineStateWithDescriptor`, over XPC), on the main thread in the middle of a
 redraw: 0.2-1.2 s on the iPad mini 2, every launch. The host now gives Skia a persistent cache
 (`shader_cache` in `base_view.mm`): each pipeline's Metal source goes to
-`Library/Caches/skia-shaders.bin`, and a later launch precompiles them
-(`GrDirectContext::precompileShader`), one a frame while there is nothing to draw, from the first
-draw on. Metal's own cache of compiled shaders serves those compiles. The file names the Skia
+`skia-shaders.bin` (in Application Support, see below), and a later launch precompiles them
+(`GrDirectContext::precompileShader`), one a frame while there is nothing to draw, once the
+background warm-up is done. Metal's own cache of compiled shaders serves those compiles. The file names the Skia
 milestone, the GPU and the iOS version, and is started afresh when any of them changes.
 **Measured** (2026-11-20): a launch with all 89 of its pipelines cached precompiled them in 54 ms,
 and from then on no redraw spent more than 15 ms submitting; without the cache the same screens
 stalled 0.2-1.0 s each the first time. What remains: the first redraw or two of a launch, before
 the precompile (75-175 ms submitting), and a combination never met on that device before.
+
+**Cold start with Metal's cache gone** (2026-11-26). Metal keeps what it compiled in the app's
+`Library/Caches`, which iOS empties when it likes, and the Skia file was kept there too. With
+Metal's cache empty the first full frame needs about 200 pipelines, and Metal on the A7 compiles
+roughly ten a second with the amp running however many threads ask: the window stayed black for
+7-12 s (the first "Slow redraw", 7.7 and 11.6 s submitting), then compiled the rest on the main
+thread for another 25 s of stalls. Now:
+
+- `skia-shaders.bin` lives in Application Support, out of the backup (moved from Caches on first
+  run), so the list of pipelines survives Metal's cache going.
+- `shader_warmup` (`nanoq/ios/elements_host/shader_warmup.mm`) compiles every stored pipeline,
+  libraries and render pipeline state, on a thread a core from the moment the view is made, with
+  Skia's compile options, so Metal's cache answers Skia when the GPU draws. It reads Skia m148's
+  cache format itself (`GrPersistentCacheUtils::PackCachedShaders` and the Metal pipeline data);
+  an entry that does not parse is skipped.
+- Until it is done the view draws with Skia on the CPU (`render_cpu`), at most six or seven frames
+  a second, into a layer over the Metal one. The GPU takes over when the warm-up finishes, stalls
+  for 5 s, or after 60 s. A warm launch finishes the warm-up in about 200 ms, before or just after
+  the first frame.
+- The view shows the backdrop colour, with a spinner over it from the app, until the first frame;
+  audio starts 1 s after it (or 3 s after launch), since its session setup took 0.55 s of the main
+  thread ahead of the UI's first update.
+
+**Measured** on the iPad mini 2: first frame 1.5 s after launch with Metal's cache wiped (was
+10-12 s), 1.0 s warm (was 2.0-2.6 s); the cold warm-up of 235 pipelines takes more than 23 s with
+the audio running. Before the stall rule, a GPU switch forced at 20 s froze the window for 3.3 s
+compiling what was left.
 Redraws that hold the main thread over 100 ms are logged to `nanoq.log` ("Slow redraw"), split
 into recording and submitting. The longest left are recording, 200-400 ms, the first time a
 screen is shown. In the profile, a quarter of those was decoding the theme's backdrops (2400-pixel

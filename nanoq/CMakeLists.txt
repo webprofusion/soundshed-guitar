@@ -397,7 +397,8 @@ endif()
 if(NANOQ_IOS)
     set_property(GLOBAL PROPERTY Q_PLUG_ELEMENTS_HOST_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/ios/elements_host/base_view.mm"
-        "${CMAKE_CURRENT_SOURCE_DIR}/ios/elements_host/key.mm")
+        "${CMAKE_CURRENT_SOURCE_DIR}/ios/elements_host/key.mm"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ios/elements_host/shader_warmup.mm")
 endif()
 # Android: Elements has no host for it at all; Nano Q's (nanoq/android/elements_host) draws on
 # OpenGL ES through EGL into the activity's Surface.
