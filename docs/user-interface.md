@@ -668,7 +668,8 @@ which controls development/authoring tools.
 **Native UI (Nano)** (`ui.nativeEditor`, `core/ui/ts/settings/nativeEditor.ts`) is an
 experimental switch under its own Native UI card in User Interface → Interface, shown only when `environment.nativeEditor`
 is true: the host can build either editor (`IPluginHost::SupportsNativeEditor`; every desktop
-build, where `SOUNDSHED_NANOQ_UI` is on by default, and never iOS or Android). On, the JUCE app draws itself with Nano Q's
+build on Windows, macOS and Linux, where `SOUNDSHED_NANOQ_UI` is on by default, and never the
+JUCE iOS or Android builds, which are not shipped: mobile ships Nano Q's own apps). On, the JUCE app draws itself with Nano Q's
 native UI (`juce/source/NanoQUiEditor.*`, see [plans/nano-q-ui-in-juce.md](plans/nano-q-ui-in-juce.md))
 instead of the WebView. It is an ordinary `setSetting`; the JUCE adapter also passes the change to
 the standalone window, which swaps its editor in place with no relaunch (`MainWindow::switchEditorIfChosen`

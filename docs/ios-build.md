@@ -6,6 +6,10 @@ DSP engine and the same web UI in a `WKWebView`. One universal app covers iPhone
 and iPad. (Soundshed Nano Q, the native UI, has its own iOS build:
 [plans/nano-q-ios.md](plans/nano-q-ios.md).)
 
+**Not shipped.** iOS and iPadOS ship Soundshed Nano Q only, the native UI's own app. This JUCE
+build is kept for development and comparison. It has no Native UI (Nano) switch: the desktop
+builds' `SOUNDSHED_NANOQ_UI` is off on mobile.
+
 There is no separate project to keep in step: `juce/CMakeLists.txt` builds for
 iOS when configured with `-DCMAKE_SYSTEM_NAME=iOS` and the Xcode generator, and
 `ios/build.sh` wraps that.

@@ -6,10 +6,12 @@ Settings → User Interface → Interface → Native UI (Nano) (`ui.nativeEditor
 standalone swaps its editor in place, and a plugin's next window follows the setting
 ([user-interface.md](../user-interface.md#settings--features)); the native UI's footer has a
 **Standard UI** button back. Since 2026-11-20 it is on by default for every desktop build
-(Windows on any architecture, macOS, Linux), so the native UI is always there to switch to; iOS
-and Android stay on the WebView. The installer ships the fonts beside each binary, where Elements
+(Windows on any architecture, macOS, Linux), so the native UI is always there to switch to. The
+JUCE iOS and Android builds stay on the WebView and are not shipped: mobile ships Nano Q's own
+apps. The installer ships the fonts beside each binary, where Elements
 looks for them. An existing build tree keeps the value it cached; pass `-DSOUNDSHED_NANOQ_UI=ON`
-once to turn it on there. Only Windows x64 has been built and run; see "Other platforms".
+once to turn it on there (`build_macos.sh` and `build_linux.sh` pass it). Windows x64 and macOS
+(universal) have been built and run; see "Other platforms".
 
 ## The question
 
@@ -76,8 +78,13 @@ does (its `q_plug/src/<platform>/host_view`):
   enabled, libcurl is opt-in). So the JUCE editor hands it one built on `juce::URL` on macOS and
   Linux (`UiLink::MakeHttpTransport`, `JuceHttpTransport`).
 
-Not built or run yet: macOS, Linux and Windows ARM64/ARM64EC. Expect the first macOS and Linux CI
-runs to need fixes.
+**macOS, 2026-11-26**: the universal (arm64 + x86_64) standalone builds and runs. Artist's CMake
+accepted only one macOS architecture, so `patches/elements-artist-macos-universal.patch` lets it
+take the list. Run on a throwaway profile with `--native-ui`: the native UI draws in the window
+(checked with a `SOUNDSHED_NANOQ_DRIVE` offscreen shot), and its Standard UI button swaps to the
+WebView editor without a crash. Not tried: the VST3/AU/CLAP in a DAW.
+
+Not built or run yet: Linux and Windows ARM64/ARM64EC. Expect the first Linux CI run to need fixes.
 
 ## Build
 

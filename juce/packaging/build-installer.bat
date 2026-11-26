@@ -61,7 +61,12 @@ if not exist "%GUITARFX_WINDOWS_BUILD_DIR%\ui-stage\index.html" (
 :: signs the binary with a code-signing certificate, so a valid Authenticode
 :: signature is the check here (it cannot tell a PACE wrap from a plain
 :: signtool signature). build_windows.bat documents the GUITARFX_*_AAX settings.
+::
+:: AAX is disabled unless GUITARFX_ENABLE_AAX=1: a stale AAX left in the
+:: artefacts folder by an earlier build is never packaged otherwise.
 set "GUITARFX_INCLUDE_AAX=0"
+set "AAX_STATUS=disabled (set GUITARFX_ENABLE_AAX=1 to package it)"
+if not "%GUITARFX_ENABLE_AAX%"=="1" goto :aax_decided
 set "AAX_STATUS=not built for this architecture"
 set "TARGET_ARCH=%GUITARFX_WINDOWS_ARCH%"
 if not defined TARGET_ARCH set "TARGET_ARCH=x64"

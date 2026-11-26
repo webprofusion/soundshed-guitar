@@ -43,10 +43,19 @@ endif()
 # format as its own shared library, so the standalone app is the only format
 # worth building there. iOS could take an AUv3 as well, but the standalone app is
 # the port; an AUv3 is a separate piece of work (docs/ios-build.md).
+#
+# AAX is off by default in every build and installer. Turn it back on with
+# -DGUITARFX_ENABLE_AAX=ON (build_macos.sh and build_windows.bat pass this when
+# GUITARFX_ENABLE_AAX=1 is set in the environment).
+option(GUITARFX_ENABLE_AAX "Build the AAX (Pro Tools) plugin target" OFF)
+
 if(SSG_MOBILE)
     set(FORMATS Standalone)
 else()
-    set(FORMATS Standalone AU AAX VST3)
+    set(FORMATS Standalone AU VST3)
+    if(GUITARFX_ENABLE_AAX)
+        list(APPEND FORMATS AAX)
+    endif()
 endif()
 option(GUITARFX_ENABLE_LV2 "Build the LV2 plugin target on Linux" OFF)
 
@@ -567,8 +576,9 @@ target_link_libraries(SharedCode
 target_link_libraries("${PROJECT_NAME}" PRIVATE SharedCode)
 
 # Experimental: Nano Q's native UI as a second editor beside the WebView (cmake/NanoQUi.cmake),
-# picked in Settings (PluginProcessorAdapter::wantsNativeEditor). On for every desktop build, so
-# it is always there to switch to; iOS and Android stay on the WebView.
+# picked in Settings (PluginProcessorAdapter::wantsNativeEditor). On for every desktop build
+# (Windows, macOS, Linux), so it is always there to switch to. The JUCE iOS and Android builds
+# stay on the WebView and are not shipped: mobile ships Nano Q's own apps (nanoq/ios, nanoq/android).
 set(_soundshed_nanoq_ui_default ON)
 if(SSG_MOBILE)
     set(_soundshed_nanoq_ui_default OFF)

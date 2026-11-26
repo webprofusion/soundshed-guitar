@@ -9,6 +9,12 @@
 #   --pkg           After staging, assemble a distributable macOS installer .pkg (default)
 #   --no-pkg        Skip macOS installer .pkg assembly
 #   --dist-dir <p>  Override the output staging directory (default: macos-dist)
+#
+# AAX (Pro Tools) is off: it is neither built nor packaged unless
+# GUITARFX_ENABLE_AAX=1 is set in the environment.
+#
+# The native (Nano Q) UI is always built in (SOUNDSHED_NANOQ_UI=ON, passed so an older
+# build tree that cached it OFF turns it on): Settings > User Interface switches to it.
 
 # For macOS signing, using xcode > to get Developer ID Application cert, Developer ID INstaller cert
 #   https://github.com/sudara/basic-macos-keychain-action/tree/v1/
@@ -33,6 +39,8 @@ SKIP_BUILD=false
 UNIVERSAL=true
 BUILD_PKG=true
 DIST_DIR="${SCRIPT_DIR}/macos-dist"
+ENABLE_AAX=false
+if [[ "${GUITARFX_ENABLE_AAX:-0}" == "1" ]]; then ENABLE_AAX=true; fi
 
 normalize_arch() {
     case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
@@ -91,6 +99,7 @@ echo "  Soundshed Guitar — macOS Distribution Build"
 echo "  Dist dir: ${DIST_DIR}"
 [[ "$UNIVERSAL" == true ]] && echo "  Architecture: universal (arm64 + x86_64)" || echo "  Architecture: native host (${HOST_ARCH})"
 [[ "$BUILD_PKG"  == true ]] && echo "  Installer .pkg: yes"
+[[ "$ENABLE_AAX" == true ]] && echo "  AAX: yes" || echo "  AAX: no (set GUITARFX_ENABLE_AAX=1 to build it)"
 echo "═══════════════════════════════════════════════════"
 
 # ── Step 1: TypeScript / UI bundle ────────────────────────────────────────────
@@ -121,7 +130,9 @@ if [[ "$SKIP_BUILD" == false ]]; then
     cmake -B "$JUCE_BUILDS" -S "${SCRIPT_DIR}/juce" \
         "${generator_args[@]}" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_OSX_ARCHITECTURES="${TARGET_ARCHITECTURES}"
+        -DCMAKE_OSX_ARCHITECTURES="${TARGET_ARCHITECTURES}" \
+        -DGUITARFX_ENABLE_AAX="$([[ "$ENABLE_AAX" == true ]] && echo ON || echo OFF)" \
+        -DSOUNDSHED_NANOQ_UI=ON
     echo "  ✓ Configured"
 
     if [[ "$UNIVERSAL" == true ]]; then
@@ -145,9 +156,11 @@ if [[ "$SKIP_BUILD" == false ]]; then
     echo "▶ Building CLAP…"
     cmake --build "$JUCE_BUILDS" --config Release --target SoundshedGuitar_CLAP --parallel
 
-    echo ""
-    echo "▶ Building AAX…"
-    cmake --build "$JUCE_BUILDS" --config Release --target SoundshedGuitar_AAX --parallel
+    if [[ "$ENABLE_AAX" == true ]]; then
+        echo ""
+        echo "▶ Building AAX…"
+        cmake --build "$JUCE_BUILDS" --config Release --target SoundshedGuitar_AAX --parallel
+    fi
 
     echo ""
     echo "  ✓ All targets built"
@@ -164,7 +177,7 @@ mkdir -p "$APP_DST"
 mkdir -p "$VST3_DST"
 mkdir -p "$AU_DST"
 mkdir -p "$CLAP_DST"
-mkdir -p "$AAX_DST"
+if [[ "$ENABLE_AAX" == true ]]; then mkdir -p "$AAX_DST"; fi
 
 # Copy each artifact (use -R to handle .app / .vst3 / .component bundles)
 SRC_APP="${ARTEFACTS}/Standalone/${PRODUCT}.app"
@@ -188,7 +201,9 @@ copy_artifact "$SRC_APP"  "$APP_DST"
 copy_artifact "$SRC_VST3" "$VST3_DST"
 copy_artifact "$SRC_AU"   "$AU_DST"
 copy_artifact "$SRC_CLAP" "$CLAP_DST"
-copy_artifact "$SRC_AAX"  "$AAX_DST"
+# A stale AAX from an earlier build may still sit in the artefacts folder;
+# it is only staged when AAX is enabled.
+if [[ "$ENABLE_AAX" == true ]]; then copy_artifact "$SRC_AAX" "$AAX_DST"; fi
 
 strip_ui_node_modules() {
     local root_dir="$1"
@@ -288,8 +303,8 @@ if [[ "$BUILD_PKG" == true ]]; then
     mkdir -p "${ROOT_VST3}/Library/Audio/Plug-Ins/VST3"
     mkdir -p "${ROOT_AU}/Library/Audio/Plug-Ins/Components"
     mkdir -p "${ROOT_CLAP}/Library/Audio/Plug-Ins/CLAP"
-    mkdir -p "${ROOT_AAX}/Library/Application Support/Avid/Audio/Plug-Ins"
-    
+    if [[ "$ENABLE_AAX" == true ]]; then mkdir -p "${ROOT_AAX}/Library/Application Support/Avid/Audio/Plug-Ins"; fi
+
 
     # Copy a pre-signed bundle into a pkg root without mutating its contents.
     # Any modification after signing invalidates notarization.
@@ -308,7 +323,9 @@ if [[ "$BUILD_PKG" == true ]]; then
     stage_bundle "${VST3_DST}/${PRODUCT}.vst3"    "${ROOT_VST3}/Library/Audio/Plug-Ins/VST3"
     stage_bundle "${AU_DST}/${PRODUCT}.component" "${ROOT_AU}/Library/Audio/Plug-Ins/Components"
     stage_bundle "${CLAP_DST}/${PRODUCT}.clap"    "${ROOT_CLAP}/Library/Audio/Plug-Ins/CLAP"
-    stage_bundle "${AAX_DST}/${PRODUCT}.aaxplugin" "${ROOT_AAX}/Library/Application Support/Avid/Audio/Plug-Ins"
+    if [[ "$ENABLE_AAX" == true ]]; then
+        stage_bundle "${AAX_DST}/${PRODUCT}.aaxplugin" "${ROOT_AAX}/Library/Application Support/Avid/Audio/Plug-Ins"
+    fi
 
     # ── Component packages ────────────────────────────────────────────────────
     echo ""
@@ -358,13 +375,25 @@ if [[ "$BUILD_PKG" == true ]]; then
         "${COMPONENTS_DIR}/clap.pkg"
     echo "  ✓ clap.pkg"
 
-    pkgbuild \
-        --root "$ROOT_AAX" \
-        --identifier "com.soundshed.guitar.aax" \
-        --version "$VERSION" \
-        --install-location "/" \
-        "${COMPONENTS_DIR}/aax.pkg"
-    echo "  ✓ aax.pkg"
+    AAX_OUTLINE=""
+    AAX_CHOICE=""
+    AAX_PKG_REF=""
+    if [[ "$ENABLE_AAX" == true ]]; then
+        pkgbuild \
+            --root "$ROOT_AAX" \
+            --identifier "com.soundshed.guitar.aax" \
+            --version "$VERSION" \
+            --install-location "/" \
+            "${COMPONENTS_DIR}/aax.pkg"
+        echo "  ✓ aax.pkg"
+        AAX_OUTLINE='<line choice="choice-aax"/>'
+        AAX_CHOICE='<choice id="choice-aax" title="AAX Plugin"
+            description="AAX plugin for Avid Pro Tools."
+            start_selected="true">
+        <pkg-ref id="com.soundshed.guitar.aax"/>
+    </choice>'
+        AAX_PKG_REF='<pkg-ref id="com.soundshed.guitar.aax">#aax.pkg</pkg-ref>'
+    fi
 
     # ── Distribution XML ──────────────────────────────────────────────────────
     DIST_XML="${PKG_STAGING}/distribution.xml"
@@ -381,7 +410,7 @@ if [[ "$BUILD_PKG" == true ]]; then
         <line choice="choice-vst3"/>
         <line choice="choice-au"/>
         <line choice="choice-clap"/>
-        <line choice="choice-aax"/>
+        ${AAX_OUTLINE}
     </choices-outline>
 
     <!-- Optional formats: user can deselect any of these. Use start_selected,
@@ -408,17 +437,13 @@ if [[ "$BUILD_PKG" == true ]]; then
             start_selected="true">
         <pkg-ref id="com.soundshed.guitar.clap"/>
     </choice>
-    <choice id="choice-aax" title="AAX Plugin"
-            description="AAX plugin for Avid Pro Tools."
-            start_selected="true">
-        <pkg-ref id="com.soundshed.guitar.aax"/>
-    </choice>
+    ${AAX_CHOICE}
 
     <pkg-ref id="com.soundshed.guitar.standalone">#standalone.pkg</pkg-ref>
     <pkg-ref id="com.soundshed.guitar.vst3">#vst3.pkg</pkg-ref>
     <pkg-ref id="com.soundshed.guitar.au">#au.pkg</pkg-ref>
     <pkg-ref id="com.soundshed.guitar.clap">#clap.pkg</pkg-ref>
-    <pkg-ref id="com.soundshed.guitar.aax">#aax.pkg</pkg-ref>
+    ${AAX_PKG_REF}
 </installer-gui-script>
 DISTXML
 

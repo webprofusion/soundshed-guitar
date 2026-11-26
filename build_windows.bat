@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 :: ---------------------------------------------------------------------------
-:: Full release build: JUCE Standalone + VST3 + CLAP (+ AAX on x64), then installer
+:: Full release build: JUCE Standalone + VST3 + CLAP, then installer
 :: Run from the workspace root.
 :: Usage: build_windows.bat [x86|x64|arm64] [--simd=avx2|avx|sse2] [--refresh-deps]
 ::   --simd=avx2  (default) /arch:AVX2 - Intel Haswell 2013+, AMD Excavator 2015+
@@ -16,6 +16,9 @@ setlocal EnableExtensions EnableDelayedExpansion
 :: directory with the Standalone, and ARM64EC in juce\builds-arm64ec. An ARM64EC
 :: host (REAPER's Windows ARM build is one) cannot load a native ARM64 plugin,
 :: nor a native ARM64 host an ARM64EC one, so the installer ships both.
+::
+:: AAX (Pro Tools) is disabled: it is neither built nor packaged unless
+:: GUITARFX_ENABLE_AAX=1 is set. When enabled, the notes below apply.
 ::
 :: AAX (Pro Tools) is built on x64 only: JUCE creates no AAX target for Win32 or
 :: ARM64, and Pro Tools on Windows is x64 only. Retail Pro Tools loads it only
@@ -33,6 +36,8 @@ set "INSTALLER_SCRIPT=%WORKSPACE_ROOT%juce\packaging\build-installer.bat"
 set "UI_DIR=%WORKSPACE_ROOT%core\ui"
 set "CORE_SIMD_LEVEL=avx2"
 set "REFRESH_DEPS="
+set "AAX_CMAKE_FLAG=-DGUITARFX_ENABLE_AAX=OFF"
+if "%GUITARFX_ENABLE_AAX%"=="1" set "AAX_CMAKE_FLAG=-DGUITARFX_ENABLE_AAX=ON"
 
 :parse_args
 if "%~1"=="" goto :args_done
@@ -139,7 +144,7 @@ echo       Architecture: %ARCH_LABEL% ^(CMake platform: %ARCH%^)
 echo       SIMD baseline: %CORE_SIMD_LEVEL%
 :: GUITARFX_CORE_ENABLE_AVX2 is passed ON so a build tree last configured by the old
 :: --no-avx2 (which cached it OFF) cannot force this level down to sse2.
-cmake -G "%CMAKE_GENERATOR%" -A "%ARCH%" -S juce -B "%JUCE_BUILDS%" -DGUITARFX_CORE_SIMD_LEVEL=%CORE_SIMD_LEVEL% -DGUITARFX_CORE_ENABLE_AVX2=ON
+cmake -G "%CMAKE_GENERATOR%" -A "%ARCH%" -S juce -B "%JUCE_BUILDS%" -DGUITARFX_CORE_SIMD_LEVEL=%CORE_SIMD_LEVEL% -DGUITARFX_CORE_ENABLE_AVX2=ON %AAX_CMAKE_FLAG%
 if !ERRORLEVEL! neq 0 (
     echo ERROR: CMake configure failed.
     goto :fail
@@ -179,7 +184,7 @@ echo.
 :: --- Build desktop formats --------------------------------------------------
 set "DESKTOP_TARGETS=SoundshedGuitar_Standalone SoundshedGuitar_VST3 SoundshedGuitar_CLAP"
 set "DESKTOP_FORMATS=Standalone, VST3 and CLAP"
-if /I "%ARCH%"=="x64" (
+if /I "%ARCH%"=="x64" if "%GUITARFX_ENABLE_AAX%"=="1" (
     set "DESKTOP_TARGETS=!DESKTOP_TARGETS! SoundshedGuitar_AAX"
     set "DESKTOP_FORMATS=Standalone, VST3, CLAP and AAX"
 )
@@ -193,6 +198,7 @@ echo Desktop format builds succeeded.
 echo.
 
 :: --- Sign the AAX (x64, when a signing script is set) -----------------------
+if not "%GUITARFX_ENABLE_AAX%"=="1" goto :aax_sign_done
 if /I not "%ARCH%"=="x64" goto :aax_sign_done
 if not defined GUITARFX_AAX_SIGN_SCRIPT goto :aax_sign_done
 
@@ -217,7 +223,7 @@ echo.
 if /I not "%ARCH%"=="ARM64" goto :arm64ec_done
 
 echo [3/4] Configuring and building the ARM64EC plugins (Release)...
-cmake -G "%CMAKE_GENERATOR%" -A ARM64EC -S juce -B "%JUCE_BUILDS_ARM64EC%"
+cmake -G "%CMAKE_GENERATOR%" -A ARM64EC -S juce -B "%JUCE_BUILDS_ARM64EC%" %AAX_CMAKE_FLAG%
 if !ERRORLEVEL! neq 0 (
     echo ERROR: ARM64EC CMake configure failed.
     goto :fail

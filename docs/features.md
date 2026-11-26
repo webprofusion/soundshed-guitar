@@ -602,7 +602,7 @@ Engine is authoritative. If a `state` broadcast contains a different value than 
 |--------|-----------|-------|
 | VST3 | Windows, macOS | Full automation, host preset management, latency reporting |
 | Audio Unit (AU v2 + v3) | macOS | CoreAudio integration |
-| AAX | Windows, macOS | Pro Tools; requires PACE signing |
+| AAX | Windows, macOS | Disabled by default (`GUITARFX_ENABLE_AAX=1` to build); Pro Tools; requires PACE signing |
 | Standalone App | Windows, macOS | WASAPI/ASIO (Windows), CoreAudio (macOS) |
 
 ### IPluginHost Interface

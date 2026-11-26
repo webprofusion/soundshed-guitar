@@ -1,6 +1,6 @@
 # Soundshed Guitar
 
-Soundshed Guitar is a guitar/bass effects app and plugin combining Neural Amp Modeler (NAM) with a modern UI. It targets VST3, AU, CLAP and AAX formats with an extensible signal graph architecture.
+Soundshed Guitar is a guitar/bass effects app and plugin combining Neural Amp Modeler (NAM) with a modern UI. It targets VST3, AU and CLAP formats (AAX is disabled by default; see below) with an extensible signal graph architecture.
 
 Downloads: https://guitar.soundshed.com
 
@@ -68,7 +68,7 @@ For minimal context with high coverage, load these files:
 |--------|-------------|
 | VST3 | Set `VST3_SDK_ROOT` environment variable |
 | AU | macOS with Xcode command-line tools |
-| AAX | Set `AAX_SDK_ROOT` (requires Avid SDK access) |
+| AAX | Disabled by default. Enable with `GUITARFX_ENABLE_AAX=1` (build scripts) or `-DGUITARFX_ENABLE_AAX=ON` (CMake); requires Avid SDK access |
 
 ## Branding
 
@@ -78,8 +78,12 @@ Edit `core/config/GuitarFXConfig.h` to customize plugin name and manufacturer. R
 
 - **UI source**: `core/ui/ts/` (TypeScript)
 - **Build UI**: `cd core/ui && npm run build`
-- **Android**: see [docs/android-build.md](docs/android-build.md)
-- **iOS and iPadOS**: see [docs/ios-build.md](docs/ios-build.md)
+- **Mobile**: iOS, iPadOS and Android ship Soundshed Nano Q, the native UI only
+  ([docs/plans/nano-q-ios.md](docs/plans/nano-q-ios.md), [docs/plans/nano-q-android.md](docs/plans/nano-q-android.md)).
+  The JUCE web-UI builds for them ([docs/android-build.md](docs/android-build.md),
+  [docs/ios-build.md](docs/ios-build.md)) are kept for development but not shipped.
+- **Native UI on the desktop**: every Windows, macOS and Linux build includes the native (Nano Q)
+  UI beside the web UI; Settings → User Interface → Native UI (Nano) switches to it
 - **Core tests**: Enable with `GUITARFX_CORE_BUILD_TESTS=ON`, run via CTest
 
 ## Prerequisites

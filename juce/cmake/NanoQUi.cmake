@@ -19,7 +19,8 @@ set(_nanoq_dir "${CMAKE_CURRENT_SOURCE_DIR}/../nanoq")
 # Elements at Nano Q's pin, with Nano Q's desktop patches, in its order (nanoq/CMakeLists.txt):
 # fewer whole-window redraws, macOS's 10 ms view tick, X11 drawing in this process, and Skia
 # keeping each image it draws instead of copying and uploading it on every draw, and shadows
-# under simple shapes blurred by a mask filter instead of an image filter. Each
+# under simple shapes blurred by a mask filter instead of an image filter, and Artist accepting a
+# universal macOS build (arm64;x86_64, which build_macos.sh makes by default). Each
 # binary compiles Elements' host layer itself (ELEMENTS_HOST_IN_CONSUMER), as QPlug does, so its
 # window class carries this product's name.
 set(_nanoq_apply_patch -P ${_nanoq_dir}/ios/cmake/ApplyPatch.cmake)
@@ -34,7 +35,8 @@ FetchContent_Declare(cycfi_elements
         COMMAND ${CMAKE_COMMAND} -DPATCH=${_nanoq_dir}/patches/elements-x11-present.patch ${_nanoq_apply_patch}
         COMMAND ${CMAKE_COMMAND} -DPATCH=${_nanoq_dir}/patches/elements-x11-skia.patch ${_nanoq_apply_patch}
         COMMAND ${CMAKE_COMMAND} -DPATCH=${_nanoq_dir}/patches/elements-skia-image-cache.patch ${_nanoq_apply_patch}
-        COMMAND ${CMAKE_COMMAND} -DPATCH=${_nanoq_dir}/patches/elements-skia-fast-shadows.patch ${_nanoq_apply_patch})
+        COMMAND ${CMAKE_COMMAND} -DPATCH=${_nanoq_dir}/patches/elements-skia-fast-shadows.patch ${_nanoq_apply_patch}
+        COMMAND ${CMAKE_COMMAND} -DPATCH=${_nanoq_dir}/patches/elements-artist-macos-universal.patch ${_nanoq_apply_patch})
 FetchContent_MakeAvailable(cycfi_elements)
 
 set(ELEMENTS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

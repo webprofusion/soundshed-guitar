@@ -164,7 +164,7 @@ jobs:
           sign_if_exists "$ARTEFACTS/VST3/$PRODUCT.vst3"
           sign_if_exists "$ARTEFACTS/AU/$PRODUCT.component"
           sign_if_exists "$ARTEFACTS/CLAP/$PRODUCT.clap"
-          sign_if_exists "$ARTEFACTS/AAX/$PRODUCT.aaxplugin"
+          # AAX is disabled (GUITARFX_ENABLE_AAX is not set), so there is no AAX bundle to sign.
 
       - name: Build macOS installer package
         run: ./build_macos.sh --skip-ts --skip-build --pkg

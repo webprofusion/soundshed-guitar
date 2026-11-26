@@ -4,6 +4,11 @@ The Android app is the JUCE **Standalone** target packaged as an APK. It runs
 the same `SoundshedGuitarCore` DSP engine and the same web UI as the desktop
 builds — only the shell around them differs.
 
+**Not shipped.** Android ships Soundshed Nano Q only, the native UI's own app
+([plans/nano-q-android.md](plans/nano-q-android.md)). This JUCE build is kept for development and
+comparison. It has no Native UI (Nano) switch: the desktop builds' `SOUNDSHED_NANOQ_UI` is off on
+mobile.
+
 ## Layout
 
 ```

@@ -1,10 +1,12 @@
 /**
  * The experimental "Native UI (Nano)" switch in Settings → User Interface → Interface.
  *
- * Only where the host can build either editor (environment.nativeEditor: the Windows x64 app and
- * plugins). The setting is the engine's (guitarfx::kNativeEditorSettingKey): the standalone app
- * swaps its editor as soon as it changes, and a plugin's next window follows it. The native UI's
- * own Settings page has the switch back.
+ * Only where the host can build either editor (environment.nativeEditor: the desktop app and
+ * plugins on Windows, macOS and Linux, where SOUNDSHED_NANOQ_UI is on). Never on iOS, iPadOS or
+ * Android: those ship Soundshed Nano Q's own apps (nanoq/ios, nanoq/android). The setting is the
+ * engine's (guitarfx::kNativeEditorSettingKey): the standalone app swaps its editor as soon as it
+ * changes, and a plugin's next window follows it. The native UI's own Settings page has the
+ * switch back.
  */
 
 import { updateAppSetting } from "../appSettingsStore.js";
