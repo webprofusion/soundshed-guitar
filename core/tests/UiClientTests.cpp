@@ -1333,6 +1333,54 @@ void TestFeatureFlagsAndFxMarks()
 }
 
 // The preset bar's back and forward, as presets/history.ts keeps it.
+void TestFolderFileRows()
+{
+    using guitarfx::uiclient::ResourceFolderListing;
+    ResourceFolderListing::File model;
+    model.name = "Plexi Crunch.nam";
+    model.resourceType = "nam";
+    model.metadata = {{"architectureVersion", "2"}, {"gearMake", "Marshall"}, {"gearModel", "Marshall Plexi"},
+                      {"toneType", "hi_gain"},      {"sampleRate", 48000},    {"tags", "bright; crunch,bright"}};
+    const std::string dot = " \xC2\xB7 ";
+    Expect(FolderFileMetaLine(model, "nam", nullptr) ==
+               "A2" + dot + "Marshall Plexi" + dot + "hi gain" + dot + "48000 Hz" + dot + "bright, crunch",
+           "a folder model's line: architecture, gear, tone type, rate, tags");
+    Expect(FolderFileMetaLine(model, "ir", nullptr).rfind("NAM" + dot, 0) == 0,
+           "a folder file of the other type says what it is");
+
+    ResourceFolderListing::File ir;
+    ir.name = "4x12.wav";
+    ir.resourceType = "ir";
+    ir.metadata = {{"channels", 2}, {"durationSec", "0.5"}, {"sampleRate", 44100}, {"toneTags", "v30"}};
+    Expect(FolderFileMetaLine(ir, "ir", nullptr) == "2 ch" + dot + "0.5 s" + dot + "44100 Hz" + dot + "v30",
+           "a folder IR's line: channels, length, rate, tags");
+
+    guitarfx::uiclient::LibraryResource entry;
+    entry.tags = {"mine"};
+    Expect(FolderFileTags(ir, &entry) == std::vector<std::string>{"mine"}, "a library file shows its entry's tags");
+
+    Expect(FormatBytes(0) == "0 B" && FormatBytes(512) == "512 B" && FormatBytes(1536) == "1.5 KB" &&
+               FormatBytes(5 * 1024 * 1024) == "5.0 MB",
+           "sizes as the web writes them");
+    Expect(FolderFileDisplayName(ir) == "4x12", "a file's name without its extension");
+    model.metadata["namName"] = "Plexi (recorded)";
+    Expect(FolderFileDisplayName(model) == "Plexi (recorded)", "a model's recorded name first");
+
+    const nlohmann::json tone = {{"toneId", "7"}, {"imageUrl", "https://x/y.png"}};
+    const auto saved = BuildFolderImport(model, &tone, "amp", "D:/Models");
+    Expect(saved.name == "Plexi (recorded)" && saved.category == "amp" &&
+               saved.tags == std::vector<std::string>{"bright", "crunch"} &&
+               saved.metadata.value("toneId", "") == "7" && saved.metadata.value("origin", "") == "folder-browser" &&
+               saved.metadata.value("sourceFileName", "") == "Plexi Crunch.nam" &&
+               saved.metadata.value("sourceFolder", "") == "D:/Models",
+           "a folder file saves with its name, the slot's category, its tags and the tone it matched");
+    const auto edited = BuildFolderImport(model, nullptr, "amp", "D:/Models", std::string(" Mine "),
+                                          std::string("Amps"), std::vector<std::string>{"a"});
+    Expect(edited.name == "Mine" && edited.category == "Amps" && edited.tags == std::vector<std::string>{"a"} &&
+               !edited.metadata.contains("toneId"),
+           "an edit's name, category and tags win");
+}
+
 void TestResourceBrowserSlotHints()
 {
     const std::vector<std::string> categories{"Amps", "Cabinet IRs", "Full Rig", "Pedals", "Reverb Rooms"};
@@ -2851,6 +2899,7 @@ int main()
     TestPresetTrail();
     TestCompositePresetSearch();
     TestResourceBrowserSlotHints();
+    TestFolderFileRows();
     TestResourceIndex();
     TestAnalysis();
     TestAnalysisPresentation();

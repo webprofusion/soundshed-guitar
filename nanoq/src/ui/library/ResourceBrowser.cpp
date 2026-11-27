@@ -136,6 +136,8 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         bool controlsTwoRows = false;                   // the Library's search over its filters, on a narrow window
         int pickedFrom = -1;                            // the Tab the choice being heard came from; -1 for none kept
         std::string expandedId;                         // the Library row showing its details (its (i))
+        std::string expandedPath;                       // the Folder row showing its details
+        std::set<std::string> pendingFavourites;        // folder files starred before they reach the library
         std::set<std::string> usageAsked;               // rows whose in-use answer has been asked for
         bool tagBar = false;                            // the Library's tag chips are showing
         std::size_t librarySignature = 0;               // what the library held when the list was last drawn
@@ -806,7 +808,90 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         rememberLocation(path);
     };
 
-    const auto folderList = [this, b, preview, refillList, openFolder]() -> Ptr {
+    // A folder file's library entry: the one the listing names, else one with the same path
+    // (folderFileLibraryMatch), so a file saved since the listing reads as in the library.
+    const auto entryFor = [this](const ResourceFolderListing::File& file) -> const LibraryResource* {
+        if (file.inLibrary && !file.libraryId.empty())
+        {
+            if (const auto* r = mState.FindLibraryResource(file.resourceType, file.libraryId))
+            {
+                return r;
+            }
+        }
+
+        const auto path = ComparablePath(file.path);
+
+        if (const auto it = mState.resources.find(file.resourceType); it != mState.resources.end())
+        {
+            for (const auto& r : it->second)
+            {
+                if (!r.filePath.empty() && ComparablePath(r.filePath) == path)
+                {
+                    return &r;
+                }
+            }
+        }
+
+        return nullptr;
+    };
+    // Into the library where it is (buildFolderImportPayload): the slot's category, its tags and
+    // what a lookup found, unless an edit says otherwise; with a node, loaded into its slot too.
+    // slotImportCategory: an IR slot's cab or reverb, a model slot's gear, else the folder's name.
+    const auto folderImportCategory = [this, b] {
+        if (b->resourceType == "ir")
+        {
+            return std::string(b->role.gear == "space" ? "reverb" : "cab");
+        }
+
+        if (!b->role.gear.empty())
+        {
+            return b->role.gear;
+        }
+
+        return mState.resourceFolder.name.empty() ? std::string("Folder") : mState.resourceFolder.name;
+    };
+    const auto saveFolderFile = [this, b, roots, folderImportCategory](
+                                    const ResourceFolderListing::File& file, const std::optional<std::string>& name,
+                                    const std::optional<std::string>& category,
+                                    const std::optional<std::vector<std::string>>& tags, bool load) {
+        const auto slotCategory = folderImportCategory();
+        std::string sourceFolder = mState.resourceFolder.path;
+
+        for (const auto& [id, label, path] : roots())
+        {
+            if (id == b->rootId && !path.empty())
+            {
+                sourceFolder = path;
+            }
+        }
+
+        const auto saved = BuildFolderImport(file, mSession.FolderLookup().DetailsFor(file), slotCategory, sourceFolder,
+                                             name, category, tags);
+        mSession.Commands().SaveLocalLibraryResource(file.resourceType, file.path, saved.name, saved.metadata,
+                                                     load ? b->nodeId : std::string(), load ? b->index : -1,
+                                                     saved.category, saved.tags);
+    };
+    const auto toggleFolderFavourite = [this, b, entryFor, saveFolderFile,
+                                        refillList](const ResourceFolderListing::File& file) {
+        if (const auto* entry = entryFor(file))
+        {
+            const bool on = IsResourceFavorite(mState, entry->id);
+            mSession.Commands().SetResourceFavorite(entry->id, !on);
+            ShowToast(on ? "Removed from favourites" : "Added to favourites", FolderFileDisplayName(file), false);
+        }
+        else
+        {
+            // Starred once its entry arrives (the Resources answer below).
+            b->pendingFavourites.insert(ComparablePath(file.path));
+            saveFolderFile(file, std::nullopt, std::nullopt, std::nullopt, false);
+            ShowToast("Adding to favourites", FolderFileDisplayName(file), false);
+        }
+
+        refillList();
+    };
+
+    const auto folderList = [this, b, preview, refillList, openFolder, entryFor, saveFolderFile, toggleFolderFavourite,
+                             folderImportCategory]() -> Ptr {
         const auto& listing = mState.resourceFolder;
         std::vector<Ptr> rows;
 
@@ -848,27 +933,38 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
         for (const auto& file : listing.files)
         {
-            if (file.resourceType != b->resourceType ||
-                (!filter.empty() && Lower(file.name).find(filter) == std::string::npos))
+            if (!filter.empty() && Lower(file.name).find(filter) == std::string::npos)
             {
                 continue;
             }
 
             shown.push_back(&file);
-            b->listedFiles.push_back(file);
+
+            if (file.resourceType == b->resourceType)
+            {
+                b->listedFiles.push_back(file);
+            }
         }
 
         const auto https = [](const std::string& url) { return url.rfind("https://", 0) == 0 ? url : std::string(); };
-        const auto libraryIdOf = [b](const ResourceFolderListing::File& file) {
-            return file.inLibrary && file.resourceType == b->resourceType ? file.libraryId : std::string();
+        const auto libraryIdOf = [b, entryFor](const ResourceFolderListing::File& file) {
+            const auto* entry = file.resourceType == b->resourceType ? entryFor(file) : nullptr;
+            return entry != nullptr ? entry->id : std::string();
         };
+        const float listWidth = std::min(944.0f, ViewSize().x - 16.0f) - 32.0f - 10.0f;
 
-        const auto fileRow = [&](const ResourceFolderListing::File& file, bool member) {
-            auto row = std::make_shared<BrowserRow>(mTheme, mIcons, file.name, Describe(file.metadata, ""));
-            row->selected = !b->selectedPath.empty() && b->selectedPath == file.path;
+        // A file's row (renderFolderFileRow): its line, In library, and while hovered or chosen
+        // star, edit, details and select; one of the other type is listed, dimmed, not selectable.
+        const auto fileRow = [&](const ResourceFolderListing::File& file, bool member) -> Ptr {
+            const bool wanted = file.resourceType == b->resourceType;
+            const auto* entry = entryFor(file);
+            auto row = std::make_shared<BrowserRow>(mTheme, mIcons, file.name,
+                                                    FolderFileMetaLine(file, b->resourceType, entry));
+            row->selected = wanted && !b->selectedPath.empty() && b->selectedPath == file.path;
             row->groupMember = member;
+            row->dimmed = !wanted;
 
-            if (file.inLibrary)
+            if (entry != nullptr)
             {
                 row->note = "In library";
                 row->noteColour = mTheme.Success();
@@ -896,15 +992,58 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 };
             }
 
-            row->onClick = [preview, refillList, path = file.path] {
-                preview({}, path);
-                refillList();
-            };
-            row->onDouble = [this, preview, path = file.path] {
-                preview({}, path);
-                CloseOverlay();
-            };
-            return row;
+            row->star = entry != nullptr && IsResourceFavorite(mState, entry->id) ? 1 : 0;
+            row->onStar = [toggleFolderFavourite, file] { toggleFolderFavourite(file); };
+
+            if (wanted)
+            {
+                row->onClick = [preview, refillList, path = file.path] {
+                    preview({}, path);
+                    refillList();
+                };
+                row->onDouble = [this, preview, path = file.path] {
+                    preview({}, path);
+                    CloseOverlay();
+                };
+            }
+
+            // Edit: an entry's own; a file not in the library yet is saved with what is typed.
+            row->actions.push_back(
+                {"ui-edit", [this, entryFor, saveFolderFile, folderImportCategory, file](el::rect at) {
+                     if (const auto* entry = entryFor(file))
+                     {
+                         EditLibraryResource(file.resourceType, entry->id, at);
+                         return;
+                     }
+
+                     OpenResourceEditor(at, file.resourceType, FolderFileDisplayName(file), folderImportCategory(),
+                                        FolderFileTags(file, nullptr),
+                                        [this, saveFolderFile, file](std::string name, std::string category,
+                                                                     std::vector<std::string> tags) {
+                                            saveFolderFile(file, name.empty() ? FolderFileDisplayName(file) : name,
+                                                           category, tags, false);
+                                            ShowToast("Resource saved", name, false);
+                                        });
+                 }});
+            row->actions.push_back({"ui-info", [b, refillList, path = file.path](el::rect) {
+                                        b->expandedPath = b->expandedPath == path ? std::string() : path;
+                                        refillList();
+                                    }});
+
+            if (wanted)
+            {
+                row->actions.push_back({"ui-play", [preview, refillList, path = file.path](el::rect) {
+                                            preview({}, path);
+                                            refillList();
+                                        }});
+            }
+
+            if (b->expandedPath != file.path)
+            {
+                return row;
+            }
+
+            return Col({row, FolderFileDetailsPanel(file, lookup.DetailsFor(file), listWidth)});
         };
 
         const auto grouped =
@@ -1577,7 +1716,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         mSession.View().layout();
         mSession.View().refresh();
     };
-    b->fillFooter = [this, b, search] {
+    b->fillFooter = [this, b, search, entryFor, saveFolderFile] {
         std::vector<Ptr> row;
 
         // Tone 3000's pages go under its list (.resource-browser-pagination), the hint staying.
@@ -1645,7 +1784,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         };
         auto ok = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Primary);
         ok->Size(44, 30).Label("OK", 11.5f).Disabled(!b->previewed);
-        ok->onClick = [this, b] {
+        ok->onClick = [this, b, entryFor, saveFolderFile] {
             if (b->onPick)
             {
                 auto pick = b->onPick;
@@ -1688,31 +1827,23 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             // A file heard from a folder joins the library (in place), or picks the entry it is.
             if (b->previewed && b->selectedId.empty() && !b->selectedPath.empty())
             {
-                std::string libraryId;
-                std::string name = b->selectedPath;
-
                 for (const auto& f : mState.resourceFolder.files)
                 {
-                    if (f.path == b->selectedPath)
+                    if (f.path != b->selectedPath)
                     {
-                        libraryId = f.inLibrary ? f.libraryId : std::string();
-                        name = f.name;
+                        continue;
                     }
-                }
 
-                if (!libraryId.empty())
-                {
-                    mSession.Commands().SetNodeResource(b->nodeId, b->resourceType, libraryId, b->index);
-                }
-                else
-                {
-                    const auto dot = name.rfind('.');
-                    mSession.Commands().SaveLocalLibraryResource(b->resourceType, b->selectedPath,
-                                                                 dot == std::string::npos ? name : name.substr(0, dot),
-                                                                 {{"sourceFolder", mState.resourceFolder.path},
-                                                                  {"sourceFileName", name},
-                                                                  {"origin", "folder-browser"}},
-                                                                 b->nodeId, b->index);
+                    if (const auto* entry = entryFor(f))
+                    {
+                        mSession.Commands().SetNodeResource(b->nodeId, b->resourceType, entry->id, b->index);
+                    }
+                    else
+                    {
+                        saveFolderFile(f, std::nullopt, std::nullopt, std::nullopt, true);
+                    }
+
+                    break;
                 }
             }
 
@@ -1855,6 +1986,19 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     };
     b->librarySignature = librarySignature();
     b->subscriptions.push_back(mSession.Client().Subscribe(Topic::Resources, [this, b, librarySignature] {
+        // A folder file starred before it was in the library is starred as its entry arrives.
+        for (const auto& [type, entries] : mState.resources)
+        {
+            for (const auto& r : entries)
+            {
+                if (!b->pendingFavourites.empty() && !r.filePath.empty() &&
+                    b->pendingFavourites.erase(ComparablePath(r.filePath)) > 0 && !IsResourceFavorite(mState, r.id))
+                {
+                    mSession.Commands().SetResourceFavorite(r.id, true);
+                }
+            }
+        }
+
         const auto now = librarySignature();
 
         if (now == b->librarySignature)
@@ -1865,12 +2009,32 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
         b->librarySignature = now;
 
-        if (b->tab != Tab::Folder && b->fillList)
+        if (b->fillList)
         {
-            b->fillControls();
+            if (b->tab != Tab::Folder)
+            {
+                b->fillControls();
+            }
+
             b->fillList();
         }
     }));
+    // A star turned on or off (an appSettingChanged, on the Session topic) redraws the stars.
+    const auto favouritesNow = [this] {
+        return mState.appSettings.value("resources.favorites", nlohmann::json()).dump();
+    };
+    b->subscriptions.push_back(mSession.Client().Subscribe(
+        Topic::Session, [b, favouritesNow, last = std::make_shared<std::string>(favouritesNow())] {
+            if (auto now = favouritesNow(); now != *last)
+            {
+                *last = std::move(now);
+
+                if (b->fillList)
+                {
+                    b->fillList();
+                }
+            }
+        }));
     // The engine saying which tone pictures the Library and Folder rows show: what it lacks is
     // fetched (and handed back to it to keep), and the rows redraw.
     b->subscriptions.push_back(mSession.Client().Subscribe(Topic::Thumbnails, [this, b] {

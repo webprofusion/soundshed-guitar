@@ -122,4 +122,36 @@ struct LibraryEntry
 /// The order the list draws its entries in, which previous/next follows.
 [[nodiscard]] std::vector<const LibraryResource*> NavigationOrder(const ClientState& state,
                                                                   const std::vector<const LibraryResource*>& resources);
+
+/// The tags a Folder tab file shows (getFolderFileTags): its library entry's, when it has one,
+/// else what its own metadata's tags, tag, toneTags and categories carry, each once.
+[[nodiscard]] std::vector<std::string> FolderFileTags(const ResourceFolderListing::File& file,
+                                                      const LibraryResource* entry);
+/// The line under a Folder tab file's name (renderFolderFileRow), its parts joined by " · ": its
+/// type when not the one wanted ("IR / Cab", "NAM"); a model's architecture, gear and tone type;
+/// an IR's channels and length; the sample rate; then its tags.
+[[nodiscard]] std::string FolderFileMetaLine(const ResourceFolderListing::File& file, const std::string& wantedType,
+                                             const LibraryResource* entry);
+/// A size as formatBytes writes it: "512 B", "1.5 KB", "2.0 MB".
+[[nodiscard]] std::string FormatBytes(std::int64_t bytes);
+/// The name a folder file is listed and saved under (folderFileDisplayName): the name its model
+/// records, else the file's name without its extension.
+[[nodiscard]] std::string FolderFileDisplayName(const ResourceFolderListing::File& file);
+
+/// What saving a folder file into the library sends (buildFolderImportPayload).
+struct FolderImport
+{
+    std::string name, category;
+    std::vector<std::string> tags;
+    nlohmann::json metadata = nlohmann::json::object();
+};
+
+/// A folder file's library entry: `name`, `category` and `tags` when given (an edit), else its
+/// display name, `slotCategory` and its own tags; its metadata the tone details a lookup found
+/// (`toneDetails`, may be null) with where it came from.
+[[nodiscard]] FolderImport BuildFolderImport(const ResourceFolderListing::File& file, const nlohmann::json* toneDetails,
+                                             const std::string& slotCategory, const std::string& sourceFolder,
+                                             const std::optional<std::string>& name = std::nullopt,
+                                             const std::optional<std::string>& category = std::nullopt,
+                                             const std::optional<std::vector<std::string>>& tags = std::nullopt);
 } // namespace guitarfx::uiclient

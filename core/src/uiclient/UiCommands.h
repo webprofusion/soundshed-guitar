@@ -166,7 +166,8 @@ class UiCommands
     /// place rather than copied; with a node, loads it into that node's slot too.
     void SaveLocalLibraryResource(const std::string& resourceType, const std::string& filePath, const std::string& name,
                                   const nlohmann::json& metadata, const std::string& nodeId = {},
-                                  int resourceIndex = -1);
+                                  int resourceIndex = -1, const std::string& category = {},
+                                  const std::vector<std::string>& tags = {});
     /// Stars or unstars a library resource (the shared resources.favorites setting).
     void SetResourceFavorite(const std::string& resourceId, bool favorite);
     /// Renames, recategorises or retags a library resource (updateLibraryResource).

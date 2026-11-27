@@ -48,6 +48,15 @@ inline std::string MetaText(const nlohmann::json& metadata, const char* key)
     return {};
 }
 
+/// A path compared as the web UI's folderFileLibraryMatch does: forward slashes, any case.
+inline std::string ComparablePath(std::string path)
+{
+    std::replace(path.begin(), path.end(), '\\', '/');
+    std::transform(path.begin(), path.end(), path.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return path;
+}
+
 /// A cached thumbnail file (the engine's resource-thumbnails cache), read once. Kept for the
 /// process and never destroyed: the drawing backend may be gone when statics are destroyed.
 inline std::shared_ptr<artist::image> CachedThumbnail(const std::string& path)
@@ -258,6 +267,7 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
     bool selected = false;
     bool indent = false;      // a model under its tone (the Tone3000 tab's)
     bool groupMember = false; // a model under its pack's row: not indented, a bar down its left edge
+    bool dimmed = false;      // listed but not for this slot (a folder's file of the other type)
     int star = -1;            // -1: none; 0 or 1: the favourite star, off or on
     std::function<void()> onClick, onDouble, onButton, onStar, onMenu;
 
@@ -456,17 +466,19 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
 
         const auto titleFont = Font(Weight::SemiBold).size(12.0f);
         const auto detailFont = Font(Weight::Regular).size(10.5f);
+        const auto ink = dimmed ? mTheme.TextMuted() : mTheme.Ink();
 
         if (mDetail.empty())
         {
-            FillText(cnv, Ellipsize(cnv, mTitle, titleFont, right - x), titleFont, mTheme.Ink(),
+            FillText(cnv, Ellipsize(cnv, mTitle, titleFont, right - x), titleFont, ink,
                      el::rect{x, face.top, right, face.bottom}, HAlign::Left);
         }
         else
         {
-            FillText(cnv, Ellipsize(cnv, mTitle, titleFont, right - x), titleFont, mTheme.Ink(),
+            FillText(cnv, Ellipsize(cnv, mTitle, titleFont, right - x), titleFont, ink,
                      el::rect{x, face.top + 5.0f, right, face.top + 21.0f}, HAlign::Left);
-            FillText(cnv, Ellipsize(cnv, mDetail, detailFont, right - x), detailFont, mTheme.TextMuted(),
+            FillText(cnv, Ellipsize(cnv, mDetail, detailFont, right - x), detailFont,
+                     dimmed ? mTheme.TextMuted().opacity(0.7f) : mTheme.TextMuted(),
                      el::rect{x, face.top + 21.0f, right, face.bottom - 4.0f}, HAlign::Left);
         }
     }

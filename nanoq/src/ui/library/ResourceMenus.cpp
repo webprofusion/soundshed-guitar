@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+#include <set>
 
 namespace nanoq::ui
 {
@@ -137,6 +138,8 @@ void Shell::OpenLibraryResourceMenu(const std::string& resourceType, const std::
 
 namespace
 {
+std::string SpacedLabel(const std::string& key);
+
 /// The details table's labels for metadata keys (libraryDetails.ts' METADATA_LABELS); any other
 /// key is spaced out from its camel case.
 std::string MetadataLabel(const std::string& key)
@@ -172,6 +175,12 @@ std::string MetadataLabel(const std::string& key)
         return it->second;
     }
 
+    return SpacedLabel(key);
+}
+
+/// A key spaced out from its camel case and underscores, its first letter a capital.
+std::string SpacedLabel(const std::string& key)
+{
     std::string label;
 
     for (const char c : key)
@@ -189,6 +198,11 @@ std::string MetadataLabel(const std::string& key)
 
             label += c;
         }
+    }
+
+    if (!label.empty())
+    {
+        label.front() = static_cast<char>(std::toupper(static_cast<unsigned char>(label.front())));
     }
 
     return label;
@@ -211,29 +225,46 @@ std::string MetadataValue(const nlohmann::json& value)
 }
 } // namespace
 
-Ptr Shell::LibraryDetailsPanel(const std::string& resourceType, const std::string& resourceId, float width,
-                               std::function<void()> onOpenTone)
+namespace
 {
-    const auto* r = mState.FindLibraryResource(resourceType, resourceId);
+/// The details table (.resource-browser-details-table): a muted label over a third, the value
+/// wrapping beside it.
+struct DetailsTable
+{
+    const Theme& theme;
+    std::vector<Ptr>& column;
+    float inner, labelWidth;
 
-    if (r == nullptr)
+    void Add(const std::string& label, Ptr value) const
     {
-        return std::make_shared<el::element>();
+        auto name = std::make_shared<Text>(theme, label, 11.0f);
+        name->Colour(theme.TextMuted());
+        column.push_back(
+            Pad(0, 2, 0, 2,
+                Row({FixedWidth(labelWidth, el::share(el::align_top(el::hold_any(FixedHeight(16, name))))), value})));
     }
 
-    const auto& metadata = r->metadata.is_object() ? r->metadata : nlohmann::json::object();
-    const auto text = [&metadata](const char* key) {
-        const auto it = metadata.find(key);
-        auto value = it != metadata.end() ? MetadataValue(*it) : std::string();
-        const auto first = value.find_first_not_of(" \t");
-        return first == std::string::npos ? std::string()
-                                          : value.substr(first, value.find_last_not_of(" \t") - first + 1);
-    };
-    const float inner = std::max(200.0f, width - 24.0f);
-    const float labelWidth = std::min(160.0f, inner * 0.3f);
-    std::vector<Ptr> column;
+    [[nodiscard]] Ptr Value(const std::string& value, float less = 0.0f) const
+    {
+        auto paragraph = std::make_shared<Paragraph>(theme, value, inner - labelWidth - less, 11.0f);
+        paragraph->Colour(theme.Ink());
+        return paragraph;
+    }
+};
 
-    // The Tone3000 card (tone3000Card.ts): picture, title, creator, the ids, and its page.
+std::string TrimmedText(std::string text)
+{
+    const auto first = text.find_first_not_of(" \t");
+    return first == std::string::npos ? std::string() : text.substr(first, text.find_last_not_of(" \t") - first + 1);
+}
+} // namespace
+
+void Shell::AppendToneCard(std::vector<Ptr>& column, const nlohmann::json& metadata, float inner)
+{
+    const auto text = [&metadata](const char* key) {
+        const auto it = metadata.is_object() ? metadata.find(key) : metadata.end();
+        return TrimmedText(metadata.is_object() && it != metadata.end() ? MetadataValue(*it) : std::string());
+    };
     const auto toneId = text("toneId");
 
     if (!toneId.empty())
@@ -289,6 +320,33 @@ Ptr Shell::LibraryDetailsPanel(const std::string& resourceType, const std::strin
         column.push_back(Pad(60, 2, 0, 0, factsText));
         column.push_back(Pad(56, 2, 0, 6, Row({page, Stretch()})));
     }
+}
+
+Ptr Shell::LibraryDetailsPanel(const std::string& resourceType, const std::string& resourceId, float width,
+                               std::function<void()> onOpenTone)
+{
+    const auto* r = mState.FindLibraryResource(resourceType, resourceId);
+
+    if (r == nullptr)
+    {
+        return std::make_shared<el::element>();
+    }
+
+    const auto& metadata = r->metadata.is_object() ? r->metadata : nlohmann::json::object();
+    const auto text = [&metadata](const char* key) {
+        const auto it = metadata.find(key);
+        auto value = it != metadata.end() ? MetadataValue(*it) : std::string();
+        const auto first = value.find_first_not_of(" \t");
+        return first == std::string::npos ? std::string()
+                                          : value.substr(first, value.find_last_not_of(" \t") - first + 1);
+    };
+    const float inner = std::max(200.0f, width - 24.0f);
+    const float labelWidth = std::min(160.0f, inner * 0.3f);
+    std::vector<Ptr> column;
+
+    // The Tone3000 card (tone3000Card.ts): picture, title, creator, the ids, and its page.
+    const auto toneId = text("toneId");
+    AppendToneCard(column, metadata, inner);
 
     // Back to the tone on the Tone 3000 tab, with the rest of its models.
     if (onOpenTone)
@@ -308,20 +366,9 @@ Ptr Shell::LibraryDetailsPanel(const std::string& resourceType, const std::strin
         column.push_back(Pad(0, 0, 0, 8, paragraph));
     }
 
-    // The table: a muted label over a third, the value wrapping beside it.
-    const auto row = [this, &column, labelWidth, inner](const std::string& label, Ptr value) {
-        auto name = std::make_shared<Text>(mTheme, label, 11.0f);
-        name->Colour(mTheme.TextMuted());
-        column.push_back(
-            Pad(0, 2, 0, 2,
-                Row({FixedWidth(labelWidth, el::share(el::align_top(el::hold_any(FixedHeight(16, name))))), value})));
-        (void)inner;
-    };
-    const auto valueText = [this, inner, labelWidth](const std::string& value, float less = 0.0f) {
-        auto paragraph = std::make_shared<Paragraph>(mTheme, value, inner - labelWidth - less, 11.0f);
-        paragraph->Colour(mTheme.Ink());
-        return paragraph;
-    };
+    const DetailsTable table{mTheme, column, inner, labelWidth};
+    const auto row = [&table](const std::string& label, Ptr value) { table.Add(label, std::move(value)); };
+    const auto valueText = [&table](const std::string& value, float less = 0.0f) { return table.Value(value, less); };
 
     row("ID", valueText(r->id));
 
@@ -335,7 +382,8 @@ Ptr Shell::LibraryDetailsPanel(const std::string& resourceType, const std::strin
             },
             Button::Style::Flat);
         copy->TextSize(10.5f).FaceHeight(18.0f);
-        row("File Path", Row({el::share(el::align_top(el::hold_any(Ptr(copy)))), HGap(6), valueText(path, 60.0f)}));
+        row("File Path", Row({el::share(el::align_top(el::hold_any(FixedWidth(54, FixedHeight(20, copy))))), HGap(6),
+                              valueText(path, 60.0f)}));
     }
 
     if (const auto tags = ResourceTags(*r); !tags.empty())
@@ -373,6 +421,55 @@ Ptr Shell::LibraryDetailsPanel(const std::string& resourceType, const std::strin
     }
 
     // .resource-browser-item-details-panel: the row's own face, under a rule.
+    auto body = Pad(12, 8, 12, 10, Col(column));
+    return Pad(0, 0, 0, 4, Over(body, el::share(Surface(mTheme.Card(), mTheme.Border(), 6.0f))));
+}
+
+Ptr Shell::FolderFileDetailsPanel(const ResourceFolderListing::File& file, const nlohmann::json* tone, float width)
+{
+    const float inner = std::max(200.0f, width - 24.0f);
+    const float labelWidth = std::min(160.0f, inner * 0.3f);
+    std::vector<Ptr> column;
+
+    if (tone != nullptr)
+    {
+        AppendToneCard(column, *tone, inner);
+    }
+
+    const DetailsTable table{mTheme, column, inner, labelWidth};
+    auto copy = std::make_shared<Button>(
+        mTheme, "Copy",
+        [this, path = file.path] {
+            el::set_clipboard({{"text/plain", path}});
+            ShowToast("Path copied", path, false);
+        },
+        Button::Style::Flat);
+    copy->TextSize(10.5f).FaceHeight(18.0f);
+    table.Add("File Path", Row({el::share(el::align_top(el::hold_any(FixedWidth(54, FixedHeight(20, copy))))), HGap(6),
+                                table.Value(file.path, 60.0f)}));
+
+    if (file.sizeBytes > 0)
+    {
+        table.Add("Size", table.Value(FormatBytes(file.sizeBytes)));
+    }
+
+    if (file.metadata.is_object())
+    {
+        // A key whose label another took already (architecture and architectureVersion) is
+        // spelt out instead.
+        std::set<std::string> used;
+
+        for (const auto& [key, value] : file.metadata.items())
+        {
+            if (const auto shown = MetadataValue(value); !shown.empty())
+            {
+                auto label = MetadataLabel(key);
+                label = used.insert(label).second ? label : SpacedLabel(key);
+                table.Add(label, table.Value(shown));
+            }
+        }
+    }
+
     auto body = Pad(12, 8, 12, 10, Col(column));
     return Pad(0, 0, 0, 4, Over(body, el::share(Surface(mTheme.Card(), mTheme.Border(), 6.0f))));
 }
@@ -415,8 +512,8 @@ void Shell::ConfirmDeleteLibraryResource(const std::string& resourceType, const 
 
 void Shell::EditLibraryResource(const std::string& resourceType, const std::string& resourceId, el::rect anchor)
 {
-    // The web UI's Edit resource popover (resourceBrowser.ts): name, category and tags, over the
-    // row; the browser stays open behind it. An IR's category offers its slots, cab and reverb.
+    // The web UI's Edit resource popover (resourceBrowser.ts), over the row; the browser stays
+    // open behind it.
     const auto* r = mState.FindLibraryResource(resourceType, resourceId);
 
     if (r == nullptr)
@@ -433,6 +530,23 @@ void Shell::EditLibraryResource(const std::string& resourceType, const std::stri
         return;
     }
 
+    const auto name = TrimmedText(r->name);
+    const auto category = TrimmedText(r->category);
+    OpenResourceEditor(
+        anchor, resourceType, name.empty() ? r->id : name, category.empty() ? std::string("Local") : category,
+        ResourceTags(*r),
+        [this, resourceType, resourceId](std::string name, std::string category, std::vector<std::string> tags) {
+            name = name.empty() ? resourceId : name;
+            mSession.Commands().UpdateLibraryResource(resourceType, resourceId, name,
+                                                      category.empty() ? std::string("Uncategorized") : category, tags);
+            ShowToast("Resource updated", name, false);
+        });
+}
+
+void Shell::OpenResourceEditor(el::rect anchor, const std::string& resourceType, const std::string& name,
+                               const std::string& category, const std::vector<std::string>& tags,
+                               std::function<void(std::string, std::string, std::vector<std::string>)> onSave)
+{
     struct Fields
     {
         std::shared_ptr<el::basic_input_box> name, category, tags;
@@ -441,16 +555,11 @@ void Shell::EditLibraryResource(const std::string& resourceType, const std::stri
     auto fields = std::make_shared<Fields>();
     std::string tagText;
 
-    for (const auto& t : ResourceTags(*r))
+    for (const auto& t : tags)
     {
         tagText += (tagText.empty() ? "" : ", ") + t;
     }
 
-    const auto trimmed = [](std::string text) {
-        const auto first = text.find_first_not_of(" \t");
-        return first == std::string::npos ? std::string()
-                                          : text.substr(first, text.find_last_not_of(" \t") - first + 1);
-    };
     const auto field = [this](const char* label, const char* placeholder, const std::string& value,
                               std::shared_ptr<el::basic_input_box>& box) -> Ptr {
         auto [element, input] = el::input_box(placeholder, Font(Weight::Regular), 1.0f);
@@ -465,7 +574,7 @@ void Shell::EditLibraryResource(const std::string& resourceType, const std::stri
 
     auto save = std::make_shared<Button>(
         mTheme, "Save",
-        [this, fields, resourceType, resourceId, trimmed] {
+        [this, fields, onSave] {
             std::vector<std::string> tags;
             std::string text = fields->tags->get_utf8();
             std::replace(text.begin(), text.end(), ';', ',');
@@ -474,7 +583,7 @@ void Shell::EditLibraryResource(const std::string& resourceType, const std::stri
             while (at <= text.size())
             {
                 const auto end = std::min(text.find(',', at), text.size());
-                const auto tag = trimmed(text.substr(at, end - at));
+                const auto tag = TrimmedText(text.substr(at, end - at));
 
                 if (!tag.empty() && std::find(tags.begin(), tags.end(), tag) == tags.end())
                 {
@@ -484,24 +593,22 @@ void Shell::EditLibraryResource(const std::string& resourceType, const std::stri
                 at = end + 1;
             }
 
-            auto name = trimmed(fields->name->get_utf8());
-            auto category = trimmed(fields->category->get_utf8());
-            name = name.empty() ? resourceId : name;
-            mSession.Commands().UpdateLibraryResource(resourceType, resourceId, name,
-                                                      category.empty() ? std::string("Uncategorized") : category, tags);
+            auto name = TrimmedText(fields->name->get_utf8());
+            auto category = TrimmedText(fields->category->get_utf8());
             CloseDropdown();
-            ShowToast("Resource updated", name, false);
+
+            if (onSave)
+            {
+                onSave(std::move(name), std::move(category), std::move(tags));
+            }
         },
         Button::Style::Primary);
     save->MinWidth(80);
     auto cancel = std::make_shared<Button>(mTheme, "Cancel", [this] { CloseDropdown(); }, Button::Style::Plain);
     cancel->MinWidth(80);
     auto heading = std::make_shared<Text>(mTheme, "Edit resource", 13.0f, Weight::SemiBold);
-    const auto name = trimmed(r->name);
-    const auto category = trimmed(r->category);
-    std::vector<Ptr> column{
-        FixedHeight(26, heading), VGap(4), field("Name", "Resource name", name.empty() ? r->id : name, fields->name),
-        field("Category", "Category", category.empty() ? std::string("Local") : category, fields->category)};
+    std::vector<Ptr> column{FixedHeight(26, heading), VGap(4), field("Name", "Resource name", name, fields->name),
+                            field("Category", "Category", category, fields->category)};
     float height = 26.0f + 4.0f + 2.0f * 58.0f;
 
     if (resourceType == "ir")

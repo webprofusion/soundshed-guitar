@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 
 namespace guitarfx::uiclient
 {
@@ -756,5 +757,187 @@ std::vector<const LibraryResource*> NavigationOrder(const ClientState& state,
     }
 
     return order;
+}
+
+namespace
+{
+std::string JsonText(const nlohmann::json& metadata, const char* key)
+{
+    const auto it = metadata.find(key);
+
+    if (it == metadata.end())
+    {
+        return {};
+    }
+
+    if (it->is_string())
+    {
+        return Trim(it->get<std::string>());
+    }
+
+    return it->is_number() ? it->dump() : std::string();
+}
+
+void AddSplitTags(std::vector<std::string>& tags, const std::string& raw)
+{
+    std::string part;
+    const auto add = [&tags](const std::string& value) {
+        const auto tag = Trim(value);
+
+        if (!tag.empty() && std::find(tags.begin(), tags.end(), tag) == tags.end())
+        {
+            tags.push_back(tag);
+        }
+    };
+
+    for (const char c : raw)
+    {
+        if (c == ',' || c == ';')
+        {
+            add(part);
+            part.clear();
+        }
+        else
+        {
+            part += c;
+        }
+    }
+
+    add(part);
+}
+} // namespace
+
+std::vector<std::string> FolderFileTags(const ResourceFolderListing::File& file, const LibraryResource* entry)
+{
+    if (entry != nullptr)
+    {
+        return ResourceTags(*entry);
+    }
+
+    std::vector<std::string> tags;
+
+    for (const auto* key : {"tags", "tag", "toneTags", "categories"})
+    {
+        const auto it = file.metadata.find(key);
+
+        if (it != file.metadata.end() && it->is_string())
+        {
+            AddSplitTags(tags, it->get<std::string>());
+        }
+    }
+
+    return tags;
+}
+
+std::string FolderFileMetaLine(const ResourceFolderListing::File& file, const std::string& wantedType,
+                               const LibraryResource* entry)
+{
+    const auto& m = file.metadata;
+    const bool nam = file.resourceType == "nam";
+    std::vector<std::string> parts;
+    const auto add = [&parts](std::string text) {
+        if (!(text = Trim(text)).empty())
+        {
+            parts.push_back(std::move(text));
+        }
+    };
+
+    add(wantedType == file.resourceType ? std::string() : (file.resourceType == "ir" ? "IR / Cab" : "NAM"));
+
+    if (nam)
+    {
+        auto arch = JsonText(m, "architectureVersion");
+        arch = arch.empty() ? JsonText(m, "architecture_version") : arch;
+        add(NormalizeArchitectureBadge(arch.empty() ? JsonText(m, "architecture") : arch));
+        add(FormatGearDescription(JsonText(m, "gearMake"), JsonText(m, "gearModel")));
+        auto toneType = JsonText(m, "toneType");
+        std::replace(toneType.begin(), toneType.end(), '_', ' ');
+        add(toneType);
+    }
+    else
+    {
+        if (const auto channels = JsonText(m, "channels"); !channels.empty() && channels != "0")
+        {
+            add(channels + " ch");
+        }
+
+        if (const auto seconds = JsonText(m, "durationSec"); !seconds.empty() && seconds != "0")
+        {
+            add(seconds + " s");
+        }
+    }
+
+    if (const auto rate = JsonText(m, "sampleRate"); !rate.empty() && rate != "0")
+    {
+        add(rate + " Hz");
+    }
+
+    std::string tags;
+
+    for (const auto& t : FolderFileTags(file, entry))
+    {
+        tags += (tags.empty() ? "" : ", ") + t;
+    }
+
+    add(tags);
+    std::string line;
+
+    for (const auto& p : parts)
+    {
+        line += (line.empty() ? "" : " \xC2\xB7 ") + p;
+    }
+
+    return line;
+}
+
+std::string FormatBytes(std::int64_t bytes)
+{
+    if (bytes <= 0)
+    {
+        return "0 B";
+    }
+
+    static const char* const units[] = {"B", "KB", "MB", "GB"};
+    double value = static_cast<double>(bytes);
+    int unit = 0;
+
+    while (value >= 1024.0 && unit < 3)
+    {
+        value /= 1024.0;
+        ++unit;
+    }
+
+    char text[32];
+    std::snprintf(text, sizeof(text), unit == 0 ? "%.0f %s" : "%.1f %s", value, units[unit]);
+    return text;
+}
+
+std::string FolderFileDisplayName(const ResourceFolderListing::File& file)
+{
+    const auto dot = file.name.rfind('.');
+    const auto base = Trim(dot == std::string::npos || dot == 0 ? file.name : file.name.substr(0, dot));
+    const auto recorded = JsonText(file.metadata, "namName");
+    return recorded.empty() ? base : recorded;
+}
+
+FolderImport BuildFolderImport(const ResourceFolderListing::File& file, const nlohmann::json* toneDetails,
+                               const std::string& slotCategory, const std::string& sourceFolder,
+                               const std::optional<std::string>& name, const std::optional<std::string>& category,
+                               const std::optional<std::vector<std::string>>& tags)
+{
+    FolderImport out;
+    out.name = Trim(name ? *name : FolderFileDisplayName(file));
+    out.category = Trim(category ? *category : slotCategory);
+    out.tags = tags ? *tags : FolderFileTags(file, nullptr);
+
+    if (toneDetails != nullptr && toneDetails->is_object())
+    {
+        out.metadata = *toneDetails;
+    }
+
+    out.metadata["sourceFolder"] = sourceFolder;
+    out.metadata["sourceFileName"] = file.name;
+    out.metadata["origin"] = "folder-browser";
+    return out;
 }
 } // namespace guitarfx::uiclient

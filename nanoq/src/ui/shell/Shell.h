@@ -875,6 +875,18 @@ class Shell
                                           std::function<void()> onOpenTone);
     /// A library entry's name, category and tags (the web UI's row edit dialog).
     void EditLibraryResource(const std::string& resourceType, const std::string& resourceId, el::rect anchor);
+    /// The Edit resource popover over `anchor`: name, category (an IR's offering cab and reverb) and
+    /// tags, as given; Save hands back what was typed, trimmed, the tags split on commas.
+    void OpenResourceEditor(
+        el::rect anchor, const std::string& resourceType, const std::string& name, const std::string& category,
+        const std::vector<std::string>& tags,
+        std::function<void(std::string name, std::string category, std::vector<std::string> tags)> onSave);
+    /// A Folder tab file's details under its row (renderFolderFileDetails): the Tone3000 card for
+    /// the tone it matched (`tone`, may be null), its path, size and metadata.
+    [[nodiscard]] Ptr FolderFileDetailsPanel(const guitarfx::uiclient::ResourceFolderListing::File& file,
+                                             const nlohmann::json* tone, float width);
+    /// The Tone3000 card (tone3000Card.ts) for a tone's metadata, added to a details column.
+    void AppendToneCard(std::vector<Ptr>& column, const nlohmann::json& metadata, float inner);
     /// Asks before deleting a library entry; one in use is refused, saying where.
     void ConfirmDeleteLibraryResource(const std::string& resourceType, const std::string& resourceId, el::rect anchor);
     /// A one-line prompt on the drop-down layer, so it stacks over a dialog.

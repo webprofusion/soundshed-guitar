@@ -612,11 +612,12 @@ void UiCommands::ExportLibraryArchive(bool allResources)
 
 void UiCommands::SaveLocalLibraryResource(const std::string& resourceType, const std::string& filePath,
                                           const std::string& name, const nlohmann::json& metadata,
-                                          const std::string& nodeId, int resourceIndex)
+                                          const std::string& nodeId, int resourceIndex, const std::string& category,
+                                          const std::vector<std::string>& tags)
 {
-    nlohmann::json payload = {
-        {"resourceType", resourceType},    {"filePath", filePath}, {"name", name},        {"category", ""},
-        {"tags", nlohmann::json::array()}, {"description", ""},    {"metadata", metadata}};
+    nlohmann::json payload = {{"resourceType", resourceType}, {"filePath", filePath}, {"name", name},
+                              {"category", category},         {"tags", tags},         {"description", ""},
+                              {"metadata", metadata}};
 
     if (!nodeId.empty())
     {
