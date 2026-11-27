@@ -71,7 +71,7 @@ Ptr Shell::BuildEffectLayout(const guitarfx::GraphNode& node, const EffectLayout
             return;
         }
 
-        OpenPrompt(param.name, EditableParamText(param, NodeParamValue(*n, param)), "Set",
+        OpenPrompt(param.name, EditableParamText(param, NodeParamValue(*n, param)), "Set", {.placeholder = "Value"},
                    [this, nodeId, param](const std::string& entered) {
                        if (const auto typed = ParseTypedNumber(entered))
                        {

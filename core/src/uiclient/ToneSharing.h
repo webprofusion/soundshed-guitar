@@ -205,4 +205,9 @@ struct InstalledEntry
 
 /// The tags a shared preset can carry (core/ui/ts/presetTags.ts), for the tag filter.
 [[nodiscard]] const std::vector<std::string>& StandardTags();
+
+/// What an install says when models it uses could not be downloaded, as the web's install.ts:
+/// "2 presets imported, but these models could not be downloaded and their slots are left empty:
+/// A, B. ..."
+[[nodiscard]] std::string MissingModelsNotice(std::size_t presetCount, const std::vector<std::string>& missing);
 } // namespace guitarfx::uiclient::tones

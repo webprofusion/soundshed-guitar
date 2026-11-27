@@ -695,14 +695,19 @@ std::shared_ptr<artist::image> RemoteImages::Find(const std::string& url, const 
     return image;
 }
 
-float MeasureTextWidth(const std::string& text, const el::font_descr& font)
+artist::canvas& MeasureCanvas()
 {
     // Kept for the life of the process and never destroyed: the drawing backend may already be
     // gone when static destructors run.
     static auto* image = new artist::image(1.0f, 1.0f);
     static auto* offscreen = new artist::offscreen_image(*image);
     static auto* cnv = new artist::canvas(offscreen->context());
-    return el::measure_text(*cnv, text, font).x;
+    return *cnv;
+}
+
+float MeasureTextWidth(const std::string& text, const el::font_descr& font)
+{
+    return el::measure_text(MeasureCanvas(), text, font).x;
 }
 
 void Icons::Add(const std::string& name, const std::string& svg)
@@ -899,6 +904,7 @@ void Images::Prefetch(const std::vector<std::string>& relativePaths)
     {
         mDecoder->changed.notify_all();
     }
+
 #else
     (void)relativePaths;
 #endif

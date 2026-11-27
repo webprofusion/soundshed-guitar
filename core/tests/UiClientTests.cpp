@@ -809,6 +809,20 @@ void TestToneSharing()
            "an install that succeeded knows its presets");
     Expect(installs.count("e2") && installs.at("e2").detail == "Needs Tone3000 models", "one that failed knows why");
 
+    // Models that could not be downloaded are named in a notice with OK, once each.
+    (void)client.TakeNotifications();
+    client.Enqueue(
+        R"({"type":"presetArchivesInstalled","entryId":"e3","presetIds":["a","b"],"missingRemote":["Crunch","Crunch","Lead"]})");
+    client.DrainPending();
+    const auto notices = client.TakeNotifications();
+    Expect(notices.size() == 1 && notices[0].kind == guitarfx::uiclient::Notification::Kind::Alert &&
+               notices[0].detail.find("2 presets imported, but these models could not be downloaded and their slots "
+                                      "are left empty: Crunch, Lead.") == 0,
+           "missing models are an alert naming each once");
+    Expect(tones::MissingModelsNotice(1, {"Crunch"}).find("The preset was imported, but this model") == 0 &&
+               tones::MissingModelsNotice(1, {"Crunch"}).find("its slot is left empty: Crunch.") != std::string::npos,
+           "and one reads in the singular");
+
     client.Enqueue(R"({"type":"installedPresetArchiveDeleted","id":"e1","presetIds":["user-9"]})");
     client.DrainPending();
     Expect(client.State().toneInstalls.count("e1") == 0, "a removed install is forgotten");

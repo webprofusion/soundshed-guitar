@@ -6,6 +6,7 @@
 #include "uiclient/UiClient.h"
 #include "uiclient/FolderToneLookup.h"
 #include "uiclient/ResourceThumbnails.h"
+#include "uiclient/ToneSharing.h"
 
 #include "models/ContentHash.h"
 #include "uiclient/UiClientParsing.h"
@@ -277,6 +278,24 @@ void UiClient::RegisterLibraryHandlers()
             {
                 install.presetIds.push_back(id.get<std::string>());
             }
+        }
+
+        // Models it uses that could not be downloaded, their slots left empty: named in a notice
+        // that stays until it is read, as the web's install.ts.
+        std::vector<std::string> missing;
+
+        for (const auto& name : m.value("missingRemote", nlohmann::json::array()))
+        {
+            if (name.is_string() && std::find(missing.begin(), missing.end(), name.get<std::string>()) == missing.end())
+            {
+                missing.push_back(name.get<std::string>());
+            }
+        }
+
+        if (!missing.empty())
+        {
+            PostNotification({Notification::Kind::Alert, "Some models are missing",
+                              tones::MissingModelsNotice(install.presetIds.size(), missing)});
         }
 
         Notify(Topic::Tones);

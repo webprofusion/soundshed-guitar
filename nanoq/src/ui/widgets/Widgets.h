@@ -74,6 +74,8 @@ class Paragraph : public el::element
     Paragraph& Colour(el::color c);
     /// The face's weight; Regular unless set.
     Paragraph& Weighted(Weight weight);
+    /// How tall its lines are, before it is drawn: for sizing the dialog it sits in.
+    [[nodiscard]] float Height() const;
 
   private:
     [[nodiscard]] std::vector<std::string> Lines(cycfi::artist::canvas& cnv) const;

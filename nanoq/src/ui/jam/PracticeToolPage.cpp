@@ -841,19 +841,20 @@ void Shell::OpenPracticeLoopMenu(const std::string& loopId, el::rect anchor)
          [this, loop] {
              char text[64];
              std::snprintf(text, sizeof(text), "%.2f - %.2f", loop.startSec, loop.endSec);
-             PostPrompt("Start - end, in seconds", text, "Set", [this, id = loop.id](const std::string& value) {
-                 double start = 0.0, end = 0.0;
-                 char dash = 0;
+             PostPrompt("Set times", text, "Set", {.message = "Start - end, in seconds.", .placeholder = "0.00 - 0.00"},
+                        [this, id = loop.id](const std::string& value) {
+                            double start = 0.0, end = 0.0;
+                            char dash = 0;
 
-                 if (std::sscanf(value.c_str(), " %lf %c %lf", &start, &dash, &end) == 3 && end > start)
-                 {
-                     mPractice->SetLoopTimes(id, start, end);
-                 }
-                 else
-                 {
-                     ShowToast("Times not set", "Write them as start - end, such as 12.5 - 20.", true);
-                 }
-             });
+                            if (std::sscanf(value.c_str(), " %lf %c %lf", &start, &dash, &end) == 3 && end > start)
+                            {
+                                mPractice->SetLoopTimes(id, start, end);
+                            }
+                            else
+                            {
+                                ShowToast("Times not set", "Write them as start - end, such as 12.5 - 20.", true);
+                            }
+                        });
          }},
         {"Name it", false, true, {}}};
     // The song sections, numbered past those already used.
@@ -875,7 +876,8 @@ void Shell::OpenPracticeLoopMenu(const std::string& loopId, el::rect anchor)
 
 void Shell::AddPracticeLink(const std::string& projectId)
 {
-    OpenPrompt("Link address (the tablature, a lesson, the lyrics)", "", "Next",
+    OpenPrompt("Add link", "", "Next",
+               {.message = "The address of the tablature, a lesson or the lyrics.", .placeholder = "https://"},
                [this, projectId](const std::string& url) {
                    if (!practice::NormalizeLinkUrl(url))
                    {
@@ -883,18 +885,21 @@ void Shell::AddPracticeLink(const std::string& projectId)
                        return;
                    }
 
-                   PostPrompt("Title (optional)", "", "Add Link", [this, projectId, url](const std::string& title) {
-                       const auto result = mPractice->AddLink(projectId, title, url);
+                   PostPrompt(
+                       "Add link", "", "Add Link",
+                       {.message = "A title for the link (optional).", .placeholder = "Title", .allowEmpty = true},
+                       [this, projectId, url](const std::string& title) {
+                           const auto result = mPractice->AddLink(projectId, title, url);
 
-                       if (result == "too-many")
-                       {
-                           ShowToast("Link not added", "A project keeps up to 30 links.", true);
-                       }
-                       else if (result != "added")
-                       {
-                           ShowToast("Link not added", "Save the project first.", true);
-                       }
-                   });
+                           if (result == "too-many")
+                           {
+                               ShowToast("Link not added", "A project keeps up to 30 links.", true);
+                           }
+                           else if (result != "added")
+                           {
+                               ShowToast("Link not added", "Save the project first.", true);
+                           }
+                       });
                });
 }
 

@@ -116,13 +116,19 @@ void Shell::PostMenu(const std::string& title, std::vector<MenuItem> items)
 void Shell::PostPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
                        std::function<void(const std::string&)> onSubmit)
 {
-    mSession.View().post(
-        [this, alive = std::weak_ptr<bool>(mAlive), title, initial, confirmLabel, onSubmit = std::move(onSubmit)] {
-            if (alive.lock())
-            {
-                OpenPrompt(title, initial, confirmLabel, onSubmit);
-            }
-        });
+    PostPrompt(title, initial, confirmLabel, PromptOptions{}, std::move(onSubmit));
+}
+
+void Shell::PostPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
+                       PromptOptions options, std::function<void(const std::string&)> onSubmit)
+{
+    mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), title, initial, confirmLabel,
+                          options = std::move(options), onSubmit = std::move(onSubmit)] {
+        if (alive.lock())
+        {
+            OpenPrompt(title, initial, confirmLabel, options, onSubmit);
+        }
+    });
 }
 
 namespace
@@ -646,7 +652,10 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
                                          return;
                                      }
 
-                                     PostPrompt("Bank number (blank for none)", bank, "Save",
+                                     PostPrompt("Setlist bank", bank, "Save",
+                                                {.message = "Its bank number; leave it blank for none.",
+                                                 .placeholder = "Bank",
+                                                 .allowEmpty = true},
                                                 [this, id, entered](const std::string& b) {
                                                     mSession.Commands().UpdateSetlist(id, entered, TypedBank(b));
                                                 });

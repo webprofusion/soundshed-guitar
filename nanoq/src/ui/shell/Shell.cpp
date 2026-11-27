@@ -642,6 +642,12 @@ void Shell::OnTick()
     // Errors and confirmations the engine sent (a save that failed, a preset saved).
     for (auto& n : mSession.Client().TakeNotifications())
     {
+        if (n.kind == guitarfx::uiclient::Notification::Kind::Alert)
+        {
+            OpenAlert(n.title, n.detail);
+            continue;
+        }
+
         ShowToast(n.title, n.detail, n.kind == guitarfx::uiclient::Notification::Kind::Error);
     }
 

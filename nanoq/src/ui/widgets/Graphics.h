@@ -107,6 +107,9 @@ class Images
 /// before it is drawn. UI thread.
 [[nodiscard]] float MeasureTextWidth(const std::string& text, const el::font_descr& font);
 
+/// The small offscreen canvas MeasureTextWidth measures on, for measuring more than one line.
+[[nodiscard]] artist::canvas& MeasureCanvas();
+
 /// Pictures downloaded at run time (tone sharing packs, Tone3000 tones, avatars), from bytes the
 /// caller fetched. Artist reads pictures from files, so each is written once to a cache folder
 /// and loaded from there. UI thread.

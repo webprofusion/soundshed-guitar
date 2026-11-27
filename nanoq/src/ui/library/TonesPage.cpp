@@ -715,26 +715,32 @@ void Shell::OpenToneAccount(el::rect anchor)
     }
 
     // Signing in: an email, then the code the service emails to it.
-    OpenPrompt("Sign in to tone sharing", "", "Email me a code", [this](const std::string& email) {
-        mSession.Tones().RequestCode(email, [this, email](const guitarfx::uiclient::tones::Response& response) {
-            if (!response.ok)
-            {
-                ShowToast("Could not send a code", response.error, true);
-                return;
-            }
+    OpenPrompt(
+        "Sign in to tone sharing", "", "Email me a code",
+        {.message = "Your email address: a sign-in code is emailed to it.", .placeholder = "Email"},
+        [this](const std::string& email) {
+            mSession.Tones().RequestCode(email, [this, email](const guitarfx::uiclient::tones::Response& response) {
+                if (!response.ok)
+                {
+                    ShowToast("Could not send a code", response.error, true);
+                    return;
+                }
 
-            OpenPrompt("Enter the code sent to " + email, "", "Sign in", [this, email](const std::string& code) {
-                mSession.Tones().VerifyCode(email, code, [this](const guitarfx::uiclient::tones::Response& answer) {
-                    if (!answer.ok)
-                    {
-                        ShowToast("Could not sign in", answer.error, true);
-                    }
+                OpenPrompt("Sign in to tone sharing", "", "Sign in",
+                           {.message = "Enter the code sent to " + email + ".", .placeholder = "Code"},
+                           [this, email](const std::string& code) {
+                               mSession.Tones().VerifyCode(email, code,
+                                                           [this](const guitarfx::uiclient::tones::Response& answer) {
+                                                               if (!answer.ok)
+                                                               {
+                                                                   ShowToast("Could not sign in", answer.error, true);
+                                                               }
 
-                    Mark(kPage);
-                });
+                                                               Mark(kPage);
+                                                           });
+                           });
             });
         });
-    });
 }
 
 void Shell::ShareTone(const tones::Tone& tone)

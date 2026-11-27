@@ -761,7 +761,8 @@ struct Notification
     enum class Kind
     {
         Info,
-        Error
+        Error,
+        Alert, // too long to read before a toast goes: a notice with OK (the web's showAlert)
     };
 
     Kind kind = Kind::Info;

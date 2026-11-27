@@ -740,10 +740,20 @@ class Shell
     void SelectPresetBrowserFolder(const std::string& folderId);
     [[nodiscard]] Ptr BuildFolderColumn();
     [[nodiscard]] Ptr BuildSetlistsView(Ptr tabs);
+    /// How a prompt asks, as the web UI's showPrompt.
+    struct PromptOptions
+    {
+        std::string message;              // a line or two above the field, saying what to enter
+        std::string placeholder = "Name"; // what the empty field reads
+        bool multiline = false;           // several lines, in a box where Enter starts a new one
+        bool allowEmpty = false;          // OK with nothing entered gives ""; otherwise it says so
+    };
     /// A menu or prompt opened from another menu's item, once that menu has closed.
     void PostMenu(const std::string& title, std::vector<MenuItem> items);
     void PostPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
                     std::function<void(const std::string&)> onSubmit);
+    void PostPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
+                    PromptOptions options, std::function<void(const std::string&)> onSubmit);
 
     // TonesPage.cpp: tone sharing, as the web UI's Tones tab
     enum class TonesTab
@@ -998,8 +1008,14 @@ class Shell
     /// keeping the keyboard focus on the layer that has it.
     void RemoveLayer(Ptr layer);
     void OpenMenu(const std::string& title, std::vector<MenuItem> items);
+
+
     void OpenPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
                     std::function<void(const std::string&)> onSubmit);
+    void OpenPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
+                    PromptOptions options, std::function<void(const std::string&)> onSubmit);
+    /// A notice with only OK, as the web UI's showAlert; `onClose` runs however it is closed.
+    void OpenAlert(const std::string& title, const std::string& message, std::function<void()> onClose = {});
     // RiffDialogs.cpp
     /// The riff capture dialog; `arm` starts counting in at once (the footer's Rec), and
     /// `appendRiffId` saves the take as another take of that riff (the library's Edit).

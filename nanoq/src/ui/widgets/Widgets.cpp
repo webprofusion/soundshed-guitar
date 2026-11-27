@@ -157,6 +157,11 @@ el::view_limits Paragraph::limits(const el::basic_context& ctx) const
     return {{mWidth, h}, {mWidth, h}};
 }
 
+float Paragraph::Height() const
+{
+    return static_cast<float>(std::max<std::size_t>(1, Lines(MeasureCanvas()).size())) * (mSize + 5.0f);
+}
+
 void Paragraph::draw(const el::context& ctx)
 {
     const auto font = Font(mWeight).size(mSize);

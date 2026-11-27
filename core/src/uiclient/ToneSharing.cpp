@@ -712,4 +712,21 @@ const std::vector<std::string>& StandardTags()
                                                   "ambient", "atmospheric", "live", "studio", "stereo", "dual-amp"};
     return tags;
 }
+
+std::string MissingModelsNotice(std::size_t presetCount, const std::vector<std::string>& missing)
+{
+    std::string names;
+
+    for (const auto& name : missing)
+    {
+        names += (names.empty() ? "" : ", ") + name;
+    }
+
+    const bool one = missing.size() == 1;
+    return (presetCount == 1 ? std::string("The preset was imported")
+                             : std::to_string(presetCount) + " presets imported") +
+           ", but " + (one ? "this model" : "these models") + " could not be downloaded and " +
+           (one ? "its slot is" : "their slots are") + " left empty: " + names +
+           ". A model goes missing when its creator removes, replaces or hides it.";
+}
 } // namespace guitarfx::uiclient::tones
