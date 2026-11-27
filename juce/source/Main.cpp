@@ -230,7 +230,7 @@ class MainWindow : public juce::DocumentWindow
                          juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(
                              juce::ResizableWindow::backgroundColourId),
                          juce::DocumentWindow::allButtons),
-          mPluginHolder(std::move(pluginHolderIn))
+          mPluginHolder(std::move(pluginHolderIn)), mAppName(appName)
     {
 #if !SOUNDSHED_MOBILE
         // Already on screen, put up by the app before the plugin holder (see LaunchCurtain
@@ -271,6 +271,8 @@ class MainWindow : public juce::DocumentWindow
             {
                 mShowsNativeEditor = adapter->wantsNativeEditor();
             }
+
+            updateTitle();
 
             if (editor != nullptr)
             {
@@ -358,7 +360,7 @@ class MainWindow : public juce::DocumentWindow
                                                         : R"({"type":"windowChromeState","customCaption":false})");
             });
 
-            // Settings' experimental switch between the WebView and the native UI: the
+            // The theme flyout's App UI choice between the WebView and the native UI: the
             // editor is swapped in place, no relaunch. Later, not now: the change arrives from
             // inside the editor being replaced.
             adapter->setEditorSwitchHandler([safe = juce::Component::SafePointer<MainWindow>(this)] {
@@ -634,10 +636,16 @@ class MainWindow : public juce::DocumentWindow
                                                                               : nullptr);
     }
 
+    // The window says when it is the native UI (beta), which can look unfamiliar.
+    void updateTitle()
+    {
+        setName(mShowsNativeEditor ? mAppName + " (Nano UI)" : mAppName);
+    }
+
 #if !SOUNDSHED_MOBILE
-    /// Replaces the editor with the other one when Settings has just chosen it (the WebView or
-    /// the native UI), keeping the window where and as big as it is. The engine carries on; the
-    /// new UI catches up with it at its uiReady, as a reopened plugin window does.
+    /// Replaces the editor with the other one when the theme flyout has just chosen it (the
+    /// WebView or the native UI), keeping the window where and as big as it is. The engine
+    /// carries on; the new UI catches up with it at its uiReady, as a reopened plugin window does.
     void switchEditorIfChosen()
     {
         auto* processor = mPluginHolder != nullptr ? mPluginHolder->processor.get() : nullptr;
@@ -659,6 +667,7 @@ class MainWindow : public juce::DocumentWindow
         clearContentComponent();
 
         mShowsNativeEditor = adapter->wantsNativeEditor();
+        updateTitle();
 
         if (auto* editor = processor->createEditorIfNeeded())
         {
@@ -800,6 +809,8 @@ class MainWindow : public juce::DocumentWindow
 
     // Which editor is up: the native UI or the WebView (switchEditorIfChosen).
     bool mShowsNativeEditor = false;
+    // The title without "(Nano UI)" (updateTitle).
+    juce::String mAppName;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainWindow)
 };

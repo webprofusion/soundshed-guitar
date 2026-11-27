@@ -184,4 +184,16 @@
         </label>
       </div>
       <div class="theme-flyout-grid" role="radiogroup" aria-label="Theme"></div>
+      <!-- The app's UI: this one, or the native UI from Soundshed Nano Q (ts/settings/nativeEditor.ts).
+           Only where the host can build either. -->
+      <div class="app-ui" id="app-ui" hidden>
+        <div class="app-ui-row">
+          <span class="theme-flyout-title" id="app-ui-label">App UI</span>
+          <div class="app-ui-choices" role="radiogroup" aria-labelledby="app-ui-label">
+            <button type="button" class="app-ui-choice" data-native-editor="false" role="radio" aria-checked="true">Standard</button>
+            <button type="button" class="app-ui-choice" data-native-editor="true" role="radio" aria-checked="false">Native (Nano) <span class="app-ui-beta">Beta</span></button>
+          </div>
+        </div>
+        <div class="app-ui-hint" id="app-ui-hint"></div>
+      </div>
     </div>

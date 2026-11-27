@@ -520,6 +520,7 @@ void Shell::OnTick()
     TickLooper();
     TickFilePicker();
     SyncZoom();
+    ShowNativeUiBetaNoticeOnce();
     {
         const auto wheel = mState.appSettings.find("ui.mouseWheelAdjustsControls");
         ParamKnob::sWheelAdjusts = wheel == mState.appSettings.end() || !wheel->is_boolean() || wheel->get<bool>();

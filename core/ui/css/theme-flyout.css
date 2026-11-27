@@ -150,3 +150,87 @@
     height: 36px;
   }
 }
+
+/* The app's UI, under the tiles (ts/settings/nativeEditor.ts): this one or the native UI, where
+   the host can build either. */
+.app-ui {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 2px 0;
+  border-top: 1px solid var(--border-dark, var(--border-light));
+}
+
+.app-ui[hidden] {
+  display: none;
+}
+
+.app-ui-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-ui-choices {
+  display: inline-flex;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md, 6px);
+  overflow: hidden;
+}
+
+.app-ui-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app-ui-choice + .app-ui-choice {
+  border-left: 1px solid var(--border-light);
+}
+
+.app-ui-choice:hover {
+  background: var(--overlay-light);
+  color: var(--text-primary);
+}
+
+.app-ui-choice:focus-visible {
+  outline: 2px solid var(--accent-primary, #50b878);
+  outline-offset: -2px;
+}
+
+.app-ui-choice[aria-checked="true"] {
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--text-primary);
+}
+
+.app-ui-beta {
+  padding: 1px 5px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app-ui-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+@media (pointer: coarse) {
+  .app-ui-choice {
+    height: 36px;
+  }
+}

@@ -455,6 +455,7 @@ Ptr Shell::BuildTempoControls(bool withTap)
     {
         tempo->Ink(mTheme.Text());
     }
+
     tempo->onClick = [this] { OpenMetronome(); };
 
     std::vector<Ptr> parts{tempo};
@@ -601,13 +602,8 @@ Ptr Shell::BuildWideFooter()
                          Stretch(), BuildTempoControls(true),
                          divider()};
 
-    // The zoom is in the theme's flyout, as the web UI's.
-    if (auto standardUi = BuildStandardUiButton())
-    {
-        row.push_back(standardUi);
-        row.push_back(HGap(8));
-    }
-
+    // The zoom, and the choice between this UI and the web one, are in the theme's flyout, as
+    // the web UI's.
     row.push_back(themeButton);
     row.push_back(HGap(12));
     // Touch sizes: the buttons are hit over the footer's whole height.

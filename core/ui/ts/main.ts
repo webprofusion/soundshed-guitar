@@ -32,6 +32,7 @@ import { startUiSettingsTracking } from "./windowSettings.js";
 import { renderFooterDemoAudio } from "./demoAudio.js";
 import { initDensitySelect, initZoomControls, initUserInputCalibrationControls } from "./settings.js";
 import { initThemeFlyout } from "./themeFlyout.js";
+import { initNativeEditorToggle } from "./settings/nativeEditor.js";
 import { postMessage, requestLooperState } from "./bridge.js";
 import { initWindowChrome } from "./windowChrome.js";
 import { initializeMetronome } from "./metronome.js";
@@ -238,6 +239,8 @@ async function bootstrap(): Promise<void> {
   void themeSwitcher; // Ensure the singleton is constructed
   console.log("[JS] Theme switcher initialized:", themeSwitcher.getCurrentTheme());
   initThemeFlyout();
+  // The flyout's App UI choice; Settings binds only when it is first opened.
+  initNativeEditorToggle();
   initZoomControls();
   initDensitySelect();
   

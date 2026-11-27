@@ -461,24 +461,12 @@ Ptr Shell::BuildSettingsPage()
             endCard();
 
             // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web
-            // UI (its Settings → User Interface → Interface has the way here). The standalone app swaps at once.
+            // UI is the theme flyout's App UI choice (ThemeFlyout.cpp), as the web UI's way here is.
             if (mState.environment.nativeEditorOnly)
             {
                 beginCard("Native UI");
                 describe("This copy of Soundshed Guitar uses only the native UI: it was installed that way, or "
                          "the WebView2 runtime the standard UI needs is not installed.");
-                endCard();
-            }
-            else if (mState.environment.nativeEditor)
-            {
-                beginCard("Native UI");
-                toggle(
-                    "Native UI (Nano)", [boolOr] { return boolOr(guitarfx::kNativeEditorSettingKey, false); },
-                    setBool(guitarfx::kNativeEditorSettingKey));
-                describe(mState.environment.standalone
-                             ? "Switch off to go back to the standard UI."
-                             : "Switch off to go back to the standard UI when the plugin window is next opened, for "
-                               "every instance.");
                 endCard();
             }
         }

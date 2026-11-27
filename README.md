@@ -83,7 +83,7 @@ Edit `core/config/GuitarFXConfig.h` to customize plugin name and manufacturer. R
   The JUCE web-UI builds for them ([docs/android-build.md](docs/android-build.md),
   [docs/ios-build.md](docs/ios-build.md)) are kept for development but not shipped.
 - **Native UI on the desktop**: every Windows, macOS and Linux build includes the native (Nano Q)
-  UI beside the web UI; Settings → User Interface → Native UI (Nano) switches to it
+  UI (beta) beside the web UI; App UI in the footer's Theme flyout switches between them
 - **Core tests**: Enable with `GUITARFX_CORE_BUILD_TESTS=ON`, run via CTest
 
 ## Prerequisites
@@ -130,7 +130,7 @@ sudo apt-get install libxrandr-dev libxcursor-dev libcairo2-dev libharfbuzz-dev 
 
 The app can also draw itself with the native (Nano) UI instead of the WebView, for a desktop
 where WebKitGTK is missing or misbehaves. Start it once with `--native-ui` and it stays that way
-(the native UI's **Standard UI** button, or `--web-ui`, goes back):
+(Standard under App UI in the native UI's Theme flyout, or `--web-ui`, goes back):
 
 ```bash
 /opt/Soundshed/soundshed-guitar/soundshed-guitar --native-ui

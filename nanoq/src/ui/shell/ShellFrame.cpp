@@ -375,22 +375,6 @@ Ptr Shell::BuildScenes()
 
 // ── The chain stage ─────────────────────────────────────────────────────────────
 
-std::shared_ptr<IconButton> Shell::BuildStandardUiButton()
-{
-    // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web
-    // UI, beside Settings -> Features -> Experimental. The standalone swaps at once; a plugin's
-    // next window follows.
-    if (!mState.environment.nativeEditor || mState.environment.nativeEditorOnly)
-    {
-        return nullptr;
-    }
-
-    auto button = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    button->Size(100, 28).Label("Standard UI", 11.0f);
-    button->onClick = [this] { mSession.Commands().SetSetting(guitarfx::kNativeEditorSettingKey, false); };
-    return button;
-}
-
 Ptr Shell::BuildChainStage()
 {
     // The add button floats at the bottom right (.signal-path-add-menu-trigger): it adds at the
@@ -622,14 +606,9 @@ void Shell::OpenOptions(el::rect anchor)
 
         OpenDropdown(d->Bounds(), std::move(items), 150.0f);
     };
-    // The zoom is in the theme's flyout, as the web UI's.
+    // The zoom, and the choice between this UI and the web one, are in the theme's flyout, as
+    // the web UI's.
     std::vector<Ptr> viewRow{themeButton, HGap(8), densityButton};
-
-    if (auto standardUi = BuildStandardUiButton())
-    {
-        viewRow.push_back(HGap(8));
-        viewRow.push_back(standardUi);
-    }
 
     viewRow.push_back(Stretch());
 

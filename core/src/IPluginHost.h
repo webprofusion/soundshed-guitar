@@ -128,7 +128,7 @@ class IPluginHost
     }
 
     /// True where the host can build either editor, the WebView or the native UI, and picks one
-    /// by kNativeEditorSettingKey. Settings then shows the switch between them (experimental).
+    /// by kNativeEditorSettingKey. The theme flyout then shows the App UI choice between them (beta).
     [[nodiscard]] virtual bool SupportsNativeEditor() const
     {
         return false;

@@ -303,9 +303,12 @@ class Shell
     /// Each tick: a stored zoom the view has not applied yet is applied, and one the host changed
     /// (QPlug's zoom keys) is stored.
     void SyncZoom();
-    /// Back to the web UI, where Soundshed Guitar hosts this UI (environment.nativeEditor); null
-    /// anywhere else.
-    [[nodiscard]] std::shared_ptr<IconButton> BuildStandardUiButton();
+    /// The flyout's App UI choice, where Soundshed Guitar hosts this UI and can draw itself with
+    /// either (environment.nativeEditor): this one, or the web UI. Null anywhere else.
+    /// `height` is set to how tall it is.
+    [[nodiscard]] Ptr BuildAppUiChoice(float& height);
+    /// Once, the first time this UI opens in Soundshed Guitar: it is a beta, and bugs are wanted.
+    void ShowNativeUiBetaNoticeOnce();
     /// Touch sizes' Auto, On or Off, in a drop-down (the Options popover, ShellFrame.cpp).
     [[nodiscard]] std::shared_ptr<IconButton> TouchControlsButton();
 
@@ -1051,7 +1054,8 @@ class Shell
     el::rect mThemeFlyoutAnchor;
     bool mOptionsOpen = false; // the overlay is the compact footer's Options sheet
     el::rect mOptionsAnchor;
-    bool mZoomKnown = false; // mZoomStored holds the zoom stored, or the one first seen
+    bool mZoomKnown = false;         // mZoomStored holds the zoom stored, or the one first seen
+    bool mBetaNoticeChecked = false; // ShowNativeUiBetaNoticeOnce has looked, this session
     float mZoomStored = 1.0f;
     Ptr mToast;
     Ptr mFilePickerLayer; // over everything: a dialog may be what asked for the file

@@ -645,8 +645,8 @@ UI collects what changes how the app looks and behaves rather than how it sounds
 sub-tabs (`activateSettingsSubTab` in `core/ui/ts/settings/tabs.ts`; markup in
 `ui-components/panels/settings-ui.html`):
 
-- **Interface**: Layout Density, Mouse wheel adjusts controls, Effect Panel Background, and the
-  Native UI (Nano) switch below.
+- **Interface**: Layout Density, Mouse wheel adjusts controls and Effect Panel Background. The
+  choice between the standard and native UI is the theme flyout's App UI (below).
 - **Features**: the feature toggles (`settings-features.html`) and the Factory Preset Archives
   options. A saved view or link that names the old `features` section tab opens here
   (`MOVED_EQUIPMENT_TABS`).
@@ -665,8 +665,8 @@ setlists and mixer slots from loading factory presets. Switching it on restores
 the entries. This is separate from the Power Feature **Factory Preset Archive Tools**,
 which controls development/authoring tools.
 
-**Native UI (Nano)** (`ui.nativeEditor`, `core/ui/ts/settings/nativeEditor.ts`) is an
-experimental switch under its own Native UI card in User Interface → Interface, shown only when `environment.nativeEditor`
+**App UI** (`ui.nativeEditor`, `core/ui/ts/settings/nativeEditor.ts`) is a Standard | Native
+(Nano) Beta choice at the bottom of the footer's theme flyout, shown only when `environment.nativeEditor`
 is true: the host can build either editor (`IPluginHost::SupportsNativeEditor`; every desktop
 build on Windows, macOS and Linux, where `SOUNDSHED_NANOQ_UI` is on by default, and never the
 JUCE iOS or Android builds, which are not shipped: mobile ships Nano Q's own apps). On, the JUCE app draws itself with Nano Q's
@@ -674,10 +674,15 @@ native UI (`juce/source/NanoQUiEditor.*`, see [plans/nano-q-ui-in-juce.md](plans
 instead of the WebView. It is an ordinary `setSetting`; the JUCE adapter also passes the change to
 the standalone window, which swaps its editor in place with no relaunch (`MainWindow::switchEditorIfChosen`
 in `juce/source/Main.cpp`). A plugin's next editor follows the setting, so in a DAW it applies when the
-plugin window is next opened, for every instance. The way back is in the native UI itself, under
-the same condition: a **Standard UI** button in its footer beside the theme picker (in the compact
-layout's Options popover, beside the layout), and the same switch in its Settings → User Interface → Interface. Nano
-Q's own app never shows either.
+plugin window is next opened, for every instance (the flyout says so under the choice). The way
+back is the same App UI choice in the native UI's own theme flyout (`Shell::BuildAppUiChoice`,
+`nanoq/src/ui/shell/ThemeFlyout.cpp`), under the same condition; Nano Q's own app never shows it.
+While the native UI is up the standalone's window title ends in "(Nano UI)" (`MainWindow::updateTitle`).
+
+The first time the native UI opens in Soundshed Guitar it shows a notice that it is a beta still in
+development, with a **Report a bug** button to the GitHub issues (`Shell::ShowNativeUiBetaNoticeOnce`);
+seeing it sets `ui.nativeEditorBetaNoticeShown`, a shared app setting, so it shows once for every
+instance.
 
 Two more ways in, for a machine where the WebView cannot run:
 
@@ -689,8 +694,8 @@ Two more ways in, for a machine where the WebView cannot run:
   writes `NativeUiOnly=1` under `Software\Soundshed\Soundshed Guitar\Installer` (HKLM, or HKCU for a
   per-user install), and the app and plugins then build only the native UI
   (`IPluginHost::NativeEditorOnly`, broadcast as `environment.nativeEditorOnly`). The same happens
-  when the WebView2 runtime is not installed at all. The native UI then hides the Standard UI
-  button and shows a note in place of the switch. The installer's other advanced task, "Don't
+  when the WebView2 runtime is not installed at all. The native UI then hides the App UI choice
+  and the beta notice, and its Settings → User Interface → Interface says why. The installer's other advanced task, "Don't
   install the Microsoft Edge WebView2 runtime", skips only the runtime (so does Nano-only); both
   can be passed to a silent install, `/TASKS="nativeuionly"`.
 
