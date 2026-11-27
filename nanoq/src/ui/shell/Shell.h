@@ -136,6 +136,7 @@ struct SectionNav
 class WebViewSlot;    // JamPage.cpp
 class ScaleNeck;      // ScaleGuideDraw.h
 class ChordWheelView; // ScaleGuideDraw.h
+class TonePill;       // ScaleGuideDraw.h
 class RunTabView;
 class ProgressionTabView;
 class NodeCard;               // NodeCard.h
@@ -832,6 +833,19 @@ class Shell
     void ChangeScaleGuide(const std::function<void(guitarfx::uiclient::scaleguide::Settings&)>& edit);
     /// Steps a progression, the next chord led from the shape showing (or `fromFrets`).
     void ScaleGuideStep(int index, std::vector<int> fromFrets = {});
+    /// Left or Right on the page: a progression showing steps back or on (the web's arrow keys).
+    bool ScaleGuideArrow(bool forward);
+    /// The progression being written (the web's draft): shown in place of the chosen one until it
+    /// is saved or dropped. An empty id is a new one.
+    std::optional<guitarfx::uiclient::scaleguide::UserProgression> mScaleGuideDraft;
+    std::shared_ptr<el::basic_input_box> mScaleGuideDraftName;
+    Ptr mScaleGuideDraftNameField;
+    int mScaleGuideDraftDegree = 0;
+    std::string mScaleGuideDraftQuality = "maj";
+    [[nodiscard]] Ptr BuildScaleGuideEditor();
+    void StartScaleGuideDraft(guitarfx::uiclient::scaleguide::UserProgression draft);
+    std::vector<std::weak_ptr<TonePill>> mScaleGuidePills; // the formula, lit by LISTEN
+    /// How LISTEN's readout reads: "idle", "in", "out" or "clean" (the web's sg-live states).
     /// Every tick: LISTEN on while the guide shows (it has no switch), and the readings it brings.
     void SyncScaleGuideListen();
     // What LISTEN heard whatever the guide shows (the engine's `heard`): the summary's Heard column,

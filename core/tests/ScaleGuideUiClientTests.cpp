@@ -276,9 +276,44 @@ void TestUiClientHeard()
     Expect(sg::ParseHeard(nlohmann::json()) == sg::Heard{}, "nor does a reading without it");
 }
 
+/// Writing a progression, as the web's progressions.ts: numerals from a degree and a quality, and
+/// the draft shown while it is written.
+void TestUiClientEditor()
+{
+    namespace sg = guitarfx::uiclient::scaleguide;
+    Expect(sg::RomanToken(0, "maj") == "I" && sg::RomanToken(10, "maj") == "bVII" && sg::RomanToken(2, "m7") == "ii7",
+           "a degree and a quality make a numeral");
+    Expect(sg::RomanToken(11, "m7b5") == "viiÃ¸"
+                                         "7" &&
+               sg::RomanToken(13, "dim") == "biiÂ°",
+           "half-diminished and diminished, the degree wrapped");
+    Expect(sg::RomanToken(7, "nonsense") == "V", "an unknown quality is major");
+    Expect(sg::DisplayNumeral("bVII7") == "â­VII7" && sg::DisplayNumeral("IV") == "IV", "shown with a flat");
+    Expect(sg::NumeralTokens({"â­VII", "I"}) == std::vector<std::string>{"bVII", "I"},
+           "a built-in's numerals copied as tokens");
+    Expect(sg::NewProgressionId({{"p1", "a", {"I"}}, {"p3", "b", {"I"}}}) == "p4" && sg::NewProgressionId({}) == "p1",
+           "a new id none has");
+
+    sg::Settings settings;
+    settings.mode = "chord";
+    settings.progression = "b:pop";
+    const sg::UserProgression draft{"", "Mine", {"I", "bVII", "IV"}};
+    const auto request = sg::ViewRequest(settings, {}, 5, {}, 0, &draft);
+    Expect(!request.contains("progression") && request["progressionChords"].size() == 3 && request["step"] == 2 &&
+               request["progressionName"] == "Mine",
+           "the draft shows instead of the chosen one, its step kept inside it");
+    const sg::UserProgression empty{"", "", {}};
+    Expect(!sg::ViewRequest(settings, {}, 0, {}, 0, &empty).contains("progressionChords") &&
+               !sg::ViewRequest(settings, {}, 0, {}, 0, &empty).contains("progression"),
+           "an empty draft shows one chord");
+    const auto view = music::BuildScaleGuideView(music::ParseScaleGuideRequest(request));
+    Expect(view["progression"]["chords"].size() == 3, "and the engine plays it");
+}
+
 int main()
 {
     TestUiClient();
+    TestUiClientEditor();
     TestUiClientArpeggio();
     TestUiClientHeard();
 

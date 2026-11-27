@@ -347,6 +347,7 @@ class ChordBoxView final : public Pressable
 
     /// A box's width for `strings` strings, for laying the boxes out.
     [[nodiscard]] static float WidthFor(std::size_t strings);
+    [[nodiscard]] static float HeightFor(bool titled);
 
   private:
     const Theme& mTheme;
@@ -358,5 +359,113 @@ class ChordBoxView final : public Pressable
     std::string mCaption;
     std::string mTitle;
     bool mSelected;
+};
+
+/// One chord of a progression's steps, as the web's .sg-step: its name and, smaller, its numeral;
+/// the one showing washed in the accent, those already played dimmed.
+class ProgressionStep final : public Pressable
+{
+  public:
+    enum class State
+    {
+        Ahead,
+        Done,
+        Active
+    };
+
+    ProgressionStep(const Theme& theme, std::string name, std::string numeral, State state)
+        : mTheme(theme), mName(std::move(name)), mNumeral(std::move(numeral)), mState(state)
+    {
+    }
+
+    el::view_limits limits(const el::basic_context& ctx) const override;
+    void draw(const el::context& ctx) override;
+    [[nodiscard]] AccessInfo Describe() const override;
+
+  private:
+    const Theme& mTheme;
+    std::string mName, mNumeral;
+    State mState;
+};
+
+/// A chord tone of the formula, as the web's .sg-pill: its interval small and its name; the root
+/// edged in the accent. LISTEN edges a tone it hears in green and one it misses in red.
+class TonePill final : public el::element, public Drawn
+{
+  public:
+    TonePill(const Theme& theme, std::string interval, std::string name, bool root)
+        : mTheme(theme), mInterval(std::move(interval)), mName(std::move(name)), mRoot(root)
+    {
+    }
+
+    el::view_limits limits(const el::basic_context& ctx) const override;
+    void draw(const el::context& ctx) override;
+
+    /// What LISTEN made of the last reading; true when that changed what shows.
+    bool Set(bool heard, bool missing);
+
+  private:
+    const Theme& mTheme;
+    std::string mInterval, mName;
+    bool mRoot;
+    bool mHeard = false, mMissing = false;
+};
+
+/// Play's volume, as the web's range input (0 to 100 in fives): a track with a thumb, dragged,
+/// clicked, scrolled, or with focus moved by the arrows. `onCommit` hears the level once a drag
+/// ends, or at once for a click, a scroll or a key.
+class LevelSlider final : public el::element, public Drawn, public Focusable
+{
+  public:
+    LevelSlider(const Theme& theme, int level) : mTheme(theme), mLevel(level)
+    {
+    }
+
+    std::function<void(int level)> onCommit;
+
+    el::view_limits limits(const el::basic_context& ctx) const override;
+    void draw(const el::context& ctx) override;
+    bool click(const el::context& ctx, el::mouse_button btn) override;
+    void drag(const el::context& ctx, el::mouse_button btn) override;
+    bool cursor(const el::context& ctx, el::point p, el::cursor_tracking status) override;
+    bool scroll(const el::context& ctx, el::point dir, el::point p) override;
+    bool key(const el::context& ctx, el::key_info k) override;
+
+    bool wants_control() const override
+    {
+        return true;
+    }
+
+    bool wants_focus() const override
+    {
+        return FocusWanted(true);
+    }
+
+    void begin_focus(focus_request) override
+    {
+        NoteFocus(true);
+    }
+
+    bool end_focus() override
+    {
+        NoteFocus(false);
+        return true;
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override;
+    bool SetPosition(double normalised) override;
+
+    [[nodiscard]] std::string TooltipText() const override
+    {
+        return "How loud Play's guitar is going into the preset, like its volume knob";
+    }
+
+  private:
+    [[nodiscard]] int LevelAt(const el::rect& bounds, float x) const;
+    void Commit(int level);
+
+    const Theme& mTheme;
+    int mLevel;
+    bool mDragging = false;
 };
 } // namespace nanoq::ui

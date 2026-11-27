@@ -59,11 +59,30 @@ struct UserProgression
 [[nodiscard]] std::vector<UserProgression> LoadProgressions(const nlohmann::json& appSettings);
 [[nodiscard]] nlohmann::json ProgressionsJson(const std::vector<UserProgression>& progressions);
 
+// ── Writing a progression (the web's progressions.ts and progressionView.ts) ──
+
+/// The twelve degrees a chord can sit on, by semitones above the key.
+inline constexpr std::array<const char*, 12> kDegreeNumerals = {"I",  "bII", "II",  "bIII", "III",  "IV",
+                                                                "bV", "V",   "bVI", "VI",   "bVII", "VII"};
+
+/// The numeral for a chord `offset` semitones above the key with the catalog's quality `quality`
+/// ("maj", "m7", "m7b5" ...): "bVII", "ii7", "viiø7".
+[[nodiscard]] std::string RomanToken(int offset, const std::string& quality);
+/// A numeral as a chart writes it: "bVII" as "♭VII".
+[[nodiscard]] std::string DisplayNumeral(const std::string& token);
+/// A built-in progression's numerals ("♭VII") as tokens a player's copy keeps ("bVII").
+[[nodiscard]] std::vector<std::string> NumeralTokens(const std::vector<std::string>& numerals);
+/// An id none of `existing` has ("p3").
+[[nodiscard]] std::string NewProgressionId(const std::vector<UserProgression>& existing);
+
 /// The engine request for these choices: the chosen progression (a built-in's id, or one of the
 /// player's own as numerals), the step showing, and in Chords the shape to lead from when stepping.
 /// In Arpeggios `anchorStep` is the chord whose run the position chooses (ScaleGuideView.h).
+/// While a progression is being written, `draft` is shown instead of the chosen one (none while it
+/// has no chords).
 [[nodiscard]] nlohmann::json ViewRequest(const Settings& settings, const std::vector<UserProgression>& progressions,
-                                         int step, const std::vector<int>& previousFrets = {}, int anchorStep = 0);
+                                         int step, const std::vector<int>& previousFrets = {}, int anchorStep = 0,
+                                         const UserProgression* draft = nullptr);
 
 // ── Play ────────────────────────────────────────────────────────────────────
 

@@ -42,6 +42,23 @@ const nlohmann::json& Catalog()
     return catalog;
 }
 
+// LISTEN's readout as the web's .sg-live states: a clean strum and a scale note in green, a
+// missed tone or a note outside the scale in red, the prompt to play in plain text.
+el::color ReadoutColour(const Theme& theme, const std::string& text)
+{
+    if (text.rfind("Play ", 0) == 0)
+    {
+        return theme.Text();
+    }
+
+    if (text.find("missing") != std::string::npos || text.find("outside the") != std::string::npos)
+    {
+        return el::rgba(224, 103, 95, 255);
+    }
+
+    return theme.Success();
+}
+
 std::string NameOf(const nlohmann::json& list, const std::string& id)
 {
     for (const auto& item : list)
@@ -78,8 +95,9 @@ const nlohmann::json& Shell::ScaleGuideView()
 {
     const auto settings = sg::LoadSettings(mState.appSettings);
     const auto progressions = sg::LoadProgressions(mState.appSettings);
+    const auto* draft = mScaleGuideDraft ? &*mScaleGuideDraft : nullptr;
     const auto request =
-        sg::ViewRequest(settings, progressions, mScaleGuideStep, mScaleGuidePrevious, mScaleGuideAnchor);
+        sg::ViewRequest(settings, progressions, mScaleGuideStep, mScaleGuidePrevious, mScaleGuideAnchor, draft);
     const auto key = request.dump();
 
     if (key == mScaleGuideViewKey && !mScaleGuideView.is_null())
@@ -113,7 +131,8 @@ const nlohmann::json& Shell::ScaleGuideView()
         auto chosen = settings;
         chosen.position = position;
         mSession.Commands().SetSetting(sg::kViewSetting, sg::SettingsJson(chosen));
-        mScaleGuideViewKey = sg::ViewRequest(chosen, progressions, mScaleGuideStep, {}, mScaleGuideAnchor).dump();
+        mScaleGuideViewKey =
+            sg::ViewRequest(chosen, progressions, mScaleGuideStep, {}, mScaleGuideAnchor, draft).dump();
     }
 
     return mScaleGuideView;
@@ -126,7 +145,11 @@ std::string Shell::ScaleGuideSignature() const
     return (settings != mState.appSettings.end() ? settings->dump() : std::string()) + "|" +
            (progressions != mState.appSettings.end() ? progressions->dump() : std::string()) + "|" +
            std::to_string(mScaleGuideStep) + "|" + std::to_string(mScaleGuideAnchor) + "|" +
-           std::to_string(mScaleGuidePrevious.size()) + (ScaleGuidePlaying() ? "|playing" : "");
+           std::to_string(mScaleGuidePrevious.size()) + (ScaleGuidePlaying() ? "|playing" : "") +
+           // A draft's chords and id, not its name: typing the name never rebuilds the page.
+           (mScaleGuideDraft ? "|draft" + mScaleGuideDraft->id + "|" + std::to_string(mScaleGuideDraftDegree) +
+                                   mScaleGuideDraftQuality + "|" + nlohmann::json(mScaleGuideDraft->chords).dump()
+                             : std::string());
 }
 
 bool Shell::ScaleGuidePlaying() const
@@ -164,8 +187,234 @@ void Shell::ChangeScaleGuide(const std::function<void(sg::Settings&)>& edit)
         mScaleGuideClean = 0;
     }
 
+    // A draft is dropped for another tab or progression, as the web's.
+    if (next.mode != before.mode || next.progression != before.progression)
+    {
+        mScaleGuideDraft.reset();
+    }
+
     mSession.Commands().SetSetting(sg::kViewSetting, sg::SettingsJson(next));
     Mark(kPage);
+}
+
+bool Shell::ScaleGuideArrow(bool forward)
+{
+    // The arrow keys step a progression, unless a field has them or one is being written.
+    if (mPage != Page::Jam || mJamSection != JamSection::Scales || mOverlay || mScaleGuideDraft ||
+        !mScaleGuideView.contains("progression"))
+    {
+        return false;
+    }
+
+    ScaleGuideStep(mScaleGuideStep + (forward ? 1 : -1));
+    return true;
+}
+
+void Shell::StartScaleGuideDraft(sg::UserProgression draft)
+{
+    if (ScaleGuidePlaying())
+    {
+        mSession.Commands().StopScaleGuide();
+    }
+
+    if (!mScaleGuideDraftName)
+    {
+        auto [element, box] = el::input_box("My progression", Font(Weight::Regular), 1.0f);
+        mScaleGuideDraftName = box;
+        mScaleGuideDraftNameField = el::share(std::move(element));
+        mScaleGuideDraftName->on_text = [this](std::string_view text) {
+            if (mScaleGuideDraft)
+            {
+                mScaleGuideDraft->name = std::string(text).substr(0, 40);
+            }
+        };
+    }
+
+    mScaleGuideDraftName->set_text(draft.name);
+    mScaleGuideDraft = std::move(draft);
+    mScaleGuideStep = 0;
+    mScaleGuidePrevious.clear();
+    Mark(kPage);
+}
+
+Ptr Shell::BuildScaleGuideEditor()
+{
+    // The web's progression editor (.sg-editor): the name, the chords as pills to take out, a
+    // degree and a quality to add one, and Save, Cancel and (for one already saved) Delete.
+    auto& draft = *mScaleGuideDraft;
+    const auto settings = sg::LoadSettings(mState.appSettings);
+    const auto& catalog = Catalog();
+    const auto label = [this](const std::string& text) { return Label(mTheme, text); };
+    std::vector<Ptr> pills;
+
+    if (draft.chords.empty())
+    {
+        auto none = std::make_shared<Text>(mTheme, "Add chords below.", 12.0f);
+        none->Colour(mTheme.TextMuted());
+        pills.push_back(Middle(none));
+    }
+
+    const auto chords = mScaleGuideView.contains("progression")
+                            ? mScaleGuideView["progression"].value("chords", nlohmann::json::array())
+                            : nlohmann::json::array();
+
+    for (std::size_t i = 0; i < draft.chords.size(); ++i)
+    {
+        const auto numeral = sg::DisplayNumeral(draft.chords[i]);
+        const auto name = i < chords.size() ? chords[i].value("name", numeral) : numeral;
+        auto pill = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+        const auto text = numeral + "  " + name + "  \xC3\x97";
+        pill->Size(std::max(64.0f, 8.0f * static_cast<float>(text.size()) + 12.0f), 32).Label(text, 12.0f);
+        pill->AccessName("Remove " + name);
+        pill->Tooltip("Remove " + name);
+        pill->onClick = [this, i] {
+            if (mScaleGuideDraft && i < mScaleGuideDraft->chords.size())
+            {
+                mScaleGuideDraft->chords.erase(mScaleGuideDraft->chords.begin() + static_cast<std::ptrdiff_t>(i));
+                mScaleGuideStep =
+                    std::min(mScaleGuideStep, std::max(0, static_cast<int>(mScaleGuideDraft->chords.size()) - 1));
+                Mark(kPage);
+            }
+        };
+        pills.push_back(pill);
+        pills.push_back(HGap(6));
+    }
+
+    pills.push_back(Stretch());
+
+    // Add a chord: a degree (with the note it lands on in this key) and a quality.
+    const auto keys = catalog["keys"];
+    const auto degreeText = [&](int offset) {
+        return sg::DisplayNumeral(sg::kDegreeNumerals[static_cast<std::size_t>(offset)]) + " \xC2\xB7 " +
+               keys[static_cast<std::size_t>((settings.key + offset) % 12)].get<std::string>();
+    };
+    auto degree = std::make_shared<PickerField>(mTheme, mIcons);
+    degree->Set(degreeText(mScaleGuideDraftDegree));
+    degree->AccessName("Degree");
+    degree->onClick = [this, weak = std::weak_ptr<PickerField>(degree), degreeText] {
+        const auto degree = weak.lock();
+
+        if (!degree)
+        {
+            return;
+        }
+
+        std::vector<MenuItem> items;
+
+        for (int offset = 0; offset < 12; ++offset)
+        {
+            items.push_back({degreeText(offset), offset == mScaleGuideDraftDegree, false, [this, offset] {
+                                 mScaleGuideDraftDegree = offset;
+                                 Mark(kPage);
+                             }});
+        }
+
+        OpenDropdown(degree->Bounds(), std::move(items), 150.0f);
+    };
+    auto quality = std::make_shared<PickerField>(mTheme, mIcons);
+    quality->Set(NameOf(catalog["chords"], mScaleGuideDraftQuality));
+    quality->AccessName("Quality");
+    quality->onClick = [this, weak = std::weak_ptr<PickerField>(quality)] {
+        const auto quality = weak.lock();
+
+        if (!quality)
+        {
+            return;
+        }
+
+        std::vector<MenuItem> items;
+
+        for (const auto& c : Catalog()["chords"])
+        {
+            const auto id = c.value("id", "");
+            items.push_back({c.value("name", ""), id == mScaleGuideDraftQuality, false, [this, id] {
+                                 mScaleGuideDraftQuality = id;
+                                 Mark(kPage);
+                             }});
+        }
+
+        OpenDropdown(quality->Bounds(), std::move(items), 200.0f);
+    };
+    const auto button = [this](const std::string& text, IconButton::Look look, float width) {
+        auto b = std::make_shared<IconButton>(mTheme, mIcons, "", look);
+        b->Size(width, 32).Label(text, 12.0f);
+        return b;
+    };
+    auto add = button("Add", IconButton::Look::Boxed, 64);
+    add->Disabled(static_cast<int>(draft.chords.size()) >= sg::kMaxProgressionChords);
+    add->onClick = [this] {
+        if (mScaleGuideDraft && static_cast<int>(mScaleGuideDraft->chords.size()) < sg::kMaxProgressionChords)
+        {
+            mScaleGuideDraft->chords.push_back(sg::RomanToken(mScaleGuideDraftDegree, mScaleGuideDraftQuality));
+            mScaleGuideStep = static_cast<int>(mScaleGuideDraft->chords.size()) - 1;
+            Mark(kPage);
+        }
+    };
+    auto save = button("Save", IconButton::Look::Accent, 80);
+    save->Disabled(draft.chords.empty());
+    save->onClick = [this] {
+        if (!mScaleGuideDraft || mScaleGuideDraft->chords.empty())
+        {
+            return;
+        }
+
+        auto list = sg::LoadProgressions(mState.appSettings);
+        auto saved = *mScaleGuideDraft;
+        saved.id = saved.id.empty() ? sg::NewProgressionId(list) : saved.id;
+        const auto first = saved.name.find_first_not_of(" \t");
+        saved.name = first == std::string::npos
+                         ? std::string("My progression")
+                         : saved.name.substr(first, saved.name.find_last_not_of(" \t") - first + 1);
+        const auto at = std::find_if(list.begin(), list.end(), [&](const auto& p) { return p.id == saved.id; });
+
+        if (at != list.end())
+        {
+            *at = saved;
+        }
+        else
+        {
+            list.push_back(saved);
+        }
+
+        mSession.Commands().SetSetting(sg::kProgressionsSetting, sg::ProgressionsJson(list));
+        mScaleGuideDraft.reset();
+        ChangeScaleGuide([id = saved.id](sg::Settings& s) { s.progression = "u:" + id; });
+    };
+    auto cancel = button("Cancel", IconButton::Look::Boxed, 80);
+    cancel->onClick = [this] {
+        mScaleGuideDraft.reset();
+        mScaleGuideStep = 0;
+        Mark(kPage);
+    };
+    std::vector<Ptr> actions{save, HGap(6), cancel};
+
+    if (!draft.id.empty())
+    {
+        auto remove = button("Delete", IconButton::Look::Boxed, 80);
+        remove->Ink(mTheme.Error());
+        remove->onClick = [this, id = draft.id] {
+            auto list = sg::LoadProgressions(mState.appSettings);
+            std::erase_if(list, [&](const auto& p) { return p.id == id; });
+            mSession.Commands().SetSetting(sg::kProgressionsSetting, sg::ProgressionsJson(list));
+            mScaleGuideDraft.reset();
+            ChangeScaleGuide([](sg::Settings& s) { s.progression.clear(); });
+        };
+        actions.push_back(HGap(6));
+        actions.push_back(remove);
+    }
+
+    actions.push_back(Stretch());
+
+    return Rounded(mTheme.ScaleGuide().surface, 12.0f,
+                   Pad(14, 12, 14, 12,
+                       Col({label("Name"), VGap(4),
+                            FixedHeight(34, FixedWidth(320, Rounded(mTheme.Tertiary(), 8.0f,
+                                                                    Pad(4, 0, 4, 0, mScaleGuideDraftNameField)))),
+                            VGap(10), label("Chords"), VGap(4), FixedHeight(32, HScroll(Row(pills))), VGap(10),
+                            label("Add a chord"), VGap(4),
+                            FixedHeight(32, Row({FixedWidth(130, Middle(degree)), HGap(6),
+                                                 FixedWidth(180, Middle(quality)), HGap(6), add, Stretch()})),
+                            VGap(12), FixedHeight(32, Row(actions))})));
 }
 
 void Shell::ScaleGuideStep(int index, std::vector<int> fromFrets)
@@ -232,7 +481,7 @@ Ptr Shell::BuildScaleGuide(float width)
         });
     };
     auto live = std::make_shared<Text>(mTheme, mScaleGuideReadout, 13.0f, Weight::SemiBold);
-    live->Colour(mTheme.Success()).Alignment(Text::Align::Right);
+    live->Colour(ReadoutColour(mTheme, mScaleGuideReadout)).Alignment(Text::Align::Right);
     mScaleGuideLive = live;
 
     // ── Pickers, each with its label beside it ──
@@ -360,7 +609,11 @@ Ptr Shell::BuildScaleGuide(float width)
     {
         std::string playing = "One chord";
 
-        if (settings.progression.rfind("b:", 0) == 0)
+        if (mScaleGuideDraft)
+        {
+            playing = mScaleGuideDraft->name.empty() ? std::string("New progression") : mScaleGuideDraft->name;
+        }
+        else if (settings.progression.rfind("b:", 0) == 0)
         {
             playing = NameOf(catalog["progressions"], settings.progression.substr(2));
         }
@@ -416,13 +669,48 @@ Ptr Shell::BuildScaleGuide(float width)
                 }
             }
 
+            items.push_back({"+ Write a progression...", false, false, [this] { StartScaleGuideDraft({}); }});
             OpenDropdown(play->Bounds(), std::move(items), 300.0f);
         };
         auto playField = field("Play", play, compact ? 200.0f : 220.0f);
         what.push_back(playField);
         flow.push_back({playField, fieldWidth("Play", 200.0f)});
 
-        if (settings.progression.empty())
+        // Edit: a built-in is never changed, so editing one writes the player a copy.
+        if (!settings.progression.empty() && !mScaleGuideDraft)
+        {
+            auto edit = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+            edit->Size(56, 30).Label("Edit", 11.0f);
+            edit->AccessName("Edit the progression");
+            edit->onClick = [this, chosen = settings.progression] {
+                if (chosen.rfind("b:", 0) == 0)
+                {
+                    for (const auto& p : Catalog()["progressions"])
+                    {
+                        if (p.value("id", "") == chosen.substr(2))
+                        {
+                            StartScaleGuideDraft({"", "Copy of " + p.value("name", ""),
+                                                  sg::NumeralTokens(p.value("numerals", std::vector<std::string>{}))});
+                        }
+                    }
+                }
+                else
+                {
+                    for (const auto& p : sg::LoadProgressions(mState.appSettings))
+                    {
+                        if ("u:" + p.id == chosen)
+                        {
+                            StartScaleGuideDraft(p);
+                        }
+                    }
+                }
+            };
+            what.push_back(HGap(6));
+            what.push_back(Middle(edit));
+            flow.push_back({Middle(edit), 56.0f});
+        }
+
+        if (settings.progression.empty() && !mScaleGuideDraft)
         {
             auto chordField = chordPicker();
             what.push_back(HGap(16));
@@ -503,6 +791,12 @@ Ptr Shell::BuildScaleGuide(float width)
     const float labelSegment = arpeggioMode ? 68.0f : 76.0f;
     auto labels = std::make_shared<Segmented>(mTheme, labelNames, labelSegment);
     labels->AccessName("Dots");
+
+    if (arpeggioMode)
+    {
+        labels->Tooltip(3, "The order the run plays its notes").Tooltip(4, "Which finger plays each note");
+    }
+
     const auto chosenLabels = std::find(labelIds.begin(), labelIds.end(), settings.labels);
     labels->Select(chosenLabels == labelIds.end() ? 0 : static_cast<int>(chosenLabels - labelIds.begin()));
     labels->onSelect = [keep, labelIds](int index) {
@@ -564,8 +858,10 @@ Ptr Shell::BuildScaleGuide(float width)
         }
 
         // A progression's arpeggios play whole, whatever the position.
-        button->Disabled(model.position == 0 && !wholeRun);
+        const bool nothingChosen = model.position == 0 && !wholeRun;
+        button->Disabled(nothingChosen);
         button->AccessName(playing ? "Stop" : "Play");
+        button->Tooltip(nothingChosen ? "Pick a position to hear it" : "Hear it played through the current preset");
         button->onClick = [togglePlay] { togglePlay(false); };
         return button;
     };
@@ -576,30 +872,14 @@ Ptr Shell::BuildScaleGuide(float width)
     };
     auto play = playButton();
 
-    // How loud Play's guitar is going into the preset, like its volume knob.
-    auto level = picker("Vol " + std::to_string(settings.playVolume) + "%", "Play volume");
-    level->onClick = [this, weak = std::weak_ptr<PickerField>(level), keep] {
-        const auto level = weak.lock();
-
-        if (!level)
-        {
-            return;
-        }
-
-        std::vector<MenuItem> items;
-        const int current = sg::LoadSettings(mState.appSettings).playVolume;
-
-        for (const int percent : {100, 80, 60, 40, 20, 10})
-        {
-            items.push_back({std::to_string(percent) + "%", percent == current, false,
-                             [keep, percent] { keep([percent](sg::Settings& s) { s.playVolume = percent; }); }});
-        }
-
-        OpenDropdown(level->Bounds(), std::move(items), 120.0f);
-    };
+    // How loud Play's guitar is going into the preset, like its volume knob: the web's range.
+    auto level = std::make_shared<LevelSlider>(mTheme, settings.playVolume);
+    level->onCommit = [keep](int percent) { keep([percent](sg::Settings& s) { s.playVolume = percent; }); };
+    auto instrumentTip = instrument;
+    instrumentTip->Tooltip("Instrument: tuning, capo and hand");
 
     const float playWidth = compact ? 40.0f : 84.0f;
-    const float levelWidth = compact ? 84.0f : 104.0f;
+    const float levelWidth = compact ? 72.0f : 96.0f;
     const float instrumentWidth = compact ? 130.0f : width >= 1000.0f ? 240.0f : 180.0f;
     const float actionsWidth = playWidth + 6.0f + levelWidth + 6.0f + instrumentWidth;
     const auto actions = FixedWidth(actionsWidth, Row({Middle(play), HGap(6), FixedWidth(levelWidth, Middle(level)),
@@ -632,6 +912,9 @@ Ptr Shell::BuildScaleGuide(float width)
         auto style =
             std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Sweep", "2 per string", "Box"}, 84.0f);
         style->AccessName("Style");
+        style->Tooltip(0, "One pick stroke across the strings, a note or two on each")
+            .Tooltip(1, "Two notes on every string, climbing the neck")
+            .Tooltip(2, "Every chord tone in one hand position");
         style->Select(settings.arpeggioStyle == "two" ? 1 : settings.arpeggioStyle == "box" ? 2 : 0);
         style->onSelect = [this, styleIds](int index) {
             ChangeScaleGuide([&](sg::Settings& s) { s.arpeggioStyle = styleIds[static_cast<std::size_t>(index)]; });
@@ -678,17 +961,33 @@ Ptr Shell::BuildScaleGuide(float width)
     // ── A progression's steps ──
     if (progression.is_object())
     {
-        std::vector<std::string> steps;
+        // The web's .sg-step buttons: the name and its numeral, the one showing lit, those played dimmed.
+        std::vector<Ptr> stepButtons;
+        float stepsWidth = 0.0f;
+        const int at = progression.value("step", 0);
+        int index = 0;
 
         for (const auto& c : progression["chords"])
         {
-            steps.push_back(c.value("name", ""));
+            using State = ProgressionStep::State;
+            auto step = std::make_shared<ProgressionStep>(mTheme, c.value("name", ""), Numeral(c.value("numeral", "")),
+                                                          index < at    ? State::Done
+                                                          : index == at ? State::Active
+                                                                        : State::Ahead);
+            step->onClick = [this, index] { ScaleGuideStep(index); };
+            stepsWidth += (index > 0 ? 4.0f : 0.0f) +
+                          std::max(44.0f, 9.0f * static_cast<float>(c.value("name", "").size()) + 20.0f);
+
+            if (index > 0)
+            {
+                stepButtons.push_back(HGap(4));
+            }
+
+            stepButtons.push_back(step);
+            ++index;
         }
 
-        auto stepper = std::make_shared<Segmented>(mTheme, steps, 44.0f);
-        stepper->AccessName("Steps");
-        stepper->Select(progression.value("step", 0));
-        stepper->onSelect = [this](int index) { ScaleGuideStep(index); };
+        auto stepper = Row(stepButtons);
         const auto button = [this](const std::string& glyph, const std::string& name, std::function<void()> click) {
             auto b = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
             b->Size(32, 30).Label(glyph, 12.0f);
@@ -701,17 +1000,11 @@ Ptr Shell::BuildScaleGuide(float width)
         round->Colour(mTheme.TextMuted());
         std::vector<Ptr> row;
 
-        if (!compact)
-        {
-            row.insert(row.end(), {FixedWidth(labelWidth("Steps"), Middle(Label(mTheme, "Steps"))), HGap(8)});
-        }
-
         row.insert(
             row.end(),
             {// A long progression scrolls its steps only when they would not fit beside the buttons.
-             Middle(static_cast<float>(steps.size()) * 44.0f > width - 300.0f ? HScroll(stepper) : Ptr(stepper)),
-             HGap(8), Middle(button("\xE2\x97\x80", "Back one chord", [this] { ScaleGuideStep(mScaleGuideStep - 1); })),
-             HGap(4),
+             Middle(stepsWidth > width - 300.0f ? HScroll(stepper) : stepper), HGap(8),
+             Middle(button("\xE2\x97\x80", "Back one chord", [this] { ScaleGuideStep(mScaleGuideStep - 1); })), HGap(4),
              Middle(button("\xE2\x96\xB6", "Forward one chord", [this] { ScaleGuideStep(mScaleGuideStep + 1); })),
              HGap(4),
              Middle(button("\xE2\x86\xBA", "Restart from the top",
@@ -858,6 +1151,21 @@ Ptr Shell::BuildScaleGuide(float width)
                 };
                 box->AccessName(c.value("name", "") + ": go to it and hear it strummed");
                 boxes.push_back(box);
+                boxes.push_back(HGap(8));
+            }
+            else
+            {
+                // No shape in reach: the chord still has its place in the strip.
+                auto title = std::make_shared<Text>(mTheme, Numeral(c.value("numeral", "")) + " " + c.value("name", ""),
+                                                    12.0f, Weight::SemiBold);
+                title->Colour(mTheme.TextSecondary()).Alignment(Text::Align::Centre);
+                auto empty = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+                const float boxWidth = ChordBoxView::WidthFor(model.openMidi.size());
+                empty->Size(boxWidth, ChordBoxView::HeightFor(false)).Label("No shape", 11.0f);
+                empty->Lit(index == progression.value("step", 0));
+                empty->AccessName(c.value("name", "") + ": no shape in reach, go to it");
+                empty->onClick = [this, index] { ScaleGuideStep(index); };
+                boxes.push_back(FixedWidth(boxWidth, Col({FixedHeight(18, title), empty})));
                 boxes.push_back(HGap(8));
             }
 
@@ -1067,12 +1375,19 @@ Ptr Shell::BuildScaleGuide(float width)
 
     std::vector<Ptr> pills;
     std::string middleLabel = chordInfo ? "Formula" : "Chords";
+    mScaleGuidePills.clear();
 
     if (chordInfo)
     {
-        auto formula = std::make_shared<Text>(mTheme, view["chord"].value("formula", ""), 15.0f, Weight::Medium);
-        formula->Colour(mTheme.Text());
-        pills.push_back(FixedHeight(30, formula));
+        // The web's .sg-pill per chord tone; LISTEN edges each as it is heard or missed.
+        for (std::size_t i = 0; i < tones.size(); ++i)
+        {
+            auto pill =
+                std::make_shared<TonePill>(mTheme, tones[i].value("interval", ""), tones[i].value("name", ""), i == 0);
+            mScaleGuidePills.push_back(pill);
+            pills.push_back(pill);
+            pills.push_back(HGap(6));
+        }
     }
     else if (view["scale"]["diatonic"].empty())
     {
@@ -1136,8 +1451,14 @@ Ptr Shell::BuildScaleGuide(float width)
 
         auto wheel = std::make_shared<ChordWheelView>(mTheme, std::move(wheelTones), mScaleGuideEar.Rule().share);
         mScaleGuideWheel = wheel;
+        auto hint = std::make_shared<Paragraph>(
+            mTheme, "Fill the ring with the chord's notes. It tightens as chords land and eases off when they don't.",
+            150.0f, 11.0f);
+        hint->Colour(mTheme.TextMuted());
         summaryColumns.push_back(HGap(18));
         summaryColumns.push_back(Middle(wheel));
+        summaryColumns.push_back(HGap(10));
+        summaryColumns.push_back(FixedWidth(150, Middle(hint)));
     }
     else
     {
@@ -1161,11 +1482,55 @@ Ptr Shell::BuildScaleGuide(float width)
         summary = Col({summary, VGap(12), heard});
     }
 
+    // The web's quick reference: what this view is for and how to move through it.
+    std::string reference;
+
+    if (arpeggioMode)
+    {
+        reference = view.contains("arpeggio") ? view["arpeggio"].value("advice", "") : "";
+    }
+    else if (chordMode && progression.is_object())
+    {
+        reference = "Next: " + progression.value("next", "") +
+                    ". \xE2\x97\x80 \xE2\x96\xB6 or the arrow keys step through; each chord takes the shape "
+                    "nearest the last.";
+    }
+    else if (chordMode && model.position > 0 && model.position <= static_cast<int>(model.shapes.size()))
+    {
+        const auto& caged = model.shapes[static_cast<std::size_t>(model.position - 1)].caged;
+        reference = (caged.empty() ? std::string() : "The " + caged + " shape. ") +
+                    "Numbers are fingers; \xC3\x97 is a string you don't play.";
+    }
+    else if (chordMode)
+    {
+        reference = "Pick a shape to see one way to play it; All shows every chord tone.";
+    }
+    else
+    {
+        reference = "Steps " + view["scale"].value("steps", "") +
+                    ". Pick a position for one box; All shows the whole neck. Tap a chord to open it.";
+    }
+
+    if (!reference.empty())
+    {
+        auto text = std::make_shared<Paragraph>(mTheme, reference, std::max(200.0f, width - 160.0f), 12.0f);
+        text->Colour(mTheme.TextSecondary());
+        summary =
+            Col({summary, VGap(12), Row({FixedWidth(130, Label(mTheme, "Quick reference")), HGap(8), Stretch(text)})});
+    }
+
     // The cards' faces only: a Rounded draws, it never takes a click from what is on it.
     const auto& card = face;
-    std::vector<Ptr> page = {Col(controls), VGap(10),
-                             // The neck fills the page; only a page narrower than its least width scrolls it.
-                             width >= 600.0f ? Ptr(neck) : HScroll(neck)};
+    std::vector<Ptr> page = {Col(controls), VGap(10)};
+
+    if (mScaleGuideDraft)
+    {
+        page.push_back(BuildScaleGuideEditor());
+        page.push_back(VGap(10));
+    }
+
+    page.insert(page.end(), {// The neck fills the page; only a page narrower than its least width scrolls it.
+                             width >= 600.0f ? Ptr(neck) : HScroll(neck)});
 
     if (!boxes.empty())
     {
@@ -1441,6 +1806,7 @@ void Shell::SyncScaleGuideListen()
         if (const auto live = mScaleGuideLive.lock())
         {
             live->Set(mScaleGuideReadout);
+            live->Colour(ReadoutColour(mTheme, mScaleGuideReadout));
             mSession.Repaint(*live);
         }
     };
@@ -1514,6 +1880,22 @@ void Shell::SyncScaleGuideListen()
     else
     {
         mScaleGuideEar.Push(loud, match.ok);
+    }
+
+    // The formula's pills: green for a tone heard, red for one the strum missed.
+    for (std::size_t i = 0; i < mScaleGuidePills.size() && i < chordTones.size(); ++i)
+    {
+        if (const auto pill = mScaleGuidePills[i].lock())
+        {
+            const bool heardTone = loud && i < match.heard.size() && match.heard[i];
+            const bool missingTone = loud && std::find(match.missing.begin(), match.missing.end(),
+                                                       chordTones[i].pitchClass) != match.missing.end();
+
+            if (pill->Set(heardTone, missingTone))
+            {
+                mSession.Repaint(*pill);
+            }
+        }
     }
 
     if (const auto wheel = mScaleGuideWheel.lock())

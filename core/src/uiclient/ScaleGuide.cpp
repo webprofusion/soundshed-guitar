@@ -1,6 +1,8 @@
 #include "uiclient/ScaleGuide.h"
 
 #include <algorithm>
+#include <cctype>
+#include <map>
 #include <regex>
 #include <set>
 
@@ -177,8 +179,99 @@ nlohmann::json ProgressionsJson(const std::vector<UserProgression>& progressions
     return out;
 }
 
+std::string RomanToken(int offset, const std::string& quality)
+{
+    // How each quality is written after its numeral, and whether the numeral is lower case.
+    static const std::map<std::string, std::pair<const char*, bool>> kSuffixes = {
+        {"maj", {"", false}},
+        {"m", {"", true}},
+        {"5", {"5", false}},
+        {"sus2", {"sus2", false}},
+        {"sus4", {"sus4", false}},
+        {"dim", {"Â°", true}},
+        {"aug", {"+", false}},
+        {"6", {"6", false}},
+        {"m6", {"6", true}},
+        {"7", {"7", false}},
+        {"maj7", {"maj7", false}},
+        {"m7", {"7", true}},
+        {"mMaj7", {"maj7", true}},
+        {"m7b5",
+         {"Ã¸"
+          "7",
+          true}},
+        {"dim7",
+         {"Â°"
+          "7",
+          true}},
+        {"aug7", {"+7", false}},
+        {"7sus4", {"7sus4", false}},
+        {"add9", {"add9", false}},
+        {"9", {"9", false}},
+        {"7#9", {"7#9", false}},
+        {"maj9", {"maj9", false}},
+        {"m9", {"9", true}},
+    };
+    const std::string degree = kDegreeNumerals[static_cast<std::size_t>(Wrap(offset))];
+    const auto found = kSuffixes.find(quality);
+    const auto& [suffix, minor] = found != kSuffixes.end() ? found->second : kSuffixes.at("maj");
+    const bool flat = degree[0] == 'b';
+    std::string numeral = degree.substr(flat ? 1 : 0);
+
+    if (minor)
+    {
+        std::transform(numeral.begin(), numeral.end(), numeral.begin(),
+                       [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    }
+
+    return (flat ? "b" : "") + numeral + suffix;
+}
+
+std::string DisplayNumeral(const std::string& token)
+{
+    if (!token.empty() && token[0] == 'b')
+    {
+        return "â­" + token.substr(1);
+    }
+
+    if (!token.empty() && token[0] == '#')
+    {
+        return "â¯" + token.substr(1);
+    }
+
+    return token;
+}
+
+std::vector<std::string> NumeralTokens(const std::vector<std::string>& numerals)
+{
+    static const std::string kFlat = "â­", kSharp = "â¯";
+    std::vector<std::string> out;
+
+    for (const auto& n : numerals)
+    {
+        out.push_back(n.rfind(kFlat, 0) == 0    ? "b" + n.substr(kFlat.size())
+                      : n.rfind(kSharp, 0) == 0 ? "#" + n.substr(kSharp.size())
+                                                : n);
+    }
+
+    return out;
+}
+
+std::string NewProgressionId(const std::vector<UserProgression>& existing)
+{
+    auto n = existing.size() + 1;
+
+    while (std::any_of(existing.begin(), existing.end(),
+                       [&](const UserProgression& p) { return p.id == "p" + std::to_string(n); }))
+    {
+        ++n;
+    }
+
+    return "p" + std::to_string(n);
+}
+
 nlohmann::json ViewRequest(const Settings& s, const std::vector<UserProgression>& progressions, int step,
-                           const std::vector<int>& previousFrets, int anchorStep)
+                           const std::vector<int>& previousFrets, int anchorStep, const UserProgression* draft)
 {
     nlohmann::json request = {{"mode", s.mode},
                               {"key", s.key},
@@ -197,7 +290,19 @@ nlohmann::json ViewRequest(const Settings& s, const std::vector<UserProgression>
         return request;
     }
 
-    if (s.progression.rfind("b:", 0) == 0)
+    if (draft != nullptr)
+    {
+        // The one being written, as the web's draft: nothing until it has a chord.
+        if (draft->chords.empty())
+        {
+            return request;
+        }
+
+        request["progressionChords"] = draft->chords;
+        request["progressionName"] = draft->name;
+        step = std::min(step, static_cast<int>(draft->chords.size()) - 1);
+    }
+    else if (s.progression.rfind("b:", 0) == 0)
     {
         request["progression"] = s.progression.substr(2);
     }

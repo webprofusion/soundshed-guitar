@@ -255,6 +255,7 @@ void Shell::BuildRoot()
     mKeys = std::make_shared<KeyRouter>(Over(MinSize(metrics::kMinWidth, metrics::kMinHeight, frame), mBgSlot));
     mKeys->keyboard = mKeyboard;
     mKeys->onKey = [this](const el::key_info& k) { return HandleKey(k); };
+    mKeys->onPageArrow = [this](const el::key_info& k) { return ScaleGuideArrow(k.key == el::key_code::right); };
     mKeys->ringColour = [this] { return mTheme.Accent(); };
     mKeys->drawOver = [this](const el::context& ctx) { Tooltips::Draw(ctx, mTheme); };
     mKeys->onPointerDown = [this] { mChainFocused = false; };

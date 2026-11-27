@@ -1290,10 +1290,15 @@ float ChordBoxView::WidthFor(std::size_t strings)
     return kBoxPadX * 2.0f + (static_cast<float>(std::max<std::size_t>(1, strings)) - 1.0f) * kBoxStringGap + 12.0f;
 }
 
+float ChordBoxView::HeightFor(bool titled)
+{
+    return (titled ? 18.0f : 0.0f) + kBoxTop + kBoxRows * kBoxFretGap + 26.0f;
+}
+
 el::view_limits ChordBoxView::limits(const el::basic_context&) const
 {
     const float width = WidthFor(mShape.frets.size());
-    const float height = (mTitle.empty() ? 0.0f : 18.0f) + kBoxTop + kBoxRows * kBoxFretGap + 26.0f;
+    const float height = HeightFor(!mTitle.empty());
     return {{width, height}, {width, height}};
 }
 
@@ -1446,5 +1451,296 @@ void ChordBoxView::draw(const el::context& ctx)
         FillText(cnv, mCaption, small, mTheme.TextMuted(), {b.left, b.bottom - 20.0f, b.right, b.bottom - 6.0f},
                  HAlign::Centre);
     }
+}
+
+// ── ProgressionStep ─────────────────────────────────────────────────────────
+
+namespace
+{
+el::font_descr StepNameFont()
+{
+    return Font(Weight::SemiBold).size(15.0f);
+}
+
+el::font_descr StepNumeralFont()
+{
+    return Font(Weight::Regular).size(10.0f);
+}
+} // namespace
+
+el::view_limits ProgressionStep::limits(const el::basic_context& ctx) const
+{
+    // 10 px each side and 5 between, as .sg-step's padding and gap; never under 44.
+    const float w = std::max(44.0f, el::measure_text(ctx.canvas, mName, StepNameFont()).x + 5.0f +
+                                        el::measure_text(ctx.canvas, mNumeral, StepNumeralFont()).x + 20.0f);
+    return {{w, 36.0f}, {w, 36.0f}};
+}
+
+void ProgressionStep::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds.inset(0.5f, 0.5f);
+    const bool active = mState == State::Active;
+    // A step already played is dimmed (opacity 0.6).
+    const float alpha = mState == State::Done ? 0.6f : 1.0f;
+
+    cnv.begin_path();
+    cnv.add_round_rect(b, 10.0f);
+
+    if (active)
+    {
+        cnv.fill_style(mTheme.Accent().opacity(0.22f));
+        cnv.fill();
+    }
+    else if (mHover || mDown)
+    {
+        cnv.fill_style(mTheme.Text().opacity(0.06f));
+        cnv.fill();
+    }
+
+    cnv.begin_path();
+    cnv.add_round_rect(b, 10.0f);
+    cnv.stroke_style(active ? mTheme.Accent() : mTheme.ScaleGuide().boxLine.opacity(alpha));
+    cnv.line_width(1.0f);
+    cnv.stroke();
+
+    const float nameW = el::measure_text(cnv, mName, StepNameFont()).x;
+    const float numW = el::measure_text(cnv, mNumeral, StepNumeralFont()).x;
+    const float x = b.left + (b.width() - nameW - 5.0f - numW) / 2.0f;
+    const auto nameColour = (active ? mTheme.Text() : mTheme.TextSecondary()).opacity(alpha);
+    FillText(cnv, mName, StepNameFont(), nameColour, {x, b.top, x + nameW + 1.0f, b.bottom}, HAlign::Left);
+    // The numeral sits on the name's baseline, as the web's baseline alignment.
+    FillText(cnv, mNumeral, StepNumeralFont(), mTheme.TextMuted().opacity(alpha),
+             {x + nameW + 5.0f, b.top + 3.0f, b.right, b.bottom + 3.0f}, HAlign::Left);
+}
+
+AccessInfo ProgressionStep::Describe() const
+{
+    AccessInfo info = Pressable::Describe();
+    info.role = AccessRole::Tab;
+    info.name = mName + ", " + mNumeral;
+    info.selected = mState == State::Active;
+    return info;
+}
+
+// ── TonePill ────────────────────────────────────────────────────────────────
+
+namespace
+{
+el::font_descr PillNameFont()
+{
+    return Font(Weight::Medium).size(16.0f);
+}
+
+el::font_descr PillIntervalFont()
+{
+    return Font(Weight::SemiBold).size(12.0f);
+}
+} // namespace
+
+el::view_limits TonePill::limits(const el::basic_context& ctx) const
+{
+    // .sg-pill: 16 px each side, 6 between, at least 56 wide; 10 px over and under.
+    const float w = std::max(56.0f, el::measure_text(ctx.canvas, mInterval, PillIntervalFont()).x + 6.0f +
+                                        el::measure_text(ctx.canvas, mName, PillNameFont()).x + 32.0f);
+    return {{w, 40.0f}, {w, 40.0f}};
+}
+
+void TonePill::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds.inset(0.5f, 0.5f);
+    static const el::color kMute = el::rgba(224, 103, 95, 255); // the web's --sg-mute
+
+    cnv.begin_path();
+    cnv.add_round_rect(b, 10.0f);
+    cnv.fill_style(mRoot ? mTheme.Accent().opacity(0.16f) : mTheme.ScaleGuide().surface);
+    cnv.fill();
+    cnv.begin_path();
+    cnv.add_round_rect(b, 10.0f);
+    cnv.stroke_style(mHeard     ? mTheme.Success()
+                     : mMissing ? kMute
+                     : mRoot    ? mTheme.Accent()
+                                : mTheme.ScaleGuide().boxLine);
+    cnv.line_width(mHeard || mMissing ? 1.5f : 1.0f);
+    cnv.stroke();
+
+    const float intervalW = el::measure_text(cnv, mInterval, PillIntervalFont()).x;
+    const float nameW = el::measure_text(cnv, mName, PillNameFont()).x;
+    const float x = b.left + (b.width() - intervalW - 6.0f - nameW) / 2.0f;
+    FillText(cnv, mInterval, PillIntervalFont(), mTheme.TextMuted(), {x, b.top + 2.0f, b.right, b.bottom + 2.0f},
+             HAlign::Left);
+    FillText(cnv, mName, PillNameFont(), mTheme.Text(), {x + intervalW + 6.0f, b.top, b.right, b.bottom}, HAlign::Left);
+}
+
+bool TonePill::Set(bool heard, bool missing)
+{
+    if (heard == mHeard && missing == mMissing)
+    {
+        return false;
+    }
+
+    mHeard = heard;
+    mMissing = missing;
+    return true;
+}
+
+// ── LevelSlider ─────────────────────────────────────────────────────────────
+
+el::view_limits LevelSlider::limits(const el::basic_context&) const
+{
+    return {{60.0f, 30.0f}, {el::full_extent, 30.0f}};
+}
+
+void LevelSlider::draw(const el::context& ctx)
+{
+    NoteDrawn(ctx);
+    auto& cnv = ctx.canvas;
+    const auto b = ctx.bounds;
+    const float cy = std::round((b.top + b.bottom) / 2.0f);
+    const float left = b.left + 7.0f, right = b.right - 7.0f;
+    const float x = left + (right - left) * static_cast<float>(mLevel) / 100.0f;
+
+    cnv.begin_path();
+    cnv.add_round_rect({left, cy - 2.0f, right, cy + 2.0f}, 2.0f);
+    cnv.fill_style(mTheme.Text().opacity(0.14f));
+    cnv.fill();
+    cnv.begin_path();
+    cnv.add_round_rect({left, cy - 2.0f, x, cy + 2.0f}, 2.0f);
+    cnv.fill_style(mTheme.Accent());
+    cnv.fill();
+    cnv.begin_path();
+    cnv.add_circle({{x, cy}, 7.0f});
+    cnv.fill_style(mDragging ? mTheme.Accent() : mTheme.Text());
+    cnv.fill();
+}
+
+int LevelSlider::LevelAt(const el::rect& bounds, float x) const
+{
+    const float left = bounds.left + 7.0f, right = bounds.right - 7.0f;
+    const float t = std::clamp((x - left) / std::max(1.0f, right - left), 0.0f, 1.0f);
+    return static_cast<int>(std::lround(t * 20.0f)) * 5;
+}
+
+void LevelSlider::Commit(int level)
+{
+    mLevel = std::clamp(level, 0, 100);
+
+    if (onCommit)
+    {
+        const auto commit = onCommit; // it may rebuild the row this sits in
+        commit(mLevel);
+    }
+}
+
+bool LevelSlider::click(const el::context& ctx, el::mouse_button btn)
+{
+    if (btn.state != el::mouse_button::left)
+    {
+        return false;
+    }
+
+    Tooltips::Press();
+    mLevel = LevelAt(ctx.bounds, btn.pos.x);
+
+    if (btn.down)
+    {
+        mDragging = true;
+        ctx.view.refresh(ctx);
+        return true;
+    }
+
+    mDragging = false;
+    ctx.view.refresh(ctx);
+    Commit(mLevel);
+    return true;
+}
+
+void LevelSlider::drag(const el::context& ctx, el::mouse_button btn)
+{
+    if (const int level = LevelAt(ctx.bounds, btn.pos.x); level != mLevel)
+    {
+        mLevel = level;
+        ctx.view.refresh(ctx);
+    }
+}
+
+bool LevelSlider::cursor(const el::context& ctx, el::point, el::cursor_tracking status)
+{
+    if (status == el::cursor_tracking::leaving)
+    {
+        Tooltips::Leave(this);
+    }
+    else
+    {
+        Tooltips::Hover(this, ctx.bounds, TooltipText());
+    }
+
+    return false;
+}
+
+bool LevelSlider::scroll(const el::context& ctx, el::point dir, el::point)
+{
+    if (dir.y == 0.0f)
+    {
+        return false;
+    }
+
+    Commit(mLevel + (dir.y > 0.0f ? 5 : -5));
+    ctx.view.refresh(ctx);
+    return true;
+}
+
+bool LevelSlider::key(const el::context& ctx, el::key_info k)
+{
+    if (k.action != el::key_action::press && k.action != el::key_action::repeat)
+    {
+        return false;
+    }
+
+    int next = mLevel;
+
+    switch (k.key)
+    {
+    case el::key_code::left:
+    case el::key_code::down:
+        next -= 5;
+        break;
+    case el::key_code::right:
+    case el::key_code::up:
+        next += 5;
+        break;
+    case el::key_code::home:
+        next = 0;
+        break;
+    case el::key_code::end:
+        next = 100;
+        break;
+    default:
+        return false;
+    }
+
+    Commit(next);
+    ctx.view.refresh(ctx);
+    return true;
+}
+
+AccessInfo LevelSlider::Describe() const
+{
+    AccessInfo info;
+    info.role = AccessRole::Slider;
+    info.name = "Play volume";
+    info.value = std::to_string(mLevel) + "%";
+    info.position = mLevel / 100.0;
+    info.help = TooltipText();
+    return info;
+}
+
+bool LevelSlider::SetPosition(double normalised)
+{
+    Commit(static_cast<int>(std::lround(std::clamp(normalised, 0.0, 1.0) * 20.0)) * 5);
+    return true;
 }
 } // namespace nanoq::ui

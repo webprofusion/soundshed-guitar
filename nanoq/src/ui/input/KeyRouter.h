@@ -202,6 +202,13 @@ class KeyRouter final : public cycfi::elements::proxy_base
             return false;
         }
 
+        // Left and Right no focused control took, for the page first (the Scale Guide steps a
+        // progression with them, as the web's).
+        if (press && (k.key == key_code::left || k.key == key_code::right) && onPageArrow && onPageArrow(k))
+        {
+            return true;
+        }
+
         if (press && (k.key == key_code::up || k.key == key_code::down || k.key == key_code::left ||
                       k.key == key_code::right || k.key == key_code::home || k.key == key_code::end))
         {
@@ -543,6 +550,8 @@ class KeyRouter final : public cycfi::elements::proxy_base
     std::shared_ptr<OnScreenKeyboard> keyboard;
     /// A key no focused element took. Returns whether it was used.
     std::function<bool(const cycfi::elements::key_info&)> onKey;
+    /// Left or Right that no focused control took, before they move focus. Returns whether used.
+    std::function<bool(const cycfi::elements::key_info&)> onPageArrow;
     /// Any press of a mouse button, before the element under it hears it.
     std::function<void()> onPointerDown;
     /// Files held over the view (or leaving it), and dropped on it. onDrop returns whether it used them.

@@ -482,6 +482,18 @@ class Segmented final : public el::element, public Drawn, public Focusable
         return *this;
     }
 
+    /// What option `index` does, shown under a resting pointer (the web's title= on a segment).
+    Segmented& Tooltip(int index, std::string text)
+    {
+        if (index >= 0)
+        {
+            mTips.resize(std::max(mTips.size(), static_cast<std::size_t>(index) + 1));
+            mTips[static_cast<std::size_t>(index)] = std::move(text);
+        }
+
+        return *this;
+    }
+
     /// A small badge after option `index`'s label, edged and lettered in the accent (.app-ui-beta).
     Segmented& Badge(int index, std::string text)
     {
@@ -576,6 +588,21 @@ class Segmented final : public el::element, public Drawn, public Focusable
         {
             mHover = hover;
             ctx.view.refresh(ctx);
+        }
+
+        // A segment's own tooltip, over that segment.
+        if (const auto tip = hover >= 0 && static_cast<std::size_t>(hover) < mTips.size()
+                                 ? mTips[static_cast<std::size_t>(hover)]
+                                 : std::string();
+            !tip.empty() && static_cast<std::size_t>(hover) < mEdges.size())
+        {
+            const float left = hover == 0 ? ctx.bounds.left : mEdges[static_cast<std::size_t>(hover) - 1];
+            Tooltips::Hover(this, {left, ctx.bounds.top, mEdges[static_cast<std::size_t>(hover)], ctx.bounds.bottom},
+                            tip);
+        }
+        else
+        {
+            Tooltips::Leave(this);
         }
 
         return false;
@@ -710,6 +737,7 @@ class Segmented final : public el::element, public Drawn, public Focusable
     float mSegmentWidth;
     bool mJoined = false;
     std::vector<std::string> mBadges;
+    std::vector<std::string> mTips;
     int mSelected = 0;
     int mHover = -1;
     mutable std::vector<float> mEdges; // each segment's right edge, as last drawn
