@@ -75,6 +75,43 @@ std::vector<std::string> Paragraph::Lines(cycfi::artist::canvas& cnv) const
             continue;
         }
 
+        // A word wider than a whole line (a path, an id) is broken where it reaches the edge,
+        // between characters (overflow-wrap: anywhere), never inside one.
+        if (el::measure_text(cnv, word, font).x > mWidth)
+        {
+            if (!line.empty())
+            {
+                lines.push_back(line);
+                line.clear();
+            }
+
+            std::string piece;
+
+            for (std::size_t c = 0; c < word.size();)
+            {
+                std::size_t next = c + 1;
+
+                while (next < word.size() && (static_cast<unsigned char>(word[next]) & 0xC0) == 0x80)
+                {
+                    ++next;
+                }
+
+                const auto glyph = word.substr(c, next - c);
+
+                if (!piece.empty() && el::measure_text(cnv, piece + glyph, font).x > mWidth)
+                {
+                    lines.push_back(piece);
+                    piece.clear();
+                }
+
+                piece += glyph;
+                c = next;
+            }
+
+            line = piece;
+            continue;
+        }
+
         const auto joined = line.empty() ? word : line + " " + word;
 
         if (!line.empty() && el::measure_text(cnv, joined, font).x > mWidth)

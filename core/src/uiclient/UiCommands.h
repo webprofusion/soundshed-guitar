@@ -149,7 +149,9 @@ class UiCommands
                          int resourceIndex = -1);
     /// Asks the engine to show a file dialog and load the chosen file into the node's slot,
     /// adding it to the library.
-    void BrowseNodeResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex = -1);
+    /// `category` files the import (the slot's: cab or reverb for an IR, the gear for a model).
+    void BrowseNodeResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex = -1,
+                            const std::string& category = {});
     /// Loads a file into a node's slot by path, as the resource browser's Folder tab previews
     /// one, without adding it to the library.
     void SetNodeResourceFile(const std::string& nodeId, const std::string& resourceType, const std::string& filePath,

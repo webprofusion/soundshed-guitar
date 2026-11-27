@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 #include <optional>
 #include <cctype>
 
@@ -134,6 +135,12 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         std::function<void(const std::string&)> onPick; // pick only: what to do with the choice
         bool controlsTwoRows = false;                   // the Library's search over its filters, on a narrow window
         int pickedFrom = -1;                            // the Tab the choice being heard came from; -1 for none kept
+        std::string expandedId;                         // the Library row showing its details (its (i))
+        std::set<std::string> usageAsked;               // rows whose in-use answer has been asked for
+        bool tagBar = false;                            // the Library's tag chips are showing
+        std::size_t librarySignature = 0;               // what the library held when the list was last drawn
+        // Opens a tone on the Tone 3000 tab with its models (a source tone, a details panel's link).
+        std::function<void(const t3::Tone&, const std::string& architecture)> openSource;
     };
 
     auto state = std::make_shared<Browser>();
@@ -219,6 +226,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
     // A model imported from Tone3000 opens on the tone it came from, its models listed.
     std::optional<t3::Tone> sourceTone;
+    std::string sourceArch;
 
     if (!b->onPick && tone3000On && !b->selectedId.empty())
     {
@@ -226,6 +234,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         {
             sourceTone = t3::SourceToneOf(*chosen);
             const auto arch = MetaText(chosen->metadata, "architectureVersion");
+            sourceArch = arch;
 
             if (sourceTone)
             {
@@ -328,8 +337,22 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
         const auto rowFor = [this, b, preview, refillList](const LibraryResource* r, const std::string& title) {
             // The category is left out while the list is filtered to one: every row would say it.
-            auto row = std::make_shared<BrowserRow>(mTheme, mIcons, title,
-                                                    ResourceMetaLine(*r, b->resourceType, b->category.empty()));
+            // Its tags at the end of the line, comma separated (.resource-browser-tag-list).
+            auto meta = ResourceMetaLine(*r, b->resourceType, b->category.empty());
+
+            if (const auto tags = ResourceTags(*r); !tags.empty())
+            {
+                std::string joined;
+
+                for (const auto& t : tags)
+                {
+                    joined += (joined.empty() ? "" : ", ") + t;
+                }
+
+                meta += (meta.empty() ? "" : " \xC2\xB7 ") + joined;
+            }
+
+            auto row = std::make_shared<BrowserRow>(mTheme, mIcons, title, meta);
             row->selected = r->id == b->selectedId || (!b->selectedPath.empty() && r->filePath == b->selectedPath);
 
             if (row->selected)
@@ -373,10 +396,31 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                     {"ui-edit", [this, type, id = r->id](el::rect at) { EditLibraryResource(type, id, at); }});
             }
 
-            row->actions.push_back(
-                {"ui-info", [this, type, id = r->id](el::rect at) { OpenLibraryResourceMenu(type, id, at); }});
-            row->actions.push_back(
-                {"ui-trash", [this, type, id = r->id](el::rect at) { ConfirmDeleteLibraryResource(type, id, at); }});
+            // The details open under the row, as the web's (i) does.
+            row->actions.push_back({"ui-info", [b, refillList, id = r->id](el::rect) {
+                                        b->expandedId = b->expandedId == id ? std::string() : id;
+                                        refillList();
+                                    }});
+            // Delete waits for the engine to say nothing uses it, asked once the row is seen.
+            const auto usageKey = type + ":" + r->id;
+            BrowserRow::Action remove{
+                "ui-trash", [this, type, id = r->id](el::rect at) { ConfirmDeleteLibraryResource(type, id, at); }};
+            remove.enabledIf = [this, usageKey] {
+                const auto it = mState.resourceUsage.find(usageKey);
+                return it != mState.resourceUsage.end() && !it->second.inUse;
+            };
+            row->actions.push_back(std::move(remove));
+
+            if (!mState.resourceUsage.contains(usageKey) && !b->usageAsked.contains(usageKey))
+            {
+                row->onShown = [this, b, type, usageKey, id = r->id] {
+                    if (b->usageAsked.insert(usageKey).second)
+                    {
+                        mSession.Commands().QueryResourceUsage(type, id);
+                    }
+                };
+            }
+
             row->actions.push_back({"ui-play", [preview, refillList, id = r->id](el::rect) {
                                         preview(id, {});
                                         refillList();
@@ -385,6 +429,29 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         };
 
         std::vector<Ptr> rows;
+        // The row and, while its (i) is on, its details under it.
+        const float listWidth = std::min(944.0f, ViewSize().x - 16.0f) - 32.0f - 10.0f;
+        const bool tone3000On = !b->onPick && IsFeatureEnabled(mState, Feature::Tone3000);
+        const auto withDetails = [this, b, listWidth, tone3000On](Ptr row, const LibraryResource* r) -> Ptr {
+            if (b->expandedId != r->id)
+            {
+                return row;
+            }
+
+            std::function<void()> openTone;
+
+            if (const auto tone = tone3000On ? t3::SourceToneOf(*r) : std::nullopt)
+            {
+                openTone = [b, tone = *tone, arch = MetaText(r->metadata, "architectureVersion")] {
+                    if (b->openSource)
+                    {
+                        b->openSource(tone, arch);
+                    }
+                };
+            }
+
+            return Col({row, LibraryDetailsPanel(b->resourceType, r->id, listWidth, openTone)});
+        };
 
         if (IsPackGroupingEnabled(mState))
         {
@@ -393,7 +460,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 if (!entry.pack)
                 {
                     const auto* r = entry.items.front();
-                    rows.push_back(rowFor(r, r->name.empty() ? r->id : r->name));
+                    rows.push_back(withDetails(rowFor(r, r->name.empty() ? r->id : r->name), r));
                     continue;
                 }
 
@@ -446,7 +513,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                     {
                         auto row = rowFor(r, NameWithinPack(r->name.empty() ? r->id : r->name, *entry.pack));
                         row->groupMember = true;
-                        rows.push_back(row);
+                        rows.push_back(withDetails(row, r));
                     }
                 }
             }
@@ -455,7 +522,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         {
             for (const auto* r : entries)
             {
-                rows.push_back(rowFor(r, r->name.empty() ? r->id : r->name));
+                rows.push_back(withDetails(rowFor(r, r->name.empty() ? r->id : r->name), r));
             }
         }
 
@@ -517,7 +584,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             return button;
         };
 
-        std::vector<std::pair<std::string, std::string>> categories{{"All categories", ""}};
+        std::vector<std::pair<std::string, std::string>> categories{{"All Categories", ""}};
 
         for (const auto& name : LibraryCategories(mState, b->resourceType))
         {
@@ -526,15 +593,15 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
         // The filters, and what they take across with their gaps.
         std::vector<Ptr> row{
-            chooser(b->category.empty() ? "All categories" : b->category, 140, categories, &b->category)};
+            chooser(b->category.empty() ? "All Categories" : b->category, 140, categories, &b->category)};
         float filtersWidth = 140.0f;
 
         if (b->resourceType == "nam")
         {
             row.push_back(HGap(6));
-            row.push_back(chooser(b->arch.empty() ? "A1 / A2" : b->arch, 84,
-                                  {{"A1 and A2", ""}, {"A1", "A1"}, {"A2", "A2"}}, &b->arch));
-            filtersWidth += 90.0f;
+            row.push_back(chooser(b->arch.empty() ? "All Architectures" : b->arch, 128,
+                                  {{"All Architectures", ""}, {"A1", "A1"}, {"A2", "A2"}}, &b->arch));
+            filtersWidth += 134.0f;
         }
 
         // Creators and tags: the facets of what the library holds (getResourceLibraryFacets).
@@ -552,7 +619,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
         if (!facets.creators.empty())
         {
-            std::vector<std::pair<std::string, std::string>> creators{{"All creators", ""}};
+            std::vector<std::pair<std::string, std::string>> creators{{"All Creators", ""}};
 
             for (const auto& c : facets.creators)
             {
@@ -560,47 +627,54 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             }
 
             row.push_back(HGap(6));
-            row.push_back(chooser(b->creator.empty() ? "All creators" : b->creator, 120, creators, &b->creator));
+            row.push_back(chooser(b->creator.empty() ? "All Creators" : b->creator, 120, creators, &b->creator));
             filtersWidth += 126.0f;
         }
 
-        if (!facets.tags.empty())
+        // The tags as a bar of chips under the filters (.resource-browser-tag-filter-bar): All Tags,
+        // each tag on or off, and Clear while any is on.
+        Ptr tagBar;
+        b->tagBar = !facets.tags.empty();
+
+        if (b->tagBar)
         {
-            auto tags = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-            tags->Size(76, 30)
-                .Label(b->tags.empty() ? std::string("Tags") : "Tags (" + std::to_string(b->tags.size()) + ")", 11.0f)
-                .Caret(true);
-            tags->onClick = [this, b, refillList, list = facets.tags, c = tags.get()] {
-                std::vector<MenuItem> items{{"All tags", b->tags.empty(), false, [b, refillList] {
-                                                 b->tags.clear();
-                                                 b->fillControls();
-                                                 refillList();
-                                             }}};
-
-                for (const auto& tag : list)
-                {
-                    const bool on = std::find(b->tags.begin(), b->tags.end(), tag) != b->tags.end();
-                    items.push_back({tag, on, false, [b, refillList, tag, on] {
-                                         if (on)
-                                         {
-                                             b->tags.erase(std::remove(b->tags.begin(), b->tags.end(), tag),
-                                                           b->tags.end());
-                                         }
-                                         else
-                                         {
-                                             b->tags.push_back(tag);
-                                         }
-
-                                         b->fillControls();
-                                         refillList();
-                                     }});
-                }
-
-                OpenDropdown(c->Bounds(), std::move(items), 200.0f);
+            const auto chip = [this, b, refillList](const std::string& label, bool on, std::function<void()> act) {
+                auto c = std::make_shared<Button>(
+                    mTheme, label,
+                    [b, refillList, act] {
+                        act();
+                        b->fillControls();
+                        refillList();
+                    },
+                    Button::Style::Flat);
+                c->Selected(on).TextSize(11.0f);
+                return c;
             };
-            row.push_back(HGap(6));
-            row.push_back(tags);
-            filtersWidth += 82.0f;
+            std::vector<Ptr> chips{chip("All Tags", b->tags.empty(), [b] { b->tags.clear(); })};
+
+            for (const auto& tag : facets.tags)
+            {
+                const bool on = std::find(b->tags.begin(), b->tags.end(), tag) != b->tags.end();
+                chips.push_back(HGap(2));
+                chips.push_back(chip(tag, on, [b, tag, on] {
+                    if (on)
+                    {
+                        std::erase(b->tags, tag);
+                    }
+                    else
+                    {
+                        b->tags.push_back(tag);
+                    }
+                }));
+            }
+
+            if (!b->tags.empty())
+            {
+                chips.push_back(HGap(2));
+                chips.push_back(chip("Clear", false, [b] { b->tags.clear(); }));
+            }
+
+            tagBar = HScroll(Row(chips));
         }
 
         // All | Favourites (.resource-browser-favorites-filter).
@@ -632,22 +706,35 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             const auto at = std::find_if(order.begin(), order.end(),
                                          [b](const LibraryResource* r) { return r->id == b->selectedId; });
             const int count = static_cast<int>(order.size());
+
+            if (at != order.end() && count < 2)
+            {
+                return;
+            }
+
             const int index = at == order.end()
                                   ? (delta > 0 ? 0 : count - 1)
-                                  : std::clamp(static_cast<int>(at - order.begin()) + delta, 0, count - 1);
+                                  : ((static_cast<int>(at - order.begin()) + delta) % count + count) % count;
             preview(order[static_cast<std::size_t>(index)]->id, {});
             refillList();
         };
+        const auto order =
+            NavigationOrder(mState, FilterLibrary(mState, b->resourceType, libraryFilter(), b->selectedId));
+        const bool selectedShown =
+            std::any_of(order.begin(), order.end(), [b](const LibraryResource* r) { return r->id == b->selectedId; });
+        const bool canStep = !order.empty() && !(selectedShown && order.size() < 2);
         auto previous = std::make_shared<IconButton>(mTheme, mIcons, "ui-prev", IconButton::Look::Boxed);
-        previous->Size(32, 32).IconSize(14);
+        previous->Size(32, 32).IconSize(14).Disabled(!canStep);
         previous->onClick = [step] { step(-1); };
         auto next = std::make_shared<IconButton>(mTheme, mIcons, "ui-next", IconButton::Look::Boxed);
-        next->Size(32, 32).IconSize(14);
+        next->Size(32, 32).IconSize(14).Disabled(!canStep);
         next->onClick = [step] { step(1); };
         auto file = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
         file->Size(64, 30).Label("File...", 11.0f);
         file->onClick = [this, b, &commands] {
-            commands.BrowseNodeResource(b->nodeId, b->resourceType, b->index);
+            commands.BrowseNodeResource(b->nodeId, b->resourceType, b->index,
+                                        b->resourceType == "ir" ? (b->role.gear == "space" ? "reverb" : "cab")
+                                                                : (b->role.gear.empty() ? "Local" : b->role.gear));
             b->previewed = true; // a file chosen there is the new choice; Cancel puts back the old
             b->fillFooter();     // which OK keeps
         };
@@ -667,19 +754,23 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         const float inner = std::min(944.0f, ViewSize().x - 16.0f) - 32.0f;
         b->controlsTwoRows = 220.0f + 8.0f + filtersWidth + 6.0f + toolsWidth > inner;
 
+        const auto withTags = [&tagBar](Ptr controls) {
+            return tagBar ? Col({controls, VGap(6), FixedHeight(28, tagBar)}) : controls;
+        };
+
         if (b->controlsTwoRows)
         {
             std::vector<Ptr> first{WidthRange(160.0f, el::full_extent, b->searchElement), HGap(8)};
             first.insert(first.end(), tools.begin(), tools.end());
             row.push_back(Stretch());
-            return Col({FixedHeight(34, Row(first)), VGap(6), FixedHeight(30, Row(row))});
+            return withTags(Col({FixedHeight(34, Row(first)), VGap(6), FixedHeight(30, Row(row))}));
         }
 
         std::vector<Ptr> one{WidthRange(220.0f, el::full_extent, b->searchElement), HGap(8)};
         one.insert(one.end(), row.begin(), row.end());
         one.push_back(HGap(6));
         one.insert(one.end(), tools.begin(), tools.end());
-        return Row(one);
+        return withTags(FixedHeight(34, Row(one)));
     };
 
     // ── Folder ──────────────────────────────────────────────────────────────────
@@ -1472,7 +1563,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         auto content = b->tab == Tab::Library  ? libraryControls()
                        : b->tab == Tab::Folder ? folderControls()
                                                : tone3000Controls();
-        const float library = b->controlsTwoRows ? 34.0f + 6.0f + 30.0f : 34.0f;
+        const float library = (b->controlsTwoRows ? 34.0f + 6.0f + 30.0f : 34.0f) + (b->tagBar ? 6.0f + 28.0f : 0.0f);
         const float height = b->tab == Tab::Folder ? 68.0f : b->tab == Tab::Library ? library : 30.0f;
         Fill(*b->controls, FixedHeight(height, content));
         mSession.View().layout();
@@ -1733,9 +1824,50 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             b->fillList();
         }
     }));
-    b->subscriptions.push_back(mSession.Client().Subscribe(Topic::Resources, [b] {
+    const auto librarySignature = [this, b] {
+        std::size_t hash =
+            std::hash<std::string>{}(mState.appSettings.value("resources.library.groupPacks", nlohmann::json()).dump());
+        const auto mix = [&hash](const std::string& text) {
+            hash = hash * 1099511628211ull ^ std::hash<std::string>{}(text);
+        };
+
+        if (const auto it = mState.resources.find(b->resourceType); it != mState.resources.end())
+        {
+            for (const auto& r : it->second)
+            {
+                mix(r.id);
+                mix(r.name);
+                mix(r.category);
+                mix(r.description);
+                mix(r.filePath);
+                mix(r.fileMissing ? "1" : "0");
+                mix(r.metadata.dump());
+
+                for (const auto& t : r.tags)
+                {
+                    mix(t);
+                }
+            }
+        }
+
+        mix(mState.appSettings.value("resources.favorites", nlohmann::json()).dump());
+        return hash;
+    };
+    b->librarySignature = librarySignature();
+    b->subscriptions.push_back(mSession.Client().Subscribe(Topic::Resources, [this, b, librarySignature] {
+        const auto now = librarySignature();
+
+        if (now == b->librarySignature)
+        {
+            mSession.View().refresh();
+            return;
+        }
+
+        b->librarySignature = now;
+
         if (b->tab != Tab::Folder && b->fillList)
         {
+            b->fillControls();
             b->fillList();
         }
     }));
@@ -1781,12 +1913,19 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         });
     };
 
-    if (sourceTone)
-    {
-        // Its models, as a click on the tone asks; a pack that cannot be listed leaves the
-        // Library showing the model (the web UI's fallBackToLibrary).
-        const auto fallBack = [this, showSelected, libraryFilter,
-                               weak = std::weak_ptr<Browser>(state)](const std::string& reason) {
+    // A tone on the Tone 3000 tab with its models, as a click on it asks (models fetched before
+    // are used again); a pack that cannot be listed leaves the Library showing the model (the
+    // web UI's openSourceTone and fallBackToLibrary).
+    b->openSource = [this, showSelected, libraryFilter, memory,
+                     weak = std::weak_ptr<Browser>(state)](const t3::Tone& tone, const std::string& arch) {
+        const auto st = weak.lock();
+
+        if (!st || !st->fillTabs)
+        {
+            return;
+        }
+
+        const auto fallBack = [this, showSelected, libraryFilter, weak](const std::string& reason) {
             const auto st = weak.lock();
 
             if (!st || !st->fillTabs)
@@ -1817,42 +1956,81 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             showSelected(weak);
         };
 
+        st->tab = Tab::Tone3000;
+        st->t3Query.clear();
+        st->t3Arch = st->resourceType == "nam" && (arch == "1" || arch == "2") ? arch : std::string();
+        st->t3Page = st->t3Pages = 1;
+        st->t3Loading = false;
+        st->t3Error.clear();
+        st->t3Tones = {tone};
+        st->t3Open = tone.id;
+        st->t3Models.clear();
+        st->t3ModelsLoading = true;
+
+        if (st->t3Box)
+        {
+            st->t3Box->set_text("");
+        }
+
+        const auto cached = memory->t3ModelsByTone.find(tone.id);
+
+        if (cached != memory->t3ModelsByTone.end() && !cached->second.empty())
+        {
+            st->t3Models = cached->second;
+            st->t3ModelsLoading = false;
+        }
+
+        st->fillTabs();
+        st->fillControls();
+        st->fillList();
+        st->fillFooter();
+
+        if (!st->t3ModelsLoading)
+        {
+            return;
+        }
+
         if (mSession.Tones().Tone3000NeedsKey())
         {
-            b->t3ModelsLoading = false;
-            b->t3Open.clear();
+            st->t3ModelsLoading = false;
+            st->t3Open.clear();
             mSession.View().post([fallBack] { fallBack("Add a Tone3000 API key in Settings to browse."); });
+            return;
         }
-        else
-        {
-            mSession.Tones().Tone3000Models(
-                sourceTone->id, [fallBack, weak = std::weak_ptr<Browser>(state),
-                                 id = sourceTone->id](const std::vector<t3::Model>& models, const std::string& error) {
-                    const auto st = weak.lock();
 
-                    if (!st || st->t3Open != id)
-                    {
-                        return;
-                    }
+        mSession.Tones().Tone3000Models(tone.id, [fallBack, memory, weak, id = tone.id](
+                                                     const std::vector<t3::Model>& models, const std::string& error) {
+            const auto st = weak.lock();
 
-                    st->t3Models = models;
-                    st->t3ModelsLoading = false;
+            if (!st || st->t3Open != id)
+            {
+                return;
+            }
 
-                    if (!error.empty() || models.empty())
-                    {
-                        st->t3Open.clear();
-                        fallBack(!error.empty() ? "Its models could not be loaded (" + error + ")."
-                                                : std::string("It has no models to show."));
-                        return;
-                    }
+            st->t3Models = models;
+            st->t3ModelsLoading = false;
 
-                    if (st->fillList)
-                    {
-                        st->fillList();
-                        st->fillFooter();
-                    }
-                });
-        }
+            if (!error.empty() || models.empty())
+            {
+                st->t3Open.clear();
+                fallBack(!error.empty() ? "Its models could not be loaded (" + error + ")."
+                                        : std::string("It has no models to show."));
+                return;
+            }
+
+            memory->t3ModelsByTone[id] = models;
+
+            if (st->fillList)
+            {
+                st->fillList();
+                st->fillFooter();
+            }
+        });
+    };
+
+    if (sourceTone)
+    {
+        b->openSource(*sourceTone, sourceArch);
     }
     else if (b->tab == Tab::Tone3000 && b->t3Tones.empty())
     {
@@ -1945,6 +2123,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         state->thumbnails.reset();
         state->fillTabs = state->fillControls = state->fillList = state->fillFooter = nullptr;
         state->searchTone3000 = nullptr;
+        state->openSource = nullptr;
     };
     (void)commands;
 }

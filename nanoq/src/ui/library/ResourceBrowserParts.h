@@ -252,13 +252,13 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
     // A fixed picture slot at the left, as the web UI's Library, Folder and Tone3000 rows have:
     // the picture when there is one, else an empty box of the same size, so titles line up.
     bool pictureSlot = false;
-    std::string note;                                      // muted text at the right ("In library")
+    std::string note; // muted text at the right ("In library")
     el::color noteColour;
     std::string button; // a button at the right ("Select")
     bool selected = false;
     bool indent = false;      // a model under its tone (the Tone3000 tab's)
     bool groupMember = false; // a model under its pack's row: not indented, a bar down its left edge
-    int star = -1;        // -1: none; 0 or 1: the favourite star, off or on
+    int star = -1;            // -1: none; 0 or 1: the favourite star, off or on
     std::function<void()> onClick, onDouble, onButton, onStar, onMenu;
 
     /// Icon buttons shown at the right while the row is hovered or chosen (.resource-browser-item-actions:
@@ -268,9 +268,16 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
         std::string icon;
         std::function<void(el::rect row)> onClick;
         bool enabled = true;
+        std::function<bool()> enabledIf; // read as it draws, when given (delete waits for the in-use answer)
+
+        [[nodiscard]] bool On() const
+        {
+            return enabledIf ? enabledIf() : enabled;
+        }
     };
 
     std::vector<Action> actions;
+    std::function<void()> onShown; // once, the first time it is drawn (a lazy ask, as the web's rows make)
 
     el::view_limits limits(const el::basic_context&) const override
     {
@@ -310,6 +317,13 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
         auto& cnv = ctx.canvas;
         auto b = ctx.bounds;
         bounds = b;
+
+        if (onShown)
+        {
+            const auto shown = std::move(onShown);
+            onShown = nullptr;
+            shown();
+        }
 
         if (indent)
         {
@@ -379,7 +393,7 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
             {
                 const el::rect r{right - 26.0f, cy - 13.0f, right, cy + 13.0f};
                 mActionRects[i] = r;
-                const bool hot = static_cast<int>(i) == mHoverAction && actions[i].enabled;
+                const bool hot = static_cast<int>(i) == mHoverAction && actions[i].On();
 
                 if (hot)
                 {
@@ -389,10 +403,10 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
 
                 const bool play = actions[i].icon == "ui-play";
                 mIcons.Draw(cnv, actions[i].icon, r.inset(6.5f, 6.5f),
-                            !actions[i].enabled ? mTheme.TextMuted().opacity(0.4f)
-                            : play              ? mTheme.Accent()
-                            : hot               ? mTheme.Ink()
-                                                : mTheme.TextSecondary());
+                            !actions[i].On() ? mTheme.TextMuted().opacity(0.4f)
+                            : play           ? mTheme.Accent()
+                            : hot            ? mTheme.Ink()
+                                             : mTheme.TextSecondary());
                 right = r.left - 4.0f;
             }
 
@@ -483,7 +497,7 @@ class BrowserRow final : public el::element, public Focusable, public TapTarget
         {
             if (mActionRects[i].includes(btn.pos))
             {
-                if (actions[i].enabled && actions[i].onClick)
+                if (actions[i].On() && actions[i].onClick)
                 {
                     actions[i].onClick(bounds);
                 }

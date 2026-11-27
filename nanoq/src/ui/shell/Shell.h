@@ -869,6 +869,10 @@ class Shell
     std::map<std::string, std::shared_ptr<ResourceBrowserMemory>> mResourceBrowserMemory;
     /// A library row's menu: details, rename, recategorise, copy the path, delete.
     void OpenLibraryResourceMenu(const std::string& resourceType, const std::string& resourceId, el::rect anchor);
+    /// A library row's details under it (libraryDetails.ts): its Tone3000 card, a way to its
+    /// tone (`onOpenTone`, when given), its description, id, file, tags and metadata.
+    [[nodiscard]] Ptr LibraryDetailsPanel(const std::string& resourceType, const std::string& resourceId, float width,
+                                          std::function<void()> onOpenTone);
     /// A library entry's name, category and tags (the web UI's row edit dialog).
     void EditLibraryResource(const std::string& resourceType, const std::string& resourceId, el::rect anchor);
     /// Asks before deleting a library entry; one in use is refused, saying where.

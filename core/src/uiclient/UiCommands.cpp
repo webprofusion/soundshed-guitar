@@ -641,13 +641,19 @@ void UiCommands::BrowseResourceFolder()
     mClient.Send("browseResourceFolder");
 }
 
-void UiCommands::BrowseNodeResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex)
+void UiCommands::BrowseNodeResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex,
+                                    const std::string& category)
 {
     nlohmann::json payload = {{"nodeId", nodeId}, {"resourceType", resourceType}};
 
     if (resourceIndex >= 0)
     {
         payload["resourceIndex"] = resourceIndex;
+    }
+
+    if (!category.empty())
+    {
+        payload["category"] = category;
     }
 
     AttachExposedResource(mClient.State(), payload, nodeId, resourceIndex);
