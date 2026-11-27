@@ -422,6 +422,16 @@ inline constexpr float kTouchCompactMaxHeight = 850.0f;
 /// 1024 x 600 tablet less its system bars still splits. The web UI's rule (compactMode.ts) is the
 /// same.
 inline constexpr float kCompactSplitMinHeight = 520.0f;
+/// A compact window as tall as it is wide or taller stacks its bars, as the web UI's does
+/// (compactMode.ts's "stack"): a 36 px tab bar over the preset bar in place of the rail. It
+/// splits from 600 x 800 (COMPACT_SPLIT_MIN_WIDTH, COMPACT_SPLIT_MIN_HEIGHT).
+inline constexpr float kStackTabBarHeight = 36.0f;
+/// A compact window this high or lower is short (COMPACT_SHORT_MAX_HEIGHT: a phone held
+/// sideways, an 800 x 480 panel): the preset library puts its list first, its folders in a
+/// drop-down, and its cards closer. 1024 x 600 is not short.
+inline constexpr float kCompactShortMaxHeight = 500.0f;
+inline constexpr float kStackSplitMinWidth = 600.0f;
+inline constexpr float kStackSplitMinHeight = 800.0f;
 /// The compact split's stage (chain and editor, between the preset bar and the footer) shorter
 /// than this takes the chain as icon tiles whatever its length (signalPath/layout.ts's
 /// SIGNAL_PATH_SPLIT_FULL_NODES_MIN_STAGE).

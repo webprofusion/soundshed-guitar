@@ -28,10 +28,11 @@ class IconButton final : public Pressable
         Ghost,
         Soft,
         Boxed,
-        Tool,  // the preset toolbar's keys (.preset-action-btn): no face until hovered
-        Edged, // the header's gear (.nav-settings-btn): an edge and no face
-        Pill,  // the control bar's chevrons and mute (.output-quick-mute-btn): 18 x 16 pills
-        Well,  // the control bar's EQ (.eq-icon-btn): a sunk square that glows when on
+        Tool,   // the preset toolbar's keys (.preset-action-btn): no face until hovered
+        Edged,  // the header's gear (.nav-settings-btn): an edge and no face
+        Pill,   // the control bar's chevrons and mute (.output-quick-mute-btn): 18 x 16 pills
+        Well,   // the control bar's EQ (.eq-icon-btn): a sunk square that glows when on
+        Footer, // the footer's buttons (.footer-btn): no face until hovered; on, the accent's
         Accent,
         Chip,    // the effect header's Presets (.default-effect-shell-chip)
         Primary, // a dialog's confirming button: filled with the accent
@@ -128,6 +129,13 @@ class IconButton final : public Pressable
         }
 
         return words;
+    }
+
+    /// Drawn as another look (a footer's copy of a button built elsewhere).
+    IconButton& Styled(Look look)
+    {
+        mLook = look;
+        return *this;
     }
 
     IconButton& Size(float w, float h)
@@ -300,6 +308,18 @@ class IconButton final : public Pressable
             }
 
             break;
+        case Look::Footer:
+            // --footer-hover-bg and --footer-press-bg: the strong text at 10% and 17%.
+            radius = 6.0f;
+            ink = mTheme.TextSecondary();
+
+            if (mHover && mEnabled)
+            {
+                fill = mTheme.Text().opacity(mDown ? 0.17f : 0.10f);
+                ink = mTheme.Text();
+            }
+
+            break;
         case Look::Primary:
             radius = 6.0f;
             fill = mTheme.Accent().level(mHover ? 1.06f : 0.92f);
@@ -334,7 +354,16 @@ class IconButton final : public Pressable
             line = lit.opacity(mLook == Look::Edged || mLook == Look::Pill ? 0.7f : 0.55f);
             ink = lit;
 
-            if (mLook == Look::Edged || mLook == Look::Well)
+            if (mLook == Look::Footer)
+            {
+                // --footer-on-bg and --footer-on-border: the accent 24% into the bar, its edge at 62%.
+                const auto bar = mTheme.Bar();
+                fill = el::color{lit.red * 0.24f + bar.red * 0.76f, lit.green * 0.24f + bar.green * 0.76f,
+                                 lit.blue * 0.24f + bar.blue * 0.76f, 1.0f};
+                line = lit.opacity(0.62f);
+                ink = mTheme.Text();
+            }
+            else if (mLook == Look::Edged || mLook == Look::Well)
             {
                 fill = mTheme.Text().opacity(mLook == Look::Well ? 0.15f : 0.06f);
                 line = mLook == Look::Well ? mTheme.Border() : lit;
@@ -410,6 +439,7 @@ class IconButton final : public Pressable
         {
         case Look::Boxed:
         case Look::Tool:
+        case Look::Footer:
         case Look::Edged:
             key = &skin.keys.tool;
             break;
@@ -447,6 +477,7 @@ class IconButton final : public Pressable
         {
         case Look::Boxed:
         case Look::Tool:
+        case Look::Footer:
         case Look::Edged:
             return b.keyTool;
         case Look::Soft:

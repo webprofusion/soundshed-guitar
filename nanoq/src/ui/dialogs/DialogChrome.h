@@ -474,23 +474,49 @@ class Segmented final : public el::element, public Drawn, public Focusable
         mSelected = index;
     }
 
+    /// The theme flyout's App UI choice (.app-ui-choices): 28 tall at 12 px, edged in the light
+    /// border with a rule between the segments, the chosen one washed in the accent at 16%.
+    Segmented& Joined()
+    {
+        mJoined = true;
+        return *this;
+    }
+
+    /// A small badge after option `index`'s label, edged and lettered in the accent (.app-ui-beta).
+    Segmented& Badge(int index, std::string text)
+    {
+        if (index >= 0)
+        {
+            mBadges.resize(std::max(mBadges.size(), static_cast<std::size_t>(index) + 1));
+            mBadges[static_cast<std::size_t>(index)] = std::move(text);
+        }
+
+        return *this;
+    }
+
     el::view_limits limits(const el::basic_context& ctx) const override
     {
         float w = 0.0f;
 
-        for (const auto& option : mOptions)
+        for (std::size_t i = 0; i < mOptions.size(); ++i)
         {
-            w += mSegmentWidth > 0.0f
-                     ? mSegmentWidth
-                     : el::measure_text(ctx.canvas, option, Font(Weight::Medium).size(13.0f)).x + 32.0f;
+            w += SegmentWidth(ctx.canvas, i);
         }
 
-        return {{w, 34.0f}, {w, 34.0f}};
+        const float h = mJoined ? 28.0f : 34.0f;
+        return {{w, h}, {w, h}};
     }
 
     void draw(const el::context& ctx) override
     {
         NoteDrawn(ctx);
+
+        if (mJoined)
+        {
+            DrawJoined(ctx);
+            return;
+        }
+
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
         const auto font = Font(Weight::Medium).size(13.0f);
@@ -560,6 +586,99 @@ class Segmented final : public el::element, public Drawn, public Focusable
     }
 
   private:
+    [[nodiscard]] static el::font_descr BadgeFont()
+    {
+        return Font(Weight::SemiBold).size(9.0f);
+    }
+
+    [[nodiscard]] std::string BadgeOf(std::size_t i) const
+    {
+        return i < mBadges.size() ? mBadges[i] : std::string();
+    }
+
+    [[nodiscard]] float BadgeWidth(el::canvas& cnv, std::size_t i) const
+    {
+        const auto badge = BadgeOf(i);
+        return badge.empty() ? 0.0f : TrackedWidth(cnv, badge, BadgeFont(), 0.06f) + 12.0f;
+    }
+
+    [[nodiscard]] float SegmentWidth(el::canvas& cnv, std::size_t i) const
+    {
+        if (mSegmentWidth > 0.0f)
+        {
+            return mSegmentWidth;
+        }
+
+        if (mJoined)
+        {
+            const float badge = BadgeWidth(cnv, i);
+            return el::measure_text(cnv, mOptions[i], Font(Weight::Medium).size(12.0f)).x + 20.0f +
+                   (badge > 0.0f ? 6.0f + badge : 0.0f);
+        }
+
+        return el::measure_text(cnv, mOptions[i], Font(Weight::Medium).size(13.0f)).x + 32.0f;
+    }
+
+    void DrawJoined(const el::context& ctx)
+    {
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const auto font = Font(Weight::Medium).size(12.0f);
+        float x = b.left;
+        mEdges.clear();
+
+        for (std::size_t i = 0; i < mOptions.size(); ++i)
+        {
+            const float w = SegmentWidth(cnv, i);
+            const el::rect segment{x, b.top, x + w, b.bottom};
+            const bool chosen = static_cast<int>(i) == mSelected;
+            const bool hover = static_cast<int>(i) == mHover;
+
+            if (chosen || hover)
+            {
+                // Inside the rounded edge: the ends keep its corners.
+                auto state = cnv.new_state();
+                cnv.add_round_rect(b, 6.0f);
+                cnv.clip();
+                cnv.fill_style(chosen ? mTheme.Accent().opacity(0.16f) : mTheme.Text().opacity(0.06f));
+                cnv.fill_rect(segment);
+            }
+
+            // The label and its badge, centred together.
+            const float badgeW = BadgeWidth(cnv, i);
+            const float textW = el::measure_text(cnv, mOptions[i], font).x;
+            const float groupW = textW + (badgeW > 0.0f ? 6.0f + badgeW : 0.0f);
+            const float left = segment.left + (w - groupW) * 0.5f;
+            FillText(cnv, mOptions[i], font, chosen || hover ? mTheme.Text() : mTheme.TextSecondary(),
+                     el::rect{left, segment.top, left + textW + 1.0f, segment.bottom}, HAlign::Left);
+
+            if (badgeW > 0.0f)
+            {
+                const float cy = segment.top + segment.height() * 0.5f;
+                const el::rect badge{left + textW + 6.0f, cy - 7.0f, left + textW + 6.0f + badgeW, cy + 7.0f};
+                cnv.stroke_style(mTheme.Accent());
+                cnv.line_width(1.0f);
+                cnv.stroke_round_rect(badge.inset(0.5f, 0.5f), 4.0f);
+                FillTrackedText(cnv, BadgeOf(i), BadgeFont(), mTheme.Accent(), badge, HAlign::Centre, 0.06f);
+            }
+
+            if (i > 0)
+            {
+                cnv.fill_style(mTheme.Border());
+                cnv.fill_rect(el::rect{x, b.top + 1.0f, x + 1.0f, b.bottom - 1.0f});
+            }
+
+            mEdges.push_back(x + w);
+            x += w;
+        }
+
+        cnv.stroke_style(mTheme.Border());
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 6.0f);
+    }
+
+  public:
+  private:
     bool Choose(int index)
     {
         if (!onSelect || index < 0 || index >= static_cast<int>(mOptions.size()))
@@ -588,6 +707,8 @@ class Segmented final : public el::element, public Drawn, public Focusable
     const Theme& mTheme;
     std::vector<std::string> mOptions;
     float mSegmentWidth;
+    bool mJoined = false;
+    std::vector<std::string> mBadges;
     int mSelected = 0;
     int mHover = -1;
     mutable std::vector<float> mEdges; // each segment's right edge, as last drawn

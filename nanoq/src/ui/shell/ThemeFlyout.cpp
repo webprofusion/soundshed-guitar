@@ -41,7 +41,7 @@ constexpr float kTileMin = 124.0f; // grid-template-columns: repeat(auto-fill, m
 constexpr float kTilePad = 5.0f;
 constexpr float kNameHeight = 16.0f;
 constexpr float kHeaderHeight = 28.0f;
-constexpr float kAppUiRowHeight = 34.0f; // Segmented's own height
+constexpr float kAppUiRowHeight = 28.0f; // the joined Segmented's own height (.app-ui-choice)
 constexpr float kAppUiHintHeight = 16.0f;
 
 // Set once the beta notice has been seen (ShowNativeUiBetaNoticeOnce), in the shared app settings
@@ -204,8 +204,9 @@ class ThemeTile final : public Pressable
 std::shared_ptr<IconButton> Shell::BuildThemeButton()
 {
     // The web UI's palette and "Theme" (#footer-theme-btn): the flyout says which theme is on.
-    auto button = std::make_shared<IconButton>(mTheme, mIcons, "ui-theme", IconButton::Look::Boxed);
-    button->Size(84, 28).IconSize(15).Label("Theme", 11.0f).AccessName("Theme and zoom");
+    auto button = std::make_shared<IconButton>(mTheme, mIcons, "ui-theme",
+                                               mWide ? IconButton::Look::Footer : IconButton::Look::Boxed);
+    button->Size(mWide ? 76.0f : 84.0f, 28).IconSize(15).Label("Theme", 11.0f).AccessName("Theme and zoom");
     button->onClick = [this, b = button.get()] { ToggleThemeFlyout(b->Bounds()); };
     return button;
 }
@@ -389,7 +390,8 @@ Ptr Shell::BuildAppUiChoice(float& height)
     const bool native = FlagSetting(mState.appSettings, guitarfx::kNativeEditorSettingKey, true);
     auto label = std::make_shared<Text>(mTheme, "APP UI", 11.0f, Weight::SemiBold);
     label->Colour(mTheme.TextSecondary()).Fixed(true);
-    auto choice = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Standard", "Native (Nano) Beta"});
+    auto choice = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Standard", "Native (Nano)"});
+    choice->Joined().Badge(1, "BETA");
     choice->AccessName("App UI");
     choice->Select(native ? 1 : 0);
     // The standalone swaps its editor at once; a plugin's next window follows, so the choice is

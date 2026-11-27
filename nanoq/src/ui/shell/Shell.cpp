@@ -174,6 +174,7 @@ void Shell::BuildRoot()
     mFrameSlot = MakeSlot();
     mWide = WantsWide();
     mSplit = !mWide && WantsSplit();
+    mStack = !mWide && WantsStack();
     mTouch = TouchSizes();
     metrics::gTouchSizes = mTouch;
     Fill(*mFrameSlot, BuildFrame());
@@ -563,11 +564,15 @@ void Shell::OnTick()
 
     // Touch sizes change every bar's height and every control's room, so they rebuild it all.
     // A folded or unfolded control bar changes the frame's bar heights too.
-    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit || touch != mTouch ||
+    const bool stack = !wide && WantsStack();
+
+    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit || stack != mStack ||
+                                                  touch != mTouch ||
                                                   (wide && mWide && ControlsCollapsed() != mBuiltControlsCollapsed))
     {
         mWide = wide;
         mSplit = split;
+        mStack = stack;
         mTouch = touch;
         metrics::gTouchSizes = touch;
         mPlayStageShown = false;

@@ -362,7 +362,9 @@ void Shell::OpenControls()
     // the window: at 640 wide it needed 28 px more than the popover has. The EQ cell is 72, a meter
     // column about 30 (36 with touch sizes), and the popover's sides 6 and its padding 8 each.
     const auto view = ViewSize();
-    const float room = view.x - metrics::kRailWidth - 12.0f - 16.0f;
+    // Under the stacked frame's tab bar; the rail's preset bar is at the top.
+    const float top = mStack ? metrics::kStackTabBarHeight : 0.0f;
+    const float room = view.x - StageLeft() - 12.0f - 16.0f;
     const float fixed = 72.0f + 2.0f * meterGap + 2.0f * (metrics::Touch() ? 36.0f : 30.0f) + 2.0f;
     auto c = BuildControlCells(std::clamp(std::floor((room - fixed) / 5.0f), 72.0f, 84.0f));
     auto strip =
@@ -375,8 +377,8 @@ void Shell::OpenControls()
              Stretch()});
 
     ShowPopover(Pad(8, 10, 8, 6, strip),
-                el::rect{metrics::kRailWidth + 6.0f, 0.0f, view.x - 6.0f, metrics::TopBarHeight() - 6.0f},
-                view.x - metrics::kRailWidth - 12.0f, 124.0f + (metrics::Touch() ? metrics::kTouchCellExtra : 0.0f));
+                el::rect{StageLeft() + 6.0f, top, view.x - 6.0f, top + metrics::TopBarHeight() - 6.0f},
+                view.x - StageLeft() - 12.0f, 124.0f + (metrics::Touch() ? metrics::kTouchCellExtra : 0.0f));
     // The bar's CONTROLS stays lit while the strip is out, as the web UI's tab does.
     mControlsOpen = true;
     mOnOverlayClosed = [this] { mControlsOpen = false; };

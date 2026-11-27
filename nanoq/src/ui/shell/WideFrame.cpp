@@ -83,7 +83,21 @@ bool Shell::WantsWide() const
 
 bool Shell::WantsSplit() const
 {
-    return ViewSize().y >= metrics::kCompactSplitMinHeight;
+    // The web UI's rule (compactSplitForViewport): the rail from 520 high; stacked, from 600 x 800.
+    const auto size = ViewSize();
+
+    if (WantsStack())
+    {
+        return size.x >= metrics::kStackSplitMinWidth && size.y >= metrics::kStackSplitMinHeight;
+    }
+
+    return size.y >= metrics::kCompactSplitMinHeight;
+}
+
+bool Shell::WantsStack() const
+{
+    const auto size = ViewSize();
+    return size.x <= size.y;
 }
 
 bool Shell::TouchSizes() const
@@ -141,6 +155,14 @@ Ptr Shell::BuildFrame()
                     mLooperSlot, FixedHeight(metrics::kWideFooterHeight, Yielding(mTransportSlot))});
     }
 
+    // Stacked: the tab bar over the preset bar, the stage and the footer (BuildStackTabs).
+    if (mStack)
+    {
+        return Col({FixedHeight(metrics::kStackTabBarHeight, Yielding(mRailSlot)),
+                    FixedHeight(metrics::TopBarHeight(), Yielding(mTopSlot)), Yielding(mPageSlot), mLooperSlot,
+                    FixedHeight(metrics::FooterHeight(), Yielding(mTransportSlot))});
+    }
+
     // The rail down the left; beside it the preset bar, the stage and the footer. The regions
     // yield their minimum sizes: each is built for the window's size and rebuilt when it changes
     // (OnTick), and the window's own floor is the root's (MinSize).
@@ -161,7 +183,7 @@ std::string Shell::TopBarSignature() const
         (guitarfx::uiclient::IsPresetFavorite(mState, mState.activePresetId) ? "f" : "") + "|" +
         (summary != nullptr ? summary->source : std::string()) + "|" + (mPresetTrail.CanGoBack() ? "<" : "") +
         (mPresetTrail.CanGoForward() ? ">" : "") + (mUpdate ? "|u" : "") +
-        (mWide && ToolbarLabelsFit(ViewSize().x) ? "|l" : "") +
+        (mWide && ToolbarLabelsFit(ViewSize().x) ? "|l" : "") + (!mWide && ViewSize().x >= 720.0f ? "|r" : "") +
         (metrics::Touch() ? "|t" + std::to_string(mWide ? 0 : TouchBarExtras(StageWidth(), static_cast<bool>(mUpdate)))
                           : "");
     return s;
@@ -188,6 +210,60 @@ void Shell::StepPresetTrail(int direction)
 }
 
 // ── The tab row ─────────────────────────────────────────────────────────────────
+
+Ptr Shell::BuildStackTabs()
+{
+    // The stacked compact frame's tab bar (css/compact/shell.css's .icon-bar: 36 px, tabs at
+    // 10 px spaced .06em, a 28 px gear). Split, the chain and the effect are one PLAY tab; taking
+    // turns, they are CHAIN and EFFECT here, in place of the web UI's second row of tabs.
+    auto tab = [this](const char* label, bool active, Page page) {
+        auto t = std::make_shared<TextTab>(mTheme, label, active, 10.0f, 24.0f, metrics::kStackTabBarHeight);
+        t->Nav(0.06f);
+        t->onClick = [this, page] { ShowPage(page); };
+        return t;
+    };
+    std::vector<Ptr> tabs;
+
+    if (mSplit)
+    {
+        tabs.push_back(tab("PLAY", PlayShown(), PlayShown() ? mPage : Page::Chain));
+    }
+    else
+    {
+        tabs.push_back(tab("CHAIN", mPage == Page::Chain, Page::Chain));
+        tabs.push_back(tab("EFFECT", mPage == Page::Effect, Page::Effect));
+    }
+
+    if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::ToneSharing))
+    {
+        tabs.push_back(tab("TONES", mPage == Page::Tones, Page::Tones));
+    }
+
+    if (JamShown())
+    {
+        tabs.push_back(tab("JAM", mPage == Page::Jam, Page::Jam));
+    }
+
+    // The tuner and the looper (the rail's tools), then the gear.
+    auto tool = [this](const char* icon, const char* name, bool lit, std::function<void()> onClick) {
+        auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Tool);
+        b->Size(28, 28).IconSize(16).Lit(lit).AccessName(name);
+        b->onClick = std::move(onClick);
+        return Pad(0, 4, 0, 4, b);
+    };
+    std::vector<Ptr> row{HGap(8), Tight(tabs), Stretch(), tool("ui-tuner", "Tuner", false, [this] { OpenTuner(); })};
+
+    if (LooperShown())
+    {
+        row.insert(row.end(), {HGap(4), tool("ui-loop", "Looper", mLooperOpen, [this] { ToggleLooper(); })});
+    }
+
+    auto settings = std::make_shared<IconButton>(mTheme, mIcons, "ui-gear", IconButton::Look::Edged);
+    settings->Size(28, 28).IconSize(15).Lit(mPage == Page::Settings);
+    settings->onClick = [this] { ShowPage(mPage == Page::Settings ? Page::Chain : Page::Settings); };
+    row.insert(row.end(), {HGap(4), Pad(0, 4, 0, 4, settings), HGap(8)});
+    return Dressed(mTheme, mTheme.Background(), &Backdrops::header, Row(row));
+}
 
 Ptr Shell::BuildTabBar()
 {
@@ -422,9 +498,11 @@ Ptr Shell::BuildPlayStage()
     // split stage is this one too, between its rail, preset bar and footer.
     auto add = std::make_shared<RoundAdd>(mTheme, 24.0f);
     add->onClick = [this, a = add.get()] { OpenAddMenu(a->Bounds()); };
-    auto chain = Over(
-        Col({mSceneSlot, mChainSlot, FixedHeight(AddRowHeight(), Pad(0, 0, 0, 6, Row({Stretch(), add, HGap(14)})))}),
-        std::make_shared<StageBackdrop>(mTheme));
+    auto chain =
+        Over(AddInSceneRow() ? Col({mSceneSlot, mChainSlot})
+                             : Col({mSceneSlot, mChainSlot,
+                                    FixedHeight(AddRowHeight(), Pad(0, 0, 0, 6, Row({Stretch(), add, HGap(14)})))}),
+             std::make_shared<StageBackdrop>(mTheme));
     // The bar between them is dragged to give the chain more room or less (kept in Nano Q's
     // own UI settings, as chainAreaHeight). Dragged 12 px past the cards' least height the
     // chain turns to icon tiles, and 12 px down from them back to cards, as the web UI's
@@ -607,6 +685,11 @@ std::vector<Ptr> Shell::BuildCaptureButtons(float size, bool labelled, bool with
         auto rec = ToolButton(mTheme, mIcons, "ui-record", [this] { OpenRiffCapture(true); }, size, 14.0f);
         rec->Ink(mTheme.Error()).AccessName("Record riff");
 
+        if (mWide)
+        {
+            rec->Styled(IconButton::Look::Footer);
+        }
+
         if (labelled)
         {
             rec->Label("Rec", 11.0f);
@@ -615,99 +698,115 @@ std::vector<Ptr> Shell::BuildCaptureButtons(float size, bool labelled, bool with
         buttons.push_back(rec);
     }
 
-    if (withLoop && LooperShown())
+    if (withLoop)
     {
-        auto loop = ToolButton(mTheme, mIcons, "ui-loop", [this] { ToggleLooper(); }, size, 16.0f);
-        loop->Lit(mLooperOpen).AccessName("Looper");
-
-        if (labelled)
+        if (auto loop = BuildLoopButton(size, labelled))
         {
-            loop->Label("Loop", 11.0f);
+            buttons.push_back(loop);
         }
-
-        if (!mLooperOpen)
-        {
-            loop->Ink(mTheme.TextSecondary());
-        }
-
-        buttons.push_back(loop);
     }
 
     return buttons;
+}
+
+std::shared_ptr<IconButton> Shell::BuildLoopButton(float size, bool labelled)
+{
+    if (!LooperShown())
+    {
+        return nullptr;
+    }
+
+    auto loop = ToolButton(mTheme, mIcons, "ui-loop", [this] { ToggleLooper(); }, size, 16.0f);
+    loop->Lit(mLooperOpen).AccessName("Looper");
+
+    if (mWide)
+    {
+        loop->Styled(IconButton::Look::Footer);
+    }
+
+    if (labelled)
+    {
+        loop->Label("Loop", 11.0f);
+    }
+
+    if (!mLooperOpen && !mWide)
+    {
+        loop->Ink(mTheme.TextSecondary());
+    }
+
+    return loop;
 }
 
 // ── The full footer ─────────────────────────────────────────────────────────────
 
 Ptr Shell::BuildWideFooter()
 {
+    // As footer.css: the history at the left, then four groups (demo, tools, tempo, view) that
+    // share the rest equally, 16 px either side of a divider between each; every button is a
+    // 28 px footer button, faceless until hovered.
     const float width = ViewSize().x;
+    constexpr float kPadX = 18.0f, kHistoryWidth = 148.0f, kGroupGap = 16.0f;
+    const float groupWidth =
+        std::max(0.0f, (width - 2.0f * kPadX - kHistoryWidth - 10.0f - 3.0f * (2.0f * kGroupGap + 1.0f)) / 4.0f);
     auto divider = [this] {
-        return Pad(10, 8, 10, 8, FixedWidth(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
+        return Pad(kGroupGap, 7, kGroupGap, 7,
+                   FixedWidth(1, Fill(mTheme.TextSecondary().opacity(0.24f), std::make_shared<el::element>())));
+    };
+    const auto tool = [this](const char* icon, std::function<void()> onClick, float iconSize = 16.0f) {
+        auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Footer);
+        b->Size(28, 28).IconSize(iconSize);
+        b->onClick = std::move(onClick);
+        return b;
     };
 
-    auto pads = ToolButton(mTheme, mIcons, "ui-pads", [this] { TogglePads(); }, 28.0f, 16.0f);
-    pads->Lit(mPage == Page::Pads);
+    auto pads = tool("ui-pads", [this] { TogglePads(); });
+    pads->Lit(mPage == Page::Pads).AccessName("Setlists");
+    auto tuner = tool("ui-tuner", [this] { OpenTuner(); });
+    tuner->AccessName("Tuner");
+    auto midi = tool("ui-midi", [this] { OpenMidiAutomation(); }); // MIDI & Automation
+    midi->AccessName("MIDI & Automation");
 
-    if (mPage != Page::Pads)
-    {
-        pads->Ink(mTheme.TextSecondary());
-    }
+    // The tools spelt out beside their icons once their group is 330 px wide, as the web UI's
+    // (footer.css's container query).
+    const bool toolLabels = groupWidth >= 330.0f;
 
-    auto tuner = ToolButton(mTheme, mIcons, "ui-tuner", [this] { OpenTuner(); }, 28.0f, 16.0f);
-    tuner->Ink(mTheme.TextSecondary());
-    auto midi =
-        ToolButton(mTheme, mIcons, "ui-midi", [this] { OpenMidiAutomation(); }, 28.0f, 16.0f); // MIDI & Automation
-    midi->Ink(mTheme.TextSecondary());
-    bool toolLabels = false;
-    const bool muted = mState.outputMuted;
-    auto mute = ToolButton(
-        mTheme, mIcons, muted ? "ui-mute" : "ui-speaker", [this, muted] { mSession.Commands().SetOutputMuted(!muted); },
-        28.0f, 16.0f);
-    mute->Lit(muted);
-
-    if (!muted)
-    {
-        mute->Ink(mTheme.TextSecondary());
-    }
-
-    // The tools spelt out beside their icons once there is room, as the web UI's do when its
-    // tools group is 330 px wide (footer.css): the footer's four groups share what the history
-    // controls leave, so from a window about 1,540 px wide.
-    if ((width - 220.0f) / 4.0f >= 330.0f)
+    if (toolLabels)
     {
         pads->Label("Setlists", 11.0f);
         tuner->Label("Tuner", 11.0f);
         midi->Label("MIDI", 11.0f);
-        mute->Label(muted ? "Muted" : "Mute", 11.0f);
-        toolLabels = true;
     }
 
-    // Render the clip through the preset: the web UI's camera (#footer-demo-render-btn).
-    auto render = ToolButton(mTheme, mIcons, "ui-more", [this] { OpenDemoClips(); }, 26.0f, 14.0f);
-    render->Ink(mTheme.TextSecondary());
-
-    auto themeButton = BuildThemeButton();
-
+    // The tools in the web UI's order, Rec first as agreed: Rec, Setlists, Tuner, MIDI, Loop.
     std::vector<Ptr> tools;
 
-    for (auto& b : BuildCaptureButtons(28.0f, toolLabels))
+    for (auto& b : BuildCaptureButtons(28.0f, toolLabels, false))
     {
         tools.insert(tools.end(), {b, HGap(6)});
     }
 
-    tools.insert(tools.end(), {pads, HGap(6), tuner, HGap(6), midi, HGap(6), mute});
-    std::vector<Ptr> row{HGap(12),  BuildHistoryControls(),
-                         divider(), BuildDemoControls(width >= 1180.0f ? 150.0f : 120.0f, true),
-                         HGap(2),   render,
-                         Stretch(), Tight(tools),
-                         Stretch(), BuildTempoControls(true),
-                         divider()};
+    tools.insert(tools.end(), {pads, HGap(6), tuner, HGap(6), midi});
 
-    // The zoom, and the choice between this UI and the web one, are in the theme's flyout, as
-    // the web UI's.
-    row.push_back(themeButton);
-    row.push_back(HGap(12));
+    if (auto loop = BuildLoopButton(28.0f, toolLabels))
+    {
+        tools.insert(tools.end(), {HGap(6), loop});
+    }
+
+    // The demo's actions (#footer-demo-audio-actions-btn): the render's rate and Render WAV.
+    auto actions = tool("ui-more", {}, 14.0f);
+    actions->AccessName("Demo audio actions");
+    actions->onClick = [this, a = actions.get()] { OpenDemoActions(a->Bounds()); };
+
+    auto group = [groupWidth](Ptr content) { return FixedWidth(groupWidth, content); };
+    std::vector<Ptr> row{
+        HGap(kPadX), FixedWidth(kHistoryWidth, Row({BuildHistoryControls(), Stretch()})), HGap(10),
+        group(Row({BuildDemoControls(width >= 1180.0f ? 150.0f : 120.0f, true), HGap(4), actions, Stretch()})),
+        divider(), group(Row({Stretch(), Tight(tools), Stretch()})), divider(),
+        group(Row({Stretch(), BuildTempoControls(true), Stretch()})), divider(),
+        // The zoom, and the choice between this UI and the web one, are in the theme's flyout, as
+        // the web UI's.
+        group(Row({Stretch(), BuildThemeButton()})), HGap(kPadX)};
     // Touch sizes: the buttons are hit over the footer's whole height.
-    return Dressed(mTheme, mTheme.Footer(), &Backdrops::footer, PadXY(0, metrics::Touch() ? 0 : 8, Row(row)));
+    return Dressed(mTheme, mTheme.Footer(), &Backdrops::footer, PadXY(0, metrics::Touch() ? 0 : 7, Row(row)));
 }
 } // namespace nanoq::ui

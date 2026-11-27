@@ -61,19 +61,20 @@ void Shell::OpenDemoClips()
         }
     }
 
-    if (current != nullptr)
+    // The full footer renders from its own more button (OpenDemoActions); the compact one has no
+    // room for it, so its chooser renders.
+    if (current != nullptr && !mWide)
     {
         items.push_back({"Render", false, true, {}});
-        items.push_back({"Render this clip through the preset", false, false, [this] {
+        items.push_back({"Render WAV", false, false, [this] {
                              const auto* c = SelectedDemoClip();
+                             const int rate =
+                                 static_cast<int>(NumberSetting(mState.appSettings, kDemoRenderRateSetting, 0.0));
 
                              if (c == nullptr)
                              {
                                  return;
                              }
-
-                             const int rate =
-                                 static_cast<int>(NumberSetting(mState.appSettings, kDemoRenderRateSetting, 0.0));
 
                              if (c->takeId.empty())
                              {
@@ -93,5 +94,49 @@ void Shell::OpenDemoClips()
     }
 
     OpenMenu("Demo audio", std::move(items));
+}
+
+void Shell::OpenDemoActions(el::rect anchor)
+{
+    // The web UI's demo actions menu: the render's sample rate (demoAudio.ts's options; "Device
+    // rate" renders at the engine's) and Render WAV, which renders the chosen clip through the
+    // preset.
+    static constexpr struct
+    {
+        int rate;
+        const char* label;
+    } kRates[] = {{0, "Device rate"}, {44100, "44.1 kHz"},   {48000, "48 kHz"},  {88200, "88.2 kHz"},
+                  {96000, "96 kHz"},  {176400, "176.4 kHz"}, {192000, "192 kHz"}};
+
+    const int chosen = static_cast<int>(NumberSetting(mState.appSettings, kDemoRenderRateSetting, 0.0));
+    std::vector<MenuItem> items{{"Rate", false, true, {}}};
+
+    for (const auto& r : kRates)
+    {
+        items.push_back({r.label, r.rate == chosen, false,
+                         [this, rate = r.rate] { mSession.Commands().SetSetting(kDemoRenderRateSetting, rate); }});
+    }
+
+    items.push_back({"Render", false, true, {}});
+    MenuItem render{"Render WAV", false, false, [this, chosen] {
+                        const auto* c = SelectedDemoClip();
+
+                        if (c == nullptr)
+                        {
+                            return;
+                        }
+
+                        if (c->takeId.empty())
+                        {
+                            mSession.Commands().RenderDemoClip(c->id, chosen);
+                        }
+                        else
+                        {
+                            mSession.Commands().RenderRiffTake(c->takeId, chosen);
+                        }
+                    }};
+    render.subtitle = "Through the current preset";
+    items.push_back(std::move(render));
+    OpenDropdown(anchor, std::move(items), 200.0f, true);
 }
 } // namespace nanoq::ui

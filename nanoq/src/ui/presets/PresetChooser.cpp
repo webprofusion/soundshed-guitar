@@ -25,11 +25,11 @@ using namespace guitarfx::uiclient;
 
 namespace
 {
-/// The chooser's short-window arrangement (BuildPresetChooser): the compact frame at the compact
-/// height or under (800x480, 640x400, 960x600).
+/// The chooser's short-window arrangement (BuildPresetChooser): the compact frame on a short
+/// window (800x480, 640x400; not 960x600), as the web UI's data-compact-short.
 bool ShortChooser(el::point view, bool wide)
 {
-    return !wide && view.y <= metrics::kCompactMaxHeight;
+    return !wide && view.y <= metrics::kCompactShortMaxHeight;
 }
 
 /// One preset (.preset-item): its name with "+ Mixer" (or "In Mixer") at the right; its source and

@@ -197,6 +197,9 @@ class Shell
     [[nodiscard]] bool WantsWide() const;
     /// The compact frame's stage is tall enough for the chain over the editor (kCompactSplitMinHeight).
     [[nodiscard]] bool WantsSplit() const;
+    /// The compact frame stacks its bars (a tab bar over the preset bar, no rail) in a window as
+    /// tall as it is wide or taller, as the web UI's portrait layout.
+    [[nodiscard]] bool WantsStack() const;
     /// Hit areas for a finger (metrics::Touch): the ui.touchControls setting, whose Auto follows
     /// TouchFirst().
     [[nodiscard]] bool TouchSizes() const;
@@ -211,7 +214,7 @@ class Shell
     /// Where the stage starts and how wide it is: right of the rail when compact.
     [[nodiscard]] float StageLeft() const
     {
-        return mWide ? 0.0f : metrics::kRailWidth;
+        return mWide || mStack ? 0.0f : metrics::kRailWidth;
     }
 
     [[nodiscard]] float StageWidth() const
@@ -227,8 +230,9 @@ class Shell
     /// The page slot's height: the view less the frame's bars, and the looper strip when it is out.
     [[nodiscard]] float StageHeight() const
     {
-        const float bars = mWide ? metrics::kTabBarHeight + 1.0f + WideHeaderHeight() + metrics::kWideFooterHeight
-                                 : metrics::TopBarHeight() + metrics::FooterHeight();
+        const float bars =
+            mWide ? metrics::kTabBarHeight + 1.0f + WideHeaderHeight() + metrics::kWideFooterHeight
+                  : metrics::TopBarHeight() + metrics::FooterHeight() + (mStack ? metrics::kStackTabBarHeight : 0.0f);
         return ViewSize().y - bars - (mLooperOpen ? LooperStripHeight() : 0.0f);
     }
 
@@ -252,9 +256,17 @@ class Shell
     Ptr EmptyState(const std::string& title, const std::string& hint, float height = 0.0f);
 
     /// The row under the split stage's chain that holds its round add button.
-    [[nodiscard]] static float AddRowHeight()
+    [[nodiscard]] float AddRowHeight() const
     {
-        return metrics::Touch() ? 46.0f : 30.0f;
+        // Touch sizes in a compact split: the + is in the scene row (AddInSceneRow), so no row.
+        return AddInSceneRow() ? 0.0f : metrics::Touch() ? 46.0f : 30.0f;
+    }
+
+    /// The compact split with touch sizes puts the chain's + at the end of the scene row, hit
+    /// over 44 px, as the web UI does, and gives the chain the row it had.
+    [[nodiscard]] bool AddInSceneRow() const
+    {
+        return metrics::Touch() && mSplit && !mWide;
     }
 
     /// The frame for the layout in force, around the region slots.
@@ -289,6 +301,7 @@ class Shell
     // ThemeFlyout.cpp: the footer's Theme button, its flyout (the zoom, and a tile per theme), and
     // the zoom, kept in uiSettings.native.zoom.
     /// The footer's Theme button, in either frame: it opens the flyout.
+    [[nodiscard]] Ptr BuildStackTabs();
     [[nodiscard]] std::shared_ptr<IconButton> BuildThemeButton();
     void ToggleThemeFlyout(el::rect anchor);
     void OpenThemeFlyout(el::rect anchor);
@@ -917,6 +930,8 @@ class Shell
     /// `labelled`: each spelt out beside its icon, as the full footer does when it is wide.
     /// `withLoop`: the Loop button too; the compact frame has it on the rail instead.
     std::vector<Ptr> BuildCaptureButtons(float size, bool labelled = false, bool withLoop = true);
+    /// The looper's button, or null where the looper isn't offered.
+    [[nodiscard]] std::shared_ptr<IconButton> BuildLoopButton(float size, bool labelled);
     void SyncLooper();
     void SyncLooperLive();
     void RepaintLooperLive();
@@ -942,6 +957,8 @@ class Shell
 
     // Instruments.cpp
     void OpenDemoClips();
+    /// The demo's actions under the footer's more button: the render's rate and Render WAV.
+    void OpenDemoActions(el::rect anchor);
     [[nodiscard]] const guitarfx::uiclient::DemoClip* SelectedDemoClip() const;
     [[nodiscard]] std::vector<const std::vector<guitarfx::uiclient::DemoClip>*> DemoClipLists() const;
     void OpenTuner();
@@ -992,6 +1009,7 @@ class Shell
     Page mPage = Page::Chain;
     bool mWide = false;               // the full layout is in force
     bool mSplit = false;              // compact, with the chain over the editor (WantsSplit)
+    bool mStack = false;              // compact, its bars stacked with no rail (WantsStack)
     bool mTouch = false;              // touch sizes are in force (TouchSizes, metrics::Touch)
     bool mControlsOpen = false;       // the compact layout's Controls strip is out
     el::extent mLastSize{0.0f, 0.0f}; // the regions sized to the window are rebuilt when it changes

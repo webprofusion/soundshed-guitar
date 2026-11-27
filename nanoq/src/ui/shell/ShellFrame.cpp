@@ -30,6 +30,11 @@ Ptr Shell::BuildRail()
         return BuildTabBar();
     }
 
+    if (mStack)
+    {
+        return BuildStackTabs();
+    }
+
     auto tab = [this](const char* icon, const char* label, Page page, bool lit) {
         auto t = std::make_shared<RailTab>(mTheme, mIcons, icon, label, lit);
         t->onClick = [this, page] { ShowPage(page); };
@@ -203,12 +208,17 @@ Ptr Shell::BuildTopBar()
                            Dressed(mTheme, mTheme.Tertiary(), &Backdrops::controlBar, PadXY(0, 2, Row(items))));
     }
 
-    std::vector<Ptr> items{HGap(15), prev, HGap(6), pill,   HGap(6), next,    HGap(10), create, HGap(4), edit,
-                           HGap(4),  save, HGap(8), random, HGap(8), publish, HGap(4),  more,   HGap(19)};
+    // Even gaps, as the web UI's rail strip (css/compact/rail.css): 6 inside the preset row and the
+    // toolbar and 10 between the groups once the window is 720 wide, 4 below that, where every
+    // pixel of gap comes out of the preset's name.
+    const bool roomy = ViewSize().x >= 720.0f;
+    const float g = roomy ? 6.0f : 4.0f, group = roomy ? 10.0f : 4.0f;
+    std::vector<Ptr> items{HGap(15), prev, HGap(g), pill,   HGap(g), next,    HGap(group), create, HGap(g),    edit,
+                           HGap(g),  save, HGap(g), random, HGap(g), publish, HGap(g),     more,   HGap(group)};
 
     if (update)
     {
-        items.insert(items.end(), {Pad(0, 1, 0, 1, update), HGap(8)});
+        items.insert(items.end(), {Pad(0, 1, 0, 1, update), HGap(group)});
     }
 
     items.insert(items.end(), {controls, HGap(6)});
@@ -430,6 +440,14 @@ Ptr Shell::BuildScenes()
     }
 
     row.push_back(Stretch());
+
+    if (AddInSceneRow())
+    {
+        auto add = std::make_shared<RoundAdd>(mTheme, 24.0f);
+        add->onClick = [this, a = add.get()] { OpenAddMenu(a->Bounds()); };
+        row.push_back(FixedWidth(44, Centred(add)));
+    }
+
     row.push_back(touch ? Ptr(wrap) : Pad(0, 0, 0, 6, wrap));
     row.push_back(HGap(6));
     Ptr scenes = touch ? FixedHeight(40, Row(row)) : FixedHeight(24, Pad(0, 2, 0, 0, Row(row)));
@@ -467,9 +485,11 @@ Ptr Shell::BuildHistoryControls()
     // The chain's history: undo, redo, the A/B pair and copying the live chain to the other.
     using Slot = guitarfx::uiclient::ChainHistory::Slot;
     const bool seeded = mHistory.IsSeeded();
-    auto undo = ToolButton(mTheme, mIcons, "ui-undo", [this] { UndoChain(); }, 26.0f, 15.0f);
+    // The full footer's are footer buttons, 28 px (.footer-btn).
+    const float key = mWide ? 28.0f : 26.0f;
+    auto undo = ToolButton(mTheme, mIcons, "ui-undo", [this] { UndoChain(); }, key, 15.0f);
     undo->Disabled(!mHistory.CanUndo());
-    auto redo = ToolButton(mTheme, mIcons, "ui-redo", [this] { RedoChain(); }, 26.0f, 15.0f);
+    auto redo = ToolButton(mTheme, mIcons, "ui-redo", [this] { RedoChain(); }, key, 15.0f);
     redo->Disabled(!mHistory.CanRedo());
     auto a = std::make_shared<AbButton>(mTheme, "A", mHistory.ActiveSlot() == Slot::A);
     a->onClick = [this] { SetChainSlot(Slot::A); };
@@ -478,8 +498,16 @@ Ptr Shell::BuildHistoryControls()
     a->Enabled(seeded);
     b->Enabled(seeded);
     auto ab = Over(PadXY(2, 2, Row({a, HGap(2), b})), el::share(Surface(mTheme.Bar(), mTheme.ModalRule(), 6.0f)));
-    auto copy = ToolButton(mTheme, mIcons, "ui-swap", [this] { CopyChainSlot(); }, 26.0f, 15.0f);
+    auto copy = ToolButton(mTheme, mIcons, "ui-swap", [this] { CopyChainSlot(); }, key, 15.0f);
     copy->Disabled(!seeded);
+
+    if (mWide)
+    {
+        for (auto* b : {undo.get(), redo.get(), copy.get()})
+        {
+            b->Styled(IconButton::Look::Footer);
+        }
+    }
 
     // The footer is rebuilt when the history moves; the Options sheet is not, so its copies follow
     // through bindings.
@@ -508,7 +536,8 @@ Ptr Shell::BuildHistoryControls()
         return Tight({undo, redo, pair, copy});
     }
 
-    return Tight({undo, HGap(2), redo, HGap(6), FixedWidth(54, FixedHeight(25, ab)), HGap(4), copy});
+    // The A/B pair (.footer-ab-toggle): 28 tall, its halves 24 wide.
+    return Tight({undo, HGap(2), redo, HGap(6), FixedWidth(54, FixedHeight(28, ab)), HGap(4), copy});
 }
 
 Ptr Shell::BuildTransport()

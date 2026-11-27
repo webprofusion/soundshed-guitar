@@ -778,8 +778,8 @@ class AbButton final : public Pressable
 
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{metrics::Hit(24.0f, metrics::kTouchFloor), 21.0f},
-                {metrics::Hit(24.0f, metrics::kTouchFloor), metrics::Hit(21.0f)}};
+        return {{metrics::Hit(24.0f, metrics::kTouchFloor), 24.0f},
+                {metrics::Hit(24.0f, metrics::kTouchFloor), metrics::Hit(24.0f)}};
     }
 
     void draw(const el::context& ctx) override
@@ -790,7 +790,7 @@ class AbButton final : public Pressable
 
         if (metrics::Touch())
         {
-            const auto face = metrics::Face(b, 24.0f, 21.0f);
+            const auto face = metrics::Face(b, 24.0f, metrics::Touch() ? 21.0f : 24.0f);
             const float left = b.left + (b.width() - 24.0f) * mFaceAt;
             b = el::rect{left, face.top, left + 24.0f, face.bottom};
         }
