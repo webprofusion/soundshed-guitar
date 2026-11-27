@@ -94,6 +94,17 @@ void AddShellIcons(Icons& icons)
         R"(<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/></svg>)");
     icons.Add("ui-caret", Svg("0 0 24 24", 2.0f, R"(<polyline points="6 9 12 15 18 9"/>)"));
 
+    // The control bar (input-control-group.html, output-control-group.html): the chevron of the
+    // meters' and the gate's flyouts, the output's quick mute, and the EQ's bars.
+    icons.Add("ui-chevron-down", Svg("0 0 16 16", 1.75f, R"(<path d="M3.5 5.75 8 10.25l4.5-4.5"/>)"));
+    icons.Add("ui-out-speaker",
+              Svg("0 0 24 24", 2.0f,
+                  R"(<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 9.5c1.6 1 2.5 2.6 2.5 4.5s-.9 3.5-2.5 4.5"/>)"));
+    icons.Add("ui-out-muted", Svg("0 0 24 24", 2.0f,
+                                  R"(<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M5 5l14 14" stroke-width="2.2"/>)"
+                                  R"(<path d="M16.5 9.5c1.6 1 2.5 2.6 2.5 4.5s-.9 3.5-2.5 4.5" opacity="0.2"/>)"));
+    icons.Add("ui-eq-bars", Svg("0 0 24 24", 2.0f, R"(<path d="M4 21v-7M12 21V3M20 21v-11"/>)"));
+
     // The footer (footer-bar.html).
     icons.Add(
         "ui-pads",

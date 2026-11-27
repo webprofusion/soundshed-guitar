@@ -234,6 +234,12 @@ class Theme
         return Argb(T().effectShellValueInk);
     }
 
+    /// A favourite's heart (--color-preset-favorite): the accent only on Dark.
+    [[nodiscard]] el::color PresetFavorite() const noexcept
+    {
+        return Argb(T().presetFavorite);
+    }
+
     /// How the theme draws the effect editor's controls: a knob's face, pointer and picture, a
     /// switch, the tabs, a group's box, a control's label and value (ControlSkin.h draws them).
     [[nodiscard]] const guitarfx::uiclient::theme::ControlSkin& Controls() const noexcept

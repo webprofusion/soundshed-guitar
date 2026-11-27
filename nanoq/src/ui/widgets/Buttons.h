@@ -28,6 +28,10 @@ class IconButton final : public Pressable
         Ghost,
         Soft,
         Boxed,
+        Tool,  // the preset toolbar's keys (.preset-action-btn): no face until hovered
+        Edged, // the header's gear (.nav-settings-btn): an edge and no face
+        Pill,  // the control bar's chevrons and mute (.output-quick-mute-btn): 18 x 16 pills
+        Well,  // the control bar's EQ (.eq-icon-btn): a sunk square that glows when on
         Accent,
         Chip,    // the effect header's Presets (.default-effect-shell-chip)
         Primary, // a dialog's confirming button: filled with the accent
@@ -163,6 +167,21 @@ class IconButton final : public Pressable
         return *this;
     }
 
+    /// The colour it lights in, where not the accent (muted output's coral).
+    IconButton& LitColour(el::color colour)
+    {
+        mLitColour = colour;
+        mHasLitColour = true;
+        return *this;
+    }
+
+    /// Unsaved: the red tint of Save with changes to keep (.preset-action-btn-unsaved).
+    IconButton& Unsaved(bool unsaved)
+    {
+        mUnsaved = unsaved;
+        return *this;
+    }
+
     IconButton& Disabled(bool disabled)
     {
         Enabled(!disabled);
@@ -243,6 +262,33 @@ class IconButton final : public Pressable
             fill = mHover ? mTheme.Elevated() : mTheme.Bar();
             line = mTheme.ModalRule();
             break;
+        case Look::Edged:
+            radius = 6.0f;
+            fill = mHover ? mTheme.Text().opacity(0.06f) : fill;
+            line = mTheme.Border();
+            ink = mTheme.TextSecondary();
+            break;
+        case Look::Pill:
+            radius = b.height() * 0.5f;
+            fill = mHover ? mTheme.Text().opacity(0.06f) : mTheme.Elevated();
+            line = mHover ? mTheme.Accent() : mTheme.Border();
+            ink = mHover ? mTheme.Text() : mTheme.TextSecondary();
+            break;
+        case Look::Well:
+            radius = 6.0f;
+            fill = mTheme.Text().opacity(mHover ? 0.15f : 0.05f);
+            line = mTheme.Border();
+            ink = mHover ? mTheme.TextSecondary() : mTheme.TextMuted();
+            break;
+        case Look::Tool:
+
+            if (mHover && mEnabled)
+            {
+                fill = mTheme.Text().opacity(0.12f);
+                ink = mTheme.Text();
+            }
+
+            break;
         case Look::Primary:
             radius = 6.0f;
             fill = mTheme.Accent().level(mHover ? 1.06f : 0.92f);
@@ -272,15 +318,33 @@ class IconButton final : public Pressable
 
         if (mLit)
         {
-            fill = mTheme.Accent().opacity(0.16f);
-            line = mTheme.Accent().opacity(0.55f);
-            ink = mTheme.Accent();
+            const auto lit = mHasLitColour ? mLitColour : mTheme.Accent();
+            fill = lit.opacity(0.16f);
+            line = lit.opacity(mLook == Look::Edged || mLook == Look::Pill ? 0.7f : 0.55f);
+            ink = lit;
+
+            if (mLook == Look::Edged || mLook == Look::Well)
+            {
+                fill = mTheme.Text().opacity(mLook == Look::Well ? 0.15f : 0.06f);
+                line = mLook == Look::Well ? mTheme.Border() : lit;
+            }
+            else if (mLook == Look::Pill)
+            {
+                fill = mTheme.Elevated();
+            }
         }
 
         // Lit takes the accent over a chosen ink: a tile that is on reads as on.
         if (mHasInk && !mLit)
         {
             ink = mInk;
+        }
+
+        if (mUnsaved && !mLit)
+        {
+            fill = mTheme.Error().opacity(mHover && mEnabled ? 0.28f : 0.18f);
+            line = mTheme.Error().opacity(0.38f);
+            ink = mTheme.Error();
         }
 
         if (!mEnabled)
@@ -295,6 +359,14 @@ class IconButton final : public Pressable
 
         if (fill.alpha > 0.0f)
         {
+            auto state = cnv.new_state();
+
+            // The EQ on glows in the accent (box-shadow 0 0 8px).
+            if (mLit && mLook == Look::Well)
+            {
+                cnv.shadow_style(el::point{0.0f, 0.0f}, 8.0f, mTheme.Accent().opacity(0.8f));
+            }
+
             cnv.fill_style(fill);
             cnv.fill_round_rect(b, radius);
         }
@@ -326,6 +398,8 @@ class IconButton final : public Pressable
         switch (mLook)
         {
         case Look::Boxed:
+        case Look::Tool:
+        case Look::Edged:
             key = &skin.keys.tool;
             break;
         case Look::Soft:
@@ -361,6 +435,8 @@ class IconButton final : public Pressable
         switch (mLook)
         {
         case Look::Boxed:
+        case Look::Tool:
+        case Look::Edged:
             return b.keyTool;
         case Look::Soft:
             return b.keyNav;
@@ -445,8 +521,8 @@ class IconButton final : public Pressable
     Look mLook;
     float mW = 28.0f, mH = 28.0f, mIconSize = 14.0f, mLabelSize = 10.0f;
     float mTouchTarget = metrics::kTouchTarget;
-    bool mCaret = false, mLit = false, mHasInk = false;
-    el::color mInk;
+    bool mCaret = false, mLit = false, mHasInk = false, mUnsaved = false, mHasLitColour = false;
+    el::color mInk, mLitColour;
 };
 
 /// The effect header's on/off switch (.default-effect-shell-toggle): an accent pill reading ON
@@ -544,9 +620,17 @@ class TextTab final : public Pressable
         return info;
     }
 
+    /// The header's tabs (.nav-tab): bold, spaced `tracking` em, muted until hovered or chosen.
+    TextTab& Nav(float tracking)
+    {
+        mNav = true;
+        mTracking = tracking;
+        return *this;
+    }
+
     el::view_limits limits(const el::basic_context& ctx) const override
     {
-        const float w = el::measure_text(ctx.canvas, mLabel, Font(Weight::SemiBold).size(mSize)).x + mPadding;
+        const float w = TrackedWidth(ctx.canvas, mLabel, TabFont(), mTracking) + mPadding;
         return {{w, mHeight}, {w, mHeight}};
     }
 
@@ -554,9 +638,10 @@ class TextTab final : public Pressable
     {
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
-        const auto ink = mActive ? mTheme.Accent() : (mHover ? mTheme.Text() : mTheme.TextSecondary());
-        FillText(cnv, mLabel, Font(Weight::SemiBold).size(mSize), ink,
-                 el::rect{b.left, b.top, b.right, b.bottom - 2.0f}, HAlign::Centre);
+        const auto rest = mNav ? mTheme.TextMuted() : mTheme.TextSecondary();
+        const auto ink = mActive ? mTheme.Accent() : (mHover ? mTheme.Text() : rest);
+        FillTrackedText(cnv, mLabel, TabFont(), ink, el::rect{b.left, b.top, b.right, b.bottom - 2.0f}, HAlign::Centre,
+                        mTracking);
 
         if (mActive)
         {
@@ -566,10 +651,17 @@ class TextTab final : public Pressable
     }
 
   private:
+    [[nodiscard]] el::font_descr TabFont() const
+    {
+        return Font(Weight::SemiBold).size(mSize);
+    }
+
     const Theme& mTheme;
     std::string mLabel;
     bool mActive;
+    bool mNav = false;
     float mSize, mPadding, mHeight;
+    float mTracking = 0.0f;
 };
 
 /// A tab drawn as text with an accent underline when chosen (.node-param-tab).

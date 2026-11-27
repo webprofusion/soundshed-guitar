@@ -64,6 +64,7 @@ struct ThemeTokens
     std::uint32_t buttonBorder;              // --button-border
     std::uint32_t effectShellTitleInk;       // --effect-shell-title-ink
     std::uint32_t effectShellValueInk;       // --effect-shell-value-ink
+    std::uint32_t presetFavorite;            // --color-preset-favorite
     std::uint32_t sgSurface;                 // --sg-surface
     std::uint32_t sgFret;                    // --sg-fret
     std::uint32_t sgNut;                     // --sg-nut
@@ -133,6 +134,7 @@ inline constexpr ThemeTokens kLight{
     0xffb6bdcd, // buttonBorder
     0xff243044, // effectShellTitleInk
     0xeb2d3d5a, // effectShellValueInk
+    0xffc27c7c, // presetFavorite
     0x06141822, // sgSurface
     0xff8a8c92, // sgFret
     0xfffbf8f0, // sgNut
@@ -202,6 +204,7 @@ inline constexpr ThemeTokens kDark{
     0xff4a4a58, // buttonBorder
     0xffeef2ff, // effectShellTitleInk
     0xc2e7ecf6, // effectShellValueInk
+    0xffff8850, // presetFavorite
     0x06ffffff, // sgSurface
     0xff8d9097, // sgFret
     0xffe6e0cf, // sgNut
@@ -271,6 +274,7 @@ inline constexpr ThemeTokens kClassic{
     0xff6b5f4f, // buttonBorder
     0xfff5f1e8, // effectShellTitleInk
     0xc2e7ecf6, // effectShellValueInk
+    0xfff0a010, // presetFavorite
     0x06ffffff, // sgSurface
     0xff8d9097, // sgFret
     0xffe6e0cf, // sgNut
@@ -340,6 +344,7 @@ inline constexpr ThemeTokens kStage{
     0xff424242, // buttonBorder
     0xfff2f2f2, // effectShellTitleInk
     0xc2e7ecf6, // effectShellValueInk
+    0xfff2a73b, // presetFavorite
     0x06ffffff, // sgSurface
     0xff8d9097, // sgFret
     0xffe6e0cf, // sgNut
@@ -409,6 +414,7 @@ inline constexpr ThemeTokens kHighGain{
     0xff0a0a0b, // buttonBorder
     0xfff4f4f5, // effectShellTitleInk
     0xc2e7ecf6, // effectShellValueInk
+    0xffff4a3d, // presetFavorite
     0x06ffffff, // sgSurface
     0xff8d9097, // sgFret
     0xffe6e0cf, // sgNut
@@ -478,6 +484,7 @@ inline constexpr ThemeTokens kStudio{
     0xffb4b4af, // buttonBorder
     0xff1d1e21, // effectShellTitleInk
     0xff333539, // effectShellValueInk
+    0xffc27c7c, // presetFavorite
     0x06141822, // sgSurface
     0xff8a8c92, // sgFret
     0xfffbf8f0, // sgNut
@@ -547,6 +554,7 @@ inline constexpr ThemeTokens kStudio2003{
     0xff8a8881, // buttonBorder
     0xff2a2824, // effectShellTitleInk
     0xff363431, // effectShellValueInk
+    0xffc27c7c, // presetFavorite
     0x06141822, // sgSurface
     0xff8a8c92, // sgFret
     0xfffbf8f0, // sgNut
@@ -616,6 +624,7 @@ inline constexpr ThemeTokens kStudio1973{
     0xffc9b894, // buttonBorder
     0xfff8eedb, // effectShellTitleInk
     0xc2e7ecf6, // effectShellValueInk
+    0xfff2952e, // presetFavorite
     0x06ffffff, // sgSurface
     0xff8d9097, // sgFret
     0xffe6e0cf, // sgNut

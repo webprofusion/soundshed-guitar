@@ -30,6 +30,12 @@ namespace
 /// under the EQ cell where no press reached it. The web UI drops the same two labels there.
 bool ToolbarLabelsFit(float viewWidth)
 {
+    // The web UI spells them out only above a 1320 px viewport (toolbar.css).
+    if (viewWidth <= 1320.0f)
+    {
+        return false;
+    }
+
     constexpr float kHeaderSides = 2.0f * (28.0f + 30.0f + 14.0f) + 5.0f * 84.0f + 72.0f;
     // With touch sizes every button is hit over 44 px, and the toolbar is 596 px spelt out.
     const float labelledToolbar = metrics::Touch() ? 596.0f : 406.0f;
@@ -149,14 +155,17 @@ void Shell::StepPresetTrail(int direction)
 Ptr Shell::BuildTabBar()
 {
     auto tab = [this](const char* label, bool active, Page page) {
-        auto t = std::make_shared<TextTab>(mTheme, label, active, 12.0f, 28.0f, metrics::kTabBarHeight);
+        // .nav-tab: 11 px bold, spaced .10em, padded 12 either side.
+        auto t = std::make_shared<TextTab>(mTheme, label, active, 11.0f, 24.0f, metrics::kTabBarHeight);
+        t->Nav(0.10f);
         t->onClick = [this, page] { ShowPage(page); };
         return t;
     };
     const bool play = mPage == Page::Chain || mPage == Page::Effect || mPage == Page::Pads;
 
-    auto settings = std::make_shared<IconButton>(mTheme, mIcons, "ui-gear", IconButton::Look::Boxed);
-    settings->Size(28, 28).IconSize(15).Lit(mPage == Page::Settings);
+    // .nav-settings-btn: 26 x 26, edged in --border-light, the accent when open.
+    auto settings = std::make_shared<IconButton>(mTheme, mIcons, "ui-gear", IconButton::Look::Edged);
+    settings->Size(26, 26).IconSize(15).Lit(mPage == Page::Settings);
     settings->Ink(mPage == Page::Settings ? mTheme.Accent() : mTheme.TextSecondary());
     settings->onClick = [this] { ShowPage(mPage == Page::Settings ? Page::Chain : Page::Settings); };
 
@@ -183,7 +192,7 @@ Ptr Shell::BuildTabBar()
         row.insert(row.end(), {Pad(0, 5, 0, 5, update), HGap(8)});
     }
 
-    row.insert(row.end(), {Pad(0, 4, 0, 4, settings), HGap(10)});
+    row.insert(row.end(), {Pad(0, 5, 0, 5, settings), HGap(10)});
     return Dressed(mTheme, mTheme.Background(), &Backdrops::header, Row(row));
 }
 
@@ -203,29 +212,35 @@ Ptr Shell::BuildHeader()
     const bool favourite = guitarfx::uiclient::IsPresetFavorite(mState, presetId);
     const auto* summary = mState.FindPresetSummary(presetId);
 
-    auto boxed = [this](const char* icon, std::function<void()> onClick) {
-        auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Boxed);
-        b->Size(30, 28).IconSize(14);
+    // The keys are the web UI's .preset-action-btn: no face until hovered, a 12 px icon, 28 px
+    // squares where the labels are dropped and 30 wide where they show.
+    const bool labelled = ToolbarLabelsFit(ViewSize().x);
+    const float keyWidth = labelled ? 30.0f : 28.0f;
+    auto boxed = [this, keyWidth](const char* icon, std::function<void()> onClick) {
+        auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Tool);
+        b->Size(keyWidth, 28).IconSize(12);
         b->onClick = std::move(onClick);
         return b;
     };
-    auto divider = [this] {
-        return Pad(7, 6, 7, 6, FixedWidth(1, Fill(mTheme.Text().opacity(0.1f), std::make_shared<el::element>())));
+    // .preset-toolbar-separator: 1 x 24 in --overlay-medium, the toolbar's gap either side.
+    const float groupGap = labelled ? 6.0f : 8.0f;
+    auto divider = [this, groupGap] {
+        return Pad(groupGap, 2, groupGap, 2,
+                   FixedWidth(1, Fill(mTheme.Text().opacity(0.15f), std::make_shared<el::element>())));
     };
 
     // NEW and PUBLISH are spelt out only where the bar has room for them (ToolbarLabelsFit).
-    const bool labelled = ToolbarLabelsFit(ViewSize().x);
-
-    auto create = std::make_shared<IconButton>(mTheme, mIcons, "ui-new", IconButton::Look::Boxed);
-    create->IconSize(13).Caret(true);
+    auto create = std::make_shared<IconButton>(mTheme, mIcons, "ui-new", IconButton::Look::Tool);
+    create->IconSize(12).Caret(true);
 
     if (labelled)
     {
-        create->Size(72, 28).Label("NEW", 10.5f);
+        create->Size(66, 28).Label("NEW", 10.0f);
     }
     else
     {
-        create->Size(44, 28);
+        // An icon and a caret don't fit a 28 px square (.preset-action-btn-menu).
+        create->Size(38, 28);
     }
 
     create->onClick = [this, b = create.get()] { OpenNewPresetMenu(b->Bounds()); };
@@ -237,10 +252,8 @@ Ptr Shell::BuildHeader()
     auto save = boxed("ui-save", [this] { SaveActivePreset(false); });
     save->Disabled(!canModify);
 
-    if (dirty)
-    {
-        save->Ink(mTheme.Accent());
-    }
+    // Save with changes to keep has the red tint (.preset-action-btn-unsaved).
+    save->Unsaved(dirty && canModify);
 
     auto random = boxed("ui-random", [this] { LoadRandomPreset(); });
 
@@ -250,34 +263,37 @@ Ptr Shell::BuildHeader()
     auto forward = ToolButton(mTheme, mIcons, "ui-redo", [this] { StepPresetTrail(1); }, 28.0f, 15.0f);
     forward->Disabled(!mPresetTrail.CanGoForward());
 
-    auto more = std::make_shared<IconButton>(mTheme, mIcons, "ui-more", IconButton::Look::Boxed);
-    more->Size(30, 28).IconSize(14).Caret(true);
+    auto more = std::make_shared<IconButton>(mTheme, mIcons, "ui-more", IconButton::Look::Tool);
+    more->Size(38, 28).IconSize(12).Caret(true);
     more->onClick = [this, b = more.get()] { OpenPresetMenu(b->Bounds()); };
 
     // Publish (#preset-publish): publishing is Soundshed Guitar's, and this says so.
     auto publish = std::make_shared<IconButton>(mTheme, mIcons, "ui-share", IconButton::Look::Accent);
-    publish->IconSize(13);
+    publish->IconSize(12);
 
     if (labelled)
     {
-        publish->Size(84, 28).Label("PUBLISH", 10.5f);
+        publish->Size(84, 28).Label("PUBLISH", 10.0f);
     }
     else
     {
-        publish->Size(30, 28);
+        publish->Size(28, 28);
     }
 
     publish->onClick = [this] { OpenPublishInfo(); };
 
-    auto toolbar = Tight({create, HGap(6), edit, HGap(6), save, divider(), random, divider(), back, HGap(2), forward,
-                          divider(), publish, divider(), more});
+    // Keys in a group 4 apart (.preset-toolbar-group), 6 where the labels are dropped.
+    const float keyGap = labelled ? 4.0f : 6.0f;
+    auto toolbar = Tight({create, HGap(keyGap), edit, HGap(keyGap), save, divider(), random, divider(), back,
+                          HGap(keyGap), forward, divider(), publish, divider(), more});
 
     // ── The preset selector ──
+    // .preset-nav-btn: 28 x 28 with a 20 px arrow.
     auto prev = std::make_shared<IconButton>(mTheme, mIcons, "ui-prev", IconButton::Look::Soft);
-    prev->Size(30, 30).IconSize(16);
+    prev->Size(28, 28).IconSize(20);
     prev->onClick = [this] { StepPresetWithConfirm(-1); };
     auto next = std::make_shared<IconButton>(mTheme, mIcons, "ui-next", IconButton::Look::Soft);
-    next->Size(30, 30).IconSize(16);
+    next->Size(28, 28).IconSize(20);
     next->onClick = [this] { StepPresetWithConfirm(1); };
 
     auto pill = std::make_shared<PresetPill>(mTheme, mIcons, PresetTitle(mState), favourite, dirty);
@@ -290,12 +306,14 @@ Ptr Shell::BuildHeader()
         }
     };
 
-    // The middle gets what the knobs leave, up to the web UI's 680 px.
-    auto centre =
-        WidthRange(330.0f, 680.0f,
-                   Col({VGap(27), FixedHeight(28, Row({Stretch(), toolbar, Stretch()})), VGap(9),
-                        FixedHeight(36, Row({Pad(0, 3, 0, 3, prev), HGap(8), pill, HGap(8), Pad(0, 3, 0, 3, next)})),
-                        std::make_shared<el::element>()}));
+    // The middle gets what the knobs leave, up to the web UI's 800 px (.preset-group, padded
+    // 6 x 8); 14 between the toolbar and the selector, whose row is 6 apart.
+    auto centre = WidthRange(
+        330.0f, 800.0f,
+        Pad(8, 0, 8, 0,
+            Col({VGap(26), FixedHeight(28, Row({Stretch(), toolbar, Stretch()})), VGap(14),
+                 FixedHeight(36, Row({Pad(0, 4, 0, 4, prev), HGap(6), pill, HGap(6), Pad(0, 4, 0, 4, next)})),
+                 std::make_shared<el::element>()})));
 
     // As wide as the ladder, or the theme's needle gauge (Studio 1973's VU meters).
     const float meterWidth = MeterBar::ColumnWidth(mTheme);

@@ -75,13 +75,21 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     const float titleSize = metrics::Readable(9.0f);
     const float headHeight = touch ? 36.0f : 12.0f;
     const float belowHeight = touch ? 36.0f : 16.0f;
-    const auto titleInk = mTheme.DarkOr(el::rgba(201, 209, 225, 200), mTheme.TextSecondary());
+    // .control-stack-label: 9 px bold, spaced .08em, --text-muted outside Dark.
+    const auto titleInk = mTheme.DarkOr(el::rgba(201, 209, 225, 200), mTheme.TextMuted());
+    constexpr float kTitleTracking = 0.08f;
+    // The small pills of the bar's flyouts and the output's mute (18 x 16).
+    auto pill = [this](const char* icon, float iconSize) {
+        auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Pill);
+        b->Size(18, 16).IconSize(iconSize).TouchTarget(36);
+        return b;
+    };
 
     // A cell of the strip: its label (with a switch beside it for a stage that turns off) over a
     // knob and its value, and, for the input, its mode under that.
     auto knobCell = [&](const char* label, const EffectParamInfo& info, Read read, Write write, Format format,
-                        std::function<bool()> readOn = {}, std::function<void(bool)> writeOn = {},
-                        Ptr below = nullptr) -> Ptr {
+                        std::function<bool()> readOn = {}, std::function<void(bool)> writeOn = {}, Ptr below = nullptr,
+                        Ptr besideValue = nullptr) -> Ptr {
         auto knob = std::make_shared<ParamKnob>(mTheme, "");
         knob->AccessName(info.name);
         knob->onChange = [info, write, format, k = knob.get()](double position) {
@@ -112,7 +120,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         });
 
         auto title = std::make_shared<Text>(mTheme, label, titleSize, Weight::SemiBold);
-        title->Colour(titleInk).Fixed(true);
+        title->Colour(titleInk).Tracking(kTitleTracking).Fixed(true);
         std::vector<Ptr> head{Stretch(), title};
 
         if (readOn)
@@ -145,6 +153,14 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         Ptr knobRow = Row({Stretch(), knob, Stretch()});
         auto top = Over(Col({FixedHeight(headHeight, Row(head)), std::make_shared<el::element>()}),
                         touch ? Col({VGap(knobTop), knobRow}) : knobRow);
+
+        // A flyout's chevron beside the value, as the gate's (.gate-settings-trigger).
+        if (besideValue)
+        {
+            top = Over(Col({Stretch(), FixedHeight(16, Row({Stretch(), std::move(besideValue), HGap(3)})), VGap(4)}),
+                       top);
+        }
+
         std::vector<Ptr> cell{FixedHeight(67 + knobTop, top)};
 
         if (below)
@@ -224,8 +240,8 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
 
     // ── GATE ──
     // ── GATE: Threshold and on/off here; everything else, and Learn, behind Settings ──
-    auto gateSettings = std::make_shared<IconButton>(mTheme, mIcons, "");
-    gateSettings->Size(70, 16).Label("Settings", 10.0f).Caret(true).Ink(mTheme.TextSecondary());
+    auto gateSettings = pill("ui-chevron-down", 9.0f);
+    gateSettings->AccessName("Noise gate settings");
     gateSettings->onClick = [this, g = gateSettings.get()] { OpenGlobalGate(g->Bounds()); };
     auto gate = knobCell(
         "GATE", Param("threshold", "Gate", "dB", -90.0, 0.0, -60.0, 1.0),
@@ -233,7 +249,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         [&commands](double v) { commands.SetGlobalChainParam("gate.threshold", v); },
         [](double v) { return std::to_string(static_cast<int>(std::lround(v))) + " dB"; },
         [chain] { return NodeEnabled(chain().preChainGraph, "global_gate"); },
-        [&commands](bool on) { commands.SetGlobalChainToggle("gate.enabled", on); }, gateSettings);
+        [&commands](bool on) { commands.SetGlobalChainToggle("gate.enabled", on); }, nullptr, gateSettings);
 
     // ── TRANSPOSE: as the web UI's knob, the transpose runs only while it transposes ──
     auto transpose = knobCell(
@@ -254,8 +270,9 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         });
 
     // ── EQ: its switch, and a button that opens its four bands ──
-    auto eqButton = std::make_shared<IconButton>(mTheme, mIcons, "sliders", IconButton::Look::Boxed);
-    eqButton->Size(46, 46).IconSize(18).Ink(mTheme.TextSecondary());
+    // .eq-icon-btn: 48 x 48 with the web UI's bars, glowing in the accent while the EQ is on.
+    auto eqButton = std::make_shared<IconButton>(mTheme, mIcons, "ui-eq-bars", IconButton::Look::Well);
+    eqButton->Size(48, 48).IconSize(18).AccessName("Global EQ");
     eqButton->onClick = [this] { OpenGlobalEq(); };
     // Lit in the accent while the Global EQ is on, as the web UI's .eq-icon-btn.
     mLive.Bind(
@@ -268,7 +285,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     };
     mLive.Bind(eqOn, [chain] { return NodeEnabled(chain().postChainGraph, "global_eq"); }, &MiniSwitch::Set);
     auto eqTitle = std::make_shared<Text>(mTheme, "EQ", titleSize, Weight::SemiBold);
-    eqTitle->Colour(titleInk).Fixed(true);
+    eqTitle->Colour(titleInk).Tracking(kTitleTracking).Fixed(true);
     Ptr eqHead = Row({Stretch(), eqTitle, HGap(5), eqOn, Stretch()});
 
     if (touch)
@@ -278,8 +295,8 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     }
 
     auto eq =
-        FixedWidth(72, Col({FixedHeight(headHeight, eqHead), VGap(touch ? 4 : 8),
-                            FixedHeight(46, Row({Stretch(), eqButton, Stretch()})), std::make_shared<el::element>()}));
+        FixedWidth(72, Col({FixedHeight(headHeight, eqHead), VGap(touch ? 4 : 7),
+                            FixedHeight(48, Row({Stretch(), eqButton, Stretch()})), std::make_shared<el::element>()}));
 
     // ── DOUBLER ──
     auto doubler = knobCell(
@@ -294,13 +311,13 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         [chain] { return NodeEnabled(chain().postChainGraph, "global_doubler"); },
         [&commands](bool on) { commands.SetGlobalChainToggle("doubler.enabled", on); });
 
-    // ── OUT, with mute under its meter, and the output's status readout behind Status ──
-    auto outStatus = std::make_shared<IconButton>(mTheme, mIcons, "");
-    outStatus->Size(70, 16).Label("Status", 10.0f).Caret(true).Ink(mTheme.TextSecondary());
+    // ── OUT; its mute and the output's status chevron sit under its meter (.output-vu-meter) ──
+    auto outStatus = pill("ui-chevron-down", 9.0f);
+    outStatus->AccessName("Output DSP status");
     outStatus->onClick = [this, o = outStatus.get()] { OpenOutputStatus(o->Bounds()); };
     auto out = knobCell(
         "OUT", Param("outputGain", "Out", "dB", -12.0, 12.0, 0.0), [chain] { return chain().outputGain; },
-        [&commands](double v) { commands.SetGlobalChainParam("output.gain", v); }, Decibels, {}, {}, outStatus);
+        [&commands](double v) { commands.SetGlobalChainParam("output.gain", v); }, Decibels);
 
     // The meters, from the telemetry feed (20 Hz): only a bar that moved is redrawn.
     auto inMeter = std::make_shared<MeterBar>(mTheme);
@@ -313,10 +330,13 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     mLive.Feed(outMeter, [this](MeterBar& m) {
         return m.Set(mState.telemetry.output.peakDb, mState.telemetry.output.clipped, mState.telemetry.output.rmsDb);
     });
-    auto mute = std::make_shared<IconButton>(mTheme, mIcons, mState.outputMuted ? "ui-mute" : "ui-speaker");
-    mute->Size(20, 18).IconSize(12).TouchTarget(36);
+    // .output-quick-mute-btn: coral while muted, with the wave struck through.
+    auto mute = pill(mState.outputMuted ? "ui-out-muted" : "ui-out-speaker", 11.0f);
+    mute->LitColour(el::rgba(240, 138, 101, 255)).AccessName("Mute output");
     mute->onClick = [this] { mSession.Commands().SetOutputMuted(!mState.outputMuted); };
-    mLive.Bind(mute, [this] { return mState.outputMuted; }, &IconButton::Lit);
+    mLive.Bind(
+        mute, [this] { return mState.outputMuted; },
+        [](IconButton& b, bool muted) { b.Lit(muted).Icon(muted ? "ui-out-muted" : "ui-out-speaker"); });
 
     ControlCells cells;
     cells.in = in;
@@ -327,7 +347,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     cells.out = out;
     cells.inMeter = inMeter;
     cells.outMeter = outMeter;
-    cells.mute = mute;
+    cells.mute = Tight({mute, HGap(3), outStatus});
     cells.levelling = BuildInputLevellingButton();
     return cells;
 }

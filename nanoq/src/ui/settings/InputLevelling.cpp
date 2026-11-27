@@ -50,8 +50,9 @@ std::string Trimmed(std::string text)
 Ptr Shell::BuildInputLevellingButton()
 {
     // The web UI's chevron under the input meter; lit while a profile is applied.
-    auto button = std::make_shared<IconButton>(mTheme, mIcons, "ui-caret");
-    button->Size(20, 18).IconSize(11).TouchTarget(36);
+    // 18 x 16, edged in the accent while levelling is applied (.input-vu-meter-dropdown-trigger).
+    auto button = std::make_shared<IconButton>(mTheme, mIcons, "ui-chevron-down", IconButton::Look::Pill);
+    button->Size(18, 16).IconSize(9).TouchTarget(36).AccessName("Input levelling and Pickup Match");
     button->onClick = [this, b = button.get()] { OpenInputLevelling(b->Bounds()); };
     mLive.Bind(
         button,

@@ -9,6 +9,7 @@
 #include "ui/widgets/Buttons.h"
 #include "ui/widgets/Pressable.h"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -143,7 +144,10 @@ class PresetPill final : public Pressable
                 cnv.fill_style(shade);
                 cnv.fill_round_rect(b, 10.0f);
             }
-            cnv.stroke_style(mHover ? mTheme.Text().opacity(0.14f) : mTheme.Text().opacity(0.06f));
+            // Unsaved changes edge it in the accent (.preset-selector.has-unsaved-changes).
+            cnv.stroke_style(mDirty   ? mTheme.Accent().opacity(0.45f)
+                             : mHover ? mTheme.Text().opacity(0.14f)
+                                      : mTheme.Text().opacity(0.06f));
             cnv.line_width(1.0f);
             cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 10.0f);
         }
@@ -151,40 +155,52 @@ class PresetPill final : public Pressable
         const el::color ink = skinned ? displayInk : mTheme.Ink();
         const el::color soft = skinned ? displayInk.opacity(0.72f) : mTheme.TextSecondary();
         const auto heart = HeartRect(b);
+        // The heart in the theme's favourite colour when set or hovered, else soft at .7.
         mIcons.Draw(cnv, mFavourite ? "heart-filled" : "heart", heart,
-                    mFavourite ? mTheme.Accent() : (mHoverHeart ? (skinned ? ink : mTheme.Text()) : soft));
+                    mFavourite || mHoverHeart ? (skinned ? ink : mTheme.PresetFavorite()) : soft.opacity(0.7f));
 
         float right = b.right - 12.0f;
         const float nameLeft = heart.right + 14.0f;
 
-        if (!mBadge.empty())
+        // The status chip (.preset-selector-status): the source, and "Unsaved" in the accent
+        // while there are changes to keep; 9 px bold, padded 2 x 7, radius 4.
+        const std::string badge =
+            mDirty ? (mBadge.empty() ? std::string("Unsaved") : mBadge + " â¢ Unsaved") : mBadge;
+
+        if (!badge.empty())
         {
-            const auto badgeFont = Font(Weight::SemiBold).size(9.5f);
-            const float w = el::measure_text(cnv, mBadge, badgeFont).x + 14.0f;
+            const auto badgeFont = Font(Weight::SemiBold).size(9.0f);
+            constexpr float kTracking = 0.06f;
+            const float w = TrackedWidth(cnv, badge, badgeFont, kTracking) + 14.0f;
             const float cy = b.top + b.height() * 0.5f;
-            const el::rect chip{b.right - 9.0f - w, cy - 9.0f, b.right - 9.0f, cy + 9.0f};
+            const el::rect chip{b.right - 8.0f - w, cy - 8.0f, b.right - 8.0f, cy + 8.0f};
 
             if (chip.left - 10.0f - nameLeft >= mBadgeNameRoom)
             {
-                cnv.fill_style(skinned ? displayInk.opacity(0.12f) : mTheme.Text().opacity(0.08f));
-                cnv.fill_round_rect(chip, 5.0f);
-                FillText(cnv, mBadge, badgeFont, soft, chip, HAlign::Centre);
+                cnv.fill_style(skinned ? displayInk.opacity(0.12f) : mTheme.Text().opacity(0.06f));
+                cnv.fill_round_rect(chip, 4.0f);
+                FillTrackedText(cnv, badge, badgeFont, mDirty ? (skinned ? ink : mTheme.Accent()) : soft, chip,
+                                HAlign::Centre, kTracking);
                 right = chip.left - 10.0f;
             }
         }
 
-        const float size = mHeight > 30.0f ? 13.0f : 12.0f;
-        const auto font = skinned ? ControlFont(display.text, size) : Font(Weight::SemiBold).size(size);
+        // The name (.preset-chooser-label): 11 px bold, tracked .05em.
+        constexpr float kNameTracking = 0.05f;
+        const auto font = skinned ? ControlFont(display.text, 11.0f) : Font(Weight::SemiBold).size(11.0f);
         const el::rect text{nameLeft, b.top, right, b.bottom};
-        std::string name = mDirty ? mName + " *" : mName;
+        // Room for the tracking too: it adds .05em after each character.
+        const float trackingRoom = kNameTracking * 11.0f * static_cast<float>(std::min<std::size_t>(mName.size(), 64));
+        const auto name = Ellipsize(cnv, mName, font, std::max(0.0f, text.width() - trackingRoom));
 
         if (skinned)
         {
-            DrawDisplayText(cnv, Ellipsize(cnv, name, font, text.width()), font, display, ink, text, HAlign::Left);
+            DrawDisplayText(cnv, name, font, display, ink, text, HAlign::Left);
         }
         else
         {
-            FillText(cnv, Ellipsize(cnv, name, font, text.width()), font, ink, text, HAlign::Left);
+            FillTrackedText(cnv, name, font, mHover && !mHoverHeart ? mTheme.Text() : ink, text, HAlign::Left,
+                            kNameTracking);
         }
     }
 

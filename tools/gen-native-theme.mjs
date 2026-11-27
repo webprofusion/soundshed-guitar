@@ -91,6 +91,7 @@ const TOKENS = [
   ['buttonBorder', ['--button-border']],
   ['effectShellTitleInk', ['--effect-shell-title-ink']],
   ['effectShellValueInk', ['--effect-shell-value-ink']],
+  ['presetFavorite', ['--color-preset-favorite']],
   // The Scale Guide's fretboard and diagrams (core/ui/css/scale-guide.css).
   ['sgSurface', ['--sg-surface']],
   ['sgFret', ['--sg-fret']],
