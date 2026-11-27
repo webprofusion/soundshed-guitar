@@ -162,6 +162,8 @@ const
 
 var
     InstallPathsPage: TInputDirWizardPage;
+    // Set when the user answers No to installing the WebView2 runtime (asked on the Ready page).
+    WebView2Declined: Boolean;
 
 function TrimmedPath(const Path: string): string;
 begin
@@ -264,9 +266,59 @@ begin
         Result := True;
 end;
 
+function HasWebView2Version(const RootKey: Integer): Boolean;
+var
+    Version: string;
+begin
+    // An uninstalled runtime can leave its key behind with pv = 0.0.0.0.
+    Result := RegQueryStringValue(RootKey, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Version)
+        and (Version <> '') and (Version <> '0.0.0.0');
+end;
+
+function IsWebView2RuntimeInstalled: Boolean;
+begin
+    // A per-machine runtime registers in the 32-bit view (WOW6432Node) on 64-bit Windows. In 64-bit
+    // install mode HKLM is the 64-bit view, so HKLM32 has to be read explicitly: without it every
+    // x64/ARM64 install missed the runtime and downloaded and re-ran its installer after copying files.
+    Result := HasWebView2Version(HKLM32)
+        or (IsWin64 and HasWebView2Version(HKLM64))
+        or HasWebView2Version(HKCU);
+end;
+
+function NeedsWebView2Runtime: Boolean;
+begin
+    // Not wanted when the advanced choices leave it out: only the native UI, which draws without
+    // a browser, or the user installs (or deploys) the runtime themselves.
+    Result := not IsWebView2RuntimeInstalled
+        and not WizardIsTaskSelected('nativeuionly')
+        and not WizardIsTaskSelected('skipwebview2');
+end;
+
+// Asked before anything is installed, and only when the runtime is missing. A silent install takes
+// the default (Yes); /TASKS="skipwebview2" leaves it out there.
+procedure ConfirmWebView2Install;
+begin
+    WebView2Declined := False;
+
+    if not WizardIsComponentSelected('standalone') or not NeedsWebView2Runtime then
+        Exit;
+
+    WebView2Declined := SuppressibleMsgBox(
+        'The Microsoft Edge WebView2 runtime is not installed. {#ProductName} uses it to show its main interface.' + #13#10#13#10 +
+        'Download and install it from Microsoft now? This needs an internet connection and can take a few minutes.' + #13#10#13#10 +
+        'If you choose No, {#ProductName} uses its native interface until WebView2 is installed.',
+        mbConfirmation, MB_YESNO, IDYES) <> IDYES;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
     Result := True;
+
+    if CurPageID = wpReady then
+    begin
+        ConfirmWebView2Install;
+        Exit;
+    end;
 
     if CurPageID = wpSelectComponents then
     begin
@@ -319,27 +371,6 @@ begin
 #endif
 end;
 
-function IsWebView2RuntimeInstalled: Boolean;
-var
-    Version: string;
-begin
-    Result :=
-        (RegQueryStringValue(HKLM64, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Version) and (Version <> ''))
-        or
-        (RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Version) and (Version <> ''))
-        or
-        (RegQueryStringValue(HKCU, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Version) and (Version <> ''));
-end;
-
-function NeedsWebView2Runtime: Boolean;
-begin
-    // Not wanted when the advanced choices leave it out: only the native UI, which draws without
-    // a browser, or the user installs (or deploys) the runtime themselves.
-    Result := not IsWebView2RuntimeInstalled
-        and not WizardIsTaskSelected('nativeuionly')
-        and not WizardIsTaskSelected('skipwebview2');
-end;
-
 function InstallWebView2Runtime: Boolean;
 var
     InstallerPath: string;
@@ -348,8 +379,12 @@ var
 begin
     Result := True;
 
-    if not NeedsWebView2Runtime then
+    if WebView2Declined or not NeedsWebView2Runtime then
         Exit;
+
+    // The download and install below can take a minute or more with no file progress to show.
+    WizardForm.StatusLabel.Caption := 'Installing the Microsoft Edge WebView2 runtime...';
+    WizardForm.ProgressGauge.Style := npbstMarquee;
 
     InstallerPath := ExpandConstant('{tmp}\MicrosoftEdgeWebView2Setup.exe');
     DownloadCommand := '/C powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
