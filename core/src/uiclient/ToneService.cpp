@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <string_view>
 
 namespace guitarfx::uiclient
@@ -101,14 +102,15 @@ void ToneService::Changed()
 // ── Requests ────────────────────────────────────────────────────────────────────
 
 void ToneService::Request(const std::string& method, const std::string& url, const std::string& jsonBody, bool json,
-                          BytesCallback done)
+                          BytesCallback done, Headers headers)
 {
     const auto session = json ? SessionId() : std::string();
     auto alive = mAlive;
     auto* workers = mWorkers.get();
     auto post = mHost.post;
 
-    mWorkers->Run([alive, workers, post, method, url, jsonBody, session, json, done = std::move(done)] {
+    mWorkers->Run([alive, workers, post, method, url, jsonBody, session, json, headers = std::move(headers),
+                   done = std::move(done)] {
         const auto perform = [&](const std::string& withSession) {
             net::HttpRequest request;
             request.method = method;
@@ -130,6 +132,11 @@ void ToneService::Request(const std::string& method, const std::string& url, con
             if (!withSession.empty())
             {
                 request.headers.emplace_back("x-session-id", withSession);
+            }
+
+            for (const auto& header : headers)
+            {
+                request.headers.push_back(header);
             }
 
             return workers->Perform(request);
@@ -534,6 +541,27 @@ void ToneService::ResolveAndInstall(const nlohmann::json& entry, const std::stri
         return;
     }
 
+    if (Tone3000NeedsKey() && mHost.needTone3000Key)
+    {
+        mHost.needTone3000Key(
+            [this, entry, folder, archives] {
+                // Asked again: the key may still be missing (the prompt was closed some other way).
+                if (Tone3000NeedsKey())
+                {
+                    DownloadFailed(entry.value("id", std::string()), entry.value("title", std::string()),
+                                   "A Tone3000 API key is needed for its models.");
+                    return;
+                }
+
+                ResolveAndInstall(entry, folder, archives);
+            },
+            [this, entry] {
+                DownloadFailed(entry.value("id", std::string()), entry.value("title", std::string()),
+                               "Import cancelled: it needs a Tone3000 API key.");
+            });
+        return;
+    }
+
     // Each fetched and imported; the install goes once every one has answered. One that cannot
     // be had leaves the engine to refuse the install, saying which.
     struct Pending
@@ -663,11 +691,158 @@ void ToneService::OnInstallsChanged()
 
 // ── Tone3000 ────────────────────────────────────────────────────────────────────
 
+namespace
+{
+double SteadySeconds()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+} // namespace
+
+bool ToneService::Tone3000UsesRelay() const
+{
+    return tone3000::UsesRelay(mClient.State().appSettings);
+}
+
+bool ToneService::Tone3000NeedsKey() const
+{
+    return !Tone3000UsesRelay() && tone3000::ApiKey(mClient.State().appSettings).empty();
+}
+
+void ToneService::Tone3000Session(const std::string& key,
+                                  std::function<void(const std::string& token, const std::string& error)> done)
+{
+    // A token for this key with a minute to spare is reused.
+    if (!mT3Token.empty() && mT3TokenKey == key && mT3Expiry - SteadySeconds() > 60.0)
+    {
+        done(mT3Token, {});
+        return;
+    }
+
+    mT3Waiting.push_back(std::move(done));
+
+    if (mT3Waiting.size() > 1)
+    {
+        return; // one being started already
+    }
+
+    const nlohmann::json body = {{"api_key", key}};
+    Request("POST", tone3000::OfficialUrl("/auth/session"), body.dump(), false, [this, key](const HttpResult& result) {
+        const auto payload = nlohmann::json::parse(result.body, nullptr, false);
+        std::string token, error;
+
+        if (result.status >= 200 && result.status < 300 && payload.is_object())
+        {
+            token = payload.value("access_token", std::string());
+            const double expires = payload.contains("expires_in") && payload["expires_in"].is_number()
+                                       ? payload["expires_in"].get<double>()
+                                       : 0.0;
+
+            if (token.empty() || expires <= 0.0)
+            {
+                token.clear();
+                error = "Tone3000 sent a session that could not be read";
+            }
+            else
+            {
+                mT3Token = token;
+                mT3TokenKey = key;
+                mT3Expiry = SteadySeconds() + expires;
+            }
+        }
+        else
+        {
+            error = result.status == 0 ? result.error
+                                       : "Tone3000 did not accept the API key (" + std::to_string(result.status) + ")";
+        }
+
+        auto waiting = std::exchange(mT3Waiting, {});
+
+        for (auto& w : waiting)
+        {
+            w(token, error);
+        }
+    });
+}
+
+void ToneService::Tone3000Get(const std::string& url, BytesCallback done)
+{
+    const auto& settings = mClient.State().appSettings;
+
+    if (tone3000::UsesRelay(settings))
+    {
+        Request("GET", tone3000::ThroughRelay(url), {}, false, std::move(done));
+        return;
+    }
+
+    // Anything not on Tone3000's API (a download host an archive named) goes as it is: the
+    // token is Tone3000's alone.
+    if (url.rfind(std::string(tone3000::kOfficialBase) + "/", 0) != 0)
+    {
+        Request("GET", url, {}, false, std::move(done));
+        return;
+    }
+
+    const auto key = tone3000::ApiKey(settings);
+
+    if (key.empty())
+    {
+        done(HttpResult{0, {}, {}, "Tone3000 API key required: set one in Settings, or use the Soundshed API", false});
+        return;
+    }
+
+    Tone3000Session(key, [this, url, done = std::move(done)](const std::string& token, const std::string& error) {
+        if (token.empty())
+        {
+            done(HttpResult{0, {}, {}, error, false});
+            return;
+        }
+
+        Request("GET", url, {}, false, done, {{"Authorization", "Bearer " + token}});
+    });
+}
+
+void ToneService::VerifyTone3000Key(const std::string& key, std::function<void(bool, const std::string&)> callback)
+{
+    // Started afresh: a token kept for the same key would answer without asking.
+    mT3Token.clear();
+    Tone3000Session(key, [callback = std::move(callback)](const std::string& token, const std::string& error) {
+        callback(!token.empty(), error);
+    });
+}
+
+void ToneService::CheckTone3000Health(std::function<void(const std::string&)> callback)
+{
+    Request("GET", std::string(tone3000::kProxyBase) + "/health", {}, false,
+            [callback = std::move(callback)](const HttpResult& result) {
+                if (result.status >= 200 && result.status < 300)
+                {
+                    callback("API health: OK");
+                    return;
+                }
+
+                std::string reason = result.status == 0 ? result.error : "HTTP " + std::to_string(result.status);
+                const auto payload = nlohmann::json::parse(result.body, nullptr, false);
+
+                if (payload.is_object() && payload.contains("error") && payload["error"].is_object())
+                {
+                    const auto message = payload["error"].value("message", std::string());
+
+                    if (!message.empty())
+                    {
+                        reason = message;
+                    }
+                }
+
+                callback("API health: failed (" + (reason.empty() ? std::string("no answer") : reason) + ")");
+            });
+}
+
 void ToneService::SearchTone3000(const std::string& query, const std::string& gear, const std::string& sort,
                                  const std::string& architecture, int page, TonesCallback callback)
 {
-    const auto url = tone3000::Url(tone3000::TonesSearchPath(query, gear, sort, architecture, page));
-    Request("GET", url, {}, false, [callback = std::move(callback)](const HttpResult& result) {
+    const auto url = tone3000::OfficialUrl(tone3000::TonesSearchPath(query, gear, sort, architecture, page));
+    Tone3000Get(url, [callback = std::move(callback)](const HttpResult& result) {
         if (result.status != 200)
         {
             callback({}, result.status == 0 ? result.error
@@ -701,8 +876,8 @@ void ToneService::Tone3000Models(const std::string& toneId, ModelsCallback callb
     auto walk = std::make_shared<Walk>();
     auto next = std::make_shared<std::function<void()>>();
     *next = [this, walk, next, toneId, callback] {
-        const auto url = tone3000::Url(tone3000::ModelsPath(toneId, walk->page, walk->architecture));
-        Request("GET", url, {}, false, [walk, next, callback](const HttpResult& result) {
+        const auto url = tone3000::OfficialUrl(tone3000::ModelsPath(toneId, walk->page, walk->architecture));
+        Tone3000Get(url, [walk, next, callback](const HttpResult& result) {
             const auto body =
                 result.status == 200 ? nlohmann::json::parse(result.body, nullptr, false) : nlohmann::json();
 
@@ -773,41 +948,39 @@ void ToneService::ImportTone3000(const tone3000::Tone& tone, const tone3000::Mod
 
     Changed();
 
-    Request("GET", tone3000::ThroughRelay(model.modelUrl), {}, false,
-            [this, tone, model, resourceType, category, callback](const HttpResult& result) {
-                const auto finish = [this, model, callback](const std::string& id, const std::string& error) {
-                    mImporting.erase(model.id);
-                    Changed();
-                    callback(id, error);
-                };
+    Tone3000Get(model.modelUrl, [this, tone, model, resourceType, category, callback](const HttpResult& result) {
+        const auto finish = [this, model, callback](const std::string& id, const std::string& error) {
+            mImporting.erase(model.id);
+            Changed();
+            callback(id, error);
+        };
 
-                if (result.status != 200 || result.body.empty())
-                {
-                    finish({}, result.status == 0 ? result.error
-                                                  : "The download failed (" + std::to_string(result.status) + ")");
-                    return;
-                }
+        if (result.status != 200 || result.body.empty())
+        {
+            finish({},
+                   result.status == 0 ? result.error : "The download failed (" + std::to_string(result.status) + ")");
+            return;
+        }
 
-                std::string bytes = result.body;
-                std::string entry;
+        std::string bytes = result.body;
+        std::string entry;
 
-                if (IsZip(bytes))
-                {
-                    const auto unzipped = UnzipModel(bytes, resourceType);
+        if (IsZip(bytes))
+        {
+            const auto unzipped = UnzipModel(bytes, resourceType);
 
-                    if (!unzipped)
-                    {
-                        finish({}, "The download holds no model");
-                        return;
-                    }
+            if (!unzipped)
+            {
+                finish({}, "The download holds no model");
+                return;
+            }
 
-                    entry = unzipped->first;
-                    bytes = unzipped->second;
-                }
+            entry = unzipped->first;
+            bytes = unzipped->second;
+        }
 
-                ImportAndWait(tone3000::ImportPayload(tone, model, resourceType, category, Base64(bytes), entry),
-                              finish);
-            });
+        ImportAndWait(tone3000::ImportPayload(tone, model, resourceType, category, Base64(bytes), entry), finish);
+    });
 }
 
 void ToneService::DownloadTone3000(const tone3000::Model& model, const std::string& resourceType,
@@ -819,53 +992,50 @@ void ToneService::DownloadTone3000(const tone3000::Model& model, const std::stri
         return;
     }
 
-    Request("GET", tone3000::ThroughRelay(model.modelUrl), {}, false,
-            [resourceType, callback](const HttpResult& result) {
-                if (result.status != 200 || result.body.empty())
-                {
-                    callback({}, result.status == 0 ? result.error
-                                                    : "The download failed (" + std::to_string(result.status) + ")");
-                    return;
-                }
+    Tone3000Get(model.modelUrl, [resourceType, callback](const HttpResult& result) {
+        if (result.status != 200 || result.body.empty())
+        {
+            callback({},
+                     result.status == 0 ? result.error : "The download failed (" + std::to_string(result.status) + ")");
+            return;
+        }
 
-                std::string bytes = result.body;
+        std::string bytes = result.body;
 
-                if (IsZip(bytes))
-                {
-                    const auto unzipped = UnzipModel(bytes, resourceType);
+        if (IsZip(bytes))
+        {
+            const auto unzipped = UnzipModel(bytes, resourceType);
 
-                    if (!unzipped)
-                    {
-                        callback({}, "The download holds no model");
-                        return;
-                    }
+            if (!unzipped)
+            {
+                callback({}, "The download holds no model");
+                return;
+            }
 
-                    bytes = unzipped->second;
-                }
+            bytes = unzipped->second;
+        }
 
-                callback(Base64(bytes), {});
-            });
+        callback(Base64(bytes), {});
+    });
 }
 
 void ToneService::Tone3000ModelsByContentHash(const std::string& contentHash, ModelsCallback callback)
 {
-    Request("GET", tone3000::Url(tone3000::ModelLookupPath(contentHash)), {}, false,
-            [callback](const HttpResult& result) {
-                if (result.status != 200)
-                {
-                    callback({}, result.status == 0 ? result.error
-                                                    : "lookup failed (" + std::to_string(result.status) + ")");
-                    return;
-                }
+    Tone3000Get(tone3000::OfficialUrl(tone3000::ModelLookupPath(contentHash)), [callback](const HttpResult& result) {
+        if (result.status != 200)
+        {
+            callback({}, result.status == 0 ? result.error : "lookup failed (" + std::to_string(result.status) + ")");
+            return;
+        }
 
-                const auto body = nlohmann::json::parse(result.body, nullptr, false);
-                callback(body.is_discarded() ? std::vector<tone3000::Model>{} : tone3000::ParseModels(body).items, {});
-            });
+        const auto body = nlohmann::json::parse(result.body, nullptr, false);
+        callback(body.is_discarded() ? std::vector<tone3000::Model>{} : tone3000::ParseModels(body).items, {});
+    });
 }
 
 void ToneService::Tone3000Tone(const std::string& toneId, ToneCallback callback)
 {
-    Request("GET", tone3000::Url(tone3000::TonePath(toneId)), {}, false, [callback](const HttpResult& result) {
+    Tone3000Get(tone3000::OfficialUrl(tone3000::TonePath(toneId)), [callback](const HttpResult& result) {
         if (result.status == 403 || result.status == 404)
         {
             callback(std::nullopt, {});
@@ -874,8 +1044,8 @@ void ToneService::Tone3000Tone(const std::string& toneId, ToneCallback callback)
 
         if (result.status != 200)
         {
-            callback(std::nullopt, result.status == 0 ? result.error
-                                                      : "tone lookup failed (" + std::to_string(result.status) + ")");
+            callback(std::nullopt,
+                     result.status == 0 ? result.error : "tone lookup failed (" + std::to_string(result.status) + ")");
             return;
         }
 
@@ -899,7 +1069,7 @@ void ToneService::FetchRemoteRef(const tone3000::RemoteRef& ref,
 {
     const auto download = [this](const std::string& url,
                                  std::function<void(const std::string&, const std::string&)> finished) {
-        Request("GET", tone3000::ThroughRelay(url), {}, false, [finished](const HttpResult& result) {
+        Tone3000Get(url, [finished](const HttpResult& result) {
             if (result.status != 200 || result.body.empty())
             {
                 finished({},

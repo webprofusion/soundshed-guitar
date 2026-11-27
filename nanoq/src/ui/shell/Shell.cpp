@@ -46,6 +46,9 @@ Shell::Shell(UiSession& session)
     mSession.onToast = [this](const std::string& title, const std::string& detail, bool isError) {
         ShowToast(title, detail, isError);
     };
+    mSession.onNeedTone3000Key = [this](std::function<void()> proceed, std::function<void()> cancel) {
+        OpenTone3000KeyDialog(true, std::move(proceed), std::move(cancel));
+    };
 
     // The Practice Tool's session lives as long as the window: its track plays on while other
     // pages are shown (JamPage.cpp).
@@ -74,6 +77,7 @@ Shell::~Shell()
     mAccess.reset(); // before the view's window goes: it unhooks from it
     mSession.Tones().RemoveListener(mToneListener);
     mSession.onToast = nullptr;
+    mSession.onNeedTone3000Key = nullptr;
 
     // A dialog still open goes with the window, and so must what it asked of the engine: the
     // tuner left on with the window closed kept the output muted, with nothing left to turn it

@@ -165,6 +165,31 @@ std::string Url(const std::string& path)
     return std::string(kProxyBase) + path;
 }
 
+std::string OfficialUrl(const std::string& path)
+{
+    return std::string(kOfficialBase) + path;
+}
+
+bool UsesRelay(const nlohmann::json& appSettings)
+{
+    const auto it = appSettings.find(kUseRelaySetting);
+    return it == appSettings.end() || !it->is_boolean() || it->get<bool>();
+}
+
+std::string ApiKey(const nlohmann::json& appSettings)
+{
+    const auto it = appSettings.find(kApiKeySetting);
+
+    if (it == appSettings.end() || !it->is_string())
+    {
+        return {};
+    }
+
+    const auto& key = it->get_ref<const std::string&>();
+    const auto first = key.find_first_not_of(" \t\r\n");
+    return first == std::string::npos ? std::string() : key.substr(first, key.find_last_not_of(" \t\r\n") - first + 1);
+}
+
 std::string ThroughRelay(const std::string& url)
 {
     static constexpr std::string_view kOfficialApi = "https://www.tone3000.com/api/v1/";

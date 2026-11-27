@@ -170,26 +170,25 @@ void ToneService::Preview(const tones::Tone& item)
                         return;
                     }
 
-                    Request("GET", tone3000::ThroughRelay(model->modelUrl), {}, false,
-                            [ref, name, pending, finishOne](const HttpResult& download) {
-                                const auto file = download.status == 200 && !download.body.empty()
-                                                      ? ModelFile(download.body, ref.type)
-                                                      : std::nullopt;
+                    Tone3000Get(model->modelUrl, [ref, name, pending, finishOne](const HttpResult& download) {
+                        const auto file = download.status == 200 && !download.body.empty()
+                                              ? ModelFile(download.body, ref.type)
+                                              : std::nullopt;
 
-                                if (file)
-                                {
-                                    pending->fetched.push_back({{"resourceType", ref.type},
-                                                                {"resourceId", ref.id},
-                                                                {"name", name},
-                                                                {"data", Base64Of(*file)}});
-                                }
-                                else
-                                {
-                                    pending->unavailable.push_back(name);
-                                }
+                        if (file)
+                        {
+                            pending->fetched.push_back({{"resourceType", ref.type},
+                                                        {"resourceId", ref.id},
+                                                        {"name", name},
+                                                        {"data", Base64Of(*file)}});
+                        }
+                        else
+                        {
+                            pending->unavailable.push_back(name);
+                        }
 
-                                finishOne();
-                            });
+                        finishOne();
+                    });
                 });
             }
         });

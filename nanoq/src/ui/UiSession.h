@@ -97,6 +97,9 @@ class UiSession
 
     /// Shows a transient message; the shell sets it.
     std::function<void(const std::string& title, const std::string& detail, bool isError)> onToast;
+    /// A shared preset needs Tone3000 models and no key is stored (relay off): the shell asks for
+    /// one, then calls `proceed` or `cancel`. Unset, the install goes on.
+    std::function<void(std::function<void()> proceed, std::function<void()> cancel)> onNeedTone3000Key;
 
     /// The editor's zoom (1 = 100%), kept by the plugin with its state; the presenter sets both.
     std::function<float()> getZoom;

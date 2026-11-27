@@ -28,6 +28,16 @@ UiSession::UiSession(UiLink& link, cycfi::elements::view& view)
             onToast(title, detail, isError);
         }
     };
+    host.needTone3000Key = [this](std::function<void()> proceed, std::function<void()> cancel) {
+        if (onNeedTone3000Key)
+        {
+            onNeedTone3000Key(std::move(proceed), std::move(cancel));
+        }
+        else
+        {
+            proceed();
+        }
+    };
     auto transport = mLink.MakeHttpTransport();
 
     if (!transport)
@@ -35,7 +45,8 @@ UiSession::UiSession(UiLink& link, cycfi::elements::view& view)
         transport = guitarfx::net::MakePlatformTransport();
     }
 
-    mTones = std::make_unique<guitarfx::uiclient::ToneService>(mClient, mCommands, std::move(host), std::move(transport));
+    mTones =
+        std::make_unique<guitarfx::uiclient::ToneService>(mClient, mCommands, std::move(host), std::move(transport));
 
     if (mDriver)
     {

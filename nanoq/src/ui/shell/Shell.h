@@ -660,6 +660,14 @@ class Shell
     void OpenUpdateDialog();
     /// The banner over every Settings section while an update waits; null when none does.
     [[nodiscard]] Ptr BuildUpdateBanner(float width);
+
+    // Tone3000Key.cpp: the player's own Tone3000 key, for when the relay is off. `required`: the
+    // web UI's "Tone3000 API Key Required" over a shared preset's install, with Cancel Import and
+    // Open Settings; else Settings' Save. A key is kept only once Tone3000 takes it.
+    void OpenTone3000KeyDialog(bool required, std::function<void()> proceed = {}, std::function<void()> cancel = {});
+    /// The relay's health as Settings shows it, and whether a check is under way.
+    std::string mTone3000Health = "API health: not checked.";
+    bool mTone3000HealthChecking = false;
     bool mUpdateChecked = false;
     double mUpdateCheckAt = 0.0;
     std::optional<guitarfx::uiclient::AvailableUpdate> mUpdate;

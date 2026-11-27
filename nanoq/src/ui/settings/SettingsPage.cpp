@@ -20,6 +20,7 @@
 #include "Paths.h"
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/ParamFormat.h"
+#include "uiclient/Tone3000.h"
 #include "util/PathEncoding.h"
 
 #include <algorithm>
@@ -312,12 +313,70 @@ Ptr Shell::BuildSettingsPage()
         {
             heading("Tone3000");
             beginCard("Tone3000 API");
+            const bool relay = guitarfx::uiclient::tone3000::UsesRelay(mState.appSettings);
             toggle(
                 "Use Soundshed Tone Search API",
-                [boolOr] { return boolOr("tone3000.useSoundshedToneSearchApi", true); },
-                setBool("tone3000.useSoundshedToneSearchApi"));
-            describe("Tone3000 searches go through Soundshed's relay. Off, they use your own Tone3000 API key, set in "
-                     "Soundshed Guitar's Settings.");
+                [this] { return guitarfx::uiclient::tone3000::UsesRelay(mState.appSettings); },
+                [&commands, this](bool on) {
+                    commands.SetSetting(guitarfx::uiclient::tone3000::kUseRelaySetting, on);
+                    Mark(kPage); // the rows under it change
+                });
+
+            if (relay)
+            {
+                // The relay: what it is, the mode, and its health on request.
+                describe("Fetch Tone 3000 results via the Soundshed API.");
+                describe("Connection mode: Soundshed API");
+                auto check = std::make_shared<Button>(
+                    mTheme, "Check API Health",
+                    [this] {
+                        if (mTone3000HealthChecking)
+                        {
+                            return;
+                        }
+
+                        mTone3000HealthChecking = true;
+                        mTone3000Health = "API health: checking...";
+                        Mark(kPage);
+                        mSession.Tones().CheckTone3000Health(
+                            [this, alive = std::weak_ptr<bool>(mAlive)](const std::string& health) {
+                                if (alive.lock())
+                                {
+                                    mTone3000HealthChecking = false;
+                                    mTone3000Health = health;
+                                    Mark(kPage);
+                                }
+                            });
+                    },
+                    Button::Style::Plain);
+                check->MinWidth(160).TextSize(metrics::kSmallText).Enabled(!mTone3000HealthChecking);
+                row("API Health", Row({Middle(FixedHeight(32, check)), Stretch()}));
+                describe(mTone3000Health);
+            }
+            else
+            {
+                // The player's own key: whether one is stored (never the key), Save and Clear.
+                const bool stored = !guitarfx::uiclient::tone3000::ApiKey(mState.appSettings).empty();
+                auto field = std::make_shared<PickerField>(mTheme, mIcons);
+                field->Set(stored ? "API key stored" : "Enter your Tone3000 API key");
+                field->AccessName("Tone3000 API key");
+                field->onClick = [this] { OpenTone3000KeyDialog(false); };
+                auto saveKey = std::make_shared<Button>(
+                    mTheme, "Save", [this] { OpenTone3000KeyDialog(false); }, Button::Style::Primary);
+                saveKey->TextSize(metrics::kSmallText);
+                auto clearKey = std::make_shared<Button>(
+                    mTheme, "Clear",
+                    [this, &commands] {
+                        commands.SetSetting(guitarfx::uiclient::tone3000::kApiKeySetting, nullptr);
+                        Mark(kPage);
+                    },
+                    Button::Style::Plain);
+                clearKey->TextSize(metrics::kSmallText).Enabled(stored);
+                row("API Key",
+                    Row({FixedWidth(std::min(300.0f, textWidth - labelWidth - 150.0f), Middle(field)), HGap(8),
+                         Middle(FixedHeight(32, saveKey)), HGap(8), Middle(FixedHeight(32, clearKey)), Stretch()}));
+            }
+
             endCard();
         }
 

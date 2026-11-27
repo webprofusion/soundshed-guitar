@@ -21,6 +21,16 @@
 namespace guitarfx::uiclient::tone3000
 {
 inline constexpr const char* kProxyBase = "https://api-guitar.soundshed.com/v1/resourcesearch";
+/// Tone3000's own API, used with the player's own key while the relay is off.
+inline constexpr const char* kOfficialBase = "https://www.tone3000.com/api/v1";
+/// On (the default): requests go through the relay. Off: straight to Tone3000 with `kApiKeySetting`.
+inline constexpr const char* kUseRelaySetting = "tone3000.useSoundshedToneSearchApi";
+inline constexpr const char* kApiKeySetting = "tone3000.apiKey";
+
+/// Whether requests go through the relay: unless the setting is false.
+[[nodiscard]] bool UsesRelay(const nlohmann::json& appSettings);
+/// The stored key, trimmed; empty for none.
+[[nodiscard]] std::string ApiKey(const nlohmann::json& appSettings);
 
 /// Results a search page holds, and the models one page of a tone holds, as the web UI asks.
 inline constexpr int kSearchPageSize = 20;
@@ -77,6 +87,8 @@ template <typename T> struct Page
 /// One tone by its id.
 [[nodiscard]] std::string TonePath(const std::string& toneId);
 [[nodiscard]] std::string Url(const std::string& path);
+/// A path on Tone3000's own API.
+[[nodiscard]] std::string OfficialUrl(const std::string& path);
 
 /// A URL Tone3000 gave on its own API (a model's `model_url`,
 /// https://www.tone3000.com/api/v1/models/<id>/download/...), moved onto the relay, which adds
