@@ -677,8 +677,162 @@ double LayoutSliderLength(const LayoutControlStyle& style)
 
 LayoutSize LayoutToggleSize(const LayoutControlStyle& style)
 {
-    return {LayoutSizeValue(style.toggleWidth, 8.0, 512.0).value_or(36.0),
-            LayoutSizeValue(style.toggleHeight, 8.0, 512.0).value_or(20.0)};
+    const double width = LayoutSizeValue(style.toggleWidth, 8.0, 512.0).value_or(36.0);
+    const auto aspect = style.toggleStrip ? style.toggleStrip->aspect : style.toggleAspect;
+
+    if (const auto height = LayoutSizeValue(style.toggleHeight, 8.0, 512.0))
+    {
+        return {width, *height};
+    }
+
+    return {width, aspect && *aspect > 0.0 && guitarfx::IsFinite(*aspect)
+                       ? std::clamp(std::round(width * *aspect), 8.0, 512.0)
+                       : 20.0};
+}
+
+bool UsableToggleImage(const LayoutControlStyle& style)
+{
+    return style.toggleStrip.has_value() || (!style.toggleOnImageId.empty() && !style.toggleOffImageId.empty());
+}
+
+LayoutStripSliderSize StripSliderSize(const LayoutControlStyle& style, const LayoutImageStrip& strip)
+{
+    const double length = LayoutSliderLength(style);
+    const double aspect = strip.aspect && *strip.aspect > 0.0 ? *strip.aspect : 0.25;
+
+    if (aspect > 1.0)
+    {
+        return {std::max(4.0, std::round(length / aspect)), length, true};
+    }
+
+    return {length, std::max(4.0, std::round(length * aspect)), false};
+}
+
+void ApplyLayoutControlImages(EffectLayout& layout)
+{
+    LayoutControlStyle layoutKnob;
+    layoutKnob.knobImage = layout.knobImage;
+    const bool knobImage = UsableKnobImage(layoutKnob) != nullptr;
+
+    for (auto& control : layout.controls)
+    {
+        auto& style = control.style;
+
+        // A knob without a picture of its own whose style is the default takes the layout's;
+        // Pedal, Amp, Minimal or a custom face is a choice of its own.
+        if (knobImage && UsableKnobImage(style) == nullptr && style.knobStyle == "default")
+        {
+            style.knobImage = layout.knobImage;
+        }
+
+        // A toggle without pictures takes the layout's switch, and its size where it sets none.
+        if (layout.switchImage && !UsableToggleImage(style))
+        {
+            const auto& image = *layout.switchImage;
+            style.toggleOnImageId = image.onImageId;
+            style.toggleOffImageId = image.offImageId;
+            style.toggleStrip = image.strip;
+            style.toggleAspect = image.aspect;
+
+            if (!style.toggleWidth)
+            {
+                style.toggleWidth = image.width;
+            }
+
+            if (!style.toggleHeight)
+            {
+                style.toggleHeight = image.height;
+            }
+        }
+    }
+}
+
+ControlShadowShape ControlShadowOf(const LayoutControlShadow& light, double width, double height, double radius)
+{
+    constexpr double kPi = 3.14159265358979323846;
+    ControlShadowShape shape;
+    const double r = std::max(0.0, std::min({radius, width / 2.0, height / 2.0}));
+    const double standing = std::min(width, height);
+    const double length = standing / std::tan(light.elevation * kPi / 180.0);
+    // The light comes from `angle` (0 at the top, clockwise); the shadow falls the other way.
+    const double away = (light.angle + 180.0) * kPi / 180.0;
+    const double dx = std::sin(away) * length;
+    const double dy = -std::cos(away) * length;
+
+    // The footprint is a rect inset by r, grown by r again with round joins; the hull spans it
+    // and its copy moved along the shadow.
+    const double cx = width / 2.0, cy = height / 2.0, hw = width / 2.0 - r, hh = height / 2.0 - r;
+    std::vector<LayoutPoint> points{{cx - hw, cy - hh}, {cx + hw, cy - hh}, {cx + hw, cy + hh}, {cx - hw, cy + hh}};
+
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        points.push_back({points[i].x + dx, points[i].y + dy});
+    }
+
+    // Andrew's monotone chain, anticlockwise, duplicates dropped.
+    std::sort(points.begin(), points.end(),
+              [](const LayoutPoint& a, const LayoutPoint& b) { return a.x < b.x || (a.x == b.x && a.y < b.y); });
+    points.erase(std::unique(points.begin(), points.end(),
+                             [](const LayoutPoint& a, const LayoutPoint& b) { return a.x == b.x && a.y == b.y; }),
+                 points.end());
+    const auto cross = [](const LayoutPoint& o, const LayoutPoint& a, const LayoutPoint& b) {
+        return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    };
+
+    if (points.size() < 3)
+    {
+        shape.hull = points;
+    }
+    else
+    {
+        std::vector<LayoutPoint> hull;
+
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            const std::size_t start = hull.size();
+
+            for (std::size_t i = 0; i < points.size(); ++i)
+            {
+                const auto& p = pass == 0 ? points[i] : points[points.size() - 1 - i];
+
+                while (hull.size() >= start + 2 && cross(hull[hull.size() - 2], hull.back(), p) <= 0.0)
+                {
+                    hull.pop_back();
+                }
+
+                hull.push_back(p);
+            }
+
+            hull.pop_back();
+        }
+
+        shape.hull = std::move(hull);
+    }
+
+    shape.radius = r;
+    shape.blur = std::round(light.softness * (1.5 + length * 0.35) * 100.0) / 100.0;
+    shape.opacity = light.opacity;
+
+    // The fade runs along the light's direction across the shadow's box, as a CSS gradient of
+    // angle + 180 degrees does: full from its start to 30%, 0.3 of that at its end.
+    const double pad = r + shape.blur * 3.0 + 1.0;
+    double minX = 1e300, minY = 1e300, maxX = -1e300, maxY = -1e300;
+
+    for (const auto& p : shape.hull)
+    {
+        minX = std::min(minX, p.x - pad);
+        minY = std::min(minY, p.y - pad);
+        maxX = std::max(maxX, p.x + pad);
+        maxY = std::max(maxY, p.y + pad);
+    }
+
+    const double ux = std::sin(away), uy = -std::cos(away);
+    const double half = (std::abs((maxX - minX) * ux) + std::abs((maxY - minY) * uy)) / 2.0;
+    const LayoutPoint centre{(minX + maxX) / 2.0, (minY + maxY) / 2.0};
+    const LayoutPoint from{centre.x - ux * half, centre.y - uy * half};
+    shape.fadeFrom = {from.x + ux * half * 2.0 * 0.3, from.y + uy * half * 2.0 * 0.3};
+    shape.fadeTo = {centre.x + ux * half, centre.y + uy * half};
+    return shape;
 }
 
 const LayoutKnobImage* UsableKnobImage(const LayoutControlStyle& style)

@@ -336,6 +336,20 @@ class ParamKnob : public el::element, public Drawn, public Focusable
         return *this;
     }
 
+    /// A point marked on the knob's travel (0..1): where a NAM Blend's model was captured
+    /// (.knob-mapped-point), lit where the other knobs reach it, green where the knob is on it.
+    struct Mark
+    {
+        double position = 0.0;
+        bool selectable = false;
+        bool selected = false;
+
+        bool operator==(const Mark&) const = default;
+    };
+
+    /// The marks round the knob; set again as the values change (a live binding).
+    void SetMarks(std::vector<Mark> marks);
+
     std::function<void(double normalised)> onChange;
     std::function<void()> onReset;
     /// A right click (a long press on a touch screen), at a point in view coordinates: the
@@ -357,6 +371,7 @@ class ParamKnob : public el::element, public Drawn, public Focusable
     /// A finger held still on it (LongPress.h): the press was for its menu, not a turn, so what
     /// the finger's wander turned goes back, and the menu opens at `at`.
     void HeldForMenu(el::point at);
+    std::vector<Mark> mMarks;
     void BeginEdit(std::string text);
     void FinishEdit(bool commit);
     [[nodiscard]] el::rect ValueBox(const el::rect& b) const;

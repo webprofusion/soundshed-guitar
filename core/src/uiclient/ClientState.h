@@ -119,12 +119,27 @@ struct EffectTypeInfo
 };
 
 /// A blend of NAM models (the blend library, state.blendLibrary): what a blend node plays.
+/// One model of a blend and the settings it was captured at (blendUtils.ts BlendModelMapping).
+/// `parameters` holds the values 0..1; a definition from before them has only parameterId and
+/// parameterValue, or neither.
+struct BlendModelMapping
+{
+    std::string modelId;
+    std::string parameterId;
+    std::optional<double> parameterValue;
+    std::map<std::string, double> parameters;
+};
+
 struct BlendSummary
 {
     std::string id;
     std::string name;
     std::string blendMode = "interpolate"; // "interpolate" or "snap"
     std::size_t modelCount = 0;
+    /// The models, in the definition's order: its mappings, else its plain model list.
+    std::vector<BlendModelMapping> mappings;
+    /// The parameters the definition lists, in its order (BlendMix.h MappedBlendParamIds).
+    std::vector<std::string> parameters;
 };
 
 struct LibraryResource

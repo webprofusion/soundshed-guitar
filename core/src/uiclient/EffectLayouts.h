@@ -199,9 +199,45 @@ inline constexpr double kLayoutDefaultKnobDiameter = 38.0;
 
 /// A size from a layout clamped to [lo, hi] and rounded, or nullopt when it is not a number.
 [[nodiscard]] std::optional<double> LayoutSizeValue(const std::optional<double>& value, double lo, double hi);
-[[nodiscard]] double LayoutKnobDiameter(const LayoutControlStyle& style);   // 16..512, default 38
-[[nodiscard]] double LayoutSliderLength(const LayoutControlStyle& style);   // 24..2048, default 80
-[[nodiscard]] LayoutSize LayoutToggleSize(const LayoutControlStyle& style); // 8..512 each, default 36 x 20
+[[nodiscard]] double LayoutKnobDiameter(const LayoutControlStyle& style); // 16..512, default 38
+[[nodiscard]] double LayoutSliderLength(const LayoutControlStyle& style); // 24..2048, default 80
+/// A switch's size: its own (8..512 each), else 36 wide and, from a strip or its pictures'
+/// shape, as high as that makes it, else 20 (imageToggleSize).
+[[nodiscard]] LayoutSize LayoutToggleSize(const LayoutControlStyle& style);
+
+/// Whether the style draws its toggle from pictures: a strip, or both an off and an on.
+[[nodiscard]] bool UsableToggleImage(const LayoutControlStyle& style);
+
+/// A filmstrip slider's size along and across its travel, which runs up a tall frame and across
+/// a wide one (stripSliderSize).
+struct LayoutStripSliderSize
+{
+    double width = 80.0;
+    double height = 20.0;
+    bool vertical = false;
+};
+
+[[nodiscard]] LayoutStripSliderSize StripSliderSize(const LayoutControlStyle& style, const LayoutImageStrip& strip);
+
+/// Gives each control the layout's knob picture and switch where it has none of its own and
+/// takes the layout's (withLayoutKnobImage, withLayoutSwitchImage). ParseEffectLayout does this.
+void ApplyLayoutControlImages(EffectLayout& layout);
+
+/// A knob's or toggle's shadow under the layout's light (controlShadowSvg): the footprint swept
+/// away from the light, as a hull in the control's own coordinates (its box from 0,0), drawn with
+/// round joins `radius` wide, blurred by `blur`, darkest at the control.
+struct ControlShadowShape
+{
+    std::vector<LayoutPoint> hull;
+    double radius = 0.0;
+    double blur = 0.0;
+    double opacity = 0.5;
+    LayoutPoint fadeFrom; // where the shadow is darkest...
+    LayoutPoint fadeTo;   // ...and where it has faded to 0.3 of that
+};
+
+[[nodiscard]] ControlShadowShape ControlShadowOf(const LayoutControlShadow& light, double width, double height,
+                                                 double radius);
 
 /// The control's image knob when it is usable (a face, and a frame count for a filmstrip).
 [[nodiscard]] const LayoutKnobImage* UsableKnobImage(const LayoutControlStyle& style);

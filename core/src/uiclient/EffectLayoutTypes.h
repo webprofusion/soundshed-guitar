@@ -68,6 +68,36 @@ struct LayoutKnobImage
     bool clip = true;         // the face clipped to a circle inset 4 px
 };
 
+/// One picture holding a control's frames (layoutKnobImages.ts LayoutImageStrip): a toggle's
+/// off and on, a slider's positions. Only a usable one is kept: an image and 2 to 1024 frames.
+struct LayoutImageStrip
+{
+    std::string imageId;
+    int frames = 0;
+    int columns = 1;              // frames run left to right across this many columns, then down
+    std::optional<double> aspect; // one frame's height over its width
+};
+
+/// The layout's one light for its knobs and toggles (layoutShadows.ts), each field in range.
+struct LayoutControlShadow
+{
+    double angle = 315.0;    // where the light comes from, degrees clockwise from the top
+    double elevation = 45.0; // 15..80 degrees
+    double softness = 0.4;   // 0..1
+    double opacity = 0.5;    // 0..1
+};
+
+/// The layout's own switch picture, for every toggle that has none (LayoutSwitchImage).
+struct LayoutSwitchImage
+{
+    std::string onImageId;
+    std::string offImageId;
+    std::optional<LayoutImageStrip> strip;
+    std::optional<double> aspect;
+    std::optional<double> width;
+    std::optional<double> height;
+};
+
 struct LayoutControlStyle
 {
     std::string labelPosition = "top"; // "top", "bottom", or anything else for no label
@@ -88,6 +118,10 @@ struct LayoutControlStyle
     std::string toggleOffImageId;
     std::string sliderTrackImageId;
     std::string sliderThumbImageId;
+    std::optional<LayoutImageStrip> toggleStrip; // wins over the two pictures: off first, on last
+    std::optional<double> toggleAspect;          // the pictures' height over width
+    std::optional<LayoutImageStrip> sliderStrip; // the frame for the slider's position
+    bool castShadow = true;                      // under the layout's controlShadow, when it has one
 };
 
 /// A control placed on the canvas: a parameter's knob, switch or slider, or a model/IR slot.
@@ -168,7 +202,10 @@ struct EffectLayout
     std::string controlValueColor;
     std::optional<double> controlLabelFontSize;
     std::optional<double> controlValueFontSize;
-    double controlLabelMaxWidth = 0.0; // 0: the 80 px every label is capped at
+    double controlLabelMaxWidth = 0.0;                // 0: the 80 px every label is capped at
+    std::optional<LayoutKnobImage> knobImage;         // every default-style knob's, unless it has its own
+    std::optional<LayoutSwitchImage> switchImage;     // every toggle's, unless it has its own
+    std::optional<LayoutControlShadow> controlShadow; // the light the knobs and toggles cast shadows from
     std::optional<LayoutScaling> scaling;
 };
 

@@ -343,6 +343,28 @@ void ParamKnob::draw(const el::context& ctx)
     const float v = static_cast<float>(std::clamp(mValue, 0.0, 1.0));
     DrawKnob(cnv, mTheme, el::point{cx, cy}, diameter, v);
 
+    // The marks on the knob's ring, over its 270 degrees of travel (.knob-mapped-point): a
+    // grey dot, the accent with a glow where the other knobs reach it, green where it is on it.
+    for (const auto& mark : mMarks)
+    {
+        const float angle =
+            (static_cast<float>(std::clamp(mark.position, 0.0, 1.0)) * 270.0f - 135.0f) * 3.14159265f / 180.0f;
+        const float r = diameter * 0.5f - 2.0f;
+        const el::point at{cx + r * std::sin(angle), cy - r * std::cos(angle)};
+        const float dot = mark.selected ? 2.3f : 2.0f;
+
+        if (mark.selectable && !mark.selected)
+        {
+            cnv.fill_style(mTheme.Accent().opacity(0.45f));
+            cnv.fill_round_rect({at.x - 4.0f, at.y - 4.0f, at.x + 4.0f, at.y + 4.0f}, 4.0f);
+        }
+
+        cnv.fill_style(mark.selected     ? el::rgba(80, 184, 120, 255)
+                       : mark.selectable ? mTheme.Accent()
+                                         : el::rgba(107, 107, 124, 179));
+        cnv.fill_round_rect({at.x - dot, at.y - dot, at.x + dot, at.y + dot}, dot);
+    }
+
     if (mBare > 0.0f)
     {
         return;
@@ -356,6 +378,15 @@ void ParamKnob::draw(const el::context& ctx)
 
     const auto valueBounds = el::rect{b.left, b.bottom - valueHeight, b.right, b.bottom};
     DrawControlText(cnv, mValueText, skin.value, valueBounds, HAlign::Centre, valueSize);
+}
+
+void ParamKnob::SetMarks(std::vector<Mark> marks)
+{
+    if (marks != mMarks)
+    {
+        mMarks = std::move(marks);
+        RepaintSoon(DrawnArea());
+    }
 }
 
 el::rect ParamKnob::ValueBox(const el::rect& b) const

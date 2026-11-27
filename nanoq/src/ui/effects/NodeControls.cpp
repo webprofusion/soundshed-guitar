@@ -8,6 +8,7 @@
 
 #include "ui/shell/Shell.h"
 
+#include "uiclient/BlendMix.h"
 #include "uiclient/ChainLayout.h"
 #include "uiclient/NodeLabels.h"
 #include "uiclient/ParamFormat.h"
@@ -785,11 +786,19 @@ Ptr Shell::BuildBlendInfo(const guitarfx::GraphNode& node)
         row.push_back(FixedWidth(150, mode));
     }
 
-    auto note = std::make_shared<Text>(mTheme,
-                                       blend != nullptr ? "Its blends are edited in Soundshed Guitar."
-                                                        : "This node plays its input dry until it is given a blend.",
-                                       11.0f);
+    // Under it, the model playing or the two being mixed, as the knobs turn
+    // (formatBlendMatchLine); missing, what the node does meanwhile.
+    auto note = std::make_shared<Text>(mTheme, "", 11.0f);
     note->Colour(mTheme.TextMuted());
+    mLive.Bind(
+        note,
+        [this, nodeId] {
+            const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+            const auto* b = n != nullptr ? FindNodeBlend(mState, *n) : nullptr;
+            return b != nullptr ? BlendMatchLine(mState, *n, *b)
+                                : std::string("This node plays its input dry until it is given a blend.");
+        },
+        &Text::Set);
     return Col({FixedHeight(26, Row(row)), VGap(4), FixedHeight(16, note)});
 }
 

@@ -10,6 +10,7 @@
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
+#include "uiclient/BlendMix.h"
 #include "uiclient/EffectLayouts.h"
 #include "uiclient/ExposedResources.h"
 #include "uiclient/NodeLabels.h"
@@ -436,6 +437,16 @@ bool ShowsFullRigCabNote(const ClientState& state, const guitarfx::GraphNode& no
 }
 } // namespace
 
+namespace
+{
+/// Whether a blend shows a knob for `key`: only those are moved when a Snap turn lands on a capture.
+bool MapsBlendParam(const BlendSummary& blend, const std::string& key)
+{
+    const auto ids = MappedBlendParamIds(blend);
+    return std::find(ids.begin(), ids.end(), key) != ids.end();
+}
+} // namespace
+
 std::string Shell::EffectPageSignature() const
 {
     const auto* node = SelectedNode();
@@ -705,6 +716,46 @@ Ptr Shell::BuildEffectPage()
         mShowAdvanced = false;
     }
 
+    // A NAM Blend's mapped knobs (panel.ts): one per parameter its models were captured at, first,
+    // each on that parameter's own scale over the captured range. With any, the Blend sweep goes:
+    // the knobs pick the model.
+    const auto* nodeBlend = boundary || customControls ? nullptr : FindNodeBlend(mState, *node);
+    const auto blendKeys = nodeBlend != nullptr ? MappedBlendParamIds(*nodeBlend) : std::vector<std::string>{};
+
+    if (!blendKeys.empty())
+    {
+        params.erase(
+            std::remove_if(params.begin(), params.end(), [](const EffectParamInfo& p) { return p.key == "blend"; }),
+            params.end());
+
+        if (!mShowAdvanced)
+        {
+            std::vector<EffectParamInfo> mapped;
+
+            for (const auto& key : blendKeys)
+            {
+                const auto current = node->params.find(key);
+                const auto range = ComputeBlendParamRange(
+                    key, *nodeBlend,
+                    current != node->params.end() ? std::optional<double>(current->second) : std::nullopt);
+                EffectParamInfo info;
+                info.key = key;
+                info.name = range.spec != nullptr ? range.spec->label : key;
+                info.minValue = range.min;
+                info.maxValue = range.max;
+                info.defaultValue = range.defaultValue;
+                info.step = 0.1;
+                mapped.push_back(std::move(info));
+            }
+
+            params.insert(params.begin(), mapped.begin(), mapped.end());
+        }
+    }
+
+    const auto isBlendKey = [&blendKeys](const std::string& key) {
+        return std::find(blendKeys.begin(), blendKeys.end(), key) != blendKeys.end();
+    };
+
     // Pitch Shift's Semitones knob spans the node's own range, in whole semitones only while Snap
     // to Semitone is on (pitchShiftRange.ts), and its default is held inside that range, as the
     // engine holds the value.
@@ -879,6 +930,120 @@ Ptr Shell::BuildEffectPage()
                                FixedHeight(14, Pad(6, 0, 6, 0,
                                                    Row({small("A", Text::Align::Left), Stretch(),
                                                         small("B", Text::Align::Right)})))}))};
+        }
+
+        if (isBlendKey(info.key))
+        {
+            // A blend's mapped knob (paramControls.ts): shown on its parameter's scale, sent 0..1;
+            // its captures are marked on it; in Snap mode a turn lands on the nearest capture,
+            // and the other knobs move to it too.
+            const auto* spec = FindBlendParamSpec(info.key);
+            const auto span = [info](double display) {
+                return info.maxValue > info.minValue
+                           ? std::clamp((display - info.minValue) / (info.maxValue - info.minValue), 0.0, 1.0)
+                           : 0.0;
+            };
+            const auto oneDecimal = [](double display) {
+                char text[24];
+                std::snprintf(text, sizeof text, "%.1f", display);
+                return std::string(text);
+            };
+            // The node's blend and its values now, looked up again each time: the page holds no
+            // pointer into the state.
+            const auto target = [this, nodeId]() -> std::pair<const BlendSummary*, std::map<std::string, double>> {
+                const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+                const auto* b = n != nullptr ? FindNodeBlend(mState, *n) : nullptr;
+                return {b, b != nullptr ? BlendTarget(*n, *b) : std::map<std::string, double>{}};
+            };
+
+            auto knob = std::make_shared<ParamKnob>(mTheme, shown);
+            knob->AccessName(info.name);
+            knob->Large(true);
+            knob->onMenu = menu;
+            mLive.Bind(
+                knob,
+                [target, key = info.key, spec] {
+                    const auto [b, t] = target();
+                    const auto it = t.find(key);
+                    return it != t.end() ? DenormalizeBlendValue(it->second, spec) : 0.0;
+                },
+                [span, oneDecimal](ParamKnob& k, double v) { k.Update(span(v), oneDecimal(v)); });
+            mLive.Bind(
+                knob,
+                [target, key = info.key, span] {
+                    std::vector<ParamKnob::Mark> marks;
+                    const auto [b, t] = target();
+
+                    if (b != nullptr)
+                    {
+                        for (const auto& point : BlendMappedPoints(key, *b, t))
+                        {
+                            marks.push_back({span(point.display), point.selectable, point.selected});
+                        }
+                    }
+
+                    return marks;
+                },
+                &ParamKnob::SetMarks);
+
+            const auto send = [this, nodeId, key = info.key, spec, target](double display) {
+                const double value = NormalizeBlendValue(display, spec);
+                const auto* n = SelectedNode();
+                const auto [b, t] = target();
+
+                if (n != nullptr && n->id == nodeId && b != nullptr && BlendSnaps(*n, *b))
+                {
+                    auto moved = t;
+                    moved[key] = value;
+
+                    if (const auto* closest = ClosestBlendMapping(key, value, *b, moved))
+                    {
+                        for (const auto& [id, captured] : BlendMappingParams(*closest))
+                        {
+                            const auto now = n->params.find(id);
+
+                            if (MapsBlendParam(*b, id) && (now == n->params.end() || now->second != captured))
+                            {
+                                mSession.Commands().SetNodeParam(nodeId, id, captured);
+                            }
+                        }
+
+                        return;
+                    }
+                }
+
+                mSession.Commands().SetNodeParam(nodeId, key, value);
+            };
+            knob->onChange = [this, info, send, oneDecimal, k = knob.get()](double position) {
+                const double display =
+                    std::round((info.minValue + position * (info.maxValue - info.minValue)) * 10.0) / 10.0;
+                k->SetValueText(oneDecimal(display));
+                send(display);
+                NoteChainEdit();
+                Mark(kValues);
+            };
+            knob->onReset = [this, info, send] {
+                send(info.defaultValue);
+                NoteChainEdit();
+                Mark(kValues);
+            };
+            knob->editText = [info, oneDecimal, target, spec] {
+                const auto [b, t] = target();
+                const auto it = t.find(info.key);
+                return oneDecimal(it != t.end() ? DenormalizeBlendValue(it->second, spec) : info.defaultValue);
+            };
+            knob->onTyped = [this, info, send](const std::string& entered) {
+                if (const auto typed = ParseTypedNumber(entered))
+                {
+                    send(std::clamp(*typed, info.minValue, info.maxValue));
+                    NoteChainEdit();
+                }
+
+                Mark(kValues);
+            };
+            const float cell = cellFor(shown);
+            knob->CellWidth(cell);
+            return {cell, knob};
         }
 
         {
@@ -1933,7 +2098,25 @@ Ptr Shell::BuildEffectPage()
 
     if (node->type == guitarfx::EffectGuids::kAmpNamBlend)
     {
-        addToSection(BuildBlendInfo(*node), 46.0f);
+        const auto blendId = node->config.find("blendId");
+
+        if (blendId != node->config.end() && !blendId->second.empty())
+        {
+            addToSection(BuildBlendInfo(*node), 46.0f);
+        }
+        else
+        {
+            // A blend node from before blend definitions: its models as slots of their own
+            // (resourceSelector.ts), Model 1 at least.
+            const std::size_t count = std::max<std::size_t>(1, node->resources.size());
+
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                addToSection(
+                    BuildResourceSlot(*node, "nam", static_cast<int>(i), "Model " + std::to_string(i + 1), true, true),
+                    StackedSlot());
+            }
+        }
     }
 
     // The visualisations, above the tabs and the knobs, in the web UI's order (panel.ts): the

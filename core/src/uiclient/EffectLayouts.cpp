@@ -139,6 +139,50 @@ LayoutKnobImage ParseKnobImage(const nlohmann::json& raw)
     return image;
 }
 
+/// A strip when `raw` names an image and a usable frame count (usableStrip), else nothing.
+std::optional<LayoutImageStrip> ParseStrip(const nlohmann::json& raw)
+{
+    LayoutImageStrip strip;
+    strip.imageId = StringOf(raw, "imageId");
+    strip.frames = FilmstripFrameCount(StrictNumberOf(raw, "frames").value_or(0.0));
+
+    if (strip.imageId.empty() || strip.frames == 0)
+    {
+        return std::nullopt;
+    }
+
+    const double columns = StrictNumberOf(raw, "columns").value_or(1.0);
+    strip.columns =
+        columns >= 1.0 && std::floor(columns) == columns && columns <= 1024.0 ? static_cast<int>(columns) : 1;
+
+    if (const auto aspect = StrictNumberOf(raw, "aspect"); aspect && *aspect > 0.0)
+    {
+        strip.aspect = aspect;
+    }
+
+    return strip;
+}
+
+/// The light, each field held in range (usableControlShadow); nothing when `raw` is not an object.
+std::optional<LayoutControlShadow> ParseControlShadow(const nlohmann::json& raw)
+{
+    if (!raw.is_object())
+    {
+        return std::nullopt;
+    }
+
+    LayoutControlShadow light;
+    const auto field = [&raw](const char* key, double lo, double hi, double fallback) {
+        const auto value = StrictNumberOf(raw, key);
+        return value ? std::clamp(*value, lo, hi) : fallback;
+    };
+    light.angle = std::fmod(std::fmod(field("angle", -3600.0, 3600.0, 315.0), 360.0) + 360.0, 360.0);
+    light.elevation = field("elevation", 15.0, 80.0, 45.0);
+    light.softness = field("softness", 0.0, 1.0, 0.4);
+    light.opacity = field("opacity", 0.0, 1.0, 0.5);
+    return light;
+}
+
 LayoutControlStyle ParseControlStyle(const nlohmann::json& raw)
 {
     LayoutControlStyle style;
@@ -174,6 +218,15 @@ LayoutControlStyle ParseControlStyle(const nlohmann::json& raw)
     const auto& sliderImage = ObjectAt(raw, "sliderImage");
     style.sliderTrackImageId = StringOf(sliderImage, "trackImageId");
     style.sliderThumbImageId = StringOf(sliderImage, "thumbImageId");
+    style.toggleStrip = ParseStrip(ObjectAt(toggleImage, "strip"));
+    style.sliderStrip = ParseStrip(ObjectAt(sliderImage, "strip"));
+    style.castShadow = !BoolIs(raw, "castShadow", false);
+
+    if (const auto aspect = StrictNumberOf(toggleImage, "aspect"); aspect && *aspect > 0.0)
+    {
+        style.toggleAspect = aspect;
+    }
+
     return style;
 }
 
@@ -387,6 +440,34 @@ EffectLayout ParseEffectLayout(const nlohmann::json& raw)
     layout.controlValueFontSize = NumberOf(raw, "controlValueFontSize");
     layout.controlLabelMaxWidth = NumberOr(raw, "controlLabelMaxWidth", 0.0);
 
+    if (const auto& knobImage = ObjectAt(raw, "knobImage"); !knobImage.empty())
+    {
+        layout.knobImage = ParseKnobImage(knobImage);
+    }
+
+    if (const auto& switchImage = ObjectAt(raw, "switchImage"); !switchImage.empty())
+    {
+        LayoutSwitchImage image;
+        image.onImageId = StringOf(switchImage, "onImageId");
+        image.offImageId = StringOf(switchImage, "offImageId");
+        image.strip = ParseStrip(ObjectAt(switchImage, "strip"));
+        image.aspect = StrictNumberOf(switchImage, "aspect");
+        image.width = StrictNumberOf(switchImage, "width");
+        image.height = StrictNumberOf(switchImage, "height");
+
+        if (image.strip || (!image.onImageId.empty() && !image.offImageId.empty()))
+        {
+            layout.switchImage = std::move(image);
+        }
+    }
+
+    if (const auto it = raw.find("controlShadow"); it != raw.end())
+    {
+        layout.controlShadow = ParseControlShadow(*it);
+    }
+
+    ApplyLayoutControlImages(layout);
+
     if (const auto it = raw.find("scaling"); it != raw.end())
     {
         layout.scaling = ParseScaling(*it);
@@ -496,6 +577,8 @@ std::vector<std::string> LayoutImageIds(const EffectLayout& layout)
         add(style.toggleOffImageId);
         add(style.sliderTrackImageId);
         add(style.sliderThumbImageId);
+        add(style.toggleStrip ? style.toggleStrip->imageId : std::string());
+        add(style.sliderStrip ? style.sliderStrip->imageId : std::string());
     }
 
     for (const auto& overlay : layout.overlays)

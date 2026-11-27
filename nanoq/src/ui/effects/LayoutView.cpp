@@ -129,8 +129,7 @@ class LocalPort : public el::port_base
 Ptr Scaled(Ptr content, float sx, float sy, float radius)
 {
     using Held = decltype(el::hold_any(std::move(content)));
-    return el::share(
-        ScaledElement(el::proxy<Held, LocalPort>(el::hold_any(std::move(content))), sx, sy, radius));
+    return el::share(ScaledElement(el::proxy<Held, LocalPort>(el::hold_any(std::move(content))), sx, sy, radius));
 }
 
 /// Children at fixed rectangles from its top-left corner, drawn in the order added: the layout's
@@ -578,9 +577,23 @@ LayoutControlView::Look MakeLook(const Theme& theme, const EffectLayout& layout,
     look.valueInk = valueColour ? ToColour(*valueColour) : inks.value;
     look.accent = theme.Accent();
 
-    const bool imageToggle = !control.style.toggleOnImageId.empty() && !control.style.toggleOffImageId.empty();
+    const bool imageToggle = UsableToggleImage(control.style);
     const bool imageSlider = !control.style.sliderTrackImageId.empty() || !control.style.sliderThumbImageId.empty();
     look.control = ControlExtent(look.kind, control.style, imageToggle, imageSlider);
+
+    // A filmstrip slider is drawn at its frame's shape (stripSliderSize).
+    if (look.kind == LayoutControlKind::Slider && control.style.sliderStrip)
+    {
+        const auto size = StripSliderSize(control.style, *control.style.sliderStrip);
+        look.control = {static_cast<float>(size.width), static_cast<float>(size.height)};
+    }
+
+    // Knobs and toggles cast the layout's shadow unless they opt out (castShadow: false).
+    if (layout.controlShadow && control.style.castShadow &&
+        (look.kind == LayoutControlKind::Knob || look.kind == LayoutControlKind::Toggle))
+    {
+        look.shadow = layout.controlShadow;
+    }
 
     // The wrapper: its own width when the layout gives one, else at least 80 and as wide as
     // what it holds (the web UI's column of centred items).

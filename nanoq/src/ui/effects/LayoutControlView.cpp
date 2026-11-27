@@ -93,6 +93,11 @@ void LayoutControlView::draw(const el::context& ctx)
                  HAlign::Centre);
     }
 
+    if (mLook.shadow)
+    {
+        DrawShadow(cnv, box);
+    }
+
     switch (mLook.kind)
     {
     case LayoutControlKind::Toggle:
@@ -282,10 +287,82 @@ void LayoutControlView::DrawKnob(artist::canvas& cnv, el::rect box)
     pointer(mTheme.IsLight() ? mTheme.Text() : el::rgba(240, 240, 248, 255), 2.0f, capR * 0.40f / k, capR * 0.85f / k);
 }
 
+void LayoutControlView::DrawShadow(artist::canvas& cnv, el::rect box)
+{
+    // A knob's footprint is round, a toggle's a pill; drawn standing as tall as it is wide.
+    const double w = box.width(), h = box.height();
+    const auto shape = ControlShadowOf(*mLook.shadow, w, h, std::min(w, h) / 2.0);
+
+    if (shape.hull.empty() || shape.opacity <= 0.0)
+    {
+        return;
+    }
+
+    const auto at = [&box](const LayoutPoint& p) {
+        return el::point{box.left + static_cast<float>(p.x), box.top + static_cast<float>(p.y)};
+    };
+    auto state = cnv.new_state();
+    const float alpha = static_cast<float>(shape.opacity);
+    artist::canvas::linear_gradient fade{at(shape.fadeFrom), at(shape.fadeTo)};
+    fade.add_color_stop(0.0f, el::rgba(0, 0, 0, 255).opacity(alpha));
+    fade.add_color_stop(1.0f, el::rgba(0, 0, 0, 255).opacity(alpha * 0.3f));
+
+    // The blur as a soft edge the canvas casts round the shape.
+    if (shape.blur > 0.0)
+    {
+        cnv.shadow_style(el::point{0.0f, 0.0f}, static_cast<float>(shape.blur * 2.0),
+                         el::rgba(0, 0, 0, 255).opacity(alpha * 0.6f));
+    }
+
+    cnv.begin_path();
+    cnv.move_to(at(shape.hull.front()));
+
+    for (std::size_t i = 1; i < shape.hull.size(); ++i)
+    {
+        cnv.line_to(at(shape.hull[i]));
+    }
+
+    cnv.close_path();
+    cnv.fill_style(fade);
+    cnv.stroke_style(fade);
+    cnv.line_width(static_cast<float>(shape.radius * 2.0));
+    cnv.line_join(artist::canvas::round_join);
+    cnv.fill_preserve();
+    cnv.stroke();
+}
+
+bool LayoutControlView::DrawStripFrame(artist::canvas& cnv, const LayoutImageStrip& strip, int frame, el::rect box)
+{
+    const auto image = mImages.Find(strip.imageId);
+
+    if (!image)
+    {
+        return false;
+    }
+
+    const auto cell = FilmstripCellOf(frame, strip.frames, strip.columns);
+    const auto size = image->size();
+    const float cw = size.x / static_cast<float>(cell.columns), ch = size.y / static_cast<float>(cell.rows);
+    cnv.draw(*image, el::rect{cell.column * cw, cell.row * ch, (cell.column + 1) * cw, (cell.row + 1) * ch}, box);
+    return true;
+}
+
+bool LayoutControlView::VerticalSlider() const
+{
+    return mLook.kind == LayoutControlKind::Slider && mLook.style.sliderStrip &&
+           StripSliderSize(mLook.style, *mLook.style.sliderStrip).vertical;
+}
+
 void LayoutControlView::DrawToggle(artist::canvas& cnv, el::rect box)
 {
     const bool on = mValue >= 0.5;
     const auto& style = mLook.style;
+
+    // A strip wins over two pictures: off is its first frame, on its last.
+    if (style.toggleStrip && DrawStripFrame(cnv, *style.toggleStrip, on ? style.toggleStrip->frames - 1 : 0, box))
+    {
+        return;
+    }
 
     // An image switch needs both of its pictures; with one missing it is the standard switch.
     if (!style.toggleOnImageId.empty() && !style.toggleOffImageId.empty())
@@ -315,6 +392,14 @@ void LayoutControlView::DrawSlider(artist::canvas& cnv, el::rect box)
 {
     const auto& style = mLook.style;
     const float position = static_cast<float>(std::clamp(mPosition, 0.0, 1.0));
+
+    // A filmstrip slider shows the frame for its value.
+    if (style.sliderStrip &&
+        DrawStripFrame(cnv, *style.sliderStrip, FilmstripFrame(position, style.sliderStrip->frames), box))
+    {
+        return;
+    }
+
     const float cy = (box.top + box.bottom) * 0.5f;
     const auto track = mImages.Find(style.sliderTrackImageId);
     const auto thumb = mImages.Find(style.sliderThumbImageId);
@@ -460,12 +545,23 @@ bool LayoutControlView::click(const el::context& ctx, el::mouse_button btn)
     // A slider's thumb jumps to where its track is pressed, as a range input's does.
     if (mLook.kind == LayoutControlKind::Slider)
     {
-        const float inset =
-            mLook.style.sliderThumbImageId.empty() && mLook.style.sliderTrackImageId.empty() ? 7.0f : 12.0f;
-        SetPosition((btn.pos.x - box.left - inset) / std::max(1.0f, box.width() - 2.0f * inset), ctx);
+        SetPosition(SliderPositionAt(box, btn.pos), ctx);
     }
 
     return true;
+}
+
+double LayoutControlView::SliderPositionAt(el::rect box, el::point p) const
+{
+    // A filmstrip slider runs edge to edge, up a tall frame; a drawn one inside its thumb's reach.
+    if (mLook.style.sliderStrip)
+    {
+        return VerticalSlider() ? (box.bottom - p.y) / std::max(1.0f, box.height())
+                                : (p.x - box.left) / std::max(1.0f, box.width());
+    }
+
+    const float inset = mLook.style.sliderThumbImageId.empty() && mLook.style.sliderTrackImageId.empty() ? 7.0f : 12.0f;
+    return (p.x - box.left - inset) / std::max(1.0f, box.width() - 2.0f * inset);
 }
 
 void LayoutControlView::drag(const el::context& ctx, el::mouse_button btn)
@@ -477,10 +573,7 @@ void LayoutControlView::drag(const el::context& ctx, el::mouse_button btn)
 
     if (mLook.kind == LayoutControlKind::Slider)
     {
-        const auto box = ControlBox(ctx.bounds);
-        const float inset =
-            mLook.style.sliderThumbImageId.empty() && mLook.style.sliderTrackImageId.empty() ? 7.0f : 12.0f;
-        SetPosition((btn.pos.x - box.left - inset) / std::max(1.0f, box.width() - 2.0f * inset), ctx);
+        SetPosition(SliderPositionAt(ControlBox(ctx.bounds), btn.pos), ctx);
         return;
     }
 

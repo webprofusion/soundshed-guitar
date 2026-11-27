@@ -9,6 +9,7 @@
 #include "uiclient/EffectLayouts.h"
 #include "uiclient/UiClient.h"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -361,6 +362,68 @@ void TestKnobImages()
            "sizes clamped to their ranges");
 }
 
+// The layout's own switch, knob picture and light, and the strips a toggle or slider is drawn
+// from (layoutControlImages.ts, layoutShadows.ts).
+void TestControlImagesAndShadows()
+{
+    const auto layout = ui::ParseEffectLayout(nlohmann::json::parse(R"({
+        "effectType": "x", "dimensions": {"width": 400, "height": 200},
+        "knobImage": {"mode": "filmstrip", "imageId": "sheet", "frames": 64},
+        "switchImage": {"strip": {"imageId": "sw", "frames": 2, "aspect": 0.5}, "width": 40},
+        "controlShadow": {"angle": 765, "elevation": 5, "opacity": 2},
+        "controls": [
+            {"paramKey": "a", "type": "knob", "position": {"x": 0, "y": 0}},
+            {"paramKey": "b", "type": "knob", "position": {"x": 0, "y": 0}, "style": {"knobStyle": "pedal"}},
+            {"paramKey": "c", "type": "toggle", "position": {"x": 0, "y": 0}},
+            {"paramKey": "d", "type": "toggle", "position": {"x": 0, "y": 0},
+             "style": {"toggleImage": {"onImageId": "on", "offImageId": "off"}, "castShadow": false}},
+            {"paramKey": "e", "type": "slider", "position": {"x": 0, "y": 0},
+             "style": {"sliderLength": 120, "sliderImage": {"strip": {"imageId": "fader", "frames": 32, "aspect": 4}}}},
+            {"paramKey": "f", "type": "slider", "position": {"x": 0, "y": 0},
+             "style": {"sliderImage": {"strip": {"imageId": "bad", "frames": 1}}}}
+        ]})"));
+
+    const auto& c = layout.controls;
+    Expect(c.size() == 6, "six controls");
+    Expect(ui::UsableKnobImage(c[0].style) != nullptr && c[0].style.knobImage->imageId == "sheet",
+           "a default knob takes the layout's picture");
+    Expect(ui::UsableKnobImage(c[1].style) == nullptr, "a Pedal knob keeps its own look");
+    Expect(c[2].style.toggleStrip && c[2].style.toggleStrip->imageId == "sw" && ui::UsableToggleImage(c[2].style),
+           "a plain toggle takes the layout's switch");
+    Expect(Near(ui::LayoutToggleSize(c[2].style).width, 40) && Near(ui::LayoutToggleSize(c[2].style).height, 20),
+           "the switch's width, and the strip's shape for its height");
+    Expect(!c[3].style.toggleStrip && c[3].style.toggleOnImageId == "on" && !c[3].style.castShadow,
+           "a toggle with pictures keeps them; castShadow false is read");
+    Expect(c[4].style.sliderStrip && c[4].style.sliderStrip->frames == 32, "a slider's strip");
+    const auto fader = ui::StripSliderSize(c[4].style, *c[4].style.sliderStrip);
+    Expect(fader.vertical && Near(fader.height, 120) && Near(fader.width, 30), "a tall strip runs up its length");
+    Expect(!c[5].style.sliderStrip, "a strip of one frame is not usable");
+
+    const auto ids = ui::LayoutImageIds(layout);
+    const auto has = [&ids](const char* id) { return std::find(ids.begin(), ids.end(), id) != ids.end(); };
+    Expect(has("sheet") && has("sw") && has("fader") && has("on"), "the pictures the controls draw are loaded");
+
+    Expect(layout.controlShadow && Near(layout.controlShadow->angle, 45) && Near(layout.controlShadow->elevation, 15) &&
+               Near(layout.controlShadow->opacity, 1),
+           "the light's fields are held in range");
+
+    // A 38 px knob lit from the top left at 45 degrees: its shadow falls 38 px down and right.
+    ui::LayoutControlShadow light;
+    const auto shadow = ui::ControlShadowOf(light, 38, 38, 19);
+    double maxX = -1e9, maxY = -1e9;
+
+    for (const auto& p : shadow.hull)
+    {
+        maxX = std::max(maxX, p.x);
+        maxY = std::max(maxY, p.y);
+    }
+
+    Expect(Near(shadow.radius, 19) && std::abs(maxX - (19 + 38 * std::sqrt(0.5))) < 1e-6 &&
+               std::abs(maxY - (19 + 38 * std::sqrt(0.5))) < 1e-6,
+           "the footprint swept away from the light");
+    Expect(shadow.fadeTo.x > shadow.fadeFrom.x && shadow.fadeTo.y > shadow.fadeFrom.y, "it fades away from the light");
+}
+
 void TestColours()
 {
     const auto is = [](const std::optional<ui::LayoutColour>& c, int r, int g, int b, double a) {
@@ -511,6 +574,7 @@ int main()
     TestPreferences();
     TestScaling();
     TestKnobImages();
+    TestControlImagesAndShadows();
     TestColours();
     TestControls();
     TestClient();

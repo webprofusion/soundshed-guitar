@@ -41,6 +41,7 @@
 #include "uiclient/Metronome.h"
 #include "uiclient/UpdateCheck.h"
 #include "uiclient/SignalFlow.h"
+#include "uiclient/BlendMix.h"
 #include "uiclient/ChainDropRules.h"
 #include "uiclient/ChainHistory.h"
 #include "uiclient/ChainLayout.h"
@@ -847,6 +848,66 @@ void TestChainLayoutWalksNestedSplits()
     Expect(layout.NodeBefore("c") == "inner" && layout.NodeBefore("d") == "innerMix" &&
                layout.NodeBefore("a") == "split",
            "NodeBefore follows nested branches");
+}
+
+// A NAM Blend's knobs as the web UI draws and plays them (blendUtils.ts, signalPathBlend.ts).
+void TestBlendMix()
+{
+    ClientState state;
+    BlendSummary blend;
+    blend.id = "b1";
+    blend.name = "Crunch";
+    blend.parameters = {"drive", "gain"};
+    blend.mappings = {{"m1", "gain", std::nullopt, {{"gain", 0.2}, {"drive", 0.5}}},
+                      {"m2", "gain", std::nullopt, {{"gain", 0.6}, {"drive", 0.5}}},
+                      {"m3", "gain", std::nullopt, {{"gain", 0.6}, {"drive", 0.9}}}};
+    state.blends.push_back(blend);
+
+    GraphNode node;
+    node.id = "n1";
+    node.type = EffectGuids::kAmpNamBlend;
+    node.config["blendId"] = "b1";
+
+    Expect(FindNodeBlend(state, node) != nullptr, "a blend node finds its blend by id");
+    Expect((MappedBlendParamIds(blend) == std::vector<std::string>{"drive", "gain"}),
+           "knobs follow the definition's order");
+
+    const auto range = ComputeBlendParamRange("gain", blend, std::nullopt);
+    Expect(std::abs(range.min - 2.0) < 1e-9 && std::abs(range.max - 6.0) < 1e-9 &&
+               std::abs(range.defaultValue - 6.0) < 1e-9,
+           "a knob spans the captured values on its own scale, its default their median");
+
+    // Unset, each knob starts at the median: gain 0.6, drive 0.5, which is m2 exactly.
+    Expect(BlendMatchLine(state, node, blend) == "Playing: m2", "at a capture, that model plays alone");
+
+    node.params["gain"] = 0.3;
+    Expect(BlendMatchLine(state, node, blend) == "Mix: m1 90% / m2 10%", "between two, both are named with shares");
+    node.config["blendModeOverride"] = "snap";
+    Expect(BlendMatchLine(state, node, blend) == "Playing: m1", "snap plays the nearest alone");
+
+    const auto target = BlendTarget(node, blend);
+    const auto gainPoints = BlendMappedPoints("gain", blend, target);
+    Expect(gainPoints.size() == 2 && std::abs(gainPoints[0].display - 2.0) < 1e-9 && gainPoints[0].selectable &&
+               gainPoints[1].selectable && !gainPoints[0].selected,
+           "gain marks both captures at drive 5, neither selected at 3");
+    const auto drivePoints = BlendMappedPoints("drive", blend, target);
+    Expect(drivePoints.size() == 2 && drivePoints[0].selected && !drivePoints[1].selectable,
+           "drive marks 5 as where it is; 9 is out of reach at gain 3");
+
+    auto moved = target;
+    moved["drive"] = 0.85;
+    const auto* closest = ClosestBlendMapping("drive", 0.85, blend, moved);
+    Expect(closest != nullptr && closest->modelId == "m3", "a snap turn lands on the nearest capture of that knob");
+    Expect(std::abs(NormalizeBlendValue(7.5, FindBlendParamSpec("gain")) - 0.75) < 1e-9 &&
+               std::abs(DenormalizeBlendValue(0.75, FindBlendParamSpec("gain")) - 7.5) < 1e-9,
+           "knob values are sent 0..1");
+
+    // No knob set and none captured: the Blend sweep.
+    BlendSummary sweep;
+    sweep.mappings = {{"a", "", std::nullopt, {}}, {"b", "", std::nullopt, {}}, {"c", "", std::nullopt, {}}};
+    const auto mix = SelectBlendMix(sweep.mappings, {}, 0.75, false);
+    Expect(mix && mix->primary == 1 && mix->secondary == 2 && std::abs(mix->secondaryWeight - 0.5) < 1e-9,
+           "the sweep places plain models evenly and mixes the two around it");
 }
 
 // A composite's slots and a Custom Effect's: what the effect editor draws a picker for and
@@ -2508,6 +2569,7 @@ int main()
     TestInputLevelling();
     TestNodeArchitectureBadge();
     TestExposedResourceSlots();
+    TestBlendMix();
     TestPresetBrowse();
     TestParamFormatting();
     TestParamVisibility();

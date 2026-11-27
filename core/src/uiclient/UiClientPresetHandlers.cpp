@@ -291,6 +291,61 @@ void UiClient::RegisterPresetHandlers()
                                            ? mappings->size()
                                        : models != b.end() && models->is_array() ? models->size()
                                                                                  : 0;
+
+                    if (mappings != b.end() && mappings->is_array() && !mappings->empty())
+                    {
+                        for (const auto& raw : *mappings)
+                        {
+                            if (!raw.is_object() || !raw.contains("id") || !raw["id"].is_string())
+                            {
+                                continue;
+                            }
+
+                            BlendModelMapping mapping;
+                            mapping.modelId = raw["id"].get<std::string>();
+                            mapping.parameterId = raw.value("parameterId", std::string());
+
+                            if (const auto v = raw.find("parameterValue"); v != raw.end() && v->is_number())
+                            {
+                                mapping.parameterValue = v->get<double>();
+                            }
+
+                            if (const auto ps = raw.find("parameters"); ps != raw.end() && ps->is_object())
+                            {
+                                for (const auto& [key, value] : ps->items())
+                                {
+                                    if (value.is_number())
+                                    {
+                                        mapping.parameters[key] = value.get<double>();
+                                    }
+                                }
+                            }
+
+                            blend.mappings.push_back(std::move(mapping));
+                        }
+                    }
+                    else if (models != b.end() && models->is_array())
+                    {
+                        for (const auto& id : *models)
+                        {
+                            if (id.is_string())
+                            {
+                                blend.mappings.push_back({id.get<std::string>(), {}, std::nullopt, {}});
+                            }
+                        }
+                    }
+
+                    if (const auto ps = b.find("parameters"); ps != b.end() && ps->is_array())
+                    {
+                        for (const auto& id : *ps)
+                        {
+                            if (id.is_string())
+                            {
+                                blend.parameters.push_back(id.get<std::string>());
+                            }
+                        }
+                    }
+
                     s.blends.push_back(std::move(blend));
                 }
             }

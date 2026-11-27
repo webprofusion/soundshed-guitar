@@ -72,6 +72,8 @@ class LayoutControlView final : public el::element, public Drawn
         el::color labelInk, valueInk, accent;
         float width = 80.0f;              // the wrapper's
         el::extent control{38.0f, 38.0f}; // the knob, switch or slider itself
+        /// The layout's light, when this knob or toggle casts a shadow under it.
+        std::optional<guitarfx::uiclient::LayoutControlShadow> shadow;
     };
 
     LayoutControlView(const Theme& theme, LayoutImages& images, guitarfx::uiclient::EffectParamInfo param, Look look,
@@ -107,6 +109,15 @@ class LayoutControlView final : public el::element, public Drawn
     void SetPosition(double position, const el::context& ctx);
     void DrawKnob(artist::canvas& cnv, el::rect box);
     void DrawToggle(artist::canvas& cnv, el::rect box);
+    /// The knob's or toggle's shadow under the layout's light, behind it (layoutShadows.ts).
+    void DrawShadow(artist::canvas& cnv, el::rect box);
+    /// One frame of a strip, fitted to `box`.
+    bool DrawStripFrame(artist::canvas& cnv, const guitarfx::uiclient::LayoutImageStrip& strip, int frame,
+                        el::rect box);
+    /// The slider's travel runs up its box (a tall filmstrip).
+    [[nodiscard]] bool VerticalSlider() const;
+    /// Where a press or drag at `p` puts the slider (0..1).
+    [[nodiscard]] double SliderPositionAt(el::rect box, el::point p) const;
     void DrawSlider(artist::canvas& cnv, el::rect box);
 
     const Theme& mTheme;
