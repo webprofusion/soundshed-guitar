@@ -1130,6 +1130,7 @@ class Shell
     SlotPtr mChooserSlot; // the preset chooser's content, rebuilt as the library changes
     bool mChooserOpen = false;
     bool mChooserSetlistsOpen = false;                   // its Setlists section unfolded
+    std::string mLoadingPresetId;                        // the card clicked, dimmed until it is the one playing
     std::shared_ptr<el::basic_input_box> mFolderNameBox; // its New Folder Name, kept across rebuilds
     Ptr mFolderNameElement;
     std::string mPadsEditingId;                        // the setlist the pads' bank editor is open on

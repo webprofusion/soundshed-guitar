@@ -278,43 +278,35 @@ void Shell::SelectPresetBrowserFolder(const std::string& folderId)
 
 Ptr Shell::BuildFolderColumn()
 {
-    // The virtual folders first, then the user's as a tree, each with its count. Multi-Rigs are
-    // the chooser's other tab, and new folders come from its folder tools.
-    const auto count = [this](const std::string& folderId) {
-        PresetQuery q;
-        q.folderId = folderId;
-        return std::to_string(FilterPresets(mState, q).size());
-    };
+    // The virtual folders first, then the user's as a plain tree indented 12 px a level, as the
+    // web's (.preset-folder-item): no icons, no heading. The virtual ones count what they list; a
+    // folder counts its own presets, not those in folders inside it. Multi-Rigs are the chooser's
+    // other tab, and new folders come from its folder tools.
     std::vector<Ptr> rows;
-    const auto add = [&](const std::string& id, const std::string& label, const char* icon, int depth, bool editable) {
+    const auto add = [&](const std::string& id, const std::string& label, std::size_t count, int depth, bool editable) {
         const bool chosen = mQuery.folderId == id && !mShowMultiRigs;
-        auto row = std::make_shared<ListRow>(mTheme, std::string(static_cast<std::size_t>(depth) * 3, ' ') + label,
-                                             count(id), chosen, false, [this, id] { SelectPresetBrowserFolder(id); });
-        row->Icon(&mIcons, icon, chosen ? mTheme.Accent() : mTheme.TextSecondary());
+        auto row = std::make_shared<ListRow>(mTheme, label, std::to_string(count), chosen, false,
+                                             [this, id] { SelectPresetBrowserFolder(id); });
 
         if (editable)
         {
             row->onMenu = [this, id] { OpenFolderMenu(id); };
         }
 
-        rows.push_back(FixedHeight(36, row));
+        rows.push_back(FixedHeight(36, Pad(static_cast<float>(depth) * 12.0f, 0, 0, 0, row)));
     };
-    add(kPresetFolderRecents, "Recents", "ui-clock", 0, false);
-    add(kPresetFolderFavorites, "Favourites", "heart", 0, false);
-    add(kPresetFolderAll, "All Presets", "ui-presets", 0, false);
+    const auto listed = [this](const std::string& folderId) {
+        PresetQuery q;
+        q.folderId = folderId;
+        return FilterPresets(mState, q).size();
+    };
+    add(kPresetFolderRecents, "Recents", listed(kPresetFolderRecents), 0, false);
+    add(kPresetFolderFavorites, "Favourites", listed(kPresetFolderFavorites), 0, false);
+    add(kPresetFolderAll, "All Presets", listed(kPresetFolderAll), 0, false);
 
-    const auto flat = FlattenPresetFolders(mState.presetFolders);
-
-    if (!flat.empty())
+    for (const auto& [f, depth] : FlattenPresetFolders(mState.presetFolders))
     {
-        auto heading = std::make_shared<Text>(mTheme, "FOLDERS", 9.5f, Weight::SemiBold);
-        heading->Colour(mTheme.TextMuted());
-        rows.push_back(FixedHeight(26, PadXY(12, 0, heading)));
-    }
-
-    for (const auto& [f, depth] : flat)
-    {
-        add(f->id, f->name, "ui-folder", depth, true);
+        add(f->id, f->name, f->presetIds.size(), depth, true);
     }
 
     return VScroll(Col(rows));
@@ -338,10 +330,29 @@ Ptr Shell::BuildPresetListContent()
 
     if (rows.empty())
     {
+        // As the web's (.preset-list-empty): an empty library offers Tone Sharing's presets.
+        const bool libraryEmpty = mState.presetList.empty();
         auto none = std::make_shared<Text>(
-            mTheme, mQuery.text.empty() && mPresetTags.empty() ? "Nothing here yet." : "No presets match.", 14.0f);
+            mTheme, libraryEmpty ? "No presets available yet." : "No presets match your current search or folder.",
+            14.0f);
         none->Colour(mTheme.TextMuted());
         rows.push_back(FixedHeight(32, PadXY(12, 0, none)));
+
+        if (libraryEmpty && IsFeatureEnabled(mState, Feature::ToneSharing))
+        {
+            auto browse = std::make_shared<Button>(
+                mTheme, "Browse Tone Sharing",
+                [this] {
+                    CloseOverlay();
+                    mTonesTab = TonesTab::Presets;
+                    mTonesPage = 1;
+                    LoadTones(false);
+                    ShowPage(Page::Tones);
+                    Mark(kPage);
+                },
+                Button::Style::Primary);
+            rows.push_back(FixedHeight(36, PadXY(12, 0, Row({browse, Stretch()}))));
+        }
     }
 
     return VScroll(Col(rows));
