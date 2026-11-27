@@ -230,9 +230,18 @@ class Shell
         return ViewSize().x - StageLeft();
     }
 
-    [[nodiscard]] float LooperStripHeight() const
+    /// The looper strip's row of controls.
+    [[nodiscard]] float LooperRowHeight() const
     {
         return mWide ? metrics::kWideLooperStripHeight : metrics::kLooperStripHeight;
+    }
+
+    /// The looper's Layers panel under its row, while it is open (LooperStrip.cpp).
+    [[nodiscard]] float LooperLayersHeight() const;
+
+    [[nodiscard]] float LooperStripHeight() const
+    {
+        return LooperRowHeight() + (mLooperLayersOpen ? LooperLayersHeight() : 0.0f);
     }
 
     /// The page slot's height: the view less the frame's bars, and the looper strip when it is out.
@@ -362,11 +371,14 @@ class Shell
 
     /// `cellWidth`: each knob's cell, narrowed where the compact strip has less room (640 wide).
     ControlCells BuildControlCells(float cellWidth = 84.0f);
-    /// A small panel beside `anchor` (a control's bounds), closed by a tap anywhere else.
-    void ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above = false);
-    /// The panel placed beside `anchor`, over a layer that calls `onOutside` when tapped.
+    /// A small panel beside `anchor` (a control's bounds), closed by a tap anywhere else but
+    /// `passThrough`, where a tap reaches what is under it and the panel stays.
+    void ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above = false,
+                     std::optional<el::rect> passThrough = std::nullopt);
+    /// The panel placed beside `anchor`, over a layer that calls `onOutside` when tapped (but in
+    /// `passThrough`, which it leaves to what is under it).
     [[nodiscard]] Ptr PlacePanel(Ptr panel, el::rect anchor, float width, float height, bool above,
-                                 std::function<void()> onOutside);
+                                 std::function<void()> onOutside, std::optional<el::rect> passThrough = std::nullopt);
     void CloseDropdown();
     /// A drop-down list under `anchor`, as the web UI's menus open from their buttons.
     /// `above`: open upwards (else upwards only near the window's foot).
@@ -1038,9 +1050,16 @@ class Shell
     void SyncLooperLive();
     void RepaintLooperLive();
     void TickLooper();
-    void OpenLooperLayers();
+    /// The Layers panel under the strip's row, as the web's inline .looper-layers.
+    void ToggleLooperLayers();
+    [[nodiscard]] Ptr BuildLooperLayers();
+    /// Loops and Options drop down from their buttons, as the web's <details> menus: the strip
+    /// stays live under them, and a second press closes them.
     void OpenLooperLoops();
     void OpenLooperOptions();
+    /// Whether the drop-down open is the strip's `menu` (1 Loops, 2 Options): if so it is closed.
+    bool CloseLooperMenu(int menu);
+    void ShowLooperMenu(int menu, Ptr body, el::rect anchor, float width, float height);
     /// The strip's Clear and Save, shared with the Options dialog: Clear asks first when the
     /// loop is unsaved; Save asks for the loop's name.
     void ClearLooperWithConfirm();
@@ -1135,11 +1154,23 @@ class Shell
     std::shared_ptr<class Waveform> mLooperWave;
     std::shared_ptr<Button> mLooperMain;
     std::shared_ptr<Text> mLooperStatus, mLooperTime, mLooperBar;
-    bool mLibraryExportAll = false; // Settings > Library: the whole library, not only what presets use
-    int mChainIcons = -1;           // the chain as icon tiles (1) or cards (0); -1 follows the setting
-    bool mChainAutoIcons = false;   // compact split: the cards did not fit, so tiles (BuildChain)
-    bool mChainAutoPass = false;    // BuildChain is building again as tiles
-    bool mChainDragIcons = false;   // which it was when that drag began
+    std::shared_ptr<class LooperDisplayFace> mLooperFace; // the progress bar and the count-in
+    bool mLooperLayersOpen = false;
+    std::vector<guitarfx::uiclient::Subscription> mLooperLayerSubs; // the Layers panel's feed
+    el::rect mLooperStripRect, mLooperLoopsRect, mLooperOptionsRect;
+    int mLooperMenu = 0; // the drop-down open from the strip: 1 Loops, 2 Options
+    std::weak_ptr<el::element> mLooperMenuLayer;
+    // The loop's name, typed in the strip and kept while it is rebuilt (the web's
+    // data-looper-title); Save names the loop with it.
+    std::shared_ptr<el::basic_input_box> mLooperTitleBox;
+    Ptr mLooperTitleField;
+    std::string mLooperTitleShown;
+    float mLooperBuiltHeight = 0.0f; // the strip's height as last built
+    bool mLibraryExportAll = false;  // Settings > Library: the whole library, not only what presets use
+    int mChainIcons = -1;            // the chain as icon tiles (1) or cards (0); -1 follows the setting
+    bool mChainAutoIcons = false;    // compact split: the cards did not fit, so tiles (BuildChain)
+    bool mChainAutoPass = false;     // BuildChain is building again as tiles
+    bool mChainDragIcons = false;    // which it was when that drag began
     guitarfx::uiclient::PresetTrail mPresetTrail;
     std::shared_ptr<guitarfx::uiclient::TapTempo> mTapTempo;
     bool mWrapChain = true;      // the web UI's signalPathWrapCompact, on unless turned off

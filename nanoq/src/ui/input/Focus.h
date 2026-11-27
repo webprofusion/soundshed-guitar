@@ -215,6 +215,12 @@ void FocusTargetUnder(el::view& view, el::element& root, const FocusTarget& targ
 /// value typed into it.
 [[nodiscard]] bool TypingUnder(el::element& root);
 
+/// Whether Shift is held now, for a wheel turn (Elements tells a scroll no modifiers): the
+/// keyboard's own state where the platform gives it, else the last key event's.
+[[nodiscard]] bool ShiftHeld();
+/// Notes the modifiers of a key event, for ShiftHeld where the platform cannot be asked.
+void NoteKeyModifiers(int modifiers);
+
 /// Gives `element` focus wherever it is in the view (the layer holding it takes focus too), for a
 /// control that starts typing from a pointer's double click. Call it outside the click (posted):
 /// the click's own handling ends focus on anything that did not want it when the button went

@@ -6,6 +6,7 @@
 
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/Drawn.h"
+#include "ui/input/Focus.h"
 #include "ui/widgets/Widgets.h"
 
 #include <algorithm>
@@ -165,7 +166,8 @@ class TempoReadout final : public el::element, public Drawn, public Focusable
     {
     }
 
-    std::function<void(int steps)> onWheel;
+    /// A wheel turn or Up / Down: `fine` (Shift held) steps in tenths.
+    std::function<void(int steps, bool fine)> onWheel;
     /// What the field opens with, and what was typed into it.
     std::function<std::string()> editText;
     std::function<void(const std::string& typed)> onTyped;
@@ -220,7 +222,8 @@ class TempoReadout final : public el::element, public Drawn, public Focusable
         if ((k.action == el::key_action::press || k.action == el::key_action::repeat) && onWheel &&
             (k.key == el::key_code::up || k.key == el::key_code::down))
         {
-            onWheel(k.key == el::key_code::up ? 1 : -1);
+            // Shift: tenths, where tapped tempos land (metronome.ts).
+            onWheel((k.key == el::key_code::up ? 1 : -1), (k.modifiers & el::mod_shift) != 0);
             return true;
         }
 
@@ -288,7 +291,7 @@ class TempoReadout final : public el::element, public Drawn, public Focusable
             return false;
         }
 
-        onWheel(dir.y > 0.0f ? 1 : -1);
+        onWheel(dir.y > 0.0f ? 1 : -1, ShiftHeld());
         return true;
     }
 

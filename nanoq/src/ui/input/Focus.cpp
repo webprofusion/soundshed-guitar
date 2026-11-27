@@ -9,6 +9,13 @@
 
 #include "ui/input/Focus.h"
 
+#ifdef _WIN32
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <windows.h>
+#endif
+
 #include <map>
 
 namespace nanoq::ui
@@ -260,6 +267,25 @@ bool TypingUnder(el::element& root)
 
     const auto* box = dynamic_cast<const el::basic_text_box*>(leaf);
     return box != nullptr && box->select_start() != -1;
+}
+
+namespace
+{
+int gKeyModifiers = 0;
+} // namespace
+
+void NoteKeyModifiers(int modifiers)
+{
+    gKeyModifiers = modifiers;
+}
+
+bool ShiftHeld()
+{
+#ifdef _WIN32
+    return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+#else
+    return (gKeyModifiers & el::mod_shift) != 0;
+#endif
 }
 
 bool FocusInView(el::view& view, el::element& element)

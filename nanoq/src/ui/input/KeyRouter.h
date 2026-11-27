@@ -169,6 +169,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
         }
 
         Tooltips::Press();
+        NoteKeyModifiers(k.modifiers);
 
         const bool press =
             k.action == cycfi::elements::key_action::press || k.action == cycfi::elements::key_action::repeat;

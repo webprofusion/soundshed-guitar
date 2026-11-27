@@ -1,6 +1,8 @@
 // The looper, as the web UI's looper strip has it (looper.ts, looper/strip.ts, looper/layers.ts):
 // docked over the footer while it is open, with the state button (Rec, Play, Dub), Stop, Undo,
-// Redo and Clear, the loop's waveform and playhead, its modes, and Layers, Loops and Options.
+// Redo and Clear, the loop's waveform, playhead and progress (and the count-in over them), the
+// loop's name and Save, its modes, and Layers (a panel under the row), Loops and Options (menus
+// that drop from their buttons and leave the strip live under them).
 // What a narrow strip has no room for is in Options (OpenLooperOptions).
 // The engine records and plays (LooperService*.cpp); this shows what it reports
 // (uiclient/Looper.h, Topic::Looper) and sends its commands. The Loop button in the footer shows
@@ -23,6 +25,59 @@ namespace nanoq::ui
 {
 using frame::ToolButton;
 using guitarfx::uiclient::Topic;
+
+/// Over the strip's display: the loop's progress along its foot (.looper-progress, 3 px) and,
+/// while it counts in, the beats left as a big number over a veil (.looper-countin).
+class LooperDisplayFace final : public el::element
+{
+  public:
+    explicit LooperDisplayFace(const Theme& theme) : mTheme(theme)
+    {
+    }
+
+    void Set(float progress, int countIn)
+    {
+        mProgress = std::clamp(progress, 0.0f, 1.0f);
+        mCountIn = countIn;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{0.0f, 0.0f}, {el::full_extent, el::full_extent}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const el::rect bar{b.left, b.bottom - 3.0f, b.right, b.bottom};
+        cnv.fill_style(mTheme.Input());
+        cnv.fill_round_rect(bar, 1.5f);
+
+        if (mProgress > 0.0f)
+        {
+            auto fill = bar;
+            fill.right = bar.left + std::max(3.0f, bar.width() * mProgress);
+            cnv.fill_style(mTheme.Text());
+            cnv.fill_round_rect(fill, 1.5f);
+        }
+
+        if (mCountIn > 0)
+        {
+            cnv.fill_style(mTheme.Bar().opacity(0.7f));
+            cnv.fill_rect(b);
+            FillText(cnv, std::to_string(mCountIn), Font(Weight::Title).size(34.0f), kDub, b, HAlign::Centre);
+        }
+    }
+
+    /// The web's --looper-dub.
+    static constexpr el::color kDub = el::rgba(224, 161, 42, 255);
+
+  private:
+    const Theme& mTheme;
+    float mProgress = 0.0f;
+    int mCountIn = 0;
+};
 
 namespace
 {
@@ -87,7 +142,34 @@ std::string Seconds(double seconds)
     std::snprintf(text, sizeof(text), "%.1f s", seconds);
     return text;
 }
+
+std::string Trimmed(const std::string& text)
+{
+    const auto first = text.find_first_not_of(" \t");
+
+    if (first == std::string::npos)
+    {
+        return {};
+    }
+
+    return text.substr(first, text.find_last_not_of(" \t") - first + 1);
+}
+
+/// One line per layer where the panel has the width for it (as the web's row), else two: its
+/// name and buttons over its Level and Balance.
+constexpr float kOneLineLayers = 1000.0f;
+constexpr float kLayerLine = 60.0f;  // a one-line layer, with its rule
+constexpr float kLayerLines = 95.0f; // a two-line layer
 } // namespace
+
+float Shell::LooperLayersHeight() const
+{
+    const auto count = static_cast<float>(mState.looper.layers.size());
+    const float rows =
+        count == 0.0f ? 40.0f : 39.0f + count * (StageWidth() >= kOneLineLayers ? kLayerLine : kLayerLines);
+    // As the web's max-height: 40vh, the rest scrolled.
+    return std::min(std::floor(ViewSize().y * 0.4f), rows + 10.0f);
+}
 
 bool Shell::LooperShown() const
 {
@@ -119,7 +201,8 @@ std::string Shell::LooperShape() const
            "|" + (l.canUndo ? "u" : "") + (l.canRedo ? "r" : "") + (l.dirty ? "d" : "") + (l.click ? "c" : "") +
            (l.tempoLocked ? "t" : "") + "|" + std::to_string(l.layerCount) + "|" + s.start + s.length +
            std::to_string(s.bars) + "|" + std::to_string(static_cast<int>(l.tempoBpm)) + "|" +
-           std::to_string(static_cast<int>(mState.metronome.bpm)) + "|" + l.projectTitle;
+           std::to_string(static_cast<int>(mState.metronome.bpm)) + "|" + l.projectTitle +
+           (mLooperLayersOpen ? "|L" + std::to_string(static_cast<int>(LooperLayersHeight())) : std::string());
 }
 
 Ptr Shell::BuildLooperStrip()
@@ -146,18 +229,22 @@ Ptr Shell::BuildLooperStrip()
     auto clear = ToolButton(mTheme, mIcons, "ui-trash", [this] { ClearLooperWithConfirm(); }, 28.0f, 14.0f);
     clear->Disabled(empty && !l.canRedo);
 
-    mLooperWave = std::make_shared<Waveform>(mTheme, 18.0f);
+    mLooperWave = std::make_shared<Waveform>(mTheme, 14.0f);
     mLooperWave->Colour(el::rgba(122, 162, 200, 255));
     mLooperStatus = std::make_shared<Text>(mTheme, "", 11.0f, Weight::SemiBold);
     mLooperTime = std::make_shared<Text>(mTheme, "", 11.0f);
     mLooperTime->Colour(mTheme.TextSecondary());
     mLooperBar = std::make_shared<Text>(mTheme, "", 11.0f);
     mLooperBar->Colour(mTheme.TextSecondary()).Alignment(HAlign::Right);
+    mLooperFace = std::make_shared<LooperDisplayFace>(mTheme);
     // Narrower columns on the smallest strip, so the layer count after them is not cut short.
     const bool narrow = !mWide && StageWidth() < 680.0f;
-    auto display = Col({FixedHeight(14, Row({FixedWidth(narrow ? 80.0f : 96.0f, mLooperStatus),
-                                             FixedWidth(narrow ? 90.0f : 100.0f, mLooperTime), mLooperBar})),
-                        VGap(2), mLooperWave});
+    // The readout, the waveform, and the progress bar the face draws along the foot.
+    Ptr display = el::share(
+        el::layer(el::hold(mLooperFace),
+                  el::hold(Col({FixedHeight(14, Row({FixedWidth(narrow ? 80.0f : 96.0f, mLooperStatus),
+                                                     FixedWidth(narrow ? 90.0f : 100.0f, mLooperTime), mLooperBar})),
+                                VGap(2), mLooperWave, VGap(4)}))));
 
     const auto segment = [this](const char* text, bool on, std::function<void()> onClick) {
         auto b = std::make_shared<Button>(mTheme, text, std::move(onClick), Button::Style::Plain);
@@ -170,17 +257,26 @@ Ptr Shell::BuildLooperStrip()
         return b;
     };
 
-    auto layers = tool("Layers", [this] { OpenLooperLayers(); });
+    auto layers = tool("Layers", [this] { ToggleLooperLayers(); });
+    layers->Selected(mLooperLayersOpen);
+    layers->AccessName(mLooperLayersOpen ? "Hide the loop's layers" : "Show the loop's layers");
     auto loops = tool("Loops", [this] { OpenLooperLoops(); });
+    loops->Tooltip("Saved loops");
     auto options = tool("Options", [this] { OpenLooperOptions(); });
+    options->Tooltip("Looper options");
+    // Where the menus hang from.
+    auto loopsAt = std::make_shared<BoundsProbe>(loops, [this](el::rect r) { mLooperLoopsRect = r; });
+    auto optionsAt = std::make_shared<BoundsProbe>(options, [this](el::rect r) { mLooperOptionsRect = r; });
 
     // What fits: the strip must never hold the window wider than it is. Options is always on
     // it, and what a narrow strip leaves out is in Options: the modes and Click, and in the
-    // compact layout Save, and Redo and Clear where they do not fit beside Undo (the compact
-    // strip with them is about 620 px; the stage is 580 at the smallest window). Each width
-    // threshold is a multiple of 40, as LooperShape rebuilds the strip in 40 px steps.
+    // compact layout the loop's name and Save, and Redo and Clear where they do not fit beside
+    // Undo (the compact strip with them is about 620 px; the stage is 580 at the smallest
+    // window). Each width threshold is a multiple of 40, as LooperShape rebuilds the strip in
+    // 40 px steps.
     const float width = StageWidth();
     std::vector<Ptr> row{HGap(10), mLooperMain, HGap(6), stop, HGap(2), undo};
+    std::vector<std::shared_ptr<Button>> faced{loops, options};
     // Touch sizes: the buttons are hit over 40 px (the icons 44 wide), drawn as before; Redo and
     // Clear then need 80 px more.
     const bool touch = metrics::Touch();
@@ -192,15 +288,64 @@ Ptr Shell::BuildLooperStrip()
 
     row.insert(row.end(), {HGap(narrow ? 8.0f : 12.0f), display, HGap(narrow ? 8.0f : 12.0f)});
 
-    if (mWide && width >= 1000.0f)
+    // The loop's project, as the web's: its name, the unsaved mark, Save and the saved loops.
+    if (mWide)
+    {
+        if (!mLooperTitleBox)
+        {
+            auto [element, box] = el::input_box("Untitled loop", Font(Weight::Regular).size(11.0f), 1.0f);
+            mLooperTitleBox = box;
+            mLooperTitleField = el::share(std::move(element));
+            box->on_enter = [this](std::string_view) {
+                if (mState.looper.layerCount > 0 && mLooperTitleBox)
+                {
+                    mSession.Commands().SaveLooperProject(Trimmed(mLooperTitleBox->get_utf8()));
+                }
+
+                return true;
+            };
+        }
+
+        // The engine's name, when it changes (a save, a load); what is being typed otherwise.
+        if (l.projectTitle != mLooperTitleShown)
+        {
+            mLooperTitleShown = l.projectTitle;
+            mLooperTitleBox->set_text(l.projectTitle);
+        }
+
+        auto save = tool("Save", [this] {
+            mSession.Commands().SaveLooperProject(mLooperTitleBox ? Trimmed(mLooperTitleBox->get_utf8())
+                                                                  : std::string());
+        });
+        save->Enabled(l.layerCount > 0);
+        faced.push_back(save);
+        row.insert(row.end(), {FixedWidth(130, Middle(FixedHeight(28, mLooperTitleField)))});
+
+        if (l.dirty)
+        {
+            auto dot = std::make_shared<Text>(mTheme, "\xE2\x80\xA2", 16.0f, Weight::SemiBold);
+            dot->Colour(LooperDisplayFace::kDub).Alignment(HAlign::Centre);
+            row.insert(row.end(), {FixedWidth(14, dot)});
+        }
+        else
+        {
+            row.push_back(HGap(6));
+        }
+
+        row.insert(row.end(), {save, HGap(4), loopsAt, HGap(12)});
+    }
+
+    if (mWide && width >= 1120.0f)
     {
         auto click =
             segment("Click", l.click, [this] { mSession.Commands().SetMetronomeEnabled(!mState.looper.click); });
         click->Dot(true).On(l.click);
+        click->Tooltip("The metronome as the loop's click: it stops with the loop and starts again in time with "
+                       "it. Saved with the loop.");
         row.insert(row.end(), {click, HGap(8)});
     }
 
-    if (mWide && width >= 1220.0f)
+    if (mWide && width >= 1400.0f)
     {
         auto press =
             segment("Press", s.start != "armed", [this] { mSession.Commands().SetLooper({{"start", "press"}}); });
@@ -221,6 +366,8 @@ Ptr Shell::BuildLooperStrip()
                 segment("+", false, [this, n] { mSession.Commands().SetLooper({{"bars", std::min(64, n + 1)}}); });
             fewer->MinWidth(26);
             more->MinWidth(26);
+            fewer->AccessName("Fewer bars");
+            more->AccessName("More bars");
             auto count = std::make_shared<Text>(mTheme, std::to_string(n), 11.0f, Weight::SemiBold);
             count->Alignment(HAlign::Centre);
             row.insert(row.end(), {HGap(4), fewer, FixedWidth(26, count), more});
@@ -231,18 +378,17 @@ Ptr Shell::BuildLooperStrip()
         std::snprintf(bpm, sizeof(bpm), "%.0f BPM", l.tempoBpm > 0.0 ? l.tempoBpm : mState.metronome.bpm);
         auto tempo = segment(bpm, l.tempoLocked, [this] { OpenMetronome(); });
         tempo->MinWidth(70);
+        tempo->Tooltip(l.tempoLocked ? "Tempo locked to the loop" : "Open the metronome");
         row.insert(row.end(), {HGap(8), tempo, HGap(8)});
     }
 
     if (mWide)
     {
-        auto save = tool(l.dirty ? "Save \xE2\x80\xA2" : "Save", [this] { SaveLooperWithPrompt(); });
-        save->Enabled(l.layerCount > 0);
-        row.insert(row.end(), {layers, HGap(4), loops, HGap(4), options, HGap(4), save, HGap(10)});
+        row.insert(row.end(), {optionsAt, HGap(4), layers, HGap(10)});
     }
     else
     {
-        row.insert(row.end(), {layers, HGap(4), loops, HGap(4), options, HGap(8)});
+        row.insert(row.end(), {layers, HGap(4), loopsAt, HGap(4), optionsAt, HGap(8)});
     }
 
     SyncLooperLive();
@@ -252,7 +398,7 @@ Ptr Shell::BuildLooperStrip()
 
     if (touch)
     {
-        const float face = LooperStripHeight() - 16.0f;
+        const float face = LooperRowHeight() - 16.0f;
 
         for (auto& e : row)
         {
@@ -262,13 +408,45 @@ Ptr Shell::BuildLooperStrip()
             }
         }
 
+        for (auto& b : faced)
+        {
+            b->FaceHeight(face);
+        }
+
         std::replace(row.begin(), row.end(), display, Middle(FixedHeight(face, display)));
     }
 
+    Ptr strip = FixedHeight(LooperRowHeight(), Fill(mTheme.Bar(), PadXY(0, padY, Row(row))));
+
+    if (mLooperLayersOpen)
+    {
+        strip = Col({strip, FixedHeight(LooperLayersHeight(), Fill(mTheme.Bar(), PadXY(12, 0, BuildLooperLayers())))});
+    }
+    else
+    {
+        mLooperLayerSubs.clear();
+    }
+
+    // Where a tap leaves its menus open (ShowLooperMenu).
+    strip = std::make_shared<BoundsProbe>(strip, [this](el::rect r) { mLooperStripRect = r; });
+
     // No minimum width: a strip built for a wider window must not hold the window at that width
     // while the window shrinks; it is rebuilt for the new width at the next tick (LooperShape).
-    return el::share(
-        WidthYielding(el::hold_any(FixedHeight(LooperStripHeight(), Fill(mTheme.Bar(), PadXY(0, padY, Row(row)))))));
+    return el::share(WidthYielding(el::hold_any(strip)));
+}
+
+void Shell::ToggleLooperLayers()
+{
+    // After the press: the strip it is on is rebuilt.
+    mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive)] {
+        if (!alive.lock())
+        {
+            return;
+        }
+
+        mLooperLayersOpen = !mLooperLayersOpen;
+        SyncLooper();
+    });
 }
 
 void Shell::SyncLooperLive()
@@ -283,14 +461,9 @@ void Shell::SyncLooperLive()
     const double position = guitarfx::uiclient::LooperPositionNow(l, now);
 
     mLooperMain->Set(guitarfx::uiclient::LooperMainButtonLabel(l.state));
-    std::string status = guitarfx::uiclient::LooperStatusLabel(l.state);
-
-    if (l.state == "countIn" && l.countInBeatsLeft > 0)
-    {
-        status += " " + std::to_string(l.countInBeatsLeft);
-    }
-
-    mLooperStatus->Set(status);
+    mLooperStatus->Set(guitarfx::uiclient::LooperStatusLabel(l.state));
+    mLooperFace->Set(l.lengthSec > 0.0 ? static_cast<float>(position / l.lengthSec) : 0.0f,
+                     l.state == "countIn" ? l.countInBeatsLeft : 0);
     mLooperStatus->Colour(l.state == "recording" || l.state == "overdubbing" ? mTheme.Error() : mTheme.Text());
     mLooperTime->Set(guitarfx::uiclient::LooperTimeText(l, position));
     mLooperBar->Set(guitarfx::uiclient::LooperBarText(l));
@@ -332,6 +505,9 @@ void Shell::SyncLooper()
         {
             mLooperWave.reset();
             mLooperMain.reset();
+            mLooperFace.reset();
+            mLooperLayerSubs.clear();
+            CloseLooperMenu(mLooperMenu);
             Fill(*mLooperSlot, FixedHeight(0, std::make_shared<el::element>()));
             mLooperShape.clear();
             mSession.View().layout();
@@ -343,17 +519,26 @@ void Shell::SyncLooper()
 
     if (const auto shape = LooperShape(); shape != mLooperShape)
     {
-        // Rebuilt while open it keeps its height, so only it is redrawn.
+        // Rebuilt at the height it had, only it is redrawn; at another (the Layers panel opened,
+        // closed or grown), the stage over it is sized again.
         const bool wasOpen = static_cast<bool>(mLooperWave);
+        const float height = LooperStripHeight();
+        const bool resized = !wasOpen || height != mLooperBuiltHeight;
         mLooperShape = shape;
+        mLooperBuiltHeight = height;
         Fill(*mLooperSlot, BuildLooperStrip());
 
-        if (wasOpen)
+        if (!resized)
         {
             mSession.View().layout(*mLooperSlot);
         }
         else
         {
+            if (wasOpen)
+            {
+                Mark(kTransport | kChain | kPage | kRail);
+            }
+
             mSession.View().layout();
             mSession.View().refresh();
         }
@@ -368,7 +553,7 @@ void Shell::SyncLooper()
 void Shell::RepaintLooperLive()
 {
     for (el::element* e : std::initializer_list<el::element*>{mLooperWave.get(), mLooperTime.get(), mLooperStatus.get(),
-                                                              mLooperBar.get(), mLooperMain.get()})
+                                                              mLooperBar.get(), mLooperMain.get(), mLooperFace.get()})
     {
         if (e != nullptr)
         {
@@ -387,16 +572,18 @@ void Shell::TickLooper()
     }
 }
 
-void Shell::OpenLooperLayers()
+Ptr Shell::BuildLooperLayers()
 {
-    CloseOverlay();
+    mLooperLayerSubs.clear();
     auto body = MakeSlot();
     auto signature = std::make_shared<std::string>("-");
+    auto built = std::make_shared<bool>(false);
     // Each layer's level and balance sliders, kept so the engine's echo moves them in place.
     auto sliders = std::make_shared<
         std::vector<std::pair<std::string, std::pair<std::shared_ptr<ParamSlider>, std::shared_ptr<ParamSlider>>>>>();
+    const bool oneLine = StageWidth() >= kOneLineLayers;
 
-    auto rebuild = [this, body, signature, sliders] {
+    auto rebuild = [this, body, signature, sliders, built, oneLine] {
         const auto& l = mState.looper;
         std::string s;
 
@@ -419,6 +606,14 @@ void Shell::OpenLooperLayers()
                 none->Colour(mTheme.TextSecondary());
                 rows.push_back(FixedHeight(40, none));
             }
+            else
+            {
+                auto all = std::make_shared<Button>(
+                    mTheme, "Re-amp all with the current rig", [this] { mSession.Commands().RetoneLooperLayers({}); },
+                    Button::Style::Plain);
+                all->MinWidth(220).TextSize(10.5f);
+                rows.push_back(FixedHeight(34, Row({Middle(FixedHeight(28, all)), Stretch()})));
+            }
 
             for (const auto& layer : l.layers)
             {
@@ -433,15 +628,10 @@ void Shell::OpenLooperLayers()
                 auto title = button(layer.title.empty() ? id : layer.title, [this, id, current = layer.title] {
                     OpenPrompt("Rename layer", current, "Rename", [this, id](const std::string& text) {
                         mSession.Commands().SetLooperLayer(id, {{"title", text.substr(0, 80)}});
-                        mSession.View().post([this, alive = mAlive] {
-                            if (*alive)
-                            {
-                                OpenLooperLayers();
-                            }
-                        });
                     });
                 });
                 title->MinWidth(110).Alignment(HAlign::Left);
+                title->AccessName("Layer name");
                 const bool retoning = layer.retoneProgress >= 0.0;
                 char retone[48];
                 std::snprintf(retone, sizeof(retone), "Re-amping %d%%",
@@ -451,12 +641,14 @@ void Shell::OpenLooperLayers()
                                                   (layer.toneChanged ? " \xE2\x80\xA2" : ""),
                                    [this, id] { mSession.Commands().RetoneLooperLayers({id}); });
                 tone->MinWidth(120).Enabled(!layer.recording && !retoning);
-                std::vector<Ptr> first{FixedWidth(10, FixedHeight(18, swatch)), HGap(8), title, HGap(6), tone};
+                tone->Tooltip("Played through this preset. Click to re-amp with the current rig.");
+                std::vector<Ptr> first{Middle(FixedWidth(10, FixedHeight(18, swatch))), HGap(8), title, HGap(6), tone};
 
                 if (layer.canRevert)
                 {
                     auto revert =
                         button("\xE2\x86\xBA", [this, id] { mSession.Commands().RetoneLooperLayers({id}, true); });
+                    revert->Tooltip("Back to the recorded tone");
                     first.insert(first.end(), {HGap(4), revert});
                 }
 
@@ -467,14 +659,15 @@ void Shell::OpenLooperLayers()
                     first.insert(first.end(), {HGap(8), FixedWidth(70, tag)});
                 }
 
-                first.push_back(Stretch());
                 auto mute = button(
                     "M", [this, id, on = layer.muted] { mSession.Commands().SetLooperLayer(id, {{"muted", !on}}); });
                 mute->Selected(layer.muted);
+                mute->Tooltip("Mute");
                 auto solo = button(
                     "S", [this, id, on = layer.solo] { mSession.Commands().SetLooperLayer(id, {{"solo", !on}}); });
                 solo->Selected(layer.solo);
-                first.insert(first.end(), {mute, HGap(2), solo});
+                solo->Tooltip("Solo");
+                std::vector<Ptr> flags{mute, HGap(2), solo};
 
                 if (!layer.recording)
                 {
@@ -483,12 +676,15 @@ void Shell::OpenLooperLayers()
                         OpenRiffCapture(false);
                         mSession.Commands().ExportLooperLayer(id, "riff");
                     });
+                    riff->Tooltip("Send this layer's DI to the riff library as a take");
                     auto wav = button("WAV", [this, id] { mSession.Commands().ExportLooperLayer(id, "wetWav"); });
-                    first.insert(first.end(), {HGap(6), riff, HGap(2), wav});
+                    wav->Tooltip("Save this layer's sound as a WAV file");
+                    flags.insert(flags.end(), {HGap(6), riff, HGap(2), wav});
                 }
 
                 auto remove = button("\xC3\x97", [this, id] { mSession.Commands().RemoveLooperLayer(id); });
-                first.insert(first.end(), {HGap(6), remove});
+                remove->Tooltip("Remove layer");
+                flags.insert(flags.end(), {HGap(6), remove});
 
                 auto level = std::make_shared<ParamSlider>(mTheme, "Level");
                 level->onChange = [this, id](double v) {
@@ -502,16 +698,38 @@ void Shell::OpenLooperLayers()
                 balance->onReset = [this, id] { mSession.Commands().SetLooperLayer(id, {{"balance", 0.0}}); };
                 sliders->push_back({id, {level, balance}});
 
-                rows.push_back(FixedHeight(30, Row(first)));
-                rows.push_back(FixedHeight(52, Row({HGap(18), level, HGap(12), balance})));
-                rows.push_back(VGap(6));
+                if (oneLine)
+                {
+                    // As the web's row: the name and tone, Level and Balance, then the flags.
+                    rows.push_back(FixedHeight(52, Row({Middle(FixedHeight(30, Tight(first))), HGap(16),
+                                                        FixedWidth(170, level), HGap(12), FixedWidth(170, balance),
+                                                        HGap(16), Middle(FixedHeight(30, Tight(flags))), Stretch()})));
+                    rows.push_back(VGap(3));
+                }
+                else
+                {
+                    first.push_back(Stretch());
+                    first.insert(first.end(), flags.begin(), flags.end());
+                    rows.push_back(FixedHeight(30, Row(first)));
+                    rows.push_back(FixedHeight(52, Row({HGap(18), level, HGap(12), balance})));
+                    rows.push_back(VGap(6));
+                }
+
                 rows.push_back(FixedHeight(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
-                rows.push_back(VGap(6));
+                rows.push_back(VGap(oneLine ? 4.0f : 6.0f));
             }
 
-            Fill(*body, VScroll(Col(rows)));
-            mSession.View().layout();
+            // A gutter at the right for the scroll bar.
+            Fill(*body, VScroll(Pad(0, 0, 14, 0, Col(rows))));
+
+            // The first build is laid out with the strip it is in.
+            if (*built)
+            {
+                mSession.View().layout(*body);
+            }
         }
+
+        *built = true;
 
         // The sliders follow the engine, except the one under the pointer.
         for (const auto& [id, pair] : *sliders)
@@ -544,24 +762,48 @@ void Shell::OpenLooperLayers()
         }
     };
 
-    auto all = std::make_shared<Button>(
-        mTheme, "Re-amp all with the current rig", [this] { mSession.Commands().RetoneLooperLayers({}); },
-        Button::Style::Plain);
-    all->MinWidth(220);
-    const auto view = ViewSize();
-    ShowDialog({.title = "Loop Layers",
-                .body = body,
-                .headerExtras = {all},
-                .width = 720.0f,
-                .height = std::min(560.0f, std::max(260.0f, view.y - 60.0f)),
-                .padY = 12.0f});
-    mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Looper, rebuild));
+    mLooperLayerSubs.push_back(mSession.Client().Subscribe(Topic::Looper, rebuild));
     rebuild();
+    // A rule between the strip's row and its layers.
+    return Col({FixedHeight(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())), VGap(4), body});
+}
+
+bool Shell::CloseLooperMenu(int menu)
+{
+    const auto layer = mLooperMenuLayer.lock();
+
+    if (!layer || layer != mOverlay)
+    {
+        mLooperMenu = 0;
+        return false;
+    }
+
+    if (menu == 0 || mLooperMenu != menu)
+    {
+        return false;
+    }
+
+    CloseOverlay();
+    mLooperMenu = 0;
+    return true;
+}
+
+void Shell::ShowLooperMenu(int menu, Ptr body, el::rect anchor, float width, float height)
+{
+    // Up from its button, as the web's .looper-options-body and .looper-projects-body; a tap on
+    // the strip goes to the strip and leaves it open.
+    ShowPopover(PadXY(12, 10, std::move(body)), anchor, width, height, true, mLooperStripRect);
+    mLooperMenu = menu;
+    mLooperMenuLayer = mOverlay;
 }
 
 void Shell::OpenLooperLoops()
 {
-    CloseOverlay();
+    if (CloseLooperMenu(1))
+    {
+        return;
+    }
+
     mSession.Commands().GetLooperProjects();
     auto body = MakeSlot();
     auto signature = std::make_shared<std::string>("-");
@@ -601,15 +843,18 @@ void Shell::OpenLooperLoops()
 
         if (l.recoverable)
         {
+            // As the web's .looper-project-recover: the note in the dub colour, its buttons under it.
             auto note = std::make_shared<Text>(mTheme, "The last session ended with an unsaved loop.", 12.0f);
+            note->Colour(LooperDisplayFace::kDub);
+            rows.push_back(FixedHeight(22, note));
             rows.push_back(FixedHeight(
-                34, Row({note, Stretch(),
-                         button("Recover",
-                                [this] {
-                                    mSession.Commands().RecoverLooperSession();
-                                    CloseOverlay();
-                                }),
-                         HGap(4), button("Discard", [this] { mSession.Commands().DismissLooperRecovery(); })})));
+                36,
+                Row({button("Recover",
+                            [this] {
+                                mSession.Commands().RecoverLooperSession();
+                                CloseOverlay();
+                            }),
+                     HGap(4), button("Discard", [this] { mSession.Commands().DismissLooperRecovery(); }), Stretch()})));
             rows.push_back(VGap(8));
         }
 
@@ -624,8 +869,25 @@ void Shell::OpenLooperLoops()
 
         for (const auto& p : l.projects)
         {
-            auto title = std::make_shared<Text>(mTheme, p.title + (p.id == l.projectId ? "  (open)" : ""), 12.5f,
-                                                Weight::SemiBold);
+            // As the web's row: the name opens it, then what it holds, then a x deletes it.
+            const std::string titleText = p.title.empty() ? std::string("Untitled loop") : p.title;
+            auto open = std::make_shared<Button>(
+                mTheme, titleText,
+                [this, id = p.id] {
+                    if (!mState.looper.dirty)
+                    {
+                        mSession.Commands().LoadLooperProject(id);
+                        CloseOverlay();
+                        return;
+                    }
+
+                    OpenConfirm("Open loop", "The loop playing now has not been saved.", "Open",
+                                [this, id] { mSession.Commands().LoadLooperProject(id); });
+                },
+                Button::Style::Plain);
+            open->Flexible(true).MinWidth(80).TextSize(11.0f).Alignment(HAlign::Left);
+            open->Selected(p.id == l.projectId);
+            open->Tooltip("Open");
             std::string detail = Seconds(p.lengthSec) + " \xC2\xB7 " + std::to_string(p.layerCount) +
                                  (p.layerCount == 1 ? " layer" : " layers");
 
@@ -636,31 +898,25 @@ void Shell::OpenLooperLoops()
 
             auto meta = std::make_shared<Text>(mTheme, detail, 10.5f);
             meta->Colour(mTheme.TextSecondary());
-            auto open = button("Open", [this, id = p.id] {
-                if (!mState.looper.dirty)
-                {
-                    mSession.Commands().LoadLooperProject(id);
-                    CloseOverlay();
-                    return;
-                }
-
-                OpenConfirm("Open loop", "The loop playing now has not been saved.", "Open",
-                            [this, id] { mSession.Commands().LoadLooperProject(id); });
-            });
-            auto remove = button("Delete", [this, id = p.id, titleText = p.title] {
-                OpenConfirm("Delete loop", "\"" + titleText + "\" is deleted.", "Delete", [this, id] {
-                    mSession.Commands().DeleteLooperProject(id);
-                    mSession.View().post([this, alive = mAlive] {
-                        if (*alive)
-                        {
-                            OpenLooperLoops();
-                        }
+            auto remove = std::make_shared<Button>(
+                mTheme, "\xC3\x97",
+                [this, id = p.id, titleText] {
+                    OpenConfirm("Delete loop", "\"" + titleText + "\" is deleted.", "Delete", [this, id] {
+                        mSession.Commands().DeleteLooperProject(id);
+                        mSession.View().post([this, alive = mAlive] {
+                            if (*alive)
+                            {
+                                OpenLooperLoops();
+                            }
+                        });
                     });
-                });
-            });
-            rows.push_back(FixedHeight(
-                36, Row({Col({FixedHeight(18, title), FixedHeight(16, meta)}), Stretch(), open, HGap(4), remove})));
-            rows.push_back(VGap(4));
+                },
+                Button::Style::Plain);
+            remove->MinWidth(28).TextSize(12.0f);
+            remove->Tooltip("Delete");
+            remove->AccessName("Delete loop");
+            rows.push_back(FixedHeight(34, Row({Middle(FixedHeight(28, open)), HGap(8), FixedWidth(140, meta), HGap(4),
+                                                Middle(FixedHeight(28, remove))})));
         }
 
         rows.push_back(VGap(8));
@@ -709,12 +965,11 @@ void Shell::OpenLooperLoops()
         mSession.View().refresh();
     };
 
-    const auto view = ViewSize();
-    ShowDialog({.title = "Loops",
-                .body = body,
-                .width = 560.0f,
-                .height = std::min(520.0f, std::max(260.0f, view.y - 60.0f)),
-                .padY = 12.0f});
+    // Up to half the window, as the web's max-height: 50vh, the rest scrolled.
+    const auto& l = mState.looper;
+    const float listed = (l.recoverable ? 66.0f : 0.0f) + 24.0f + std::max<float>(1.0f, l.projects.size()) * 34.0f +
+                         32.0f + std::max<float>(1.0f, mState.riffs.riffs.size()) * 32.0f + 20.0f;
+    ShowLooperMenu(1, body, mLooperLoopsRect, 440.0f, std::clamp(listed, 180.0f, std::floor(ViewSize().y * 0.5f)));
     mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Looper, rebuild));
     mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Riffs, rebuild));
     rebuild();
@@ -722,13 +977,17 @@ void Shell::OpenLooperLoops()
 
 void Shell::OpenLooperOptions()
 {
-    CloseOverlay();
+    if (CloseLooperMenu(2))
+    {
+        return;
+    }
+
     std::vector<Ptr> page;
     std::vector<std::function<void()>> syncs;
     const auto label = [this](const char* text) {
         auto l = std::make_shared<Text>(mTheme, text, 12.0f);
         l->Colour(mTheme.TextSecondary());
-        return FixedWidth(170, l);
+        return FixedWidth(150, l);
     };
     // A row of options, one lit, each sending its value.
     const auto choice = [&](const char* title, std::vector<std::pair<std::string, nlohmann::json>> options,
@@ -815,8 +1074,15 @@ void Shell::OpenLooperOptions()
     }
     choice("Count-in", {{"None", 0}, {"1 bar", 1}, {"2 bars", 2}}, "countInBars",
            [s] { return nlohmann::json(s().countInBars); });
-    choice("Click while recording", {{"On", true}, {"Off", false}}, "clickWhileRecording",
-           [s] { return nlohmann::json(s().clickWhileRecording); });
+    {
+        // A tick box, as the web's.
+        auto box = std::make_shared<CheckBox>(mTheme, "Click while recording", 12.0f);
+        box->onClick = [this] {
+            mSession.Commands().SetLooper({{"clickWhileRecording", !mState.looper.settings.clickWhileRecording}});
+        };
+        page.push_back(FixedHeight(36, Row({Middle(box), Stretch()})));
+        syncs.push_back([this, box] { box->Set(mState.looper.settings.clickWhileRecording); });
+    }
     choice("After a Bars take", {{"Play", "play"}, {"Overdub", "overdub"}}, "afterRecord",
            [s] { return nlohmann::json(s().afterRecord); });
     choice("Longest loop", {{"30 s", 30}, {"60 s", 60}, {"120 s", 120}, {"300 s", 300}}, "maxSeconds",
@@ -844,8 +1110,8 @@ void Shell::OpenLooperOptions()
         memory->Set(text);
     });
 
-    // Tall enough for every row; a shorter window scrolls it (ShowDialog).
-    ShowDialog({.title = "Looper Options", .body = Col(page), .width = 560.0f, .height = mWide ? 484.0f : 524.0f});
+    // Tall enough for every row; a shorter window scrolls it.
+    ShowLooperMenu(2, VScroll(Col(page)), mLooperOptionsRect, 480.0f, mWide ? 396.0f : 436.0f);
 
     // Redrawn only when an option, the memory or what the loop allows moved: the looper reports
     // several times a second while it plays.

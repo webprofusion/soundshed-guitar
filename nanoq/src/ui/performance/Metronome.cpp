@@ -154,7 +154,9 @@ void Shell::OpenMetronome()
 
     // ── The tempo, TAP, the rhythm and the transport ──
     auto readout = std::make_shared<TempoReadout>(mTheme);
-    readout->onWheel = [this, setBpm](int steps) { setBpm(mState.metronome.bpm + steps); };
+    readout->onWheel = [this, setBpm](int steps, bool fine) {
+        setBpm(mState.metronome.bpm + steps * (fine ? 0.1 : 1.0));
+    };
     // A tempo typed in where it shows, as the web UI's number field takes one.
     readout->editText = [this] { return Fixed(mState.metronome.bpm, 1); };
     readout->onTyped = [setBpm](const std::string& text) {

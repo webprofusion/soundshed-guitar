@@ -152,7 +152,24 @@ class TunerFace final : public el::element, public Drawn
         cnv.add_circle(cycfi::artist::circle({(left + right) * 0.5f, trackY}, kPuck));
         cnv.stroke();
 
-        const float x = left + (right - left) * static_cast<float>(r.detected ? r.needle : 0.5);
+        // The puck slides to the reading (.tuner-puck's left 0.15 s ease-out) rather than jumping:
+        // it closes most of the way in that time and is drawn again until it is there.
+        const float target = static_cast<float>(r.detected ? r.needle : 0.5);
+        const double now = UiSession::Now();
+        const float dt = static_cast<float>(std::clamp(now - mShownAt, 0.0, 0.1));
+        mShownAt = now;
+        mShown += (target - mShown) * (1.0f - std::exp(-dt / 0.05f));
+
+        if (std::abs(target - mShown) > 0.001f)
+        {
+            RepaintSoon(b);
+        }
+        else
+        {
+            mShown = target;
+        }
+
+        const float x = left + (right - left) * mShown;
         const el::color fill = !r.detected ? mTheme.ModalRule().opacity(0.5f)
                                : r.inTune  ? mTheme.Success()
                                            : mTheme.Accent();
@@ -205,6 +222,8 @@ class TunerFace final : public el::element, public Drawn
     }
 
   private:
+    float mShown = 0.5f; // where the puck is drawn, sliding to the reading
+    double mShownAt = 0.0;
     const Theme& mTheme;
     bool mCompact = false;
     guitarfx::uiclient::TunerModel::Reading mReading;
@@ -306,6 +325,8 @@ void Shell::OpenTuner()
 
         // As the web UI's .tuner-mute-btn: muted, it takes the accent.
         mute->Ink(t.liveMode ? mTheme.ModalTextMuted() : mTheme.Accent());
+        mute->Tooltip(t.liveMode ? "Mute output while tuning" : "Unmute output");
+        mute->AccessName(t.liveMode ? "Mute output while tuning" : "Unmute output");
         live->Set(t.liveMode);
         reference->Set(Fixed(t.referenceFrequency, 1));
         units->Select(gTunerShowsHz ? 1 : 0);

@@ -3,6 +3,8 @@
 
 #include "ui/shell/Shell.h"
 
+#include <optional>
+
 #include <algorithm>
 #include <cmath>
 
@@ -15,8 +17,21 @@ namespace
 class ClickCatcher final : public el::element
 {
   public:
-    explicit ClickCatcher(std::function<void()> onClick) : mOnClick(std::move(onClick))
+    explicit ClickCatcher(std::function<void()> onClick, std::optional<el::rect> passThrough = std::nullopt)
+        : mOnClick(std::move(onClick)), mPassThrough(passThrough)
     {
+    }
+
+    /// Nothing under it in `passThrough`: a tap there reaches what is under the layer, which
+    /// stays open (the looper strip under its Loops and Options drop-downs, as the web's).
+    el::element* hit_test(const el::context& ctx, el::point p, bool leaf, bool control) override
+    {
+        if (mPassThrough && mPassThrough->includes(p))
+        {
+            return nullptr;
+        }
+
+        return el::element::hit_test(ctx, p, leaf, control);
     }
 
     bool click(const el::context&, el::mouse_button btn) override
@@ -36,6 +51,7 @@ class ClickCatcher final : public el::element
 
   private:
     std::function<void()> mOnClick;
+    std::optional<el::rect> mPassThrough;
 };
 
 /// A row of a drop-down (.preset-extra-action-item): 12 px text, a hover wash, a tick when chosen.
@@ -225,7 +241,7 @@ class MenuNote final : public el::element
 } // namespace
 
 Ptr Shell::PlacePanel(Ptr panel, el::rect anchor, float width, float height, bool above,
-                      std::function<void()> onOutside)
+                      std::function<void()> onOutside, std::optional<el::rect> passThrough)
 {
     const auto view = ViewSize();
     width = std::min(width, view.x - 16.0f);
@@ -239,10 +255,11 @@ Ptr Shell::PlacePanel(Ptr panel, el::rect anchor, float width, float height, boo
     auto face = Over(std::move(panel), el::share(Surface(mTheme.Bar(), mTheme.ModalRule(), 10.0f)));
     auto placed = Pad(x, y, std::max(0.0f, view.x - x - width), std::max(0.0f, view.y - y - height),
                       FixedWidth(width, FixedHeight(height, Expand(face))));
-    return Over(placed, std::make_shared<ClickCatcher>(std::move(onOutside)));
+    return Over(placed, std::make_shared<ClickCatcher>(std::move(onOutside), passThrough));
 }
 
-void Shell::ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above)
+void Shell::ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above,
+                        std::optional<el::rect> passThrough)
 {
     CloseOverlay();
 
@@ -255,7 +272,8 @@ void Shell::ShowPopover(Ptr panel, el::rect anchor, float width, float height, b
     // It fades while a preset dragged out of it is elsewhere (PresetDrag.cpp).
     *mOverlayAlpha = 1.0f;
     mOverlay = KeyLayer(std::make_shared<FadeLayer>(
-        mOverlayAlpha, PlacePanel(std::move(panel), anchor, width, height, above, [this] { CloseOverlay(); })));
+        mOverlayAlpha,
+        PlacePanel(std::move(panel), anchor, width, height, above, [this] { CloseOverlay(); }, passThrough)));
     mSession.View().add(mOverlay);
 }
 
