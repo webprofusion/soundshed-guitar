@@ -246,6 +246,8 @@ class UiCommands
     /// the stored one whole.
     void PatchUiSettings(const nlohmann::json& patch);
     void AudioDevice(const std::string& action, nlohmann::json payload = nlohmann::json::object());
+    /// Runs a 440 Hz tone through the chain for a second; the result arrives as a notification.
+    void RunSignalPathTest();
     void OpenUrl(const std::string& url);
 
     // ── Tone sharing ────────────────────────────────────────────────────────────

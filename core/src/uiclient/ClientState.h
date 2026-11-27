@@ -481,6 +481,9 @@ struct MixerState
     double masterGain = 1.0;
     double mixGainDb = 0.0; // the Multi-Rig's own level
     bool limiterEnabled = false;
+    /// What this instance runs for Full Level on Mono Outputs; a plugin instance keeps its own
+    /// from when it was added. Unknown until a full state says.
+    std::optional<bool> monoOutputUnity;
     std::vector<std::string> activePresetIds;
     std::map<std::string, std::string> presetNames;
     std::map<std::string, MixerSlot> slots; // by preset id

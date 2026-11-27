@@ -8,6 +8,7 @@
 // While the page is on screen the input meter runs on uiclient's level lease, which it renews
 // itself; leaving the page lets it go.
 
+#include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/Shell.h"
 
 #include <algorithm>
@@ -277,7 +278,7 @@ void Shell::DeviceRequest(const std::string& action, nlohmann::json args)
     mSession.Commands().AudioDevice(action, std::move(args));
 }
 
-Ptr Shell::BuildDeviceSection()
+Ptr Shell::BuildDeviceSection(bool midi)
 {
     if (!mDevicePage)
     {
@@ -294,45 +295,47 @@ Ptr Shell::BuildDeviceSection()
         return VGap(0);
     }
 
+    if (midi)
+    {
+        return BuildDeviceContent(true);
+    }
+
     page.slot = MakeSlot();
     page.signature = mState.device.state.dump() + "\n" + page.error + (mState.device.known ? "1" : "0");
-    Fill(*page.slot, BuildDeviceContent());
+    Fill(*page.slot, BuildDeviceContent(false));
     return page.slot;
 }
 
-Ptr Shell::BuildDeviceContent()
+Ptr Shell::BuildDeviceContent(bool midi)
 {
     auto& page = *mDevicePage;
     const auto& device = mState.device;
     const auto& s = device.state;
     std::vector<Ptr> rows;
 
-    // The card's inner width, as SettingsPage.cpp works it out. At 640 the 190 px labels and 340 px
-    // device lists with Test beside them ran past the card's right edge: the labels and lists
-    // narrow to leave room for the button.
+    // The card's inner width, as SettingsPage.cpp works it out. The labels are Settings' 230 px
+    // capitals while the device lists (at least 200) and Test fit beside them; narrower, they
+    // close to 120 to leave the lists room.
     const float room = StageWidth() - (mWide ? 245.0f : 0.0f) - (mWide ? 48.0f : metrics::kPagePad + 14.0f) - 46.0f;
-    const float labelWidth = room >= 190.0f + 340.0f + 104.0f ? 190.0f : 120.0f;
+    const float labelWidth = room >= 242.0f + 200.0f + 104.0f ? 242.0f : 132.0f;
     const float wideWidth = std::clamp(room - labelWidth - 104.0f, 200.0f, 340.0f);
     const float narrowWidth = std::min(220.0f, wideWidth);
 
-    auto heading = [&](const char* text) {
-        auto t = std::make_shared<Text>(mTheme, text, 11.0f, Weight::SemiBold);
-        t->Colour(mTheme.TextMuted());
-        rows.push_back(FixedHeight(32, PadXY(0, 6, t)));
-    };
+    // The label in capitals at the left, as every Settings row has it.
     auto label = [&](const std::string& text) {
-        auto l = std::make_shared<Text>(mTheme, text, metrics::kTextSize);
+        auto l = std::make_shared<Text>(mTheme, Upper(text), 11.0f, Weight::SemiBold);
         l->Colour(mTheme.TextSecondary());
         return FixedWidth(labelWidth, Middle(l));
     };
-    // A muted line under a control, indented to the controls' column.
+    // A muted line under a control, indented to the controls' column; it wraps.
     auto hint = [&](const std::string& text, bool warning = false) {
-        auto t = std::make_shared<Text>(mTheme, text, metrics::kSmallText);
-        t->Colour(warning ? mTheme.Warning() : mTheme.TextMuted());
-        rows.push_back(FixedHeight(22, Row({HGap(labelWidth), t})));
+        auto p = std::make_shared<Paragraph>(mTheme, text, std::max(160.0f, room - labelWidth), 11.5f);
+        p->Colour(warning ? mTheme.Warning() : mTheme.TextSecondary());
+        rows.push_back(Row({HGap(labelWidth), el::share(el::hold_any(p)), Stretch()}));
+        rows.push_back(VGap(8));
     };
     auto select = [&](const std::vector<Option>& options, const std::string& selected, float width, bool enabled,
-                      std::function<void(const std::string&)> onPick) -> Ptr {
+                      std::function<void(const std::string&)> onPick, const std::string& name) -> Ptr {
         std::string shown = selected;
 
         for (const auto& [value, text] : options)
@@ -345,6 +348,7 @@ Ptr Shell::BuildDeviceContent()
 
         auto box = std::make_shared<SelectBox>(mTheme, mIcons, shown, width);
         box->Enabled(enabled);
+        box->AccessName(name);
         box->onClick = [this, b = box.get(), options, selected, width, onPick] {
             std::vector<MenuItem> items;
 
@@ -373,8 +377,103 @@ Ptr Shell::BuildDeviceContent()
         b->MinWidth(96).TextSize(metrics::kSmallText).Enabled(enabled);
         return Middle(b);
     };
+    auto toggle = [&](const std::string& name, bool on, std::function<void()> onClick) {
+        auto sw = std::make_shared<ToggleSwitch>(mTheme, on);
+        sw->AccessName(name);
+        sw->onClick = std::move(onClick);
+        return Middle(sw);
+    };
 
-    heading("AUDIO DEVICE");
+    if (midi)
+    {
+        // ── MIDI Devices: one full-width row per input (their names are long), then the output ──
+        {
+            auto title = std::make_shared<Text>(mTheme, "MIDI INPUTS", 11.0f, Weight::SemiBold);
+            title->Colour(mTheme.TextSecondary());
+            rows.push_back(FixedHeight(28, Middle(title)));
+        }
+        const auto inputs = s.find("midiInputs");
+        bool anyPort = false;
+
+        if (inputs != s.end() && inputs->is_array())
+        {
+            for (const auto& port : *inputs)
+            {
+                if (!port.is_object() || !port.contains("identifier"))
+                {
+                    continue;
+                }
+
+                anyPort = true;
+                const auto identifier = port.value("identifier", std::string());
+                const bool enabled = port.value("enabled", false);
+                const auto name = port.value("name", identifier);
+                auto text = std::make_shared<Text>(mTheme, name, metrics::kTextSize);
+                rows.push_back(FixedHeight(40, Row({HGap(12), Middle(text), Stretch(),
+                                                    toggle(name, enabled,
+                                                           [this, identifier, enabled] {
+                                                               DeviceRequest(
+                                                                   "setMidiInputEnabled",
+                                                                   {{"identifier", identifier}, {"enabled", !enabled}});
+                                                           }),
+                                                    HGap(4)})));
+            }
+        }
+
+        if (!anyPort)
+        {
+            auto none = std::make_shared<Text>(mTheme, "None", metrics::kTextSize);
+            none->Colour(mTheme.TextMuted());
+            rows.push_back(FixedHeight(32, Row({HGap(12), Middle(none)})));
+        }
+
+        {
+            auto p = std::make_shared<Paragraph>(mTheme,
+                                                 "Enabled inputs drive MIDI learn, automation and setlist switching.",
+                                                 std::max(160.0f, room), 11.5f);
+            p->Colour(mTheme.TextSecondary());
+            rows.push_back(VGap(4));
+            rows.push_back(Row({el::share(el::hold_any(p)), Stretch()}));
+            rows.push_back(VGap(8));
+        }
+
+        if (Flag(s, "showMidiOutput"))
+        {
+            std::vector<Option> outputs;
+            const auto chosen = Str(s, "midiOutput");
+            const auto ports = s.find("midiOutputs");
+            bool listed = false;
+
+            if (ports != s.end() && ports->is_array())
+            {
+                for (const auto& port : *ports)
+                {
+                    if (port.is_object() && port.contains("identifier"))
+                    {
+                        const auto identifier = port.value("identifier", std::string());
+                        listed = listed || identifier == chosen;
+                        outputs.emplace_back(identifier, port.value("name", std::string()));
+                    }
+                }
+            }
+
+            // A chosen output that has gone stays listed, so the picker shows what broke.
+            if (!chosen.empty() && !listed)
+            {
+                outputs.insert(outputs.begin(), Option{chosen, "(disconnected)"});
+            }
+
+            outputs.emplace_back("", "None");
+            row("MIDI Output",
+                {select(
+                    outputs, chosen, wideWidth, true,
+                    [this](const std::string& v) { DeviceRequest("setMidiOutput", {{"identifier", v}}); },
+                    "MIDI Output")});
+            hint("Where the preset name goes for a controller's display.");
+        }
+
+        return Col(rows);
+    }
 
     if (!device.known)
     {
@@ -417,8 +516,10 @@ Ptr Shell::BuildDeviceContent()
             options.emplace_back(t, t);
         }
 
-        row("Driver", {select(options, Str(s, "deviceType"), narrowWidth, true,
-                              [this](const std::string& v) { DeviceRequest("setDeviceType", {{"deviceType", v}}); })});
+        row("Audio Driver", {select(
+                                options, Str(s, "deviceType"), narrowWidth, true,
+                                [this](const std::string& v) { DeviceRequest("setDeviceType", {{"deviceType", v}}); },
+                                "Audio Driver")});
     }
 
     const bool separate = Flag(s, "separateIO", true);
@@ -427,21 +528,98 @@ Ptr Shell::BuildDeviceContent()
     {
         const auto input = Str(s, "inputDevice");
         row("Input Device",
-            {select(DeviceOptions(Strings(s, "inputDevices"), input, "No input"), input, wideWidth, true,
-                    [this](const std::string& v) { DeviceRequest("setDevice", {{"kind", "input"}, {"name", v}}); })});
+            {select(
+                DeviceOptions(Strings(s, "inputDevices"), input, "No input"), input, wideWidth, true,
+                [this](const std::string& v) { DeviceRequest("setDevice", {{"kind", "input"}, {"name", v}}); },
+                "Input Device")});
     }
 
     {
         const auto output = Str(s, "outputDevice");
         const bool open = Flag(s, "deviceOpen");
         auto test = button("Test", [this] { DeviceRequest("playTestTone"); }, open && !output.empty());
-        row(separate ? "Output Device" : "Device",
-            {select(DeviceOptions(Strings(s, "outputDevices"), output, separate ? "No output" : "No device"), output,
-                    wideWidth, true,
-                    [this, separate](const std::string& v) {
-                        DeviceRequest("setDevice", {{"kind", separate ? "output" : "linked"}, {"name", v}});
-                    }),
-             HGap(8), test});
+        const char* title = separate ? "Output Device" : "Device";
+        row(title, {select(
+                        DeviceOptions(Strings(s, "outputDevices"), output, separate ? "No output" : "No device"),
+                        output, wideWidth, true,
+                        [this, separate](const std::string& v) {
+                            DeviceRequest("setDevice", {{"kind", separate ? "output" : "linked"}, {"name", v}});
+                        },
+                        title),
+                    HGap(8), test});
+    }
+
+    // ── Channels: the input's with its meter beside them (while this page shows), then the output's ──
+    const auto groups = [&](const char* key) {
+        std::vector<Option> options{{"-1", "None"}};
+        int active = -1;
+        const auto it = s.find(key);
+
+        if (it != s.end() && it->is_array())
+        {
+            for (const auto& g : *it)
+            {
+                if (!g.is_object())
+                {
+                    continue;
+                }
+
+                if (g.value("active", false) && active < 0)
+                {
+                    active = static_cast<int>(options.size()) - 1;
+                }
+
+                options.emplace_back(std::to_string(options.size() - 1), g.value("name", std::string()));
+            }
+        }
+
+        return std::pair{options, active};
+    };
+    auto meter = [&]() -> Ptr {
+        auto bar = std::make_shared<MeterBar>(mTheme);
+        mLive.Feed(
+            bar, [this](MeterBar& m) { return m.Set(mState.device.inputLevelDb, mState.device.inputLevelDb > -0.5); });
+        auto level = std::make_shared<Text>(mTheme, "", metrics::kSmallText);
+        level->Colour(mTheme.TextMuted());
+        // In whole dB; below -99 as -inf.
+        mLive.Bind(
+            level,
+            [this] { return mState.device.inputLevelDb <= -99.0 ? -100L : std::lround(mState.device.inputLevelDb); },
+            [](Text& t, long db) { t.Set(db <= -100L ? std::string("-inf dB") : std::to_string(db) + " dB"); });
+        return Row({FixedWidth(std::max(80.0f, wideWidth - narrowWidth - 8.0f), Middle(bar)), HGap(10),
+                    FixedWidth(56, Middle(level))});
+    };
+
+    {
+        const auto [options, active] = groups("inputChannels");
+
+        if (options.size() > 1)
+        {
+            row("Input Channels",
+                {select(
+                     options, std::to_string(active), narrowWidth, true,
+                     [this](const std::string& v) { DeviceRequest("setInputChannels", {{"group", std::stoi(v)}}); },
+                     "Input Channels"),
+                 HGap(8), meter()});
+        }
+        else if (!Str(s, "inputDevice").empty())
+        {
+            row("Input Level", {meter()});
+        }
+    }
+
+    {
+        // A two-channel output has nothing to choose, unless it has somehow been switched off.
+        const auto [options, active] = groups("outputChannels");
+
+        if (options.size() > 2 || (options.size() > 1 && active < 0))
+        {
+            row("Output Channels",
+                {select(
+                    options, std::to_string(active), narrowWidth, true,
+                    [this](const std::string& v) { DeviceRequest("setOutputChannels", {{"group", std::stoi(v)}}); },
+                    "Output Channels")});
+        }
     }
 
     // ── Rate and buffer: what the device runs at, from its own lists ──
@@ -457,12 +635,17 @@ Ptr Shell::BuildDeviceContent()
         }
 
         row("Sample Rate",
-            {select(rateOptions, Integer(rate), narrowWidth, rates.size() > 1,
-                    [this](const std::string& v) { DeviceRequest("setSampleRate", {{"sampleRate", std::stod(v)}}); })});
+            {select(
+                rateOptions, Integer(rate), narrowWidth, rates.size() > 1,
+                [this](const std::string& v) { DeviceRequest("setSampleRate", {{"sampleRate", std::stod(v)}}); },
+                "Sample Rate")});
 
         if (Numbers(s, "sampleRates").size() <= 1)
         {
-            hint("The audio driver sets the sample rate.");
+            hint(Str(s, "deviceType") == "Windows Audio"
+                     ? "Windows fixes the rate in shared mode. Choose Windows Audio (Exclusive Mode) as the driver "
+                       "for other rates."
+                     : "The audio driver sets the sample rate.");
         }
 
         const double buffer = Num(s, "bufferSize");
@@ -476,112 +659,52 @@ Ptr Shell::BuildDeviceContent()
         }
 
         row("Buffer Size",
-            {select(sizeOptions, Integer(buffer), narrowWidth, sizes.size() > 1,
-                    [this](const std::string& v) { DeviceRequest("setBufferSize", {{"bufferSize", std::stoi(v)}}); })});
+            {select(
+                sizeOptions, Integer(buffer), narrowWidth, sizes.size() > 1,
+                [this](const std::string& v) { DeviceRequest("setBufferSize", {{"bufferSize", std::stoi(v)}}); },
+                "Buffer Size")});
 
         if (Numbers(s, "bufferSizes").size() <= 1)
         {
-            hint("The audio driver sets the buffer size.");
+            hint(Flag(s, "hasControlPanel")
+                     ? "This driver sets its own buffer size. Change it in the driver's Control Panel below."
+                     : "The audio driver sets the buffer size.");
         }
 
-        const double latency = Num(s, "inputLatency") + Num(s, "outputLatency");
+        const double in = Num(s, "inputLatency");
+        const double out = Num(s, "outputLatency");
 
-        if (latency > 0.0 && rate > 0.0)
+        if ((in > 0.0 || out > 0.0) && rate > 0.0)
         {
-            hint("Latency reported by the driver: " + Ms(latency, rate) + " ms.");
+            hint("Latency reported by the driver: " + Ms(in + out, rate) + " ms (" + Ms(in, rate) + " ms in, " +
+                 Ms(out, rate) + " ms out).");
         }
     }
 
-    // ── The input: its level while this page shows, and the mute ──
-    if (!Str(s, "inputDevice").empty())
-    {
-        auto meter = std::make_shared<MeterBar>(mTheme);
-        mLive.Feed(meter, [this](MeterBar& m) {
-            return m.Set(mState.device.inputLevelDb, mState.device.inputLevelDb > -0.5);
-        });
-        auto level = std::make_shared<Text>(mTheme, "", metrics::kSmallText);
-        level->Colour(mTheme.TextMuted());
-        // In whole dB; below -99 as -inf.
-        mLive.Bind(
-            level,
-            [this] { return mState.device.inputLevelDb <= -99.0 ? -100L : std::lround(mState.device.inputLevelDb); },
-            [](Text& t, long db) { t.Set(db <= -100L ? std::string("-inf dB") : std::to_string(db) + " dB"); });
-        row("Input Level", {FixedWidth(wideWidth, Middle(meter)), HGap(10), FixedWidth(70, Middle(level))});
-    }
-
+    // ── The mute ──
     if (Flag(s, "canMuteInput"))
     {
         const bool muted = Flag(s, "inputMuted");
         const bool risk = Flag(s, "feedbackRisk");
-        auto toggle = std::make_shared<PowerSwitch>(mTheme, muted);
-        toggle->AccessName("Mute Input");
-        toggle->onClick = [this, muted] { DeviceRequest("setInputMuted", {{"muted", !muted}}); };
-        row("Mute Input", {Middle(toggle)});
+        row("Mute Input",
+            {toggle("Mute Input", muted, [this, muted] { DeviceRequest("setInputMuted", {{"muted", !muted}}); })});
         hint(MuteHint(muted, risk), muted || risk);
     }
 
-    row("", {button("Reset Device", [this] { DeviceRequest("resetDevice"); }), HGap(8),
-             button("Rescan", [this] { DeviceRequest("getState", {{"rescan", true}}); })});
-
-    // ── MIDI ──
-    heading("MIDI DEVICES");
+    // ── The driver's own: its control panel, and a reopen ──
     {
-        auto title = std::make_shared<Text>(mTheme, "MIDI Inputs", metrics::kTextSize);
-        title->Colour(mTheme.TextSecondary());
-        rows.push_back(FixedHeight(30, title));
-    }
-    const auto inputs = s.find("midiInputs");
-    bool anyPort = false;
+        std::vector<Ptr> buttons;
 
-    if (inputs != s.end() && inputs->is_array())
-    {
-        // One full-width row per port: their names are long.
-        for (const auto& port : *inputs)
+        if (Flag(s, "hasControlPanel"))
         {
-            if (!port.is_object() || !port.contains("identifier"))
-            {
-                continue;
-            }
-
-            anyPort = true;
-            const auto identifier = port.value("identifier", std::string());
-            const bool enabled = port.value("enabled", false);
-            auto name = std::make_shared<Text>(mTheme, port.value("name", identifier), metrics::kTextSize);
-            auto toggle = std::make_shared<PowerSwitch>(mTheme, enabled);
-            toggle->AccessName(port.value("name", identifier));
-            toggle->onClick = [this, identifier, enabled] {
-                DeviceRequest("setMidiInputEnabled", {{"identifier", identifier}, {"enabled", !enabled}});
-            };
-            rows.push_back(FixedHeight(40, Row({HGap(16), Middle(name), HGap(12), Middle(toggle), HGap(4)})));
-        }
-    }
-
-    if (!anyPort)
-    {
-        hint("None");
-    }
-
-    if (Flag(s, "showMidiOutput"))
-    {
-        std::vector<Option> outputs;
-        const auto chosen = Str(s, "midiOutput");
-        const auto ports = s.find("midiOutputs");
-
-        if (ports != s.end() && ports->is_array())
-        {
-            for (const auto& port : *ports)
-            {
-                if (port.is_object() && port.contains("identifier"))
-                {
-                    outputs.emplace_back(port.value("identifier", std::string()), port.value("name", std::string()));
-                }
-            }
+            buttons.push_back(button("Control Panel", [this] { DeviceRequest("showControlPanel"); }));
+            buttons.push_back(HGap(8));
         }
 
-        outputs.emplace_back("", "None");
-        row("MIDI Output", {select(outputs, chosen, wideWidth, true, [this](const std::string& v) {
-                DeviceRequest("setMidiOutput", {{"identifier", v}});
-            })});
+        buttons.push_back(button("Reset Device", [this] { DeviceRequest("resetDevice"); }));
+        buttons.push_back(HGap(8));
+        buttons.push_back(button("Rescan", [this] { DeviceRequest("getState", {{"rescan", true}}); }));
+        row("Driver", std::move(buttons));
     }
 
     return Col(rows);

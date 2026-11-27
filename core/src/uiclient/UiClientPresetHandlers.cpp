@@ -57,6 +57,12 @@ void ApplyMixer(ClientState& state, const nlohmann::json& mixer)
     state.mixer.masterGain = mixer.value("masterGain", 1.0);
     state.mixer.mixGainDb = mixer.value("mixGainDb", 0.0);
     state.mixer.limiterEnabled = mixer.value("limiterEnabled", false);
+
+    if (const auto unity = mixer.find("monoOutputUnity"); unity != mixer.end() && unity->is_boolean())
+    {
+        state.mixer.monoOutputUnity = unity->get<bool>();
+    }
+
     state.mixer.activePresetIds = parse::StringArray(mixer, "activePresetIds");
     state.mixer.presetNames.clear();
     state.mixer.slots.clear();

@@ -6,6 +6,7 @@
 
 #include "ui/shell/Shell.h"
 
+#include "ui/dialogs/DialogChrome.h"
 #include "uiclient/UpdateCheck.h"
 
 #include <cstdio>
@@ -35,6 +36,51 @@ std::string RandomUuid()
                   bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
     return text;
 }
+
+/// The banner's download arrow, 18 px in the info blue.
+class BannerIcon final : public el::element
+{
+  public:
+    BannerIcon(Icons& icons, el::color ink) : mIcons(icons), mInk(ink)
+    {
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{18.0f, 18.0f}, {18.0f, 18.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        mIcons.Draw(ctx.canvas, "ui-download", ctx.bounds, mInk);
+    }
+
+  private:
+    Icons& mIcons;
+    el::color mInk;
+};
+
+/// The banner's face: the info blue at 10% with a 35% edge, radius 10.
+class BannerFace final : public el::element
+{
+  public:
+    explicit BannerFace(el::color info) : mInfo(info)
+    {
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        auto& cnv = ctx.canvas;
+        cnv.fill_style(mInfo.opacity(0.10f));
+        cnv.fill_round_rect(ctx.bounds, 10.0f);
+        cnv.stroke_style(mInfo.opacity(0.35f));
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(ctx.bounds.inset(0.5f, 0.5f), 10.0f);
+    }
+
+  private:
+    el::color mInfo;
+};
 } // namespace
 
 void Shell::SyncUpdateCheck()
@@ -119,20 +165,123 @@ void Shell::OpenUpdateDialog()
     }
 
     const auto update = *mUpdate;
-    std::string detail = "Version " + update.version + " is available (this is " + mState.environment.version + ").";
+    constexpr float kWidth = 520.0f;
+    constexpr float kTextWidth = kWidth - 40.0f;
+    std::vector<Ptr> body;
 
-    if (!update.releaseNotes.empty())
+    // "Soundshed Guitar X is available. You are running Y." (.update-modal-summary)
     {
-        detail += "\n\n" + update.releaseNotes;
+        const std::string product = mState.environment.nativeEditor ? "Soundshed Guitar" : "Soundshed Nano Q";
+        const std::string current =
+            mState.environment.version.empty() ? "an older version" : mState.environment.version;
+        auto p = std::make_shared<Paragraph>(
+            mTheme, product + " " + update.version + " is available. You are running " + current + ".", kTextWidth,
+            13.0f);
+        p->Colour(mTheme.ModalText());
+        body.push_back(Row({el::share(el::hold_any(p)), Stretch()}));
+        body.push_back(VGap(12));
     }
 
-    if (update.downloadUrl.empty())
+    // The release notes, rendered (.update-modal-notes): headings, quotes and bullets, in a box that
+    // scrolls when they run long.
+    std::vector<Ptr> notes;
+
+    for (const auto& line : guitarfx::uiclient::ReleaseNoteLines(
+             update.releaseNotes.empty() ? std::string("No release notes provided.") : update.releaseNotes))
     {
-        OpenConfirm("Update available", detail, "OK", [] {});
-        return;
+        using Kind = guitarfx::uiclient::ReleaseNoteLine::Kind;
+
+        if (line.kind == Kind::Blank)
+        {
+            notes.push_back(VGap(8));
+            continue;
+        }
+
+        const bool heading = line.kind == Kind::Heading;
+        const float size = heading ? (line.level == 1 ? 16.0f : line.level == 2 ? 14.5f : 13.0f) : 12.5f;
+        const float indent = line.kind == Kind::Bullet || line.kind == Kind::Quote ? 16.0f : 0.0f;
+        auto p = std::make_shared<Paragraph>(mTheme, line.text, kTextWidth - 24.0f - indent, size);
+        p->Weighted(heading ? Weight::SemiBold : Weight::Regular);
+        p->Colour(line.kind == Kind::Quote ? mTheme.ModalTextSecondary() : mTheme.ModalText());
+        std::vector<Ptr> parts;
+
+        if (line.kind == Kind::Bullet)
+        {
+            auto dot = std::make_shared<Text>(mTheme, "\xE2\x80\xA2", size);
+            dot->Colour(mTheme.ModalTextSecondary());
+            parts.push_back(FixedWidth(indent, dot));
+        }
+        else if (line.kind == Kind::Quote)
+        {
+            parts.push_back(FixedWidth(3, Fill(mTheme.ModalRule(), std::make_shared<el::element>())));
+            parts.push_back(HGap(indent - 3.0f));
+        }
+
+        parts.push_back(el::share(el::hold_any(p)));
+        parts.push_back(Stretch());
+        notes.push_back(Row(parts));
+        notes.push_back(VGap(heading ? 6.0f : 3.0f));
     }
 
-    OpenConfirm("Update available", detail, "Download",
-                [this, url = update.downloadUrl] { mSession.Commands().OpenUrl(url); });
+    body.push_back(FixedHeight(260, Rounded(mTheme.Bar(), 8.0f, Pad(12, 10, 12, 10, VScroll(Col(notes))))));
+
+    std::vector<Ptr> actions{DialogButton("Later", [this] { CloseOverlay(); }, false)};
+
+    if (!update.downloadUrl.empty())
+    {
+        actions.push_back(DialogButton(
+            "Download",
+            [this, url = update.downloadUrl] {
+                mSession.Commands().OpenUrl(url);
+                CloseOverlay();
+            },
+            true));
+    }
+
+    ShowDialog({.title = "Update available",
+                .body = Col(body),
+                .actions = std::move(actions),
+                .width = kWidth,
+                .height = kDialogHeaderHeight + kDialogFooterHeight + 36.0f + 40.0f + 260.0f});
+}
+
+Ptr Shell::BuildUpdateBanner(float width)
+{
+    // The banner over every Settings section while an update waits (.settings-update-banner): an
+    // icon, "Software Update Version X is available" over the notes' first line, and Download.
+    if (!mUpdate)
+    {
+        return nullptr;
+    }
+
+    const auto& update = *mUpdate;
+    const el::color info = el::rgba(59, 130, 246, 255);
+    auto icon = std::make_shared<BannerIcon>(mIcons, info);
+    auto title = std::make_shared<Text>(mTheme, "Software Update Version " + update.version + " is available", 13.0f,
+                                        Weight::SemiBold);
+    title->Fixed(true);
+    std::vector<Ptr> text{FixedHeight(18, Middle(title))};
+    const auto first = guitarfx::uiclient::ReleaseNotesFirstLine(update.releaseNotes);
+
+    if (!first.empty())
+    {
+        auto notes = std::make_shared<Text>(mTheme, first, 11.0f);
+        notes->Colour(mTheme.TextSecondary());
+        text.push_back(FixedHeight(16, Middle(notes)));
+    }
+
+    std::vector<Ptr> parts{Middle(icon), HGap(12), Middle(Col(text)), Stretch()};
+
+    if (!update.downloadUrl.empty())
+    {
+        auto download = std::make_shared<Button>(
+            mTheme, "Download", [this, url = update.downloadUrl] { mSession.Commands().OpenUrl(url); },
+            Button::Style::Primary);
+        download->TextSize(11.0f);
+        parts.push_back(Middle(FixedHeight(30, download)));
+    }
+
+    (void)width;
+    return Over(Pad(16, 12, 16, 12, Row(parts)), std::make_shared<BannerFace>(info));
 }
 } // namespace nanoq::ui

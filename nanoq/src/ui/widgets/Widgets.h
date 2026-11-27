@@ -71,6 +71,8 @@ class Paragraph : public el::element
     void draw(const el::context& ctx) override;
 
     Paragraph& Colour(el::color c);
+    /// The face's weight; Regular unless set.
+    Paragraph& Weighted(Weight weight);
 
   private:
     [[nodiscard]] std::vector<std::string> Lines(cycfi::artist::canvas& cnv) const;
@@ -80,6 +82,7 @@ class Paragraph : public el::element
     float mWidth;
     float mSize;
     el::color mColour;
+    Weight mWeight = Weight::Regular;
 };
 
 /// A push button or, with Toggle(), a switch. Text, or text with a leading dot for a state.

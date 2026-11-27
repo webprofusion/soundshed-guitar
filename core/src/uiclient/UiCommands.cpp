@@ -1076,6 +1076,11 @@ void UiCommands::AudioDevice(const std::string& action, nlohmann::json payload)
     mClient.Send("audioDevice", std::move(payload));
 }
 
+void UiCommands::RunSignalPathTest()
+{
+    mClient.Send("runSignalPathTest", {{"frequency", 440}, {"duration", 1.0}});
+}
+
 void UiCommands::OpenUrl(const std::string& url)
 {
     mClient.Send("openUrl", {{"url", url}});

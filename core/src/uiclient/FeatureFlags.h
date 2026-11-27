@@ -44,6 +44,8 @@ enum class Feature
 [[nodiscard]] const std::vector<Feature>& AllFeatures();
 /// Its name in Settings, as the web UI's.
 [[nodiscard]] const char* FeatureLabel(Feature feature);
+/// What it shows or does, the line under it in Settings, as the web UI's.
+[[nodiscard]] const char* FeatureDescription(Feature feature);
 
 /// The app setting's key, "features.<key>.enabled".
 [[nodiscard]] const char* FeatureSettingKey(Feature feature);

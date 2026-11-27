@@ -39,6 +39,7 @@
 #include "uiclient/ChainLayout.h"
 #include "uiclient/DspDiagnostics.h"
 #include "uiclient/DspStatus.h"
+#include "uiclient/PresetInspect.h"
 #include "uiclient/SignalFlow.h"
 #include "uiclient/UpdateCheck.h"
 #include "uiclient/EffectPresentation.h"
@@ -542,8 +543,9 @@ class Shell
     // UI's settings/audioDevice.ts). SyncDevicePage runs every tick: the level lease, and a redraw
     // when a new device snapshot arrives. The meter is bound (mLive).
     struct DevicePage;
-    [[nodiscard]] Ptr BuildDeviceSection();
-    [[nodiscard]] Ptr BuildDeviceContent();
+    /// The audio device card's rows, or (`midi`) the MIDI Devices card's.
+    [[nodiscard]] Ptr BuildDeviceSection(bool midi = false);
+    [[nodiscard]] Ptr BuildDeviceContent(bool midi);
     void SyncDevicePage();
     void DeviceRequest(const std::string& action, nlohmann::json args = nlohmann::json::object());
     std::shared_ptr<DevicePage> mDevicePage;
@@ -656,6 +658,8 @@ class Shell
     void SyncUpdateCheck();
     [[nodiscard]] Ptr BuildUpdateButton();
     void OpenUpdateDialog();
+    /// The banner over every Settings section while an update waits; null when none does.
+    [[nodiscard]] Ptr BuildUpdateBanner(float width);
     bool mUpdateChecked = false;
     double mUpdateCheckAt = 0.0;
     std::optional<guitarfx::uiclient::AvailableUpdate> mUpdate;
@@ -868,6 +872,7 @@ class Shell
     {
         std::string load, peakLoad, latency;
         guitarfx::uiclient::DspLevelSummary input, output;
+        std::string designedPeak, rawPeak; // the active preset's designed peak input, and the raw input's held peak
         std::vector<guitarfx::uiclient::DspDiagnosticsGroup> table;
     };
 
@@ -876,6 +881,7 @@ class Shell
     /// Each tick: folds in the feeds, and refreshes what the page shows a few times a second.
     void SyncDspDiagnostics(bool refresh = false);
     guitarfx::uiclient::DspDiagnostics mDspDiagnostics;
+    guitarfx::uiclient::PeakHold mDspRawPeak; // the raw input over ten seconds, beside the designed peak
     DspSnapshot mDspSnapshot;
     std::weak_ptr<el::element> mDspFiguresShown; // on screen: the snapshot is kept fresh
     std::string mDspTableShape;                  // the groups and rows the table was built with

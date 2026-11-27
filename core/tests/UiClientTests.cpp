@@ -2259,6 +2259,20 @@ void TestUpdateCheckVersions()
     Expect(IsVersionNewer("1.10.0", "1.9.9") && !IsVersionNewer("1.6.0", "1.6.0") && !IsVersionNewer("1.5.9", "1.6.0"),
            "compared part by part, numerically");
     Expect(!IsVersionNewer("garbage", "1.0.0") && !IsVersionNewer("2.0.0", ""), "an unreadable side is never newer");
+
+    // Release notes as the update dialog draws them.
+    const auto notes = ReleaseNoteLines("\n## What's new\r\n\n\n- **Faster** NAM\n* See [the guide](https://x.y/z)\n> "
+                                        "Note ![pic](http://a/b.png)\nPlain *text*\n\n");
+    Expect(notes.size() == 6, "a leading and trailing blank go, and a run of blanks is one");
+    Expect(notes[0].kind == ReleaseNoteLine::Kind::Heading && notes[0].level == 2 && notes[0].text == "What's new",
+           "a heading, its level and text");
+    Expect(notes[1].kind == ReleaseNoteLine::Kind::Blank, "the blank under the heading");
+    Expect(notes[2].kind == ReleaseNoteLine::Kind::Bullet && notes[2].text == "Faster NAM", "a bullet, emphasis out");
+    Expect(notes[3].kind == ReleaseNoteLine::Kind::Bullet && notes[3].text == "See the guide", "a link as its label");
+    Expect(notes[4].kind == ReleaseNoteLine::Kind::Quote && notes[4].text == "Note pic",
+           "a quote, an image as its label");
+    Expect(notes[5].kind == ReleaseNoteLine::Kind::Text && notes[5].text == "Plain text", "text");
+    Expect(ReleaseNotesFirstLine("\n\n# **v1.9** is out\nMore") == "v1.9 is out", "the banner's first line, plain");
 }
 
 // The engine applies a global chain edit without echoing it, so the client mirrors it: a switch

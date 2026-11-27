@@ -10,6 +10,7 @@
 #include <array>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace guitarfx::uiclient
 {
@@ -28,4 +29,29 @@ struct AvailableUpdate
 
 /// True only when both parse and `candidate` is higher than `current`.
 [[nodiscard]] bool IsVersionNewer(const std::string& candidate, const std::string& current);
+
+/// One line of release notes as the update dialog draws it (updateCheck.ts's renderMarkdown):
+/// "# " to "### " headings, "> " quotes, "- " and "* " bullets, blank lines, and text. Emphasis
+/// markers are taken out and a link or image keeps its label, so nothing from the server is
+/// followed.
+struct ReleaseNoteLine
+{
+    enum class Kind
+    {
+        Text,
+        Heading,
+        Quote,
+        Bullet,
+        Blank
+    };
+
+    Kind kind = Kind::Text;
+    int level = 0; // a heading's 1 to 3
+    std::string text;
+};
+
+[[nodiscard]] std::vector<ReleaseNoteLine> ReleaseNoteLines(const std::string& notes);
+
+/// The notes' first line with text, plain (the Settings banner's, updateBanner.ts).
+[[nodiscard]] std::string ReleaseNotesFirstLine(const std::string& notes);
 } // namespace guitarfx::uiclient

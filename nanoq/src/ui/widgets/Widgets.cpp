@@ -59,7 +59,7 @@ Paragraph::Paragraph(const Theme& theme, std::string text, float width, float si
 std::vector<std::string> Paragraph::Lines(cycfi::artist::canvas& cnv) const
 {
     // As many words as fit each line; a word wider than the line has one to itself.
-    const auto font = Font(Weight::Regular).size(mSize);
+    const auto font = Font(mWeight).size(mSize);
     std::vector<std::string> lines;
     std::string line;
     std::size_t i = 0;
@@ -104,7 +104,7 @@ el::view_limits Paragraph::limits(const el::basic_context& ctx) const
 
 void Paragraph::draw(const el::context& ctx)
 {
-    const auto font = Font(Weight::Regular).size(mSize);
+    const auto font = Font(mWeight).size(mSize);
     float y = ctx.bounds.top;
 
     for (const auto& line : Lines(ctx.canvas))
@@ -113,6 +113,12 @@ void Paragraph::draw(const el::context& ctx)
                  HAlign::Left);
         y += mSize + 5.0f;
     }
+}
+
+Paragraph& Paragraph::Weighted(Weight weight)
+{
+    mWeight = weight;
+    return *this;
 }
 
 Paragraph& Paragraph::Colour(el::color c)

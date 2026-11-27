@@ -6,6 +6,8 @@
 #include "uiclient/UiClient.h"
 #include "uiclient/UiClientParsing.h"
 
+#include <cstdio>
+
 namespace guitarfx::uiclient
 {
 namespace
@@ -216,6 +218,32 @@ void UiClient::RegisterLiveHandlers()
         device.error = m.value("error", "");
         device.state = m.contains("state") && m["state"].is_object() ? m["state"] : nlohmann::json::object();
         Notify(Topic::Device);
+    });
+
+    // The Signal Path Test's answer, as the web UI's onSignalPathTestResult says it.
+    On("signalPathTestResult", [this](const nlohmann::json& m) {
+        const bool passed = m.value("passed", false);
+        const double duration = m.value("duration", 0.0);
+        const double elapsed = m.value("elapsed", 0.0);
+        char ratio[32] = "N/A";
+
+        if (elapsed > 0.0)
+        {
+            std::snprintf(ratio, sizeof(ratio), "%.2f", duration / elapsed);
+        }
+
+        char timing[160];
+        std::snprintf(timing, sizeof(timing), "Audio: %.3fs, Elapsed: %.3fs (%sx realtime)", duration, elapsed, ratio);
+        std::string detail = timing;
+        const auto message = m.value("message", std::string());
+
+        if (!message.empty())
+        {
+            detail += " - " + message;
+        }
+
+        PostNotification({passed ? Notification::Kind::Info : Notification::Kind::Error,
+                          passed ? "Signal path test passed" : "Signal path test failed", detail});
     });
 
     On("audioDeviceLevels", [this](const nlohmann::json& m) {
