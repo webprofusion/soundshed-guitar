@@ -230,6 +230,16 @@ void TestPreferences()
     Expect(ui::LayoutLookupKeys("amp_nam", "") == std::vector<std::string>{"amp_nam"}, "one key without a blend");
     Expect(ui::AvailableLayoutEntries(library, "amp_nam", "").size() == 2, "the entries a node can pick");
 
+    // The FX Library's card: the default layout's thumbnail, a blend's own before its effect's.
+    const auto* face = ui::DefaultLibraryLayout(library, "amp_nam");
+    Expect(face != nullptr && face->name == "Tweed Face", "the effect's default layout");
+    Expect(ui::DefaultLibraryLayout(library, "amp_nam", "blend-9") == face, "a blend without one has its effect's");
+    Expect(ui::DefaultLibraryLayout(library, "delay_digital") == nullptr, "and an effect with none, none");
+    Expect(ui::ImageDataUrlBytes("data:image/png;base64,iVBORw==") == std::string("\x89PNG"), "a picture's bytes");
+    Expect(ui::ImageDataUrlBytes("data:image/svg+xml;base64,PHN2Zz4=").empty() &&
+               ui::ImageDataUrlBytes("data:image/png;base64,ab\"c").empty() && ui::ImageDataUrlBytes("").empty(),
+           "but not a script's, a broken one's or nothing's");
+
     auto selection = Resolve(library, none, "amp_nam");
     Expect(selection.layoutId == std::optional<std::string>("tweed") && selection.source == "libraryDefault",
            "the library default when no rules exist");

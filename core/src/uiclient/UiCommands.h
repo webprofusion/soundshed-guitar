@@ -19,6 +19,23 @@
 
 namespace guitarfx::uiclient
 {
+/// What a node starts with besides its type, as the web UI's SignalPathNodeOptions: a blend's
+/// id, or a saved Custom Effect's id, name, category, settings and module.
+struct NodeOptions
+{
+    struct Resource
+    {
+        std::string type;
+        std::string id;
+    };
+
+    std::map<std::string, std::string> config;
+    std::string label;
+    std::string category;
+    std::map<std::string, double> params;
+    std::vector<Resource> resources;
+};
+
 class UiCommands
 {
   public:
@@ -125,10 +142,10 @@ class UiCommands
     /// chain's undo does when the change it reverses rebuilt the chain (history.ts,
     /// applyWholeGraph). The engine compares the result with the preset as saved for dirty.
     void LoadActivePresetWithGraph(const SignalGraph& graph);
-    void AddNode(const std::string& effectType, const std::string& afterNodeId);
+    void AddNode(const std::string& effectType, const std::string& afterNodeId, const NodeOptions& options = {});
     /// Adds an effect on one edge of the graph: the way into a parallel branch, which "after a
     /// node" cannot name.
-    void AddNodeOnEdge(const std::string& effectType, const GraphEdge& edge);
+    void AddNodeOnEdge(const std::string& effectType, const GraphEdge& edge, const NodeOptions& options = {});
     void RemoveNode(const std::string& nodeId);
     void MoveNode(const std::string& nodeId, const std::string& afterNodeId);
     /// Moves a node onto an edge of the graph: a cable, which may be inside a parallel branch.
@@ -137,7 +154,7 @@ class UiCommands
     /// Gives a split 2 to 4 branches; the engine adds empty ones and removes only empty ones.
     void SetSplitBranchCount(const std::string& splitterId, int count);
     /// Puts another effect in the node's place, as the web UI's FX library replace does.
-    void ReplaceNode(const std::string& nodeId, const std::string& effectType);
+    void ReplaceNode(const std::string& nodeId, const std::string& effectType, const NodeOptions& options = {});
     /// The node's own name; empty hands it back its automatic one.
     void RenameNode(const std::string& nodeId, const std::string& title);
     /// Which channels a node takes: "" (follow what arrives), "mono" (summed), "monoLeft" or

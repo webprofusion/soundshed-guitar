@@ -2,22 +2,27 @@
 // effects to add or swap in, with favourites and recents before the categories.
 
 #include "ui/dialogs/DialogChrome.h"
+#include "ui/input/Focus.h"
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
 #include "uiclient/FeatureFlags.h"
+#include "uiclient/EffectLayouts.h"
+#include "uiclient/FxLibrary.h"
 #include "uiclient/FxMarks.h"
 #include "uiclient/PresetBrowse.h"
 #include "uiclient/NodeLabels.h"
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <set>
 #include <utility>
 
 namespace nanoq::ui
 {
 using guitarfx::uiclient::EffectTypeInfo;
+using guitarfx::uiclient::FxLibraryItem;
 
 namespace
 {
@@ -26,7 +31,7 @@ const std::string kFavouritesTab = "__favourites__";
 const std::string kRecentTab = "__recent__";
 } // namespace
 
-std::vector<const EffectTypeInfo*> Shell::OfferedEffects() const
+std::vector<FxLibraryItem> Shell::OfferedEffects() const
 {
     namespace guids = guitarfx::EffectGuids;
     const std::set<std::string> experimental{guids::kTransposeStft, guids::kTransposeHybrid, guids::kEqPitchTracking};
@@ -38,7 +43,7 @@ std::vector<const EffectTypeInfo*> Shell::OfferedEffects() const
 
     // Guitar to MIDI only plays a plugin host's instrument: offered where the engine has one.
     const bool canHostPlugins = mState.FindEffectType(guids::kPluginHost) != nullptr;
-    std::vector<const EffectTypeInfo*> offered;
+    std::vector<FxLibraryItem> offered;
 
     for (const auto& info : mState.catalog)
     {
@@ -72,7 +77,21 @@ std::vector<const EffectTypeInfo*> Shell::OfferedEffects() const
             continue;
         }
 
-        offered.push_back(&info);
+        offered.push_back(guitarfx::uiclient::FxItemForEffect(info));
+    }
+
+    // Then each blend, and each saved Custom Effect where Custom Effects are on (catalog.ts).
+    for (auto& item : guitarfx::uiclient::BlendFxItems(mState, mPresentation))
+    {
+        offered.push_back(std::move(item));
+    }
+
+    if (showCustom)
+    {
+        for (auto& item : guitarfx::uiclient::CustomEffectFxItems(mState))
+        {
+            offered.push_back(std::move(item));
+        }
     }
 
     return offered;
@@ -93,19 +112,22 @@ void Shell::ExpectAddedNode()
     }
 }
 
-void Shell::OpenEffectPickerOnEdge(const guitarfx::GraphEdge& edge)
+void Shell::OpenEffectPickerOnEdge(const guitarfx::GraphEdge& edge, std::optional<el::rect> plus)
 {
-    OpenEffectPicker(edge.from);
+    OpenEffectPicker(edge.from, {}, plus);
     mPickerEdge = edge; // after: opening the picker forgets any edge a previous one had
 }
 
-void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& replaceNodeId)
+void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& replaceNodeId,
+                             std::optional<el::rect> plus)
 {
+    const bool flyout = plus.has_value() && replaceNodeId.empty();
     mPickerEdge.reset();
     const auto offered = OfferedEffects();
 
-    // Replacing opens on the node's own category, with its effect marked (fxSelector.ts).
-    std::string currentType;
+    // Replacing opens on the node's own category, with its effect marked (fxSelector.ts): the
+    // same blend or saved Custom Effect, not only the same type.
+    std::string currentKey;
 
     if (!replaceNodeId.empty() && mState.activePreset)
     {
@@ -117,9 +139,20 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
             return;
         }
 
-        currentType = node->type;
+        const auto config = [node](const char* key) {
+            const auto it = node->config.find(key);
+            return it == node->config.end() ? std::string() : it->second;
+        };
+        currentKey = guitarfx::uiclient::FxItemKey(node->type, config("blendId"), config("customEffectId"));
 
-        if (const auto* type = mState.FindEffectType(node->type))
+        const auto mine = std::find_if(offered.begin(), offered.end(),
+                                       [&currentKey](const FxLibraryItem& item) { return item.Key() == currentKey; });
+
+        if (mine != offered.end())
+        {
+            mPickerCategory = mine->category;
+        }
+        else if (const auto* type = mState.FindEffectType(node->type))
         {
             mPickerCategory = type->category;
         }
@@ -130,17 +163,17 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
 
     for (const auto& id : mPresentation.CategoryOrder())
     {
-        if (std::any_of(offered.begin(), offered.end(), [&id](const EffectTypeInfo* e) { return e->category == id; }))
+        if (std::any_of(offered.begin(), offered.end(), [&id](const FxLibraryItem& e) { return e.category == id; }))
         {
             categories.push_back(id);
         }
     }
 
-    for (const auto* effect : offered)
+    for (const auto& effect : offered)
     {
-        if (std::find(categories.begin(), categories.end(), effect->category) == categories.end())
+        if (std::find(categories.begin(), categories.end(), effect.category) == categories.end())
         {
-            categories.push_back(effect->category);
+            categories.push_back(effect.category);
         }
     }
 
@@ -150,15 +183,42 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         return;
     }
 
+    // Amps first, as the web's docked library opens (fxSelector.ts).
     if (mPickerCategory.empty() ||
         (mPickerCategory != kFavouritesTab && mPickerCategory != kRecentTab &&
          std::find(categories.begin(), categories.end(), mPickerCategory) == categories.end()))
     {
-        mPickerCategory = categories.front();
+        mPickerCategory =
+            std::find(categories.begin(), categories.end(), "amp") != categories.end() ? "amp" : categories.front();
     }
 
     // The web UI's Favourites and Recent tabs come first (fxBrowser.ts).
     categories.insert(categories.begin(), {kFavouritesTab, kRecentTab});
+
+    // The flyout opens on Favourites when there are any, else on Recent when it holds anything,
+    // else where it was last (addEffectDropdown.ts preferredMarkTab).
+    if (flyout)
+    {
+        const auto anyOffered = [&offered](const std::vector<std::string>& keys) {
+            return std::any_of(keys.begin(), keys.end(), [&offered](const std::string& key) {
+                return std::any_of(offered.begin(), offered.end(),
+                                   [&key](const FxLibraryItem& item) { return item.Key() == key; });
+            });
+        };
+
+        if (anyOffered(guitarfx::uiclient::FxFavoriteKeys(mState)))
+        {
+            mPickerCategory = kFavouritesTab;
+        }
+        else if (anyOffered(guitarfx::uiclient::FxRecentKeys(mState)))
+        {
+            mPickerCategory = kRecentTab;
+        }
+        else if (mPickerCategory == kFavouritesTab || mPickerCategory == kRecentTab)
+        {
+            mPickerCategory = categories[2];
+        }
+    }
 
     // The web UI's chooser (fx-selector-panel.html): a title and a search over two columns, the
     // categories with their counts at the left and the chosen one's effects at the right. Both
@@ -170,13 +230,17 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         SlotPtr right = MakeSlot();
         std::function<void()> fill;
         std::weak_ptr<PickerState> self;
+        // The cards shown, in order, for Up and Down; the first's effect, for Enter in the search.
+        std::vector<std::weak_ptr<EffectRow>> rows;
+        std::optional<FxLibraryItem> first;
+        std::weak_ptr<el::element> searchBox;
     };
 
     auto state = std::make_shared<PickerState>();
     auto* s = state.get();
     s->self = state;
 
-    auto choose = [this, weak = s->self, afterNodeId, replaceNodeId, currentType](const std::string& type) {
+    auto choose = [this, weak = s->self, afterNodeId, replaceNodeId, currentKey](const FxLibraryItem& item) {
         if (weak.expired())
         {
             return; // a second click on the closed chooser, before its layer has gone
@@ -184,28 +248,28 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
 
         CloseOverlay();
 
-        if (type == currentType)
+        if (item.Key() == currentKey)
         {
             return; // a model or settings are not reset by accident
         }
 
-        guitarfx::uiclient::RecordFxRecent(mSession.Commands(), mState, guitarfx::uiclient::FxItemKey(type));
+        guitarfx::uiclient::RecordFxRecent(mSession.Commands(), mState, item.Key());
         ExpectAddedNode();
 
         if (!replaceNodeId.empty())
         {
             // The replacement is a new node; its controls come up.
-            mSession.Commands().ReplaceNode(replaceNodeId, type);
+            mSession.Commands().ReplaceNode(replaceNodeId, item.type, item.options);
             return;
         }
 
         if (mPickerEdge)
         {
-            mSession.Commands().AddNodeOnEdge(type, *mPickerEdge);
+            mSession.Commands().AddNodeOnEdge(item.type, *mPickerEdge, item.options);
         }
         else
         {
-            mSession.Commands().AddNode(type, afterNodeId);
+            mSession.Commands().AddNode(item.type, afterNodeId, item.options);
         }
     };
 
@@ -226,30 +290,40 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
                                  : metrics::TopBarHeight() + 8.0f;
     const float x = overEditor ? mEditorArea.left + (mEditorArea.width() - width) * 0.5f
                                : StageLeft() + (stageWidth - width) * 0.5f;
-    // The effects in columns of cards (.fx-items grid), as many as fit beside the categories.
-    const int columns = std::max(1, static_cast<int>((width - 196.0f) / 200.0f));
+    // The effects in columns of cards (.fx-items grid), as many as fit beside the categories;
+    // the flyout lists one effect per row.
+    const int columns = flyout ? 1 : std::max(1, static_cast<int>((width - 196.0f) / 200.0f));
     const bool replacing = !replaceNodeId.empty();
 
-    s->fill = [this, s, offered, categories, currentType, choose, columns, replacing] {
+    s->fill = [this, s, offered, categories, currentKey, choose, columns] {
         const auto query = Lower(s->search);
+        s->rows.clear();
+        s->first.reset();
 
         // What the Favourites and Recent tabs list: offered effects, in the lists' own order.
         const auto marked = [&offered](const std::vector<std::string>& keys) {
-            std::vector<const EffectTypeInfo*> effects;
+            std::vector<const FxLibraryItem*> effects;
 
             for (const auto& key : keys)
             {
-                for (const auto* e : offered)
+                for (const auto& e : offered)
                 {
-                    if (guitarfx::uiclient::FxItemKey(e->type) == key)
+                    if (e.Key() == key)
                     {
-                        effects.push_back(e);
+                        effects.push_back(&e);
                     }
                 }
             }
 
             return effects;
         };
+        std::vector<const FxLibraryItem*> all;
+
+        for (const auto& e : offered)
+        {
+            all.push_back(&e);
+        }
+
         const auto favourites = marked(guitarfx::uiclient::FxFavoriteKeys(mState));
         const auto recents = marked(guitarfx::uiclient::FxRecentKeys(mState));
 
@@ -258,11 +332,12 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         for (const auto& id : categories)
         {
             const bool fav = id == kFavouritesTab, recent = id == kRecentTab;
-            const auto count = fav      ? favourites.size()
-                               : recent ? recents.size()
-                                        : static_cast<std::size_t>(std::count_if(
-                                              offered.begin(), offered.end(),
-                                              [&id](const EffectTypeInfo* e) { return e->category == id; }));
+            const auto count =
+                fav ? favourites.size()
+                : recent
+                    ? recents.size()
+                    : static_cast<std::size_t>(std::count_if(
+                          offered.begin(), offered.end(), [&id](const FxLibraryItem& e) { return e.category == id; }));
             const auto* look = (fav || recent) ? nullptr : mPresentation.Category(id);
             auto row = std::make_shared<CategoryRow>(mTheme, mIcons,
                                                      fav               ? std::string("star")
@@ -308,52 +383,117 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         std::vector<Ptr> right;
         const auto& listed = query.empty() && mPickerCategory == kFavouritesTab ? favourites
                              : query.empty() && mPickerCategory == kRecentTab   ? recents
-                                                                                : offered;
-        const bool marksTab = &listed != &offered;
+                                                                                : all;
+        const bool marksTab = &listed != &all;
 
-        for (const auto* effect : listed)
+        for (const auto* listedEffect : listed)
         {
+            const auto& effect = *listedEffect;
+
+            // A search looks through every tab, by name, type, category and description
+            // (fxBrowser.ts).
+            const auto* category = mPresentation.Category(effect.category);
             const bool match = marksTab        ? true
-                               : query.empty() ? effect->category == mPickerCategory
-                                               : Lower(effect->name).find(query) != std::string::npos;
+                               : query.empty() ? effect.category == mPickerCategory
+                                               : Lower(effect.name + " " + effect.type + " " + effect.category + " " +
+                                                       (category != nullptr ? category->name : std::string()) + " " +
+                                                       effect.description)
+                                                         .find(query) != std::string::npos;
 
             if (!match)
             {
                 continue;
             }
 
-            const auto* look = mPresentation.Category(effect->category);
+            const auto* look = mPresentation.Category(effect.category);
             std::shared_ptr<cycfi::artist::image> thumb;
 
-            if (effect->requiresResource || !effect->resourceType.empty())
+            // Its layout's picture when it has one, else a saved Custom Effect's own
+            // (fxBrowser.ts itemThumbnail), else its gear's.
+            const auto* layout =
+                guitarfx::uiclient::DefaultLibraryLayout(mState.layouts.library, effect.type, effect.blendId);
+            const auto& picture = layout != nullptr && !layout->thumbnailDataUrl.empty() ? layout->thumbnailDataUrl
+                                                                                         : effect.thumbnailDataUrl;
+
+            if (!picture.empty())
             {
-                thumb = mImages.Find(mPresentation.EquipmentImage(effect->type, effect->category));
+                const auto bytes = guitarfx::uiclient::ImageDataUrlBytes(picture);
+                thumb = mRemoteImages.Find("thumb:" + std::to_string(std::hash<std::string>{}(picture)), &bytes);
             }
 
-            auto row = std::make_shared<EffectRow>(
-                mTheme, mIcons, mPresentation.IconFor(effect->type, effect->category), thumb, effect->name,
-                look != nullptr ? look->name : effect->category,
-                Theme::Argb(mPresentation.CategoryColour(effect->category)), effect->type == currentType);
-            row->onClick = [choose, type = effect->type] { choose(type); };
-
-            // Dragged onto the chain, it goes where it is let go.
-            if (!replacing)
+            if (!thumb && (effect.requiresResource || !effect.resourceType.empty()))
             {
-                row->onDrag = [this, type = effect->type, name = effect->name](el::point, el::point to, bool done) {
-                    DragLibraryEffect(type, name, to, done);
-                };
+                thumb = mImages.Find(mPresentation.EquipmentImage(effect.type, effect.category));
             }
 
-            if (effect->type.rfind("composite:", 0) == 0)
+            auto row = std::make_shared<EffectRow>(mTheme, mIcons, mPresentation.IconFor(effect.type, effect.category),
+                                                   thumb, effect.name, look != nullptr ? look->name : effect.category,
+                                                   Theme::Argb(mPresentation.CategoryColour(effect.category)),
+                                                   effect.Key() == currentKey);
+            row->onClick = [choose, item = effect] { choose(item); };
+
+            // Dragged onto the chain, it goes where it is let go; replacing too, as the web's.
+            row->onDrag = [this, item = effect](el::point, el::point to, bool done) {
+                DragLibraryEffect(item, to, done);
+            };
+
+            // Up and Down along the cards; Up from the first goes back to the search.
+            row->onStep = [this, weak = s->self, index = s->rows.size()](int step) {
+                mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), weak, index, step] {
+                    const auto live = weak.lock();
+
+                    if (!alive.lock() || !live)
+                    {
+                        return;
+                    }
+
+                    const auto to = static_cast<std::ptrdiff_t>(index) + step;
+
+                    if (to < 0)
+                    {
+                        if (const auto box = live->searchBox.lock())
+                        {
+                            Focusable::SetFocusVisible(true);
+                            FocusInView(mSession.View(), *box);
+                        }
+                    }
+                    else if (static_cast<std::size_t>(to) < live->rows.size())
+                    {
+                        if (const auto next = live->rows[static_cast<std::size_t>(to)].lock())
+                        {
+                            Focusable::SetFocusVisible(true);
+                            FocusInView(mSession.View(), *next);
+                        }
+                    }
+                });
+            };
+            s->rows.push_back(row);
+
+            if (!s->first)
+            {
+                s->first = effect;
+            }
+
+            // What it is beyond an effect (.fx-item-badge): a composite, a blend, a saved Custom
+            // Effect, or an effect that needs a model or IR.
+            if (effect.type.rfind("composite:", 0) == 0)
             {
                 row->SetBadge(EffectRow::Badge::Composite);
             }
-            else if (effect->requiresResource)
+            else if (!effect.blendId.empty())
+            {
+                row->SetBadge(EffectRow::Badge::Blend);
+            }
+            else if (!effect.customEffectId.empty())
+            {
+                row->SetBadge(EffectRow::Badge::Custom);
+            }
+            else if (effect.requiresResource)
             {
                 row->SetBadge(EffectRow::Badge::Resource);
             }
 
-            const auto key = guitarfx::uiclient::FxItemKey(effect->type);
+            const auto key = effect.Key();
             row->Star(guitarfx::uiclient::IsFxFavorite(mState, key), [this, weak = s->self, key] {
                 if (weak.expired())
                 {
@@ -401,9 +541,11 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         {
             const bool marks = query.empty() && (mPickerCategory == kFavouritesTab || mPickerCategory == kRecentTab);
             auto none = std::make_shared<Text>(mTheme,
-                                               !marks                              ? "No effects match."
-                                               : mPickerCategory == kFavouritesTab ? "Star an effect to keep it here."
-                                                                                   : "The effects you add show here.",
+                                               !query.empty() ? "No effects match your search"
+                                               : !marks       ? "No effects in this category"
+                                               : mPickerCategory == kFavouritesTab
+                                                   ? "Star an effect to keep it here."
+                                                   : "Effects you add to the chain show up here.",
                                                12.0f);
             none->Colour(mTheme.TextMuted());
             right.push_back(FixedHeight(30, PadXY(8, 0, none)));
@@ -427,17 +569,54 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
     }
 
     // The header (.fx-library-header): the title, what to do, and Close.
+    // Replacing, the title is in the accent (.is-replacing).
     auto heading = std::make_shared<Text>(mTheme, title, 13.0f, Weight::SemiBold);
-    heading->Colour(mTheme.Ink());
-    auto hint = std::make_shared<Text>(mTheme,
-                                       replacing ? "Click an effect to put it in its place."
-                                                 : "Drag an effect into the signal chain, or click one to add it.",
-                                       11.5f);
+    heading->Colour(replacing ? mTheme.Accent() : mTheme.Ink());
+    auto hint =
+        std::make_shared<Text>(mTheme,
+                               replacing ? "Click an effect to use it instead, or drag one anywhere in the chain."
+                                         : "Drag an effect into the signal chain, or click one to add it.",
+                               11.5f);
     hint->Colour(mTheme.TextSecondary());
     auto close = std::make_shared<Button>(mTheme, "\xC3\x97  Close", [this] { CloseOverlay(); }, Button::Style::Plain);
     close->MinWidth(80).TextSize(12.0f);
 
     auto [searchElement, searchBox] = el::input_box("Search effects...", Font(Weight::Regular), 1.0f);
+    s->searchBox = searchBox;
+    // Enter takes the first match; Down goes into the list (fxBrowser.ts onSearchKey).
+    searchBox->on_enter = [weak = s->self, choose](std::string_view) {
+        const auto live = weak.lock();
+
+        if (live && !live->search.empty() && live->first)
+        {
+            choose(*live->first);
+        }
+
+        return true;
+    };
+    auto searchHook = std::make_shared<KeyHook>(el::share(std::move(searchElement)));
+    searchHook->onKey = [this, weak = s->self](el::key_info k) {
+        const auto live = weak.lock();
+
+        if (!live || k.key != el::key_code::down || k.action == el::key_action::release || live->rows.empty())
+        {
+            return false;
+        }
+
+        mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), weak] {
+            const auto state = weak.lock();
+
+            if (alive.lock() && state && !state->rows.empty())
+            {
+                if (const auto first = state->rows.front().lock())
+                {
+                    Focusable::SetFocusVisible(true);
+                    FocusInView(mSession.View(), *first);
+                }
+            }
+        });
+        return true;
+    };
     searchBox->on_text = [weak = s->self](std::string_view text) {
         const auto live = weak.lock();
 
@@ -448,14 +627,33 @@ void Shell::OpenEffectPicker(const std::string& afterNodeId, const std::string& 
         }
     };
 
+    auto search = Over(PadXY(10, 0, Middle(searchHook)), el::share(Surface(mTheme.Input(), mTheme.Border(), 6.0f)));
+
+    // From a cable's +: the small flyout there (.fx-flyout), its title and search in one band
+    // over a narrower rail and one effect per row. Under the +, or over it where there is no
+    // room below.
+    if (flyout)
+    {
+        const float flyWidth = std::min(560.0f, view.x - 16.0f);
+        const float flyHeight = std::min(440.0f, view.y - 16.0f);
+        const bool above = plus->bottom + 5.0f + flyHeight > view.y - 8.0f;
+        auto flyTitle = std::make_shared<Text>(mTheme, "ADD EFFECT", 12.0f, Weight::Title);
+        flyTitle->Colour(mTheme.Ink()).Tracking(0.08f).Fixed(true);
+        auto band = Over(Pad(14, 6, 8, 6, Row({Middle(flyTitle), HGap(10), Stretch(FixedHeight(30, search))})),
+                         el::share(Surface(mTheme.Bar(), mTheme.ModalRule(), 0.0f)));
+        auto flyPanel =
+            Col({FixedHeight(44, band), Row({FixedWidth(164, Pad(6, 6, 6, 6, s->left)), Pad(8, 8, 8, 0, s->right)})});
+        ShowPopover(flyPanel, *plus, flyWidth, flyHeight, above);
+        mOnOverlayClosed = [state] { state->fill = nullptr; };
+        return;
+    }
+
     auto header =
         Row({Col({FixedHeight(18, heading), FixedHeight(18, hint)}), Stretch(), Middle(FixedHeight(32, close))});
-    auto search = Over(PadXY(10, 0, Middle(el::share(std::move(searchElement)))),
-                       el::share(Surface(mTheme.Input(), mTheme.Border(), 6.0f)));
     auto panel =
         Pad(14, 10, 12, 12,
             Col({FixedHeight(40, header), VGap(10),
-                 Row({FixedWidth(176, s->left), HGap(12), Col({FixedHeight(34, search), VGap(10), s->right})})}));
+                 Row({FixedWidth(208, s->left), HGap(12), Col({FixedHeight(34, search), VGap(10), s->right})})}));
     ShowPopover(panel, el::rect{x, top, x + width, top}, width, height);
     // The state lives as long as the chooser.
     mOnOverlayClosed = [state] { state->fill = nullptr; };

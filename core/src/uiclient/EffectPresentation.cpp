@@ -131,6 +131,7 @@ EffectPresentation EffectPresentation::FromJson(const nlohmann::json& document)
     result.mLoaded = true;
     result.mDefaultIcon = document.value("defaultIcon", result.mDefaultIcon);
     result.mDefaultNodeClass = document.value("defaultNodeClass", result.mDefaultNodeClass);
+    result.mDefaultBlendCategory = document.value("defaultBlendCategory", result.mDefaultBlendCategory);
 
     if (document.contains("categoryOrder") && document["categoryOrder"].is_array())
     {
@@ -160,6 +161,7 @@ EffectPresentation EffectPresentation::FromJson(const nlohmann::json& document)
 
     readStringMap("nodeCategoryAliases", result.mNodeCategoryAliases);
     readStringMap("nodeClasses", result.mNodeClasses);
+    readStringMap("blendCategories", result.mBlendCategories);
     readStringMap("legacyEffectEquipmentImages", result.mLegacyImages);
 
     if (document.contains("categories") && document["categories"].is_object())
@@ -209,6 +211,12 @@ EffectPresentation EffectPresentation::FromJson(const nlohmann::json& document)
     }
 
     return result;
+}
+
+std::string EffectPresentation::BlendCategory(const std::string& gearCategory) const
+{
+    const auto it = mBlendCategories.find(gearCategory);
+    return it == mBlendCategories.end() ? mDefaultBlendCategory : it->second;
 }
 
 std::string EffectPresentation::AliasCategory(const std::string& category) const

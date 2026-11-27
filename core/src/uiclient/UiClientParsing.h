@@ -29,6 +29,9 @@ namespace guitarfx::uiclient::parse
 
 [[nodiscard]] std::vector<EffectTypeInfo> EffectCatalog(const nlohmann::json& catalog);
 
+/// The saved Custom Effects, entries without an id or module left out.
+[[nodiscard]] std::vector<CustomEffectEntry> CustomEffectLibrary(const nlohmann::json& entries);
+
 [[nodiscard]] EffectParamInfo EffectParam(const nlohmann::json& param);
 
 [[nodiscard]] EffectPresetInfo EffectPreset(const nlohmann::json& preset, const std::string& defaultSource);

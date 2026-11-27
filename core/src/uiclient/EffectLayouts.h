@@ -83,6 +83,15 @@ struct LayoutSelection
                                                                             const std::string& effectType,
                                                                             const std::string& blendId);
 
+/// The library's default layout for an effect (or one blend of it, falling back to the effect's),
+/// or null: what the FX Library's card pictures (layoutRenderer.ts getCustomLayout).
+[[nodiscard]] const EffectLayout* DefaultLibraryLayout(const LayoutLibrary& library, const std::string& effectType,
+                                                       const std::string& blendId = {});
+
+/// The picture in an image data URL (png, jpeg, gif or webp, base64), or empty for anything
+/// else (utils.ts safeImageDataUrl).
+[[nodiscard]] std::string ImageDataUrlBytes(const std::string& dataUrl);
+
 [[nodiscard]] const EffectLayout* FindLayoutById(const LayoutLibrary& library, const std::string& layoutId,
                                                  const std::string& effectType, const std::string& blendId);
 

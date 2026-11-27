@@ -350,6 +350,7 @@ EffectLayout ParseEffectLayout(const nlohmann::json& raw)
     layout.blendId = StringOf(raw, "blendId");
     layout.name = StringOf(raw, "name");
     layout.version = static_cast<int>(NumberOr(raw, "version", 1.0));
+    layout.thumbnailDataUrl = StringOf(raw, "thumbnailDataUrl");
 
     const auto& dimensions = ObjectAt(raw, "dimensions");
     const double width = NumberOr(dimensions, "width", 400.0);

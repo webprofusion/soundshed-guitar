@@ -134,12 +134,27 @@ struct BlendSummary
 {
     std::string id;
     std::string name;
+    std::string category;                  // its gear: "amp", "pedal", "preamp", "full-rig", "cab" (or empty)
     std::string blendMode = "interpolate"; // "interpolate" or "snap"
     std::size_t modelCount = 0;
     /// The models, in the definition's order: its mappings, else its plain model list.
     std::vector<BlendModelMapping> mappings;
     /// The parameters the definition lists, in its order (BlendMix.h MappedBlendParamIds).
     std::vector<std::string> parameters;
+};
+
+/// A Custom Effect saved to the library (customEffectLibrary): a WebAssembly module with its
+/// name, settings and picture, added to a chain as a Custom Effect node that loads it.
+struct CustomEffectEntry
+{
+    std::string id;
+    std::string name;
+    std::string category;
+    std::string description;
+    std::string moduleResourceType;
+    std::string moduleResourceId;
+    std::string thumbnailDataUrl;
+    std::map<std::string, double> defaultParams;
 };
 
 struct LibraryResource
@@ -890,6 +905,7 @@ struct ClientState
 
     std::map<std::string, std::vector<LibraryResource>> resources; // by resource type
     std::vector<BlendSummary> blends;
+    std::vector<CustomEffectEntry> customEffects; // the saved Custom Effects (Topic::Catalog)
 
     /// What uses each library resource, by "type:id", as queryResourceUsage answered.
     struct ResourceUsage

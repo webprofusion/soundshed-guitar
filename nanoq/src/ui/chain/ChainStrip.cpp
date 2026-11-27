@@ -343,16 +343,16 @@ Ptr Shell::BuildChain()
     // A cable's +: inserts on the cable's own edge of the graph, as the web UI's connectors do,
     // which is the only way into a parallel branch; after `from` when no edge is found.
     auto plus = [this, &graph](const std::string& from, const std::string& to,
-                               int fromPort = -1) -> std::function<void()> {
+                               int fromPort = -1) -> std::function<void(el::rect)> {
         for (const auto& edge : graph.edges)
         {
             if (edge.from == from && edge.to == to && (fromPort < 0 || edge.fromPort == fromPort))
             {
-                return [this, edge] { OpenEffectPickerOnEdge(edge); };
+                return [this, edge](el::rect at) { OpenEffectPickerOnEdge(edge, at); };
             }
         }
 
-        return [this, from] { OpenEffectPicker(from); };
+        return [this, from](el::rect at) { OpenEffectPicker(from, {}, at); };
     };
     // A cable with its +, which knows its edge of the graph so a dragged card can land on it.
     auto cable = [this, &graph, &plus, rowHeight](const std::string& from, const std::string& to, int fromPort = -1,
@@ -412,7 +412,7 @@ Ptr Shell::BuildChain()
                 // Into a nested block's mixer the cable is drawing only, as on the main row.
                 if (joinsBlock)
                 {
-                    auto drawing = std::make_shared<Connector>(mTheme, std::function<void()>{});
+                    auto drawing = std::make_shared<Connector>(mTheme, std::function<void(el::rect)>{});
                     drawing->RowHeight(rowHeight);
                     drawing->Tint(colour);
                     lane.parts.push_back(drawing);
@@ -519,7 +519,7 @@ Ptr Shell::BuildChain()
         // Into a parallel block's mixer the cable is drawing only: the branches are its inputs.
         if (afterParallel)
         {
-            auto drawing = std::make_shared<Connector>(mTheme, std::function<void()>{});
+            auto drawing = std::make_shared<Connector>(mTheme, std::function<void(el::rect)>{});
             drawing->RowHeight(rowHeight);
             segment.parts.push_back(drawing);
         }

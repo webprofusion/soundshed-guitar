@@ -21,7 +21,8 @@ namespace nanoq::ui
 class Connector final : public el::element, public Drawn, public Focusable
 {
   public:
-    Connector(const Theme& theme, std::function<void()> onAdd, bool stretch = false)
+    /// `onAdd` is told where the + is (view coordinates): the chooser opens from it.
+    Connector(const Theme& theme, std::function<void(el::rect plus)> onAdd, bool stretch = false)
         : mTheme(theme), mOnAdd(std::move(onAdd)), mStretch(stretch)
     {
     }
@@ -34,7 +35,7 @@ class Connector final : public el::element, public Drawn, public Focusable
         return info;
     }
 
-    bool Activate(const el::rect&) override
+    bool Activate(const el::rect& at) override
     {
         if (!mOnAdd)
         {
@@ -42,7 +43,7 @@ class Connector final : public el::element, public Drawn, public Focusable
         }
 
         const auto add = mOnAdd;
-        add();
+        add(PlusRect(at));
         return true;
     }
 
@@ -256,7 +257,8 @@ class Connector final : public el::element, public Drawn, public Focusable
 
         if (!btn.down && HitsPlus(ctx, btn.pos))
         {
-            mOnAdd();
+            const auto add = mOnAdd;
+            add(PlusRect(ctx.bounds));
         }
 
         return HitsPlus(ctx, btn.pos);
@@ -293,6 +295,12 @@ class Connector final : public el::element, public Drawn, public Focusable
         return el::point{b.left + kConnectorWidth * 0.4f, b.top + b.height() * 0.5f};
     }
 
+    static el::rect PlusRect(const el::rect& b)
+    {
+        const auto c = PlusCentre(b);
+        return el::rect{c.x - 11.0f, c.y - 11.0f, c.x + 11.0f, c.y + 11.0f};
+    }
+
     bool HitsPlus(const el::context& ctx, el::point p) const
     {
         const auto c = PlusCentre(ctx.bounds);
@@ -307,7 +315,7 @@ class Connector final : public el::element, public Drawn, public Focusable
     }
 
     const Theme& mTheme;
-    std::function<void()> mOnAdd;
+    std::function<void(el::rect)> mOnAdd;
     bool mStretch;
     bool mHover = false, mHoverCable = false;
     std::shared_ptr<HitMap> mHits;

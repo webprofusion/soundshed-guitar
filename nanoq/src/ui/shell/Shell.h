@@ -42,6 +42,7 @@
 #include "uiclient/ChainLayout.h"
 #include "uiclient/DspDiagnostics.h"
 #include "uiclient/DspStatus.h"
+#include "uiclient/FxLibrary.h"
 #include "uiclient/PresetInspect.h"
 #include "uiclient/SignalFlow.h"
 #include "uiclient/UpdateCheck.h"
@@ -431,7 +432,7 @@ class Shell
     [[nodiscard]] guitarfx::uiclient::NodeDropTarget DropTargetAt(el::point to, const std::string& except);
     /// An effect dragged out of the FX Library: lights where it would land, and adds it there when
     /// let go.
-    void DragLibraryEffect(const std::string& type, const std::string& name, el::point to, bool done);
+    void DragLibraryEffect(const guitarfx::uiclient::FxLibraryItem& item, el::point to, bool done);
 
     // PresetDrag.cpp: dragging in the preset library (PresetDrag.h).
     /// What is dragged follows the pointer, the place it would land is lit, and on `done` it lands.
@@ -740,6 +741,7 @@ class Shell
     void SelectPresetBrowserFolder(const std::string& folderId);
     [[nodiscard]] Ptr BuildFolderColumn();
     [[nodiscard]] Ptr BuildSetlistsView(Ptr tabs);
+
     /// How a prompt asks, as the web UI's showPrompt.
     struct PromptOptions
     {
@@ -748,6 +750,7 @@ class Shell
         bool multiline = false;           // several lines, in a box where Enter starts a new one
         bool allowEmpty = false;          // OK with nothing entered gives ""; otherwise it says so
     };
+
     /// A menu or prompt opened from another menu's item, once that menu has closed.
     void PostMenu(const std::string& title, std::vector<MenuItem> items);
     void PostPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
@@ -1009,7 +1012,6 @@ class Shell
     void RemoveLayer(Ptr layer);
     void OpenMenu(const std::string& title, std::vector<MenuItem> items);
 
-
     void OpenPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
                     std::function<void(const std::string&)> onSubmit);
     void OpenPrompt(const std::string& title, const std::string& initial, const std::string& confirmLabel,
@@ -1048,12 +1050,16 @@ class Shell
                      std::function<void()> onYes);
     /// Adds the chosen effect after `afterNodeId`, or, with `replaceNodeId`, puts it in that
     /// node's place.
-    void OpenEffectPicker(const std::string& afterNodeId, const std::string& replaceNodeId = {});
+    /// From a cable's + (`plus`), the small Add Effect flyout there, as the web UI's
+    /// addEffectDropdown.ts; otherwise the whole FX Library.
+    void OpenEffectPicker(const std::string& afterNodeId, const std::string& replaceNodeId = {},
+                          std::optional<el::rect> plus = std::nullopt);
     /// Adds the chosen effect on this edge of the graph.
-    void OpenEffectPickerOnEdge(const guitarfx::GraphEdge& edge);
+    void OpenEffectPickerOnEdge(const guitarfx::GraphEdge& edge, std::optional<el::rect> plus = std::nullopt);
     void ExpectAddedNode();
     void ShowToast(const std::string& title, const std::string& detail, bool isError);
-    [[nodiscard]] std::vector<const guitarfx::uiclient::EffectTypeInfo*> OfferedEffects() const;
+    /// What the FX Library lists: the catalog's effects, then the blends and saved Custom Effects.
+    [[nodiscard]] std::vector<guitarfx::uiclient::FxLibraryItem> OfferedEffects() const;
 
     // Instruments.cpp
     void OpenDemoClips();

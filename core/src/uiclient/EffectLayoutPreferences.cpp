@@ -7,6 +7,7 @@
 #include "uiclient/EffectLayouts.h"
 
 #include "uiclient/NodeLabels.h"
+#include "util/Base64.h"
 
 #include <algorithm>
 #include <cctype>
@@ -220,6 +221,75 @@ std::vector<const LayoutLibraryEntry*> AvailableLayoutEntries(const LayoutLibrar
     }
 
     return entries;
+}
+
+const EffectLayout* DefaultLibraryLayout(const LayoutLibrary& library, const std::string& effectType,
+                                         const std::string& blendId)
+{
+    const auto find = [&library](const std::string& key) -> const EffectLayout* {
+        const auto id = library.defaults.find(key);
+        const auto entries = library.byEffectType.find(key);
+
+        if (id == library.defaults.end() || id->second.empty() || entries == library.byEffectType.end())
+        {
+            return nullptr;
+        }
+
+        for (const auto& entry : entries->second)
+        {
+            if (entry.layoutId == id->second)
+            {
+                return &entry.layout;
+            }
+        }
+
+        return nullptr;
+    };
+
+    if (!blendId.empty())
+    {
+        if (const auto* layout = find(effectType + "::" + blendId))
+        {
+            return layout;
+        }
+    }
+
+    return find(effectType);
+}
+
+std::string ImageDataUrlBytes(const std::string& dataUrl)
+{
+    static const char* const kTypes[] = {"png", "jpeg", "gif", "webp"};
+    std::size_t start = std::string::npos;
+
+    for (const char* type : kTypes)
+    {
+        const std::string prefix = std::string("data:image/") + type + ";base64,";
+
+        if (dataUrl.rfind(prefix, 0) == 0)
+        {
+            start = prefix.size();
+            break;
+        }
+    }
+
+    if (start == std::string::npos)
+    {
+        return {};
+    }
+
+    for (std::size_t i = start; i < dataUrl.size(); ++i)
+    {
+        const char c = dataUrl[i];
+
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '+' && c != '/' && c != '=')
+        {
+            return {};
+        }
+    }
+
+    const auto bytes = util::DecodeBase64(dataUrl.substr(start));
+    return std::string(bytes.begin(), bytes.end());
 }
 
 const EffectLayout* FindLayoutById(const LayoutLibrary& library, const std::string& layoutId,

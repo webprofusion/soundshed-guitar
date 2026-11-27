@@ -62,6 +62,10 @@ class EffectPresentation
 
     [[nodiscard]] Argb CategoryColour(const std::string& category) const;
 
+    /// The FX Library category a blend of this gear falls in (pedal: utility, cab: cab, the
+    /// rest: amp).
+    [[nodiscard]] std::string BlendCategory(const std::string& gearCategory) const;
+
     /// The chain node's colour class ("amp", "cab", ...; "utility" for anything else).
     [[nodiscard]] std::string NodeClass(const std::string& category) const;
 
@@ -88,6 +92,8 @@ class EffectPresentation
     bool mLoaded = false;
     std::string mDefaultIcon = "gear";
     std::string mDefaultNodeClass = "utility";
+    std::string mDefaultBlendCategory = "amp";
+    std::map<std::string, std::string> mBlendCategories{{"pedal", "utility"}, {"cab", "cab"}};
     std::vector<std::string> mCategoryOrder;
     std::map<std::string, std::string> mNodeCategoryAliases;
     std::map<std::string, std::string> mNodeClasses;

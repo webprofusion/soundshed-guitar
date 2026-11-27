@@ -271,6 +271,11 @@ void UiClient::RegisterPresetHandlers()
             }
 
             // The blends a blend node can name: their name, mode and how many models they hold.
+            if (const auto saved = m.find("customEffectLibrary"); saved != m.end())
+            {
+                s.customEffects = parse::CustomEffectLibrary(*saved);
+            }
+
             s.blends.clear();
 
             if (m.contains("blendLibrary") && m["blendLibrary"].is_array())
@@ -285,6 +290,11 @@ void UiClient::RegisterPresetHandlers()
                     BlendSummary blend;
                     blend.id = b["id"].get<std::string>();
                     blend.name = b.value("name", blend.id);
+
+                    if (const auto c = b.find("category"); c != b.end() && c->is_string())
+                    {
+                        blend.category = c->get<std::string>();
+                    }
 
                     if (b.value("blendMode", std::string()) == "snap")
                     {

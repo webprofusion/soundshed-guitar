@@ -162,7 +162,7 @@ void Shell::DragCard(const std::string& nodeId, el::point from, el::point to, bo
     mSession.View().refresh();
 }
 
-void Shell::DragLibraryEffect(const std::string& type, const std::string& name, el::point to, bool done)
+void Shell::DragLibraryEffect(const guitarfx::uiclient::FxLibraryItem& item, el::point to, bool done)
 {
     using namespace guitarfx::uiclient;
 
@@ -171,7 +171,7 @@ void Shell::DragLibraryEffect(const std::string& type, const std::string& name, 
     {
         if (!mDragGhost)
         {
-            mDragGhost = std::make_shared<DragGhost>(mTheme, name);
+            mDragGhost = std::make_shared<DragGhost>(mTheme, item.name);
             mSession.View().add(mDragGhost);
         }
 
@@ -205,16 +205,16 @@ void Shell::DragLibraryEffect(const std::string& type, const std::string& name, 
     if (done && target.kind != NodeDropTarget::Kind::None)
     {
         CloseOverlay();
-        RecordFxRecent(mSession.Commands(), mState, FxItemKey(type));
+        RecordFxRecent(mSession.Commands(), mState, item.Key());
         ExpectAddedNode();
 
         if (target.kind == NodeDropTarget::Kind::Node)
         {
-            mSession.Commands().AddNode(type, target.nodeId);
+            mSession.Commands().AddNode(item.type, target.nodeId, item.options);
         }
         else
         {
-            mSession.Commands().AddNodeOnEdge(type, target.edge);
+            mSession.Commands().AddNodeOnEdge(item.type, target.edge, item.options);
         }
     }
 

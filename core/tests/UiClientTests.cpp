@@ -49,6 +49,7 @@
 #include "uiclient/EffectPresentation.h"
 #include "uiclient/ExposedResources.h"
 #include "uiclient/FeatureFlags.h"
+#include "uiclient/FxLibrary.h"
 #include "uiclient/FxMarks.h"
 #include "uiclient/InputLevelling.h"
 #include "uiclient/InputMode.h"
@@ -1306,6 +1307,29 @@ void TestEffectPresentationTable()
            "category colours, with pedal folded into amp");
     Expect(table.NodeClass("channel") == "amp" && table.NodeClass("drive") == "utility",
            "node classes as the web UI's");
+    Expect(table.BlendCategory("pedal") == "utility" && table.BlendCategory("cab") == "cab" &&
+               table.BlendCategory("full-rig") == "amp" && table.BlendCategory("") == "amp",
+           "a blend's gear puts it in an FX Library category");
+
+    // The FX Library's blends and saved Custom Effects, and the nodes they add (catalog.ts).
+    ClientState state;
+    state.blends.push_back({"b1", "Edge Blend", "pedal"});
+    state.customEffects = parse::CustomEffectLibrary(nlohmann::json::parse(R"([
+        {"id":"ce1","name":"Fuzz Lab","category":"drive","description":"a fuzz","moduleResourceType":"wasm",
+         "moduleResourceId":"m1","defaultParams":{"gain":0.5,"bad":"x"}},
+        {"id":"ce2","name":"No module"}])"));
+    const auto blends = BlendFxItems(state, table);
+    Expect(blends.size() == 1 && blends[0].type == EffectGuids::kAmpNamBlend && blends[0].category == "utility" &&
+               blends[0].Key() == std::string(EffectGuids::kAmpNamBlend) + "|b1|" &&
+               blends[0].options.config.at("blendId") == "b1" && blends[0].options.label == "Edge Blend" &&
+               blends[0].options.category == "pedal",
+           "a blend adds a blend node naming it");
+    const auto custom = CustomEffectFxItems(state);
+    Expect(custom.size() == 1 && custom[0].type == EffectGuids::kWasmHost && custom[0].category == "drive" &&
+               custom[0].description == "a fuzz" && custom[0].Key() == std::string(EffectGuids::kWasmHost) + "||ce1" &&
+               custom[0].options.params == std::map<std::string, double>{{"gain", 0.5}} &&
+               custom[0].options.resources.size() == 1 && custom[0].options.resources[0].id == "m1",
+           "a saved Custom Effect adds its module with its settings; one without a module is left out");
     Expect(table.EquipmentImage(EffectGuids::kDelayTape, "delay") == "images/equipment/fx/studio-rack-delay.png" &&
                table.EquipmentImage("fx_nam", "amp") == "images/equipment/pedals/colourful-pedal2.png",
            "stock artwork by effect, legacy id and category");

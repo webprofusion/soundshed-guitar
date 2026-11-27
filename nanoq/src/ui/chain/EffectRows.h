@@ -104,12 +104,19 @@ class EffectRow final : public Pressable
         return info;
     }
 
-    // F stars it, as a click on its star does.
+    // F stars it, as a click on its star does; Up and Down step to the card before or after.
     bool key(const el::context& ctx, el::key_info k) override
     {
         if (onStar && k.action == el::key_action::press && k.key == el::key_code::f && k.modifiers == 0)
         {
             onStar();
+            return true;
+        }
+
+        if (onStep && k.action != el::key_action::release && k.modifiers == 0 &&
+            (k.key == el::key_code::up || k.key == el::key_code::down))
+        {
+            onStep(k.key == el::key_code::down ? 1 : -1);
             return true;
         }
 
@@ -128,7 +135,8 @@ class EffectRow final : public Pressable
         cnv.fill_style(mTheme.DarkOr(mHover ? el::rgba(40, 40, 50, 255) : el::rgba(30, 30, 38, 255),
                                      mHover ? mTheme.Elevated() : mTheme.Card()));
         cnv.fill_round_rect(b, 6.0f);
-        cnv.stroke_style(mCurrent ? mTheme.Accent().opacity(0.6f)
+        // The one being replaced: edged in its category's colour (.fx-item.is-current).
+        cnv.stroke_style(mCurrent ? mTint.opacity(0.6f)
                                   : mTheme.DarkOr(el::rgba(255, 255, 255, mHover ? 28 : 14), mTheme.Border()));
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 6.0f);
@@ -150,7 +158,11 @@ class EffectRow final : public Pressable
         }
 
         // The name stops short of the badge and the star.
-        const float nameRight = b.right - (mBadge != Badge::None ? 54.0f : 38.0f) - (mCurrent ? 40.0f : 0.0f);
+        const float nameRight = b.right -
+                                (mBadge == Badge::Custom ? 84.0f
+                                 : mBadge != Badge::None ? 54.0f
+                                                         : 38.0f) -
+                                (mCurrent ? 56.0f : 0.0f);
         const auto nameFont = Font(Weight::SemiBold).size(12.0f);
         FillText(cnv, Ellipsize(cnv, mName, nameFont, nameRight - b.left - 56.0f), nameFont, mTheme.Ink(),
                  el::rect{b.left + 56.0f, b.top + 6.0f, nameRight, b.top + 22.0f}, HAlign::Left);
@@ -175,6 +187,20 @@ class EffectRow final : public Pressable
             {
                 mIcons.Draw(cnv, "ui-folder", r, mTheme.TextSecondary());
             }
+            else if (mBadge == Badge::Blend)
+            {
+                mIcons.Draw(cnv, "blend", r, mTheme.TextSecondary());
+            }
+            else if (mBadge == Badge::Custom)
+            {
+                // A word in a pill, as the web's "Custom".
+                const auto font = Font(Weight::SemiBold).size(9.0f);
+                const float w = MeasureTextWidth("Custom", font) + 10.0f;
+                const el::rect pill{labelRight - w, cy - 8.0f, labelRight, cy + 8.0f};
+                cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 26), mTheme.Text().opacity(0.08f)));
+                cnv.fill_round_rect(pill, 8.0f);
+                FillText(cnv, "Custom", font, mTheme.TextSecondary(), pill, HAlign::Centre);
+            }
             else
             {
                 cnv.fill_style(mTheme.Accent().opacity(0.85f));
@@ -188,10 +214,16 @@ class EffectRow final : public Pressable
             }
         }
 
+        // A pill (.fx-item-current).
         if (mCurrent)
         {
-            FillText(cnv, "CURRENT", Font(Weight::SemiBold).size(9.0f), mTheme.Accent(),
-                     el::rect{labelRight - 58.0f, b.top, labelRight, b.bottom}, HAlign::Right);
+            const auto font = Font(Weight::SemiBold).size(9.0f);
+            const float w = TrackedWidth(cnv, "CURRENT", font, 0.045f) + 12.0f;
+            const float cy = b.top + b.height() * 0.5f;
+            const el::rect pill{labelRight - w, cy - 8.0f, labelRight, cy + 8.0f};
+            cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 26), mTheme.Text().opacity(0.08f)));
+            cnv.fill_round_rect(pill, 8.0f);
+            FillTrackedText(cnv, "CURRENT", font, mTheme.TextSecondary(), pill, HAlign::Centre, 0.045f);
         }
 
         // The star (.fx-favorite-toggle): the accent when starred, faint until hovered otherwise.
@@ -274,6 +306,8 @@ class EffectRow final : public Pressable
         None,
         Resource,  // it needs a model or an IR
         Composite, // a composite channel strip
+        Blend,     // a blend of models
+        Custom,    // a saved Custom Effect
     };
 
     void SetBadge(Badge badge)
@@ -284,6 +318,9 @@ class EffectRow final : public Pressable
     /// Dragged out (onto the chain): `onDrag(from, to, done)` in view coordinates. A drag is not
     /// a click.
     std::function<void(el::point from, el::point to, bool done)> onDrag;
+
+    /// Up (-1) or Down (1) pressed on it: the picker moves focus along its cards.
+    std::function<void(int step)> onStep;
 
   private:
     static el::rect StarRect(const el::rect& b)
@@ -304,6 +341,41 @@ class EffectRow final : public Pressable
     Badge mBadge = Badge::None;
     el::point mDownAt;
     bool mDragging = false;
+};
+
+/// Takes keys before what it holds: the picker's search, where Down goes into the list.
+class KeyHook final : public el::proxy_base
+{
+  public:
+    explicit KeyHook(el::element_ptr subject) : mSubject(std::move(subject))
+    {
+    }
+
+    el::element& subject() override
+    {
+        return *mSubject;
+    }
+
+    const el::element& subject() const override
+    {
+        return *mSubject;
+    }
+
+    bool key(const el::context& ctx, el::key_info k) override
+    {
+        if (onKey && onKey(k))
+        {
+            return true;
+        }
+
+        return proxy_base::key(ctx, k);
+    }
+
+    /// True when it took the key.
+    std::function<bool(el::key_info)> onKey;
+
+  private:
+    el::element_ptr mSubject;
 };
 
 /// What is being dragged, named in a chip by the pointer over everything: a layer of the view that

@@ -25,6 +25,12 @@ void UiClient::RegisterLibraryHandlers()
         Notify(Topic::Catalog);
     });
 
+    // The saved Custom Effects, after one is saved, renamed or deleted.
+    On("customEffectLibrary", [this](const nlohmann::json& m) {
+        mState.customEffects = parse::CustomEffectLibrary(m.value("entries", nlohmann::json::array()));
+        Notify(Topic::Catalog);
+    });
+
     On("effectPresets", [this](const nlohmann::json& m) {
         const auto read = [&m](const char* key, const char* source,
                                std::map<std::string, std::vector<EffectPresetInfo>>& presets) {

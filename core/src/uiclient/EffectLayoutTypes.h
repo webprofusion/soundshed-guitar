@@ -207,6 +207,8 @@ struct EffectLayout
     std::optional<LayoutSwitchImage> switchImage;     // every toggle's, unless it has its own
     std::optional<LayoutControlShadow> controlShadow; // the light the knobs and toggles cast shadows from
     std::optional<LayoutScaling> scaling;
+    /// A small picture of it, as a data URL (the FX Library's card shows it).
+    std::string thumbnailDataUrl;
 };
 
 struct LayoutLibraryEntry

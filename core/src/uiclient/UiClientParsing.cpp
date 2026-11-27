@@ -162,6 +162,58 @@ EffectPresetInfo EffectPreset(const nlohmann::json& preset, const std::string& d
     return info;
 }
 
+std::vector<CustomEffectEntry> CustomEffectLibrary(const nlohmann::json& entries)
+{
+    std::vector<CustomEffectEntry> result;
+
+    if (!entries.is_array())
+    {
+        return result;
+    }
+
+    const auto text = [](const nlohmann::json& e, const char* key) {
+        const auto it = e.find(key);
+        return it != e.end() && it->is_string() ? it->get<std::string>() : std::string();
+    };
+
+    for (const auto& e : entries)
+    {
+        if (!e.is_object())
+        {
+            continue;
+        }
+
+        CustomEffectEntry entry;
+        entry.id = text(e, "id");
+        entry.name = text(e, "name");
+        entry.category = text(e, "category");
+        entry.description = text(e, "description");
+        entry.moduleResourceType = text(e, "moduleResourceType");
+        entry.moduleResourceId = text(e, "moduleResourceId");
+        entry.thumbnailDataUrl = text(e, "thumbnailDataUrl");
+
+        if (const auto params = e.find("defaultParams"); params != e.end() && params->is_object())
+        {
+            for (const auto& [key, value] : params->items())
+            {
+                if (value.is_number())
+                {
+                    entry.defaultParams[key] = value.get<double>();
+                }
+            }
+        }
+
+        if (entry.id.empty() || entry.moduleResourceId.empty())
+        {
+            continue;
+        }
+
+        result.push_back(std::move(entry));
+    }
+
+    return result;
+}
+
 std::vector<EffectTypeInfo> EffectCatalog(const nlohmann::json& catalog)
 {
     std::vector<EffectTypeInfo> result;

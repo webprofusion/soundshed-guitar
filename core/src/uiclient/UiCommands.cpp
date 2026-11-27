@@ -478,17 +478,59 @@ void UiCommands::SetNodeParam(const std::string& nodeId, const std::string& key,
     mClient.Send("updateSignalPathNodeParam", {{"nodeId", nodeId}, {"paramKey", key}, {"value", value}});
 }
 
-void UiCommands::AddNode(const std::string& effectType, const std::string& afterNodeId)
+namespace
 {
-    mClient.Send("addSignalPathNode", {{"effectType", effectType}, {"insertAfter", afterNodeId}});
+/// The node options as addSignalPathNode and replaceSignalPathNode read them; each only when set.
+void AddNodeOptions(nlohmann::json& payload, const NodeOptions& options)
+{
+    if (!options.config.empty())
+    {
+        payload["config"] = options.config;
+    }
+
+    if (!options.label.empty())
+    {
+        payload["label"] = options.label;
+    }
+
+    if (!options.category.empty())
+    {
+        payload["category"] = options.category;
+    }
+
+    if (!options.params.empty())
+    {
+        payload["params"] = options.params;
+    }
+
+    if (!options.resources.empty())
+    {
+        auto resources = nlohmann::json::array();
+
+        for (const auto& r : options.resources)
+        {
+            resources.push_back({{"resourceType", r.type}, {"resourceId", r.id}});
+        }
+
+        payload["resources"] = std::move(resources);
+    }
+}
+} // namespace
+
+void UiCommands::AddNode(const std::string& effectType, const std::string& afterNodeId, const NodeOptions& options)
+{
+    nlohmann::json payload{{"effectType", effectType}, {"insertAfter", afterNodeId}};
+    AddNodeOptions(payload, options);
+    mClient.Send("addSignalPathNode", payload);
 }
 
-void UiCommands::AddNodeOnEdge(const std::string& effectType, const GraphEdge& edge)
+void UiCommands::AddNodeOnEdge(const std::string& effectType, const GraphEdge& edge, const NodeOptions& options)
 {
-    mClient.Send(
-        "addSignalPathNode",
-        {{"effectType", effectType},
-         {"edge", {{"from", edge.from}, {"to", edge.to}, {"fromPort", edge.fromPort}, {"toPort", edge.toPort}}}});
+    nlohmann::json payload{
+        {"effectType", effectType},
+        {"edge", {{"from", edge.from}, {"to", edge.to}, {"fromPort", edge.fromPort}, {"toPort", edge.toPort}}}};
+    AddNodeOptions(payload, options);
+    mClient.Send("addSignalPathNode", payload);
 }
 
 void UiCommands::RemoveNode(const std::string& nodeId)
@@ -522,9 +564,11 @@ void UiCommands::SetSplitBranchCount(const std::string& splitterId, int count)
     mClient.Send("setSplitBranchCount", {{"splitterId", splitterId}, {"count", count}});
 }
 
-void UiCommands::ReplaceNode(const std::string& nodeId, const std::string& effectType)
+void UiCommands::ReplaceNode(const std::string& nodeId, const std::string& effectType, const NodeOptions& options)
 {
-    mClient.Send("replaceSignalPathNode", {{"nodeId", nodeId}, {"newEffectType", effectType}});
+    nlohmann::json payload{{"nodeId", nodeId}, {"newEffectType", effectType}};
+    AddNodeOptions(payload, options);
+    mClient.Send("replaceSignalPathNode", payload);
 }
 
 void UiCommands::SetNodeChannelMode(const std::string& nodeId, const std::string& channelMode)
