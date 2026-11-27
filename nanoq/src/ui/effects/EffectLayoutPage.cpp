@@ -7,6 +7,7 @@
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
+#include "uiclient/ExposedResources.h"
 #include "uiclient/ParamFormat.h"
 
 #include <chrono>
@@ -105,9 +106,21 @@ Ptr Shell::BuildEffectLayout(const guitarfx::GraphNode& node, const EffectLayout
     input.defaultControlsSize = controlsSize;
     input.defaultControlsFit = controlsFit;
     // A model or IR slot the layout places is the editor's own slot row, put where the layout
-    // says: the effect's slots by index ("__resource__:primary:<index>"), two for the IR Cabinet.
+    // says: the effect's slots by index ("__resource__:primary:<index>"), two for the IR Cabinet,
+    // or a composite's or Custom Effect's by the slot's id ("__resource__:<id>:<index>").
     input.resourceSlot = [this, &node](const LayoutResourceSlot& slot, const std::string& label, float) -> Ptr {
         const auto* type = mState.FindEffectType(node.type);
+
+        for (const auto& exposed : NodeExposedResources(mState, node))
+        {
+            if (exposed.resourceId == slot.resourceType && exposed.resourceType != "plugin")
+            {
+                return BuildResourceSlot(
+                    node, exposed.resourceType, exposed.resourceIndex,
+                    label.empty() ? (exposed.displayName.empty() ? exposed.resourceId : exposed.displayName) : label,
+                    false, false, exposed.allowBrowseFile);
+            }
+        }
 
         if (type == nullptr || type->resourceType.empty() || type->resourceType == "plugin")
         {

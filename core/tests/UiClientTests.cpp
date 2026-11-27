@@ -45,6 +45,7 @@
 #include "uiclient/ChainHistory.h"
 #include "uiclient/ChainLayout.h"
 #include "uiclient/EffectPresentation.h"
+#include "uiclient/ExposedResources.h"
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/FxMarks.h"
 #include "uiclient/InputLevelling.h"
@@ -58,6 +59,7 @@
 #include "uiclient/Tone3000.h"
 #include "uiclient/ToneSharing.h"
 #include "uiclient/UiClient.h"
+#include "uiclient/UiClientParsing.h"
 #include "uiclient/UiClientParsing.h"
 #include "uiclient/UiCommands.h"
 #include "util/PathEncoding.h"
@@ -845,6 +847,59 @@ void TestChainLayoutWalksNestedSplits()
     Expect(layout.NodeBefore("c") == "inner" && layout.NodeBefore("d") == "innerMix" &&
                layout.NodeBefore("a") == "split",
            "NodeBefore follows nested branches");
+}
+
+// A composite's slots and a Custom Effect's: what the effect editor draws a picker for and
+// what UiCommands names to the engine (exposedResourceSlots.ts, presetV2.ts).
+void TestExposedResourceSlots()
+{
+    const auto catalog = nlohmann::json::parse(R"([
+        {"type": "composite:amp-and-cab", "name": "Amp and Cab", "exposedResources": [
+            {"resourceId": "amp", "displayName": "Amp Model", "resourceType": "nam", "resourceIndex": 0},
+            {"resourceId": "cab", "displayName": "Cab IR", "resourceType": "ir", "resourceIndex": 0}]},
+        {"type": ")" + std::string(EffectGuids::kWasmHost) +
+                                               R"(", "name": "Custom Effect", "resourceType": "wasm",
+         "exposedResources": [{"resourceId": "module", "displayName": "Module", "resourceType": "wasm",
+                               "resourceIndex": 0}]}
+    ])");
+
+    ClientState state;
+    state.catalog = parse::EffectCatalog(catalog);
+
+    GraphNode composite;
+    composite.id = "c1";
+    composite.type = "composite:amp-and-cab";
+    const auto compositeSlots = NodeExposedResources(state, composite);
+    Expect(compositeSlots.size() == 2 && compositeSlots[0].resourceIndex == 0 && compositeSlots[1].resourceIndex == 1,
+           "a composite's slots are numbered in declaration order, whatever inner slot they forward to");
+    Expect(compositeSlots[1].displayName == "Cab IR" && compositeSlots[1].resourceType == "ir",
+           "a composite slot keeps its name and kind");
+
+    GraphNode wasm;
+    wasm.id = "w1";
+    wasm.type = EffectGuids::kWasmHost;
+    wasm.config["wasmGuestDescriptor"] =
+        nlohmann::json::array({
+                                  {{"key", "name"}, {"value", "Sampler"}},
+                                  {{"key", "resource.samples.title"}, {"value", "Samples"}},
+                                  {{"key", "resource.samples.type"}, {"value", "wav"}},
+                                  {{"key", "resource.samples.allowBrowseFile"}, {"value", "false"}},
+                                  {{"key", "resource.table.name"}, {"value", "Table"}},
+                                  {{"key", "resource.module.title"}, {"value", "Shadowed"}},
+                                  {{"key", "resource.bad-id.title"}, {"value", "Ignored"}},
+                              })
+            .dump();
+    const auto wasmSlots = NodeExposedResources(state, wasm);
+    Expect(wasmSlots.size() == 3 && wasmSlots[0].resourceId == "module" && wasmSlots[0].resourceIndex == 0,
+           "a Custom Effect keeps its module slot first, and an id the host uses is not declared again");
+    Expect(wasmSlots[1].resourceId == "samples" && wasmSlots[1].resourceIndex == 1 &&
+               wasmSlots[1].displayName == "Samples" && wasmSlots[1].resourceType == "wav" &&
+               !wasmSlots[1].allowBrowseFile,
+           "a declared slot takes the next index, its title, type and browse flag");
+    Expect(wasmSlots[2].resourceId == "table" && wasmSlots[2].resourceIndex == 2 &&
+               wasmSlots[2].displayName == "Table" && wasmSlots[2].resourceType == "blob" &&
+               wasmSlots[2].allowBrowseFile,
+           "a slot with only a name is a blob that can be browsed for");
 }
 
 void TestNodeArchitectureBadge()
@@ -2452,6 +2507,7 @@ int main()
     TestAutomation();
     TestInputLevelling();
     TestNodeArchitectureBadge();
+    TestExposedResourceSlots();
     TestPresetBrowse();
     TestParamFormatting();
     TestParamVisibility();

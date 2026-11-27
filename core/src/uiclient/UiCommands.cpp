@@ -13,6 +13,35 @@
 
 namespace guitarfx::uiclient
 {
+namespace
+{
+/// A composite's slot is one of its type's exposed resources, which the engine finds by id to
+/// learn what the slot's file sets inside it (resourceSelector.ts data-exposed-resource-id); the
+/// slot's index names it.
+void AttachExposedResource(const ClientState& state, nlohmann::json& payload, const std::string& nodeId,
+                           int resourceIndex)
+{
+    const auto* node = state.activePreset ? state.activePreset->graph.FindNode(nodeId) : nullptr;
+
+    if (node == nullptr || resourceIndex < 0 || node->type.rfind("composite:", 0) != 0)
+    {
+        return;
+    }
+
+    if (const auto* type = state.FindEffectType(node->type))
+    {
+        for (const auto& slot : type->exposedResources)
+        {
+            if (slot.resourceIndex == resourceIndex)
+            {
+                payload["exposedResourceId"] = slot.resourceId;
+                return;
+            }
+        }
+    }
+}
+} // namespace
+
 // ── Presets and scenes ─────────────────────────────────────────────────────
 
 void UiCommands::LoadPreset(const std::string& presetId, const std::string& sceneId)
@@ -520,6 +549,8 @@ void UiCommands::SetNodeResource(const std::string& nodeId, const std::string& r
         payload["resourceIndex"] = resourceIndex;
     }
 
+    AttachExposedResource(mClient.State(), payload, nodeId, resourceIndex);
+
     // A third-party plugin takes a while to load; the engine says when it has. What failed
     // before is no longer the question.
     if (resourceType == "plugin")
@@ -545,6 +576,8 @@ void UiCommands::SetNodeResourceFile(const std::string& nodeId, const std::strin
     {
         payload["resourceIndex"] = resourceIndex;
     }
+
+    AttachExposedResource(mClient.State(), payload, nodeId, resourceIndex);
 
     mClient.Send("updateNodeResource", std::move(payload));
 }
@@ -610,6 +643,8 @@ void UiCommands::BrowseNodeResource(const std::string& nodeId, const std::string
     {
         payload["resourceIndex"] = resourceIndex;
     }
+
+    AttachExposedResource(mClient.State(), payload, nodeId, resourceIndex);
 
     if (resourceType == "plugin")
     {

@@ -207,6 +207,36 @@ std::vector<EffectTypeInfo> EffectCatalog(const nlohmann::json& catalog)
             }
         }
 
+        if (const auto found = entry.find("exposedResources"); found != entry.end() && found->is_array())
+        {
+            for (const auto& raw : *found)
+            {
+                if (!raw.is_object())
+                {
+                    continue;
+                }
+
+                ExposedResourceInfo slot;
+                slot.resourceId = raw.value("resourceId", std::string{});
+                slot.displayName = raw.value("displayName", std::string{});
+                slot.resourceType = raw.value("resourceType", std::string{});
+                // A composite's node has one slot per exposed resource, in declaration order; the
+                // index its definition gives is the inner node's slot (exposedResourceSlots.ts).
+                const int declaration = static_cast<int>(info.exposedResources.size());
+                slot.resourceIndex =
+                    info.type.rfind("composite:", 0) == 0 ? declaration : raw.value("resourceIndex", declaration);
+                slot.allowBrowseFile = raw.value("allowBrowseFile", true);
+                slot.parameterId = raw.value("parameterId", std::string{});
+
+                if (const auto value = raw.find("parameterValue"); value != raw.end() && value->is_number())
+                {
+                    slot.parameterValue = value->get<double>();
+                }
+
+                info.exposedResources.push_back(std::move(slot));
+            }
+        }
+
         if (!info.type.empty())
         {
             result.push_back(std::move(info));

@@ -11,6 +11,7 @@
 
 #include "dsp/EffectGuids.h"
 #include "uiclient/EffectLayouts.h"
+#include "uiclient/ExposedResources.h"
 #include "uiclient/NodeLabels.h"
 #include "uiclient/ParamFormat.h"
 #include "uiclient/PitchShiftRange.h"
@@ -484,6 +485,17 @@ std::string Shell::EffectPageSignature() const
 
     s += "|blends" + std::to_string(mState.blends.size());
 
+    // A Custom Effect's slots come with the module it loads (its descriptor).
+    if (type != nullptr && !IsBoundaryNode(*node))
+    {
+        s += "|xr";
+
+        for (const auto& slot : NodeExposedResources(mState, *node))
+        {
+            s += ":" + slot.resourceId;
+        }
+    }
+
     // The IR Cabinet's cards fade what L/R Split and Mics leave doing nothing.
     if (node->type == guitarfx::EffectGuids::kCabIr)
     {
@@ -602,7 +614,11 @@ Ptr Shell::BuildEffectPage()
     const auto category = NodeCategory(mState, *node);
     const auto tint = Theme::Argb(mPresentation.CategoryColour(category));
     const bool hasPlugin = !boundary && type != nullptr && type->resourceType == "plugin";
-    const bool hasSlots = !boundary && type != nullptr && !type->resourceType.empty() &&
+    // A composite or Custom Effect names its slots (exposedResources), each with its own kind of
+    // file; a plain effect has the one slot of its type's kind.
+    const auto exposedSlots =
+        boundary || type == nullptr ? std::vector<ExposedResourceInfo>{} : NodeExposedResources(mState, *node);
+    const bool hasSlots = !boundary && type != nullptr && (!type->resourceType.empty() || !exposedSlots.empty()) &&
                           type->resourceType != "plugin" && node->type != guitarfx::EffectGuids::kAmpNamBlend;
 
     // A custom layout draws the effect in place of its groups of controls; a backdrop layout has
@@ -1883,6 +1899,21 @@ Ptr Shell::BuildEffectPage()
             addToSection(BuildResourceSlot(*node, rt, 0, "IR A", false, true), StackedSlot());
             addToSection(BuildIrList(*node), mShowIrList ? 318.0f : 29.0f);
             addToSection(BuildResourceSlot(*node, rt, 1, "IR B", true, true), StackedSlot());
+        }
+        else if (!exposedSlots.empty())
+        {
+            for (const auto& slot : exposedSlots)
+            {
+                if (slot.resourceType == "plugin")
+                {
+                    continue;
+                }
+
+                addToSection(BuildResourceSlot(*node, slot.resourceType, slot.resourceIndex,
+                                               slot.displayName.empty() ? slot.resourceId : slot.displayName, false,
+                                               true, slot.allowBrowseFile),
+                             StackedSlot());
+            }
         }
         else
         {

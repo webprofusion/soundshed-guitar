@@ -91,6 +91,19 @@ struct EffectPresetInfo
     std::vector<std::string> parameterOrder; // a registry factory preset's apply order, if it has one
 };
 
+/// A resource slot an effect surfaces (the catalog's exposedResources): a composite's inner amp or
+/// cab, the IR Cabinet's A and B, a Custom Effect's guest files.
+struct ExposedResourceInfo
+{
+    std::string resourceId; // the slot's id, sent back as exposedResourceId
+    std::string displayName;
+    std::string resourceType; // "nam", "ir", "wasm", "blob"...
+    int resourceIndex = 0;    // where the node keeps its file
+    bool allowBrowseFile = true;
+    std::string parameterId;
+    std::optional<double> parameterValue;
+};
+
 struct EffectTypeInfo
 {
     std::string type;
@@ -100,6 +113,7 @@ struct EffectTypeInfo
     std::string resourceType;
     std::vector<EffectParamInfo> parameters;
     std::vector<EffectPresetInfo> presets;
+    std::vector<ExposedResourceInfo> exposedResources;
 
     [[nodiscard]] const EffectParamInfo* FindParam(const std::string& key) const;
 };

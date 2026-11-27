@@ -232,7 +232,7 @@ constexpr std::size_t kIrListMaxRows = 300;
 } // namespace
 
 Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string& resourceType, int resourceIndex,
-                             const std::string& label, bool optional, bool stacked)
+                             const std::string& label, bool optional, bool stacked, bool allowBrowse)
 {
     auto& commands = mSession.Commands();
     const std::string nodeId = node.id;
@@ -284,7 +284,8 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
         };
     };
 
-    const std::string what = resourceType == "nam" ? "model" : "impulse response";
+    const bool library = resourceType == "nam" || resourceType == "ir";
+    const std::string what = resourceType == "nam" ? "model" : resourceType == "ir" ? "impulse response" : "resource";
     auto slate = [this](const char* icon, std::function<void()> onClick, bool enabled) {
         auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Slate);
         b->Size(26, 26).IconSize(13).Disabled(!enabled);
@@ -294,10 +295,52 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
 
     auto choose = std::make_shared<SelectField>(mTheme, mIcons, missing ? name + "  (file missing)" : name,
                                                 at >= 0 || ref != nullptr, missing);
-    choose->AccessName(what == "model" ? "Model" : "Impulse response");
+    choose->AccessName(what == "model" ? "Model" : what == "resource" ? label : "Impulse response");
     choose->onClick = [this, nodeId, resourceType, resourceIndex] {
         OpenResourceBrowser(nodeId, resourceType, resourceIndex);
     };
+
+    // A Custom Effect's or composite's own kind of file (a module, a data blob) has no browser:
+    // the library's files of that kind and Browse, as the web UI's drop-down and folder button
+    // (resourceSelector.ts).
+    if (!library)
+    {
+        choose->onClick = [this, nodeId, resourceType, resourceIndex, label, allowBrowse] {
+            const auto* n = SelectedNode();
+
+            if (n == nullptr || n->id != nodeId)
+            {
+                return;
+            }
+
+            const auto* current = SlotRef(*n, resourceIndex);
+            std::vector<MenuItem> items;
+            items.push_back({"None", current == nullptr || current->resourceId.empty(), false,
+                             [this, nodeId, resourceType, resourceIndex] {
+                                 mSession.Commands().SetNodeResource(nodeId, resourceType, {}, resourceIndex);
+                             }});
+
+            for (const auto* entry : OrderedResources(mState, resourceType))
+            {
+                items.push_back({entry->name.empty() ? entry->id : entry->name,
+                                 current != nullptr && current->resourceId == entry->id, false,
+                                 [this, nodeId, resourceType, resourceIndex, id = entry->id] {
+                                     mSession.Commands().SetNodeResource(nodeId, resourceType, id, resourceIndex);
+                                 }});
+            }
+
+            if (allowBrowse)
+            {
+                MenuItem browse{"Browse for file...", false, false, [this, nodeId, resourceType, resourceIndex] {
+                                    mSession.Commands().BrowseNodeResource(nodeId, resourceType, resourceIndex);
+                                }};
+                browse.icon = "folder";
+                items.push_back(std::move(browse));
+            }
+
+            OpenMenu(label.empty() ? std::string("Resource") : label, std::move(items));
+        };
+    }
 
     auto clear = slate(
         "x",
@@ -318,9 +361,10 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
 
     if (empty && !missing)
     {
-        const std::string prompt = resourceType == "ir"    ? (optional ? "Add a second IR" : "Choose an IR")
-                                   : resourceType == "nam" ? "Choose a model"
-                                                           : "Choose a resource";
+        const std::string prompt = resourceType == "ir"     ? (optional ? "Add a second IR" : "Choose an IR")
+                                   : resourceType == "nam"  ? "Choose a model"
+                                   : resourceType == "wasm" ? "Choose a module"
+                                                            : "Choose " + Lower(label.empty() ? "a file" : label);
         const std::string hint = resourceType == "ir"    ? "or drop a .wav file here"
                                  : resourceType == "nam" ? "or drop a .nam file here"
                                                          : "";
