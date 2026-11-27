@@ -872,5 +872,11 @@ struct ClientState
 
     /// The active scene's title, or empty when the preset has one unnamed scene.
     [[nodiscard]] const PresetScene* ActiveScene() const;
+
+    /// Makes the active preset's working graph the active scene's, as the web UI's
+    /// selectPresetScene does. The engine sends a preset with scenes and no working graph of its
+    /// own, so parsing it leaves the first scene's chain in `graph`; without this every scene past
+    /// the first showed (and edited, as far as the user could see) the first scene's chain.
+    void UseActiveSceneGraph();
 };
 } // namespace guitarfx::uiclient

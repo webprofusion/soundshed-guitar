@@ -159,6 +159,10 @@ struct EffectLayout
     bool useDefaultControls = false;
     LayoutPoint defaultControlsOffset;
     LayoutPoint defaultControlsScale{1.0, 1.0};
+    /// A box on the backdrop, its top left at defaultControlsOffset, that the default controls stay
+    /// inside (layoutControlsArea.ts): they wrap at its width and shrink, keeping their scale's
+    /// shape, until they are no taller than it. Unset: they wrap at the layout's width.
+    std::optional<LayoutSize> defaultControlsArea;
     std::string containerTheme; // "light", "dark", "classic", or empty for the app's theme
     std::string controlLabelColor;
     std::string controlValueColor;

@@ -119,6 +119,23 @@ const PresetScene* ClientState::ActiveScene() const
     return activePreset->scenes.empty() ? nullptr : &activePreset->scenes.front();
 }
 
+void ClientState::UseActiveSceneGraph()
+{
+    if (!activePreset)
+    {
+        return;
+    }
+
+    for (const auto& scene : activePreset->scenes)
+    {
+        if (scene.id == activeSceneId)
+        {
+            activePreset->graph = scene.graph;
+            return;
+        }
+    }
+}
+
 // ── Subscription ───────────────────────────────────────────────────────────
 
 Subscription::Subscription(UiClient* client, Topic topic, int id) : mClient(client), mTopic(topic), mId(id)

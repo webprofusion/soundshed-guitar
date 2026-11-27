@@ -92,9 +92,45 @@ template <el::concepts::Element Subject> class ScaledElement : public el::proxy<
     std::optional<el::canvas::state> mState;
 };
 
+/// Marks where a scaled subject's own coordinates begin, for Elements' culling. A composite
+/// skips any child outside the innermost port's bounds (get_port_bounds), and those bounds are
+/// the enclosing scroller's, in window coordinates. Under ScaledElement the children are placed
+/// from 0,0 in the subject's coordinates, so a child whose local rectangle missed the scroller's
+/// window rectangle was never drawn: a backdrop layout's default controls, at 126,102 on a
+/// layout drawn half way down the page, vanished entirely. This port's bounds are the subject's
+/// own, in the same coordinates as its children; the canvas clip still culls what is off screen.
+class LocalPort : public el::port_base
+{
+  public:
+    void draw(const el::context& ctx) override
+    {
+        el::proxy_base::draw(ctx); // no clip of its own: ScaledElement clips when it needs to
+    }
+
+    double halign() const override
+    {
+        return 0.0;
+    }
+
+    void halign(double) override
+    {
+    }
+
+    double valign() const override
+    {
+        return 0.0;
+    }
+
+    void valign(double) override
+    {
+    }
+};
+
 Ptr Scaled(Ptr content, float sx, float sy, float radius)
 {
-    return el::share(ScaledElement(el::hold_any(std::move(content)), sx, sy, radius));
+    using Held = decltype(el::hold_any(std::move(content)));
+    return el::share(
+        ScaledElement(el::proxy<Held, LocalPort>(el::hold_any(std::move(content))), sx, sy, radius));
 }
 
 /// Children at fixed rectangles from its top-left corner, drawn in the order added: the layout's
@@ -602,7 +638,9 @@ LayoutViewParts BuildLayoutView(const Theme& theme, LayoutImages& images, const 
         if (input.defaultControls)
         {
             const auto finite = [](double v) { return std::isfinite(v) && v > 0.0 ? static_cast<float>(v) : 1.0f; };
-            const float sx = finite(layout->defaultControlsScale.x), sy = finite(layout->defaultControlsScale.y);
+            const float fit = input.defaultControlsFit > 0.0f ? input.defaultControlsFit : 1.0f;
+            const float sx = finite(layout->defaultControlsScale.x) * fit;
+            const float sy = finite(layout->defaultControlsScale.y) * fit;
             const float x = std::round(static_cast<float>(layout->defaultControlsOffset.x));
             const float y = std::round(static_cast<float>(layout->defaultControlsOffset.y));
             placed->Add(Scaled(input.defaultControls, sx, sy, 0.0f),

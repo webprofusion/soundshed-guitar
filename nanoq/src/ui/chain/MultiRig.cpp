@@ -326,7 +326,7 @@ Ptr Shell::BuildMultiRigList()
     {
         auto none = std::make_shared<Text>(
             mTheme,
-            "No Multi-Rigs yet. Add two or more presets to the mix (a preset's menu), then save it from the Mix tab.",
+            "No Multi-Rigs yet. Add two or more presets to the mix (+ Mixer on a preset), then save it from the Mix tab.",
             13.0f);
         none->Colour(mTheme.TextMuted());
         rows.push_back(FixedHeight(32, PadXY(12, 0, none)));

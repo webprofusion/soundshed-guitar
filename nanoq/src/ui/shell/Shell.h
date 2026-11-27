@@ -422,10 +422,11 @@ class Shell
 
     // EffectLayoutPage.cpp: an effect drawn with its custom layout (the web UI's layoutRenderer.ts).
     /// The layout as one element `width` wide at most, its drawn height in `height`. A backdrop
-    /// layout carries `defaultControls`, the standard controls laid out `controlsSize` big.
+    /// layout carries `defaultControls`, the standard controls laid out `controlsSize` big and
+    /// drawn at the layout's scale times `controlsFit` (under 1 when they shrink into their area).
     [[nodiscard]] Ptr BuildEffectLayout(const guitarfx::GraphNode& node, const guitarfx::uiclient::EffectLayout& layout,
                                         float width, float availableHeight, Ptr defaultControls,
-                                        el::extent controlsSize, float& height);
+                                        el::extent controlsSize, float& height, float controlsFit = 1.0f);
     /// The header's chooser between the standard controls and the layouts the effect can wear,
     /// or null when it has none to choose; `width` is what it takes.
     [[nodiscard]] Ptr BuildLayoutChooser(const guitarfx::GraphNode& node, bool usingLayout, float& width);
@@ -854,9 +855,14 @@ class Shell
     /// A footer button for ShowDialog: Primary for the action that confirms, Plain for Cancel.
     [[nodiscard]] std::shared_ptr<Button> DialogButton(const std::string& label, std::function<void()> onClick,
                                                        bool primary);
+    /// Closes the overlay, and the dialog it was opened over, if any.
     void CloseOverlay();
-    /// Esc or a tap outside: the dialog's own close (a Cancel that undoes a preview), else closing.
+    /// Esc or a tap outside: the dialog's own close (a Cancel that undoes a preview), else
+    /// DismissOverlay.
     void CancelOverlay();
+    /// Cancel: a confirm or prompt opened over a dialog goes back to that dialog; anything else
+    /// closes.
+    void DismissOverlay();
 
     // FilePicker.cpp
     /// The file dialog drawn in the view, for a host with none of its own (Linux, where a kiosk
@@ -1064,6 +1070,16 @@ class Shell
     std::shared_ptr<bool> mAlive = std::make_shared<bool>(true);
     std::function<void()> mOnOverlayClosed; // runs when the overlay closes
     std::function<void()> mOverlayCancel;   // what Esc and a tap outside do to the dialog: its own Cancel
+    // The dialog a confirm or prompt was opened over (the web UI's .modal-interrupt): still in the
+    // view, under the confirm's backdrop, and back in front when the confirm is cancelled.
+    struct SuspendedOverlay
+    {
+        Ptr layer;
+        std::function<void()> cancel;
+        std::function<void()> onClosed;
+    };
+    std::optional<SuspendedOverlay> mSuspendedOverlay;
+    bool mNextOverlayInterrupts = false; // the next ShowOverlay is a confirm or prompt
     std::vector<guitarfx::uiclient::Subscription> mInstrumentSubs; // an open dialog's live feeds
     guitarfx::uiclient::Subscription mImportWatch;                 // a preset archive import, until it answers
     std::string mPickerCategory;

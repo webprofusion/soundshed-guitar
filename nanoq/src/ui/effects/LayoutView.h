@@ -139,6 +139,8 @@ struct LayoutViewInput
     /// A backdrop layout's standard controls, `defaultControlsSize` big at their own scale.
     Ptr defaultControls;
     el::extent defaultControlsSize{0.0f, 0.0f};
+    /// How far they shrink to fit the layout's defaultControlsArea, on top of its scale.
+    float defaultControlsFit = 1.0f;
     /// A model or IR slot placed by the layout: the slot's row, `width` wide, or null to leave it out.
     std::function<Ptr(const guitarfx::uiclient::LayoutResourceSlot& slot, const std::string& label, float width)>
         resourceSlot;

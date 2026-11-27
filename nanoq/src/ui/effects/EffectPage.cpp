@@ -1573,14 +1573,23 @@ Ptr Shell::BuildEffectPage()
     }
 
     // The tabs (.node-param-tabs): on their own line, with a rule under them across the section.
-    if (auto t = tabs())
+    // A backdrop layout draws them on itself, above its controls, as the web UI's backdrop takes
+    // the params panel's markup tabs and all.
+    // Touch sizes give the tabs a 40 px row to be hit in.
+    const float tabRow = metrics::Touch() ? 40.0f : 28.0f;
+    auto tabLine = [&]() -> Ptr {
+        auto t = tabs();
+        return t ? Col({FixedHeight(tabRow, Row({t, Stretch()})),
+                        FixedHeight(1, Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>()))})
+                 : nullptr;
+    };
+
+    if (!backdrop)
     {
-        // Touch sizes give the tabs a 40 px row to be hit in.
-        const float tabRow = metrics::Touch() ? 40.0f : 28.0f;
-        addToSection(
-            Col({FixedHeight(tabRow, Row({t, Stretch()})),
-                 FixedHeight(1, Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>()))}),
-            tabRow + 1.0f);
+        if (auto line = tabLine())
+        {
+            addToSection(line, tabRow + 1.0f);
+        }
     }
 
     // The groups, laid into rows as they fit `inner`, each row handed to `add`.
@@ -1651,14 +1660,76 @@ Ptr Shell::BuildEffectPage()
         const float roomBelow = std::max(0.0f, stageHeight - above - 8.0f);
         Ptr standard;
         el::extent standardSize{0.0f, 0.0f};
+        float controlsFit = 1.0f;
 
         if (backdrop)
         {
             // The standard controls, wrapped at the layout's own width as the web UI's backdrop
-            // wraps them, and placed on it by the layout's offset and scale.
-            const float inner = layoutWidth;
+            // wraps them, and placed on it by the layout's offset and scale. A layout with a
+            // controls area wraps them at its width instead, and shrinks them, keeping the
+            // scale's shape, until they are no taller than it (layoutControlsArea.ts).
+            float inner = layoutWidth;
+
+            if (layout->defaultControlsArea)
+            {
+                const auto positive = [](double v) { return std::isfinite(v) && v > 0.0 ? static_cast<float>(v) : 1.0f; };
+                const float scaleX = positive(layout->defaultControlsScale.x);
+                const float scaleY = positive(layout->defaultControlsScale.y);
+                const float areaW = static_cast<float>(layout->defaultControlsArea->width);
+                const float areaH = static_cast<float>(layout->defaultControlsArea->height);
+
+                // layRows' wrapping, measured without building anything.
+                const auto heightAt = [&](float width) {
+                    float total = 0.0f, used = 0.0f, rowHeight = 0.0f;
+                    bool any = false;
+
+                    for (const auto& g : groups)
+                    {
+                        const float w = std::min(groupWidth(g), width);
+
+                        if (any && used + kGroupGap + w > width)
+                        {
+                            total += rowHeight + 8.0f;
+                            used = 0.0f;
+                            rowHeight = 0.0f;
+                            any = false;
+                        }
+
+                        used += (any ? kGroupGap : 0.0f) + w;
+                        rowHeight = std::max(rowHeight, groupHeight(g));
+                        any = true;
+                    }
+
+                    return total + rowHeight + (anyAdvanced ? tabRow + 1.0f + 8.0f : 0.0f);
+                };
+                const auto drawnHeight = [&](float fit) { return heightAt(areaW / (scaleX * fit)) * scaleY * fit; };
+
+                if (drawnHeight(1.0f) > areaH)
+                {
+                    float low = 0.2f, high = 1.0f;
+
+                    for (int step = 0; step < 8; ++step)
+                    {
+                        const float mid = 0.5f * (low + high);
+                        (drawnHeight(mid) <= areaH ? low : high) = mid;
+                    }
+
+                    controlsFit = low;
+                }
+
+                controlsFit = std::floor(controlsFit * 10000.0f) / 10000.0f;
+                inner = areaW / (scaleX * controlsFit);
+            }
+
             std::vector<Ptr> rows;
             float rowsHeight = 0.0f;
+
+            if (auto line = tabLine())
+            {
+                rows.push_back(FixedHeight(tabRow + 1.0f, line));
+                rowsHeight += tabRow + 1.0f;
+            }
+
             layRows(inner, [&rows, &rowsHeight](Ptr r, float h) {
                 if (!rows.empty())
                 {
@@ -1674,7 +1745,8 @@ Ptr Shell::BuildEffectPage()
         }
 
         float layoutHeight = 0.0f;
-        auto drawn = BuildEffectLayout(*node, *layout, sectionInner, roomBelow, standard, standardSize, layoutHeight);
+        auto drawn =
+            BuildEffectLayout(*node, *layout, sectionInner, roomBelow, standard, standardSize, layoutHeight, controlsFit);
         addToSection(drawn, layoutHeight);
     }
     else

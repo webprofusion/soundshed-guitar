@@ -143,7 +143,11 @@ inline std::string Describe(const nlohmann::json& metadata, const std::string& c
         parts.push_back(arch.front() == 'A' ? arch : "A" + arch);
     }
 
-    if (const auto rate = MetaText(metadata, "sample_rate"); !rate.empty())
+    // The folder scanner files it as sampleRate; sample_rate is the older spelling.
+    auto rate = MetaText(metadata, "sampleRate");
+    rate = rate.empty() ? MetaText(metadata, "sample_rate") : rate;
+
+    if (!rate.empty())
     {
         parts.push_back(rate + " Hz");
     }

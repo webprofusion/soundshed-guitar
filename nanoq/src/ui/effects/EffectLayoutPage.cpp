@@ -45,7 +45,8 @@ std::string BlendIdOf(const guitarfx::GraphNode& node)
 } // namespace
 
 Ptr Shell::BuildEffectLayout(const guitarfx::GraphNode& node, const EffectLayout& layout, float width,
-                             float availableHeight, Ptr defaultControls, el::extent controlsSize, float& height)
+                             float availableHeight, Ptr defaultControls, el::extent controlsSize, float& height,
+                             float controlsFit)
 {
     // The pictures' list is asked for the first time a layout draws, as the web UI asks; the
     // pictures themselves are read from their files as they are drawn.
@@ -102,6 +103,7 @@ Ptr Shell::BuildEffectLayout(const guitarfx::GraphNode& node, const EffectLayout
     input.scale = fit.scale;
     input.defaultControls = std::move(defaultControls);
     input.defaultControlsSize = controlsSize;
+    input.defaultControlsFit = controlsFit;
     // A model or IR slot the layout places is the editor's own slot row, put where the layout
     // says: the effect's slots by index ("__resource__:primary:<index>"), two for the IR Cabinet.
     input.resourceSlot = [this, &node](const LayoutResourceSlot& slot, const std::string& label, float) -> Ptr {

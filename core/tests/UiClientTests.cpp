@@ -257,6 +257,52 @@ void TestClientMirrorsTheEngine()
     Expect(sessionCalls == 1, "an unsubscribed listener is not called");
 }
 
+// A scene past the first with a chain of its own: the client shows that scene's chain, and an
+// edit made there is seen. The engine sends a preset's scenes and no working graph, so the
+// parsed preset used to keep the first scene's chain whatever scene was active.
+void TestSecondSceneShowsItsOwnChain()
+{
+    LoopbackHost host(Sandbox("scenes"));
+    PluginController controller(host);
+    controller.Initialize();
+
+    UiClient client([&controller](const std::string& json) { controller.HandleUIMessage(json); });
+    host.client = &client;
+    UiCommands commands(client);
+
+    auto preset = BuildPreset("ps", "Scenes", 2);
+    auto& solo = preset.scenes[1].graph;
+    solo.nodes.insert(solo.nodes.begin() + 2, Node("gain_2", EffectGuids::kGain));
+    solo.edges = {GraphEdge{"__input__", "gain_1", 0, 0, 1.0}, GraphEdge{"gain_1", "gain_2", 0, 0, 1.0},
+                  GraphEdge{"gain_2", "__output__", 0, 0, 1.0}};
+    client.Send("savePreset", {{"saveMode", "overwrite"},
+                               {"presetId", preset.id},
+                               {"name", preset.name},
+                               {"preset", nlohmann::json::parse(PresetStorage::SerializeToJson(preset))}});
+    client.Start();
+    Pump(controller, client);
+    const auto& state = client.State();
+
+    commands.LoadPreset("ps");
+    Pump(controller, client);
+    commands.SelectScene("scene-2");
+    Pump(controller, client);
+    Expect(state.activeSceneId == "scene-2" && state.activePreset &&
+               state.activePreset->graph.FindNode("gain_2") != nullptr,
+           "the second scene shows its own chain");
+
+    commands.RemoveNode("gain_2");
+    Pump(controller, client);
+    Expect(state.activePreset && state.activePreset->graph.FindNode("gain_2") == nullptr,
+           "removing an effect in the second scene is seen");
+
+    commands.SelectScene("scene-1");
+    Pump(controller, client);
+    Expect(state.activePreset && state.activePreset->graph.FindNode("gain_2") == nullptr &&
+               state.activePreset->graph.FindNode("gain_1") != nullptr,
+           "the first scene shows its own chain again");
+}
+
 /// A factory archive's effect presets can choose its models, IRs and blends, which only the
 /// engine holds, so the client lists them and leaves applying them to the engine.
 void TestFactoryPackEffectPresetsApplyInTheEngine()
@@ -2381,6 +2427,7 @@ void TestLooperMessages()
 int main()
 {
     TestClientMirrorsTheEngine();
+    TestSecondSceneShowsItsOwnChain();
     TestFactoryPackEffectPresetsApplyInTheEngine();
     TestGraphicEqFactoryProfilesApplyExactly();
     TestFactoryPresetParameterOrder();

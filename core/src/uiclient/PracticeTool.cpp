@@ -88,6 +88,16 @@ std::optional<double> LeadingNumber(const std::string& text)
     return guitarfx::IsFinite(n) ? std::optional<double>(n) : std::nullopt;
 }
 
+/// The project fields this client reads and writes; everything else is kept as read.
+bool IsProjectFieldEditedHere(const std::string& key)
+{
+    static constexpr const char* kEdited[] = {"id",           "name",         "filePath", "fileTitle", "durationSec",
+                                              "loops",        "activeLoopId", "gain",     "balance",   "speed",
+                                              "pitchSemitones", "eq",         "presetId", "presetName", "links",
+                                              "savedAt"};
+    return std::any_of(std::begin(kEdited), std::end(kEdited), [&key](const char* k) { return key == k; });
+}
+
 std::optional<Link> ParseLink(const nlohmann::json& value)
 {
     if (!value.is_object())
@@ -384,9 +394,33 @@ std::optional<Project> ParseProject(const nlohmann::json& value)
     p.name = Trim(ReadString(value, "name"));
     p.filePath = ReadString(value, "filePath");
 
-    if (p.id.empty() || p.name.empty() || p.filePath.empty())
+    // parseYouTubeReference: an 11-character video id, else no video.
+    if (const auto it = value.find("youtube"); it != value.end() && it->is_object())
+    {
+        const auto videoId = ReadString(*it, "videoId");
+        const bool valid = videoId.size() == 11 && std::all_of(videoId.begin(), videoId.end(), [](unsigned char c) {
+                               return std::isalnum(c) || c == '_' || c == '-';
+                           });
+
+        if (valid)
+        {
+            p.youtubeVideoId = videoId;
+            p.youtubeTitle = ReadString(*it, "title").substr(0, 300);
+        }
+    }
+
+    // A project follows a backing track, a YouTube video, or both (parsePracticeToolProject).
+    if (p.id.empty() || p.name.empty() || (p.filePath.empty() && p.youtubeVideoId.empty()))
     {
         return std::nullopt;
+    }
+
+    for (const auto& [key, field] : value.items())
+    {
+        if (!IsProjectFieldEditedHere(key))
+        {
+            p.kept[key] = field;
+        }
     }
 
     if (const auto it = value.find("loops"); it != value.end() && it->is_array())
@@ -413,6 +447,11 @@ std::optional<Project> ParseProject(const nlohmann::json& value)
     {
         const auto slash = p.filePath.find_last_of("\\/");
         p.fileTitle = slash == std::string::npos ? p.filePath : p.filePath.substr(slash + 1);
+    }
+
+    if (p.fileTitle.empty())
+    {
+        p.fileTitle = p.youtubeTitle.empty() ? "YouTube video" : p.youtubeTitle;
     }
 
     p.durationSec = std::max(0.0, ReadNumber(value, "durationSec", 0.0));
@@ -460,18 +499,21 @@ nlohmann::json ProjectJson(const Project& p)
         loops.push_back(LoopJson(loop));
     }
 
-    nlohmann::json json = {{"id", p.id},
-                           {"name", p.name},
-                           {"filePath", p.filePath},
-                           {"fileTitle", p.fileTitle},
-                           {"durationSec", p.durationSec},
-                           {"loops", std::move(loops)},
-                           {"activeLoopId", p.activeLoopId.empty() ? nlohmann::json() : nlohmann::json(p.activeLoopId)},
-                           {"gain", p.faders.gain},
-                           {"balance", p.faders.balance},
-                           {"speed", p.faders.speed},
-                           {"pitchSemitones", p.faders.pitchSemitones},
-                           {"savedAt", p.savedAt}};
+    // What this client does not edit first, as it was read; then its own fields over it.
+    nlohmann::json json = p.kept.is_object() ? p.kept : nlohmann::json::object();
+    json.update(nlohmann::json{
+        {"id", p.id},
+        {"name", p.name},
+        {"filePath", p.filePath},
+        {"fileTitle", p.fileTitle},
+        {"durationSec", p.durationSec},
+        {"loops", std::move(loops)},
+        {"activeLoopId", p.activeLoopId.empty() ? nlohmann::json() : nlohmann::json(p.activeLoopId)},
+        {"gain", p.faders.gain},
+        {"balance", p.faders.balance},
+        {"speed", p.faders.speed},
+        {"pitchSemitones", p.faders.pitchSemitones},
+        {"savedAt", p.savedAt}});
 
     if (p.eq)
     {
@@ -1470,10 +1512,18 @@ bool PracticeTool::SaveProject(const std::string& name, bool includePreset)
         }
     }
 
-    // Links are edited on the saved project: saving over it keeps them.
+    // Links are edited on the saved project: saving over it keeps them. So does what only the web
+    // UI edits (the tab binding, the YouTube video), while the project still follows this track.
     if (existing != projects.end())
     {
         p.links = existing->links;
+
+        if (existing->filePath.empty() || IsSameTrackPath(existing->filePath, t.filePath))
+        {
+            p.kept = existing->kept;
+            p.youtubeVideoId = existing->youtubeVideoId;
+            p.youtubeTitle = existing->youtubeTitle;
+        }
     }
 
     p.savedAt = static_cast<double>(
@@ -1511,6 +1561,13 @@ bool PracticeTool::LoadProject(const std::string& projectId)
     }
 
     mSelectedProject = projectId;
+
+    // A project that follows only a YouTube video plays in the web UI's tab view.
+    if (it->filePath.empty())
+    {
+        Changed();
+        return false;
+    }
 
     if (!it->presetId.empty() && mClient.State().FindPresetSummary(it->presetId) != nullptr &&
         mClient.State().activePresetId != it->presetId)

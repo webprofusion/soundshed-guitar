@@ -74,6 +74,8 @@ Ptr Shell::BuildSettingsPage()
 {
     auto& commands = mSession.Commands();
     const bool standalone = mState.environment.audioDeviceSettings;
+    // As Soundshed Guitar's native editor, this is Soundshed Guitar.
+    const std::string productName = mState.environment.nativeEditor ? "Soundshed Guitar" : "Soundshed Nano Q";
 
     // ── The sections ──
     SectionNav nav;
@@ -234,7 +236,7 @@ Ptr Shell::BuildSettingsPage()
                                             mState.environment.version.empty() ? std::string("Soundshed engine")
                                                                                : mState.environment.version,
                                             metrics::kTextSize, Weight::Medium);
-            row("Soundshed Nano Q", Middle(v));
+            row(productName.c_str(), Middle(v));
         }
         endCard();
         beginCard("App Updates");
@@ -290,7 +292,7 @@ Ptr Shell::BuildSettingsPage()
         {
             card.push_back(
                 FixedHeight(24, Middle(std::make_shared<Text>(mTheme, "AUDIO DEVICE", 13.0f, Weight::SemiBold))));
-            describe("The audio device is set by the host, or in the window menu (Alt+Space) of the standalone app.");
+            describe("The host chooses the audio device. The standalone app has its own device settings here.");
         }
 
         endCard();
@@ -298,7 +300,8 @@ Ptr Shell::BuildSettingsPage()
         toggle(
             "Show Effect Channels Choice", [boolOr] { return boolOr("audio.signalPath.channelModeControl", false); },
             setBool("audio.signalPath.channelModeControl"));
-        describe("Shows the channel choice (stereo, left, right) on each effect.");
+        describe("Adds a Channels choice to each effect's header: Follow takes the stereo or mono signal it is "
+                 "given, Mono folds a stereo input to one channel and runs the effect mono, at half the CPU.");
         endCard();
         break;
     }
@@ -332,7 +335,11 @@ Ptr Shell::BuildSettingsPage()
                 // The standalone app and the plugins keep their own choice, as in the web UI.
                 const char* key = mState.environment.standalone ? "audio.processing.multiCore.standalone"
                                                                 : "audio.processing.multiCore.plugin";
-                toggle("Use Multiple CPU Cores", [boolOr, key] { return boolOr(key, true); }, setBool(key));
+                // On by default in the standalone app only, as the engine has it (SettingsKeys.h).
+                const bool byDefault = mState.environment.standalone;
+                toggle(
+                    "Use Multiple CPU Cores", [boolOr, key, byDefault] { return boolOr(key, byDefault); },
+                    setBool(key));
                 describe("Spreads the chain over more cores where it can run in parallel.");
             }
             toggle(
@@ -405,8 +412,6 @@ Ptr Shell::BuildSettingsPage()
             describe(
                 "Catches peaks at the very end of the chain, at the ceiling above. Applies to the whole output, not "
                 "to any one preset.");
-            slider("Nominal Level", "audio.dsp.nominalOperatingLevelDbfs", -30.0, -6.0, -18.0, "dBFS", 1);
-            describe("The level the effects are voiced for.");
             toggle(
                 "Full Level on Mono Outputs", [boolOr] { return boolOr("audio.dsp.monoOutputUnity", false); },
                 setBool("audio.dsp.monoOutputUnity"));
@@ -538,17 +543,20 @@ Ptr Shell::BuildSettingsPage()
             auto v = std::make_shared<Text>(mTheme, value, metrics::kTextSize, Weight::Medium);
             row(title, Middle(v), 30.0f);
         };
-        line("Product", "Soundshed Nano Q");
+        line("Product", productName);
         line("Engine", mState.environment.version.empty() ? "Soundshed engine" : mState.environment.version);
-        line("Interface", "QPlug and Elements (no JUCE)");
+        line("Interface", mState.environment.nativeEditor ? "Native editor" : "Native (no JUCE)");
         // As UTF-8, which the text expects: path::string() converts through the ANSI code page on
         // Windows, where a user name that page cannot spell throws, and opening Settings took the
         // app down with it.
         line("Profile", guitarfx::util::PathToUtf8(ProfileFolder()));
         card.push_back(VGap(6));
         card.push_back(FixedHeight(40, button("soundshed.com", [&commands] { commands.OpenUrl(kWebsite); })));
-        describe("Riff capture, plugin hosting, preset blending and publishing are in Soundshed Guitar, which shares "
-                 "this app's presets, library and settings.");
+        if (!mState.environment.nativeEditor)
+        {
+            describe("Publishing tones and making packs are in Soundshed Guitar, which shares this app's presets, "
+                     "library and settings.");
+        }
         endCard();
         break;
     }

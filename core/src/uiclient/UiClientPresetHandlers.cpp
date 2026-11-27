@@ -219,6 +219,7 @@ void UiClient::RegisterPresetHandlers()
             s.activePreset = parse::ParsePreset(m["preset"]);
             s.activePresetId = m.value("activePresetId", s.activePreset ? s.activePreset->id : std::string{});
             s.activeSceneId = m.value("activeSceneId", std::string{});
+            s.UseActiveSceneGraph();
             Notify(Topic::ActivePreset);
         }
 
@@ -353,6 +354,7 @@ void UiClient::RegisterPresetHandlers()
         }
 
         s.activeSceneId = m.value("sceneId", s.activeSceneId);
+        s.UseActiveSceneGraph();
         s.activePresetDirty = m.value("activePresetDirty", false);
 
         if (m.contains("activePresetIds"))
@@ -426,6 +428,7 @@ void UiClient::RegisterPresetHandlers()
         }
 
         s.activeSceneId = m.value("sceneId", s.activeSceneId);
+        s.UseActiveSceneGraph();
         s.activePresetDirty = false;
         Notify(Topic::ActivePreset);
         PostNotification({Notification::Kind::Info, "Preset saved", s.activePreset ? s.activePreset->name : ""});

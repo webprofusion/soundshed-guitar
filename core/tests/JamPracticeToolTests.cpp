@@ -187,6 +187,23 @@ void TestLoopsAndProjects()
     Expect(old && !old->eq && old->activeLoopId.empty(), "an old project has no EQ; a missing active loop is none");
     Expect(!practice::ParseProject({{"id", "x"}, {"name", "n"}}), "no track: not a project");
 
+    // What the web UI saves and this client does not edit comes back unchanged.
+    nlohmann::json web = {{"id", "w1"},
+                          {"name", "Video"},
+                          {"filePath", ""},
+                          {"youtube", {{"videoId", "dQw4w9WgXcQ"}, {"title", "Lesson"}}},
+                          {"tab", {{"title", "Song"}, {"syncPoints", {1, 2}}}},
+                          {"later", 7}};
+    const auto video = practice::ParseProject(web);
+    Expect(video && video->youtubeVideoId == "dQw4w9WgXcQ" && video->fileTitle == "Lesson",
+           "a project with only a YouTube video");
+    const auto rewritten = video ? practice::ProjectJson(*video) : nlohmann::json();
+    Expect(rewritten.value("tab", nlohmann::json()) == web["tab"] &&
+               rewritten.value("youtube", nlohmann::json()) == web["youtube"] && rewritten.value("later", 0) == 7,
+           "its tab, its video and unknown fields are written back");
+    web["youtube"]["videoId"] = "short";
+    Expect(!practice::ParseProject(web), "a bad video id and no track: not a project");
+
     nlohmann::json projects = nlohmann::json::array({practice::ProjectJson(p)});
     p.id = "p2";
     p.savedAt = 9;
@@ -346,6 +363,34 @@ void TestSession()
     h.Receive(FileLoaded("C:\\Music\\Song.wav", 60.0));
     Expect(tool.Loops().size() == 1 && Near(tool.Faders().speed, 0.5), "then its loops and faders apply");
 
+    // A project the web UI saved (a tab, a video) survives every edit made here.
+    auto settings = h.client.State().appSettings;
+    auto webProject = practice::ProjectJson(tool.Projects()[0]);
+    webProject["tab"] = {{"title", "Song"}};
+    webProject["youtube"] = {{"videoId", "dQw4w9WgXcQ"}, {"title", "Lesson"}};
+    nlohmann::json videoOnly = {{"id", "w2"},
+                                {"name", "Video"},
+                                {"filePath", ""},
+                                {"youtube", {{"videoId", "dQw4w9WgXcQ"}}},
+                                {"savedAt", 1}};
+    settings[practice::kProjectsSetting] = nlohmann::json::array({webProject, videoOnly});
+    h.client.MutableState().appSettings = settings;
+    Expect(tool.Projects().size() == 2, "a video-only project lists");
+    Expect(!tool.LoadProject("w2"), "and does not load here");
+    Expect(tool.SaveProject("practice", false), "saving over the web's project");
+    const auto webId = webProject.value("id", std::string());
+    const auto saved = h.client.State().appSettings[practice::kProjectsSetting];
+    bool keptBoth = false;
+
+    for (const auto& j : saved)
+    {
+        keptBoth = keptBoth || (j.value("id", std::string()) == webId && j.contains("tab") && j.contains("youtube"));
+    }
+
+    Expect(saved.size() == 2 && keptBoth,
+           "keeps its tab and video, and the video-only project");
+
+    tool.DeleteProject("w2");
     tool.DeleteProject(tool.Projects()[0].id);
     Expect(tool.Projects().empty(), "deleted");
 }

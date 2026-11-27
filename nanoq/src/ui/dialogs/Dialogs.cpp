@@ -1,5 +1,6 @@
 // What floats over the page: a pop-up list, a text prompt and a confirmation (the effect picker is
 // chain/EffectPicker.cpp's). One at a time, over a dimmed view; a tap outside, or a choice, closes it.
+// A confirm or prompt opened from a dialog stacks over it, and Cancel goes back to that dialog.
 
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/Shell.h"
@@ -29,7 +30,19 @@ void Shell::ApplyElementsTheme()
 
 void Shell::ShowOverlay(Ptr panel, float width, float height)
 {
-    CloseOverlay();
+    const bool interrupts = std::exchange(mNextOverlayInterrupts, false);
+
+    if (interrupts && mOverlay && !mSuspendedOverlay && !mOptionsOpen)
+    {
+        // Kept as it is, live feeds and all, under the confirm's backdrop, which takes the clicks.
+        CloseDropdown();
+        mSuspendedOverlay = SuspendedOverlay{std::exchange(mOverlay, nullptr), std::exchange(mOverlayCancel, nullptr),
+                                             std::exchange(mOnOverlayClosed, nullptr)};
+    }
+    else
+    {
+        CloseOverlay();
+    }
 
     auto face = Over(std::move(panel), el::share(Surface(mTheme.Elevated(), mTheme.BorderStrong(), 12.0f)));
     // Expand: a column is only as wide as its narrowest row allows, and a row of fixed-size
@@ -48,7 +61,7 @@ void Shell::ShowDialog(DialogParts parts)
     title->Colour(mTheme.ModalText());
     auto close = std::make_shared<CloseCross>(mTheme);
     auto cancel = parts.onClose; // Esc and a tap outside do the same as the cross
-    close->onClick = parts.onClose ? std::move(parts.onClose) : std::function<void()>([this] { CloseOverlay(); });
+    close->onClick = parts.onClose ? std::move(parts.onClose) : std::function<void()>([this] { DismissOverlay(); });
     std::vector<Ptr> header{Stretch(title)};
 
     for (auto& extra : parts.headerExtras)
@@ -116,7 +129,37 @@ void Shell::CancelOverlay()
         return;
     }
 
-    CloseOverlay();
+    DismissOverlay();
+}
+
+void Shell::DismissOverlay()
+{
+    if (!mSuspendedOverlay)
+    {
+        CloseOverlay();
+        return;
+    }
+
+    // Only the confirm goes; the dialog under it is the overlay again, with the keys.
+    CloseDropdown();
+    auto parent = std::move(*mSuspendedOverlay);
+    mSuspendedOverlay.reset();
+    RemoveLayer(std::exchange(mOverlay, nullptr));
+    mOverlay = parent.layer;
+    mOverlayCancel = std::move(parent.cancel);
+    mOnOverlayClosed = std::move(parent.onClosed);
+
+    auto& view = mSession.View();
+    view.post([&view, layer = parent.layer] {
+        auto& layers = view.content();
+        const auto found = std::find(layers.begin(), layers.end(), layer);
+
+        if (found != layers.end())
+        {
+            layers.focus(static_cast<std::size_t>(found - layers.begin()));
+            view.refresh();
+        }
+    });
 }
 
 std::shared_ptr<Button> Shell::DialogButton(const std::string& label, std::function<void()> onClick, bool primary)
@@ -143,14 +186,27 @@ void Shell::CloseOverlay()
         closed();
     }
 
-    if (!mOverlay)
+    if (mOverlay)
     {
-        return;
+        auto overlay = std::move(mOverlay);
+        mOverlay.reset();
+        RemoveLayer(std::move(overlay));
     }
 
-    auto overlay = std::move(mOverlay);
-    mOverlay.reset();
-    RemoveLayer(std::move(overlay));
+    // A confirm opened over a dialog is done with: the dialog goes too (what it confirmed may
+    // reopen it, up to date).
+    if (mSuspendedOverlay)
+    {
+        auto parent = std::move(*mSuspendedOverlay);
+        mSuspendedOverlay.reset();
+
+        if (parent.onClosed)
+        {
+            parent.onClosed();
+        }
+
+        RemoveLayer(std::move(parent.layer));
+    }
 }
 
 void Shell::RemoveLayer(Ptr layer)
@@ -279,12 +335,13 @@ void Shell::OpenPrompt(const std::string& title, const std::string& initial, con
         submit();
         return true;
     };
-    box->on_escape = [this] { CloseOverlay(); };
+    box->on_escape = [this] { DismissOverlay(); };
 
+    mNextOverlayInterrupts = true;
     ShowDialog({.title = title,
                 .body = Col({FixedHeight(40, el::share(std::move(boxElement))), Stretch()}),
                 .actions = {DialogButton(
-                                "Cancel", [this] { CloseOverlay(); }, false),
+                                "Cancel", [this] { DismissOverlay(); }, false),
                             DialogButton(confirmLabel, submit, true)},
                 .width = DialogWidth(ViewSize(), 420.0f),
                 .height = kDialogHeaderHeight + kDialogFooterHeight + 76.0f});
@@ -300,10 +357,11 @@ void Shell::OpenConfirm(const std::string& title, const std::string& detail, con
         CloseOverlay();
         onYes();
     };
+    mNextOverlayInterrupts = true;
     ShowDialog({.title = title,
                 .body = Col({body, Stretch()}),
                 .actions = {DialogButton(
-                                "Cancel", [this] { CloseOverlay(); }, false),
+                                "Cancel", [this] { DismissOverlay(); }, false),
                             DialogButton(confirmLabel, yes, true)},
                 .width = DialogWidth(ViewSize(), 460.0f),
                 .height = kDialogHeaderHeight + kDialogFooterHeight + 86.0f});

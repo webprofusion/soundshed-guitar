@@ -87,6 +87,14 @@ struct Project
     std::string presetName;
     std::vector<Link> links;
     double savedAt = 0.0; // ms since the epoch, as Date.now()
+    /// The YouTube video the project follows (the web UI's `youtube`), when it has one. A
+    /// project follows a backing track, a video, or both; with only a video, filePath is empty.
+    std::string youtubeVideoId;
+    std::string youtubeTitle;
+    /// Every field this client does not edit (the tab binding, the YouTube reference, anything a
+    /// newer app adds), as it was read: written back unchanged, so saving here never drops what
+    /// the web UI saved. The projects list is one shared setting, rewritten whole on every edit.
+    nlohmann::json kept = nlohmann::json::object();
 };
 
 // ── The faders ──────────────────────────────────────────────────────────────────

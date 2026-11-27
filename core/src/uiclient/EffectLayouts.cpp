@@ -367,6 +367,19 @@ EffectLayout ParseEffectLayout(const nlohmann::json& raw)
     layout.useDefaultControls = BoolIs(raw, "useDefaultControls", true);
     layout.defaultControlsOffset = PointOf(raw, "defaultControlsOffset");
     layout.defaultControlsScale = PointOf(raw, "defaultControlsScale", {1.0, 1.0});
+
+    // usableControlsArea: a box of positive, finite size, rounded, else none.
+    if (const auto& area = ObjectAt(raw, "defaultControlsArea"); area.is_object())
+    {
+        const double width = NumberOr(area, "width", 0.0);
+        const double height = NumberOr(area, "height", 0.0);
+
+        if (std::isfinite(width) && std::isfinite(height) && width >= 1.0 && height >= 1.0)
+        {
+            layout.defaultControlsArea = LayoutSize{std::round(width), std::round(height)};
+        }
+    }
+
     layout.containerTheme = StringOf(raw, "containerTheme");
     layout.controlLabelColor = StringOf(raw, "controlLabelColor");
     layout.controlValueColor = StringOf(raw, "controlValueColor");
