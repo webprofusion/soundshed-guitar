@@ -332,7 +332,9 @@ export function showNodeParamsPanel(node: GraphNode, preset: Preset): void {
   const hasAdvancedTab = advancedParamDefs.length > 0;
 
   // Pickup Match is an EQ by category, but it draws its own curve and has no bands to edit.
-  const isEqNode = (typeInfo?.category === "eq" || node.type.startsWith("eq_")) && !isPickupMatchNode(node);
+  // Pitch Tracking EQ is an EQ by category, but it has none of the band params the curve edits.
+  const isEqNode = (typeInfo?.category === "eq" || node.type.startsWith("eq_")) && !isPickupMatchNode(node)
+    && EffectTypeRegistry.resolve(node.type) !== EffectGuids.kEqPitchTracking;
   const isGraphicEqNode = EffectTypeRegistry.resolve(node.type) === EffectGuids.kEqGraphic;
   const customEffectActions = buildCustomEffectActions(node);
   const eqVisualizer = isEqNode && !isGraphicEqNode ? `

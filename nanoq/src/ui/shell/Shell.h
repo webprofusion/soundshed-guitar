@@ -415,6 +415,9 @@ class Shell
     [[nodiscard]] Ptr BuildSplitBranches(const guitarfx::GraphNode& splitter);
     /// A third-party plugin node's list, Open Plugin and Browse (NodeControls.cpp).
     [[nodiscard]] Ptr BuildPluginHost(const guitarfx::GraphNode& node);
+    [[nodiscard]] float PluginHostHeight(const guitarfx::GraphNode& node) const;
+    /// Why the node's plugin did not load, while it is still the one picked; empty otherwise.
+    [[nodiscard]] std::string PluginLoadFailureText(const guitarfx::GraphNode& node) const;
     /// A blend node's blend and its mode (NodeControls.cpp).
     [[nodiscard]] Ptr BuildBlendInfo(const guitarfx::GraphNode& node);
     /// The IR Cabinet's IR list between its slots (NodeControls.cpp).
@@ -579,6 +582,8 @@ class Shell
     std::vector<std::weak_ptr<el::element>> mPickupDesignPills;
     /// The graphic EQ's sliders over its curve (GraphicEq.cpp), `width` wide; `height` is what it takes.
     [[nodiscard]] Ptr BuildGraphicEq(const guitarfx::GraphNode& node, float width, float& height);
+    /// The width the graphic EQ's bands stand in one row at their narrowest.
+    [[nodiscard]] static float GraphicEqNaturalWidth(const guitarfx::GraphNode& node);
     /// What the EQ sections' layout depends on (the graphic EQ's bands, Pickup Match's custom
     /// sides), for EffectPageSignature.
     [[nodiscard]] std::string EqSectionSignature(const guitarfx::GraphNode& node) const;
@@ -1024,7 +1029,8 @@ class Shell
     double mHistorySettleUntil = 0.0; // the engine's echo of a restore is not a new edit until then
     std::string mSelectedNode;
     bool mShowAdvanced = false;
-    bool mShowIrList = false; // the IR Cabinet's list between its slots, for every cabinet
+    std::string mShowAdvancedFor; // the node the tab was picked on: each other node opens on Main
+    bool mShowIrList = false;     // the IR Cabinet's list between its slots, for every cabinet
     unsigned mDirty = kAll;
     bool mShowingStarting = false;
     std::string mAppliedTheme;
@@ -1070,6 +1076,7 @@ class Shell
     std::shared_ptr<bool> mAlive = std::make_shared<bool>(true);
     std::function<void()> mOnOverlayClosed; // runs when the overlay closes
     std::function<void()> mOverlayCancel;   // what Esc and a tap outside do to the dialog: its own Cancel
+
     // The dialog a confirm or prompt was opened over (the web UI's .modal-interrupt): still in the
     // view, under the confirm's backdrop, and back in front when the confirm is cancelled.
     struct SuspendedOverlay
@@ -1078,8 +1085,9 @@ class Shell
         std::function<void()> cancel;
         std::function<void()> onClosed;
     };
+
     std::optional<SuspendedOverlay> mSuspendedOverlay;
-    bool mNextOverlayInterrupts = false; // the next ShowOverlay is a confirm or prompt
+    bool mNextOverlayInterrupts = false;                           // the next ShowOverlay is a confirm or prompt
     std::vector<guitarfx::uiclient::Subscription> mInstrumentSubs; // an open dialog's live feeds
     guitarfx::uiclient::Subscription mImportWatch;                 // a preset archive import, until it answers
     std::string mPickerCategory;

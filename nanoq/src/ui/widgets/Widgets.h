@@ -42,6 +42,8 @@ class Text : public el::element, public Drawn
     /// With true, the text asks for its full width and the row shrinks nothing around it;
     /// with false (the default) it takes what is left and truncates.
     Text& Fixed(bool fixed);
+    /// Letter-spacing in em, as CSS letter-spacing: the web UI's small capitals.
+    Text& Tracking(float em);
 
     [[nodiscard]] const std::string& Value() const
     {
@@ -56,6 +58,7 @@ class Text : public el::element, public Drawn
     el::color mColour;
     Align mAlign = Align::Left;
     bool mFixed = false;
+    float mTracking = 0.0f;
 };
 
 /// Text wrapped at word breaks to a fixed width, as tall as its lines.

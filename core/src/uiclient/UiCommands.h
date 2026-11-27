@@ -168,6 +168,9 @@ class UiCommands
                                const std::string& category, const std::vector<std::string>& tags);
     /// Deletes one; the engine refuses one in use (resourceDeleteFailed), else resourceRemoved.
     void DeleteLibraryResource(const std::string& resourceType, const std::string& resourceId);
+    /// Takes one out of the library and leaves its file where it is (cleanupResourceLibrary with
+    /// removeFiles false): a scanned plugin, as the web UI's plugin host removes one.
+    void ForgetLibraryResource(const std::string& resourceType, const std::string& resourceId);
     /// Asks what uses a resource; answered into ClientState::resourceUsage.
     void QueryResourceUsage(const std::string& resourceType, const std::string& resourceId);
     /// Writes the library as one archive through a save dialog (exportLibraryArchive): the

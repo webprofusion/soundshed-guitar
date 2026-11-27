@@ -24,7 +24,7 @@ using cycfi::artist::canvas;
 // at least 72 wide and 10 apart, each its gain (14), the 132 px slider and its frequency (16),
 // 6 apart.
 constexpr int kMaxBands = 10;
-constexpr double kDefaultFrequencies[kMaxBands] = {31.25, 62.5, 125.0, 250.0, 500.0,
+constexpr double kDefaultFrequencies[kMaxBands] = {31.25,  62.5,   125.0,  250.0,  500.0,
                                                    1000.0, 2000.0, 4000.0, 8000.0, 16000.0};
 constexpr double kMaxGainDb = 18.0;
 constexpr float kSectionPad = 16.0f;
@@ -37,8 +37,8 @@ constexpr float kSliderHeight = 132.0f;
 constexpr float kFreqHeight = 16.0f;
 constexpr float kBandHeight = kGainHeight + 6.0f + kSliderHeight + 6.0f + kFreqHeight;
 // The slider's thumb (16 x 10) and the travel it has along the track.
-constexpr float kThumbWidth = 16.0f;
-constexpr float kThumbHeight = 10.0f;
+constexpr float kThumbRadius = 8.0f;
+constexpr float kThumbHeight = 2.0f * kThumbRadius;
 
 /// `a` mixed with `b`, `share` of it `a` (color-mix in srgb).
 el::color MixColour(el::color a, el::color b, float share)
@@ -63,7 +63,7 @@ double FrequencyValue(const std::map<std::string, double>& params, int index)
 {
     const auto it = params.find(BandKey(index + 1, "Freq"));
     return it != params.end() && std::isfinite(it->second) ? std::clamp(it->second, 20.0, 20000.0)
-                                                            : kDefaultFrequencies[index];
+                                                           : kDefaultFrequencies[index];
 }
 
 /// The frequency band `band` (1-based) may take: between its neighbours, a hertz clear of each
@@ -173,23 +173,24 @@ class GainSlider final : public el::element, public Drawn, public Focusable
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(track.inset(0.5f, 0.5f), 2.5f);
 
-        // The thumb: a small rounded bar, light at the top, its edge tinted with the accent.
+        // The thumb: a round accent dot, as the web UI's vertical range draws it (its
+        // appearance: slider-vertical is drawn by the browser, not by the thumb's own style).
         const float cy = ThumbY(b);
-        const el::rect thumb{cx - kThumbWidth / 2.0f, cy - kThumbHeight / 2.0f, cx + kThumbWidth / 2.0f,
-                             cy + kThumbHeight / 2.0f};
         {
             auto state = cnv.new_state();
-            cnv.shadow_style(el::point{0.0f, 2.0f}, 5.0f, el::rgba(0, 0, 0, 115));
-            canvas::linear_gradient face{el::point{thumb.left, thumb.top}, el::point{thumb.left, thumb.bottom}};
-            face.add_color_stop(0.0f, el::rgba(229, 235, 248, 255));
-            face.add_color_stop(1.0f, el::rgba(130, 146, 178, 255));
-            cnv.fill_style(face);
-            cnv.fill_round_rect(thumb, 4.0f);
+            cnv.shadow_style(el::point{0.0f, 1.0f}, 3.0f, el::rgba(0, 0, 0, 115));
+            cnv.fill_style(mTheme.Accent());
+            cnv.add_circle(cycfi::artist::circle(el::point{cx, cy}, kThumbRadius));
+            cnv.fill();
         }
 
-        cnv.stroke_style(MixColour(mTheme.Accent(), el::rgba(220, 231, 255, 255), 0.6f));
-        cnv.line_width(1.0f);
-        cnv.stroke_round_rect(thumb.inset(0.5f, 0.5f), 3.5f);
+        if (mDragging)
+        {
+            cnv.stroke_style(el::rgba(255, 255, 255, 110));
+            cnv.line_width(1.0f);
+            cnv.add_circle(cycfi::artist::circle(el::point{cx, cy}, kThumbRadius - 0.5f));
+            cnv.stroke();
+        }
     }
 
     bool click(const el::context& ctx, el::mouse_button btn) override
@@ -338,10 +339,8 @@ class GainSlider final : public el::element, public Drawn, public Focusable
 class NumberField final : public el::element, public Drawn, public Focusable
 {
   public:
-    NumberField(const Theme& theme, float fieldWidth, std::string unit, el::color ink, el::color unitInk,
-                Weight weight)
-        : mTheme(theme), mFieldWidth(fieldWidth), mUnit(std::move(unit)), mInk(ink), mUnitInk(unitInk),
-          mWeight(weight)
+    NumberField(const Theme& theme, float fieldWidth, std::string unit, el::color ink, el::color unitInk, Weight weight)
+        : mTheme(theme), mFieldWidth(fieldWidth), mUnit(std::move(unit)), mInk(ink), mUnitInk(unitInk), mWeight(weight)
     {
         mUnitWidth = std::ceil(MeasureTextWidth(mUnit, Font(mWeight).size(10.0f)));
     }
@@ -521,7 +520,30 @@ Ptr Across(float width, Ptr content)
 {
     return Row({Stretch(), FixedWidth(width, std::move(content)), Stretch()});
 }
+
+/// The bands in use (bandCount) and turned on, in order.
+std::vector<int> ShownBands(const guitarfx::GraphNode& node)
+{
+    const int bandCount = static_cast<int>(std::lround(ParamOr(node.params, "bandCount", kMaxBands)));
+    std::vector<int> bands;
+
+    for (int band = 1; band <= kMaxBands; ++band)
+    {
+        if (band <= bandCount && ParamOr(node.params, BandKey(band, "Enabled"), 1.0) >= 0.5)
+        {
+            bands.push_back(band);
+        }
+    }
+
+    return bands;
+}
 } // namespace
+
+float Shell::GraphicEqNaturalWidth(const guitarfx::GraphNode& node)
+{
+    const auto n = static_cast<float>(std::max<std::size_t>(1, ShownBands(node).size()));
+    return n * kBandMinWidth + (n - 1.0f) * kBandGap + 2.0f * kSectionPad;
+}
 
 Ptr Shell::BuildGraphicEq(const guitarfx::GraphNode& node, float width, float& height)
 {
@@ -539,23 +561,15 @@ Ptr Shell::BuildGraphicEq(const guitarfx::GraphNode& node, float width, float& h
     };
 
     // The bands in use (bandCount) and turned on, a column each.
-    const int bandCount = static_cast<int>(std::lround(ParamOr(node.params, "bandCount", kMaxBands)));
-    std::vector<int> bands;
-
-    for (int band = 1; band <= kMaxBands; ++band)
-    {
-        if (band <= bandCount && ParamOr(node.params, BandKey(band, "Enabled"), 1.0) >= 0.5)
-        {
-            bands.push_back(band);
-        }
-    }
+    const auto bands = ShownBands(node);
 
     // The columns: as many at least 72 wide as fit, a row of them, more rows when they do not.
     const float inner = std::max(0.0f, width - 2.0f * kSectionPad);
     const int tracks = std::max(1, static_cast<int>(std::floor((inner + kBandGap) / (kBandMinWidth + kBandGap))));
     const int columns = std::max(1, std::min(static_cast<int>(bands.size()), tracks));
     const int rows = bands.empty() ? 0 : (static_cast<int>(bands.size()) + columns - 1) / columns;
-    const float column = std::max(0.0f, (inner - static_cast<float>(columns - 1) * kBandGap) / static_cast<float>(columns));
+    const float column =
+        std::max(0.0f, (inner - static_cast<float>(columns - 1) * kBandGap) / static_cast<float>(columns));
 
     // The curve behind, faint, its axis pinned to the sliders while they stand in one row.
     auto plotElement = MakeEqPlot(NodeEqPlotSource(node), false);
@@ -649,7 +663,8 @@ Ptr Shell::BuildGraphicEq(const guitarfx::GraphNode& node, float width, float& h
         slider->onReset = [write, gainKey] { write(gainKey, 0.0); };
 
         // The frequency in Hz, typed in place and kept between its neighbours'.
-        auto freq = std::make_shared<NumberField>(mTheme, 48.0f, "Hz", freqInk, mTheme.TextSecondary(), Weight::Regular);
+        auto freq =
+            std::make_shared<NumberField>(mTheme, 48.0f, "Hz", freqInk, mTheme.TextSecondary(), Weight::Regular);
         freq->AccessName("Band " + std::to_string(band) + " frequency");
         mLive.Bind(freq, [freqOf] { return std::to_string(std::lround(freqOf())); }, &NumberField::Set);
         freq->editText = [freqOf] { return std::to_string(std::lround(freqOf())); };

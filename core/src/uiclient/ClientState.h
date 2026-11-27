@@ -804,6 +804,18 @@ struct ClientState
     /// (hostedPluginResourceLoadCompleted or Failed) or the file dialog is cancelled.
     std::set<std::string> pluginLoadsPending;
 
+    /// Why a node's plugin did not load (hostedPluginResourceLoadFailed), by node, until the node
+    /// loads one or asks for another.
+    struct PluginLoadFailure
+    {
+        std::string resourceId;
+        std::string filePath;
+        std::string message;
+        std::string errorCode;
+    };
+
+    std::map<std::string, PluginLoadFailure> pluginLoadFailures;
+
     // The active preset (the engine's working copy) and where it came from.
     std::optional<Preset> activePreset;
     std::string activePresetId;

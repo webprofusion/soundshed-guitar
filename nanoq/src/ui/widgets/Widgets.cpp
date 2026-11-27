@@ -30,7 +30,8 @@ Text::Text(const Theme& theme, std::string text, float size, Weight weight)
 el::view_limits Text::limits(const el::basic_context& ctx) const
 {
     const auto font = mWeight == Weight::Title ? TitleFont(mSize) : Font(mWeight).size(mSize);
-    const auto size = el::measure_text(ctx.canvas, mText, font);
+    auto size = el::measure_text(ctx.canvas, mText, font);
+    size.x = mTracking > 0.0f ? TrackedWidth(ctx.canvas, mText, font, mTracking) : size.x;
     const float h = std::max(size.y, mSize * 1.3f);
     return mFixed ? el::view_limits{{size.x, h}, {size.x, h}} : el::view_limits{{0.0f, h}, {el::full_extent, h}};
 }
@@ -39,6 +40,13 @@ void Text::draw(const el::context& ctx)
 {
     NoteDrawn(ctx);
     const auto font = mWeight == Weight::Title ? TitleFont(mSize) : Font(mWeight).size(mSize);
+
+    if (mTracking > 0.0f && TrackedWidth(ctx.canvas, mText, font, mTracking) <= ctx.bounds.width())
+    {
+        FillTrackedText(ctx.canvas, mText, font, mColour, ctx.bounds, mAlign, mTracking);
+        return;
+    }
+
     const auto shown = Ellipsize(ctx.canvas, mText, font, ctx.bounds.width());
     FillText(ctx.canvas, shown, font, mColour, ctx.bounds, mAlign);
 }
@@ -134,6 +142,12 @@ Text& Text::Alignment(Align a)
 Text& Text::Fixed(bool fixed)
 {
     mFixed = fixed;
+    return *this;
+}
+
+Text& Text::Tracking(float em)
+{
+    mTracking = std::max(0.0f, em);
     return *this;
 }
 

@@ -129,9 +129,7 @@ class IrListButton final : public Pressable
     {
         AccessInfo info = Pressable::Describe();
         info.role = mKind == Kind::Source ? AccessRole::Tab : AccessRole::Button;
-        info.name = NameOr(mKind == Kind::Toggle  ? "Show IR list"
-                           : mKind == Kind::Close ? "Hide IR list"
-                                                  : mLabel);
+        info.name = NameOr(mKind == Kind::Toggle ? "Show IR list" : mKind == Kind::Close ? "Hide IR list" : mLabel);
         info.selected = mActive;
         return info;
     }
@@ -225,6 +223,9 @@ std::map<std::string, IrListState>& IrListStates()
     static std::map<std::string, IrListState> states;
     return states;
 }
+
+/// The plugin host's load-error box: a title and a line.
+constexpr float kPluginErrorHeight = 46.0f;
 
 /// Rows drawn at once; a filter narrows a longer list (irSlotList.ts MAX_ROWS).
 constexpr std::size_t kIrListMaxRows = 300;
@@ -323,8 +324,20 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
     if (stacked)
     {
         heading->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 200), mTheme.TextSecondary()));
+        Ptr headingRow = heading;
+
+        // A file loaded from outside the library shows where it is (.resource-path-info), on the
+        // label's line, cut short when long.
+        if (ref != nullptr && !ref->filePath.empty() && !metrics::Touch())
+        {
+            heading->Fixed(true);
+            auto path = std::make_shared<Text>(mTheme, guitarfx::util::PathToUtf8(ref->filePath), 9.0f);
+            path->Colour(mTheme.TextMuted()).Alignment(Text::Align::Right);
+            headingRow = Row({heading, HGap(12), path});
+        }
+
         // Touch sizes: the row's buttons and field are hit over 36 px (EffectPage.cpp StackedSlot).
-        return Col({FixedHeight(16, heading), VGap(6), FixedHeight(metrics::Touch() ? 36 : 26, controls)});
+        return Col({FixedHeight(16, headingRow), VGap(6), FixedHeight(metrics::Touch() ? 36 : 26, controls)});
     }
 
     return Row(
@@ -441,16 +454,22 @@ Ptr Shell::BuildSplitBranches(const guitarfx::GraphNode& splitter)
 
     actions.push_back(Stretch());
 
-    // What the branches get, when the splitter routes them (splitBranches.ts).
-    const auto routing = guitarfx::uiclient::DescribeSplitRouting(splitter, count);
-    auto hint = std::make_shared<Text>(
-        mTheme,
-        routing.empty() ? "Each branch runs in parallel and meets the others at the mixer, whose levels set the blend."
-                        : routing,
-        metrics::kSmallText);
-    hint->Colour(mTheme.TextMuted());
-    return Col({FixedHeight(20, heading), VGap(4), FixedHeight(metrics::kRowHeight, Row(actions)), VGap(8),
-                FixedHeight(18, hint)});
+    // What the branches get, when the splitter routes them, then how branches come and go
+    // (splitBranches.ts).
+    std::vector<Ptr> column{FixedHeight(20, heading), VGap(4), FixedHeight(metrics::kRowHeight, Row(actions)), VGap(8)};
+    const auto hintLine = [&](const std::string& text) {
+        auto hint = std::make_shared<Text>(mTheme, text, metrics::kSmallText);
+        hint->Colour(mTheme.TextMuted());
+        column.push_back(FixedHeight(18, hint));
+    };
+
+    if (const auto routing = guitarfx::uiclient::DescribeSplitRouting(splitter, count); !routing.empty())
+    {
+        hintLine(routing);
+    }
+
+    hintLine("New branches start empty. Only an empty branch can be removed.");
+    return Col(std::move(column));
 }
 
 void Shell::RenameNodeWithPrompt(const std::string& nodeId)
@@ -464,6 +483,37 @@ void Shell::RenameNodeWithPrompt(const std::string& nodeId)
 
     OpenPrompt("Rename effect", NodeDisplayName(mState, *node), "Rename",
                [this, nodeId](const std::string& entered) { mSession.Commands().RenameNode(nodeId, entered); });
+}
+
+std::string Shell::PluginLoadFailureText(const guitarfx::GraphNode& node) const
+{
+    const auto failed = mState.pluginLoadFailures.find(node.id);
+
+    if (failed == mState.pluginLoadFailures.end())
+    {
+        return {};
+    }
+
+    // Only while the plugin that failed is still the one picked (getHostedPluginLoadFailureForResource).
+    const auto& f = failed->second;
+    const auto* ref = SlotRef(node, 0);
+    const bool current = ref == nullptr || (f.resourceId.empty() && f.filePath.empty()) ||
+                         (!f.resourceId.empty() && f.resourceId == ref->resourceId) ||
+                         (!f.filePath.empty() && f.filePath == guitarfx::util::PathToUtf8(ref->filePath));
+
+    if (!current)
+    {
+        return {};
+    }
+
+    const auto message =
+        f.message.empty() ? std::string("The selected plugin cannot be hosted by this build.") : f.message;
+    return f.errorCode.empty() ? message : message + " (code: " + f.errorCode + ")";
+}
+
+float Shell::PluginHostHeight(const guitarfx::GraphNode& node) const
+{
+    return 28.0f + 8.0f + 168.0f + (PluginLoadFailureText(node).empty() ? 0.0f : kPluginErrorHeight + 8.0f);
 }
 
 Ptr Shell::BuildPluginHost(const guitarfx::GraphNode& node)
@@ -535,24 +585,50 @@ Ptr Shell::BuildPluginHost(const guitarfx::GraphNode& node)
         mTheme, "Browse...", [this, nodeId] { mSession.Commands().BrowseNodeResource(nodeId, "plugin", 0); });
     auto top = Row({name, HGap(8), open, HGap(6), browse});
 
-    std::vector<Ptr> rows;
-
-    for (const auto* p : plugins)
-    {
-        const bool selected = ref != nullptr && ref->resourceId == p->id;
-        std::string format = guitarfx::util::PathToUtf8(std::filesystem::path(p->filePath).extension());
+    const auto formatOf = [](const std::string& path) {
+        std::string format = guitarfx::util::PathToUtf8(std::filesystem::u8path(path).extension());
 
         if (!format.empty() && format.front() == '.')
         {
             format.erase(0, 1);
         }
 
-        auto row =
-            std::make_shared<ListRow>(mTheme, p->name, Upper(format), selected, false, [this, nodeId, id = p->id] {
-                mSession.Commands().SetNodeResource(nodeId, "plugin", id, 0);
-                NoteChainEdit();
-                Mark(kPage);
-            });
+        return Upper(format);
+    };
+    // Each entry's file under its name (.plugin-host-item-path).
+    const auto withPath = [this](Ptr row, const std::string& path) -> Ptr {
+        if (path.empty())
+        {
+            return FixedHeight(30, std::move(row));
+        }
+
+        auto where = std::make_shared<Text>(mTheme, path, 9.0f);
+        where->Colour(mTheme.TextMuted());
+        return FixedHeight(42,
+                           Col({FixedHeight(28, std::move(row)), FixedHeight(12, Pad(12, 0, 8, 0, where)), VGap(2)}));
+    };
+
+    std::vector<Ptr> rows;
+
+    // A plugin loaded from a file rather than the library leads the list, picked
+    // (.plugin-host-item.is-custom).
+    if (ref != nullptr && ref->resourceId.empty() && !ref->filePath.empty())
+    {
+        const auto path = guitarfx::util::PathToUtf8(ref->filePath);
+        auto custom = std::make_shared<ListRow>(mTheme, guitarfx::util::PathToUtf8(ref->filePath.filename()),
+                                                formatOf(path), true, false, [] {});
+        rows.push_back(withPath(custom, path));
+    }
+
+    for (const auto* p : plugins)
+    {
+        const bool selected = ref != nullptr && ref->resourceId == p->id && ref->filePath.empty();
+        auto row = std::make_shared<ListRow>(mTheme, p->name, formatOf(p->filePath), selected, false,
+                                             [this, nodeId, id = p->id] {
+                                                 mSession.Commands().SetNodeResource(nodeId, "plugin", id, 0);
+                                                 NoteChainEdit();
+                                                 Mark(kPage);
+                                             });
         const bool fav = favourites.count(p->id) > 0;
         auto star = std::make_shared<IconButton>(mTheme, mIcons, "star");
         star->Size(26, 26).IconSize(13).Ink(fav ? mTheme.Accent() : mTheme.TextMuted());
@@ -568,7 +644,31 @@ Ptr Shell::BuildPluginHost(const guitarfx::GraphNode& node)
                                            nlohmann::json(std::vector<std::string>(next.begin(), next.end())));
             Mark(kPage);
         };
-        rows.push_back(FixedHeight(30, Row({row, HGap(4), FixedWidth(26, star)})));
+        star->AccessName(fav ? "Remove from favourites" : "Add to favourites");
+
+        // Out of the library, the file left where it is (.plugin-host-remove-btn).
+        auto remove = std::make_shared<IconButton>(mTheme, mIcons, "x");
+        remove->Size(26, 26).IconSize(11).Ink(mTheme.TextMuted());
+        remove->AccessName("Remove " + p->name + " from library");
+        remove->onClick = [this, nodeId, id = p->id, pluginName = p->name] {
+            OpenConfirm("Remove Plugin",
+                        "Remove \"" + pluginName +
+                            "\" from your plugin library? The plugin file on disk will not be deleted.",
+                        "Remove", [this, nodeId, id] {
+                            const auto* n = SelectedNode();
+                            const auto* now = n != nullptr && n->id == nodeId ? SlotRef(*n, 0) : nullptr;
+
+                            // Not in use by the preset when the library lets it go.
+                            if (now != nullptr && now->resourceId == id)
+                            {
+                                mSession.Commands().SetNodeResource(nodeId, "plugin", {}, 0);
+                            }
+
+                            mSession.Commands().ForgetLibraryResource("plugin", id);
+                        });
+        };
+        rows.push_back(
+            withPath(Row({row, HGap(4), FixedWidth(26, star), HGap(2), FixedWidth(26, remove)}), p->filePath));
     }
 
     if (rows.empty())
@@ -579,7 +679,24 @@ Ptr Shell::BuildPluginHost(const guitarfx::GraphNode& node)
         rows.push_back(FixedHeight(30, none));
     }
 
-    return Col({FixedHeight(28, top), VGap(8), FixedHeight(168, VScroll(Col(rows)))});
+    std::vector<Ptr> column{FixedHeight(28, top), VGap(8)};
+
+    // Why the plugin did not load, over the list (.plugin-host-load-error), while it is still
+    // the one picked.
+    if (const auto failure = PluginLoadFailureText(node); !failure.empty())
+    {
+        auto title = std::make_shared<Text>(mTheme, "Plugin Load Error", 11.0f, Weight::SemiBold);
+        title->Colour(el::rgba(255, 170, 160, 255));
+        auto detail = std::make_shared<Text>(mTheme, failure, 10.5f);
+        detail->Colour(mTheme.TextSecondary());
+        column.push_back(FixedHeight(
+            kPluginErrorHeight, Over(Pad(10, 6, 10, 6, Col({FixedHeight(16, title), FixedHeight(16, detail)})),
+                                     el::share(Surface(el::rgba(196, 59, 59, 40), el::rgba(196, 59, 59, 140), 6.0f)))));
+        column.push_back(VGap(8));
+    }
+
+    column.push_back(FixedHeight(168, VScroll(Col(rows))));
+    return Col(std::move(column));
 }
 
 Ptr Shell::BuildBlendInfo(const guitarfx::GraphNode& node)
@@ -780,8 +897,8 @@ Ptr Shell::BuildIrList(const guitarfx::GraphNode& node)
             for (int slot = 0; slot < 2; ++slot)
             {
                 const std::string slotName = slot == 0 ? "IR A" : "IR B";
-                auto assign = std::make_shared<IrListButton>(mTheme, mIcons, IrListButton::Kind::Assign,
-                                                             slot == 0 ? "A" : "B");
+                auto assign =
+                    std::make_shared<IrListButton>(mTheme, mIcons, IrListButton::Kind::Assign, slot == 0 ? "A" : "B");
                 assign->AccessName("Load into " + slotName + ": " + label);
                 assign->onClick = [this, nodeId, id = r->id, slot] {
                     mSession.Commands().SetNodeResource(nodeId, "ir", id, slot);
@@ -796,8 +913,8 @@ Ptr Shell::BuildIrList(const guitarfx::GraphNode& node)
             // A row a slot plays takes the accent's tint.
             if (inA || inB)
             {
-                row = Over(row, Rounded(mTheme.Accent().opacity(0.14f), RadiusSm(mTheme),
-                                        std::make_shared<el::element>()));
+                row = Over(row,
+                           Rounded(mTheme.Accent().opacity(0.14f), RadiusSm(mTheme), std::make_shared<el::element>()));
             }
 
             rows.push_back(FixedHeight(26, row));
@@ -835,9 +952,8 @@ Ptr Shell::BuildIrList(const guitarfx::GraphNode& node)
 
     // The open list (.ir-slot-list.is-open): an inset panel, 8 px inside, its parts 6 apart.
     return Over(Pad(8, 8, 8, 8,
-                    Col({FixedHeight(26, Row(header)), VGap(6),
-                         FixedHeight(14, Row({title, HGap(4), count})), VGap(6), FixedHeight(24, filter), VGap(6),
-                         FixedHeight(220, rowsSlot)})),
+                    Col({FixedHeight(26, Row(header)), VGap(6), FixedHeight(14, Row({title, HGap(4), count})), VGap(6),
+                         FixedHeight(24, filter), VGap(6), FixedHeight(220, rowsSlot)})),
                 std::make_shared<SkinBox>(mTheme, &ControlSkin::group));
 }
 } // namespace nanoq::ui

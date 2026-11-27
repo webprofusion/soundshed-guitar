@@ -353,6 +353,9 @@ void UiClient::RegisterLibraryHandlers()
 
     On("hostedPluginResourceLoadFailed", [this](const nlohmann::json& m) {
         MutableState().pluginLoadsPending.erase(m.value("nodeId", ""));
+        MutableState().pluginLoadFailures[m.value("nodeId", "")] = {
+            m.value("resourceId", std::string()), m.value("filePath", std::string()), m.value("message", std::string()),
+            m.value("errorCode", std::string())};
         Notify(Topic::ActivePreset);
         PostNotification({Notification::Kind::Error, "Plugin failed to load", m.value("message", "")});
     });
@@ -360,6 +363,7 @@ void UiClient::RegisterLibraryHandlers()
     // A plugin loaded, or the file dialog for one was cancelled: the node is no longer loading.
     On("hostedPluginResourceLoadCompleted", [this](const nlohmann::json& m) {
         MutableState().pluginLoadsPending.erase(m.value("nodeId", ""));
+        MutableState().pluginLoadFailures.erase(m.value("nodeId", ""));
         Notify(Topic::ActivePreset);
     });
     On("nodeResourceBrowseCancelled", [this](const nlohmann::json& m) {

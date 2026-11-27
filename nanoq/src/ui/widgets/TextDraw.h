@@ -32,6 +32,14 @@ enum class HAlign
 void FillText(cycfi::artist::canvas& cnv, const std::string& text, const el::font_descr& font, el::color colour,
               el::rect bounds, HAlign align);
 
+/// `text`'s width with `tracking` (an em fraction, CSS letter-spacing) after every character.
+[[nodiscard]] float TrackedWidth(cycfi::artist::canvas& cnv, const std::string& text, const el::font_descr& font,
+                                 float tracking);
+
+/// FillText with letter-spacing: `tracking` em after every character but the last.
+void FillTrackedText(cycfi::artist::canvas& cnv, const std::string& text, const el::font_descr& font, el::color colour,
+                     el::rect bounds, HAlign align, float tracking);
+
 /// ASCII letters in capitals, the rest unchanged: the web UI's uppercase labels.
 [[nodiscard]] std::string Upper(std::string text);
 [[nodiscard]] std::string Lower(std::string text);

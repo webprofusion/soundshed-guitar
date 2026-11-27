@@ -124,6 +124,69 @@ void FillText(artist::canvas& cnv, const std::string& text, const el::font_descr
     cnv.fill_text(text, el::point{x, bounds.top + bounds.height() * 0.5f});
 }
 
+namespace
+{
+/// `text` cut into its UTF-8 characters.
+std::vector<std::string> Characters(const std::string& text)
+{
+    std::vector<std::string> out;
+
+    for (std::size_t i = 0; i < text.size();)
+    {
+        const auto lead = static_cast<unsigned char>(text[i]);
+        const std::size_t n = lead < 0x80           ? 1
+                              : (lead >> 5) == 0x6  ? 2
+                              : (lead >> 4) == 0xE  ? 3
+                              : (lead >> 3) == 0x1E ? 4
+                                                    : 1;
+        out.push_back(text.substr(i, n));
+        i += n;
+    }
+
+    return out;
+}
+} // namespace
+
+float TrackedWidth(artist::canvas& cnv, const std::string& text, const el::font_descr& font, float tracking)
+{
+    const auto characters = Characters(text);
+    const float spacing = tracking * font._size;
+    // The whole line's advance, kerning and all, plus the spacing between the characters.
+    return el::measure_text(cnv, text, font).x +
+           spacing * static_cast<float>(characters.empty() ? 0 : characters.size() - 1);
+}
+
+void FillTrackedText(artist::canvas& cnv, const std::string& text, const el::font_descr& font, el::color colour,
+                     el::rect bounds, HAlign align, float tracking)
+{
+    if (tracking <= 0.0f)
+    {
+        FillText(cnv, text, font, colour, bounds, align);
+        return;
+    }
+
+    const float total = TrackedWidth(cnv, text, font, tracking);
+    float x = align == HAlign::Centre  ? bounds.left + (bounds.width() - total) * 0.5f
+              : align == HAlign::Right ? bounds.right - total
+                                       : bounds.left;
+    const float spacing = tracking * font._size;
+
+    auto state = cnv.new_state();
+    cnv.font(font);
+    cnv.fill_style(colour);
+    cnv.text_align(artist::canvas::left | artist::canvas::middle);
+    const float y = bounds.top + bounds.height() * 0.5f;
+    std::string drawn;
+
+    // Each character where the line so far ends, so the font's own advances (and kerning) hold.
+    for (const auto& c : Characters(text))
+    {
+        cnv.fill_text(c, el::point{x + el::measure_text(cnv, drawn, font).x, y});
+        drawn += c;
+        x += spacing;
+    }
+}
+
 std::string Lower(std::string text)
 {
     std::transform(text.begin(), text.end(), text.begin(),

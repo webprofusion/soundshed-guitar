@@ -23,15 +23,23 @@ Worked through in batches of related items, one commit per batch on main.
 
 | Item | Commit | What changed, and what was left out |
 | --- | --- | --- |
-| 1 | batch 1 | Backdrop layouts lost their controls: Elements culled them against port bounds that the scale transform never moved (`LayoutView.cpp`, `LocalPort`). `defaultControlsArea` is parsed, and the standard controls are fitted into it, the tab row with them. Checked live on Chaos Engine and Verbal |
-| 2 | batch 1 | Practice Tool projects keep every field Nano Q does not edit (`tab`, `youtube`, anything newer), YouTube-only projects are read (and say they open in the web UI), and saving over a project keeps them while it follows the same track. `JamPracticeToolTests` covers it |
-| 3 | batch 1 | Use Multiple CPU Cores defaults to on in the standalone app only |
-| 4 | batch 1 | Root cause: the engine sends scenes without a working graph, and the client kept showing the base graph. `ClientState::UseActiveSceneGraph` takes the active scene's graph on `state`, `presetLoaded` and `presetSaved`, as the web's `selectPresetScene` does. `UiClientTests` covers it; checked live in Solo |
-| 5 | batch 1 | The plugin's device text, the Channels hint (the web's wording), the Multi-Rig empty text (+ Mixer), the product name (Soundshed Guitar as its native editor) and About's Interface line and Soundshed Guitar note |
-| 6 | batch 1 | Nominal Level slider removed |
-| 7 | batch 1 | Folder files show `metadata.sampleRate`, falling back to `sample_rate` |
+| 1 | `818da269` | Backdrop layouts lost their controls: Elements culled them against port bounds that the scale transform never moved (`LayoutView.cpp`, `LocalPort`). `defaultControlsArea` is parsed, and the standard controls are fitted into it, the tab row with them. Checked live on Chaos Engine and Verbal |
+| 2 | `818da269` | Practice Tool projects keep every field Nano Q does not edit (`tab`, `youtube`, anything newer), YouTube-only projects are read (and say they open in the web UI), and saving over a project keeps them while it follows the same track. `JamPracticeToolTests` covers it |
+| 3 | `818da269` | Use Multiple CPU Cores defaults to on in the standalone app only |
+| 4 | `818da269` | Root cause: the engine sends scenes without a working graph, and the client kept showing the base graph. `ClientState::UseActiveSceneGraph` takes the active scene's graph on `state`, `presetLoaded` and `presetSaved`, as the web's `selectPresetScene` does. `UiClientTests` covers it; checked live in Solo |
+| 5 | `818da269` | The plugin's device text, the Channels hint (the web's wording), the Multi-Rig empty text (+ Mixer), the product name (Soundshed Guitar as its native editor) and About's Interface line and Soundshed Guitar note |
+| 6 | `818da269` | Nominal Level slider removed |
+| 7 | `818da269` | Folder files show `metadata.sampleRate`, falling back to `sample_rate` |
 | 8 | none | Not a bug: an unsaved new preset has no library entry, so Save already opens the Save dialog, named as the preset and filed in the open folder |
-| 9 | batch 1 | A confirm or prompt opened over a dialog or popover stacks on it (`ShowOverlay`, `DismissOverlay`). Cancel, Esc and a tap outside go back to it; the confirming button closes both, as before. Checked live: New folder from the preset chooser |
+| 9 | `818da269` | A confirm or prompt opened over a dialog or popover stacks on it (`ShowOverlay`, `DismissOverlay`). Cancel, Esc and a tap outside go back to it; the confirming button closes both, as before. Checked live: New folder from the preset chooser |
+| 10 | batch 2a | Signal Analyzer and Graphic EQ size as every other editor (content width, at least half the stage); the analyzer's tiles wrap to it, and the graphic EQ asks for its bands in one row |
+| 13 | batch 2a | The gain thumb is a round accent dot. The number boxes were already there (underlined, typed in place); left as they are |
+| 14 | batch 2a | Title 11 px; subtitle 8 px capitals at 0.12 em (`Text::Tracking`, `FillTrackedText`) |
+| 15 | none | Already there: values bold over smaller labels, and the "Updated" line. The "Waiting" capture was the demo audio not playing |
+| 20 | batch 2a | A blend-unit param (Simple Cab's Mic Blend) is an A-B slider reading A, B or the share of B. The IR cards keep their knob, as the web's do |
+| 22 | batch 2a | With no main params every param shows with no tabs; each node opens on Main |
+| 23 | batch 2a | DSP status floats in the controls' corner; the IR Cabinet's Full Rig note; a custom file's path on the slot's label line; Plugin Host: inline load error, paths, Remove (confirm, file kept), the custom-file row; splitter hint as the web's; Presets chip whenever the type has params, Splitter and Mixer too; art gap 16 and a 52 x 34 thumbnail when the stage is too narrow for the column. Left out: a spinner beside "Loading plugin..." (the text says it). "Back to one lane" stays |
+| 25 | batch 2a | Web fix: Pitch Tracking EQ is no longer an EQ node, so it gets no curve |
 
 ## How it was compared
 

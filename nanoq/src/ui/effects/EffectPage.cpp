@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <optional>
+#include <set>
 
 namespace nanoq::ui
 {
@@ -298,6 +299,93 @@ Ptr Sized(float w, float h, Ptr content)
 {
     return FixedWidth(w, FixedHeight(h, std::move(content)));
 }
+
+/// A NAM node playing a capture that includes its cabinet (chainRules.ts
+/// nodeUsesFullRigNamCategory): filed as a full rig, or with "cab" in its gear_type.
+bool PlaysFullRigNam(const ClientState& state, const guitarfx::GraphNode& node)
+{
+    namespace guids = guitarfx::EffectGuids;
+
+    if (node.type != guids::kAmpNamOptimized && node.type != guids::kAmpNam && node.type != guids::kFxNam &&
+        node.type != guids::kAmpNamBlend)
+    {
+        return false;
+    }
+
+    const auto lower = [](std::string text) {
+        std::transform(text.begin(), text.end(), text.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const auto first = text.find_first_not_of(" 	");
+        const auto last = text.find_last_not_of(" 	");
+        return first == std::string::npos ? std::string() : text.substr(first, last - first + 1);
+    };
+
+    for (const auto& ref : node.resources)
+    {
+        const auto* resource = ref.resourceId.empty() ? nullptr : state.FindLibraryResource("nam", ref.resourceId);
+
+        if (resource == nullptr)
+        {
+            continue;
+        }
+
+        auto category = lower(resource->category);
+
+        if (category.empty() && resource->metadata.is_object())
+        {
+            category = lower(resource->metadata.value("gear", std::string()));
+        }
+
+        const auto gearType =
+            resource->metadata.is_object() ? lower(resource->metadata.value("gear_type", std::string())) : "";
+
+        if (category == "full-rig" || gearType.find("cab") != std::string::npos)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// An IR Cabinet whose signal path (everything connected to it, either way) already has a full-rig
+/// capture (chainRules.ts shouldShowFullRigCabModelNote).
+bool ShowsFullRigCabNote(const ClientState& state, const guitarfx::GraphNode& node)
+{
+    if (node.type != guitarfx::EffectGuids::kCabIr || !state.activePreset)
+    {
+        return false;
+    }
+
+    const auto& graph = state.activePreset->graph;
+    std::vector<std::string> queue{node.id};
+    std::set<std::string> visited{node.id};
+
+    while (!queue.empty())
+    {
+        const auto current = queue.back();
+        queue.pop_back();
+
+        for (const auto& edge : graph.edges)
+        {
+            const std::string next = edge.from == current ? edge.to : edge.to == current ? edge.from : std::string();
+
+            if (next.empty() || !visited.insert(next).second)
+            {
+                continue;
+            }
+
+            if (const auto* other = graph.FindNode(next); other != nullptr && PlaysFullRigNam(state, *other))
+            {
+                return true;
+            }
+
+            queue.push_back(next);
+        }
+    }
+
+    return false;
+}
 } // namespace
 
 std::string Shell::EffectPageSignature() const
@@ -359,6 +447,8 @@ std::string Shell::EffectPageSignature() const
             const auto it = node->params.find(key);
             s += it != node->params.end() && it->second >= 0.5 ? "1" : "0";
         }
+
+        s += ShowsFullRigCabNote(mState, *node) ? "|fullrig" : "";
     }
 
     // The model and IR slots show what is loaded and what the library holds.
@@ -372,11 +462,13 @@ std::string Shell::EffectPageSignature() const
         const auto it = mState.resources.find(type->resourceType);
         s += "|lib" + std::to_string(it != mState.resources.end() ? it->second.size() : 0);
 
-        // A plugin host also shows whether it is loading and which plugins are starred.
+        // A plugin host also shows whether it is loading, why it failed, and which plugins are
+        // starred.
         if (type->resourceType == "plugin")
         {
             s += std::string(mState.pluginLoadsPending.count(node->id) > 0 ? "|loading" : "") + "|fav" +
-                 mState.appSettings.value("plugins.hostFavorites", nlohmann::json::array()).dump();
+                 mState.appSettings.value("plugins.hostFavorites", nlohmann::json::array()).dump() + "|fail" +
+                 PluginLoadFailureText(*node);
         }
     }
 
@@ -412,6 +504,16 @@ std::string Shell::EffectPageSignature() const
                 s += "|e" + edge.to;
             }
         }
+
+        // And its routing line follows its mode.
+        int outgoing = 0;
+
+        for (const auto& edge : mState.activePreset->graph.edges)
+        {
+            outgoing += edge.from == node->id ? 1 : 0;
+        }
+
+        s += "|route" + guitarfx::uiclient::DescribeSplitRouting(*node, outgoing);
     }
 
     s += EqSectionSignature(*node);
@@ -465,6 +567,14 @@ Ptr Shell::BuildEffectPage()
     // ── Which controls: this tab's, and only those whose condition holds ──
     std::vector<EffectParamInfo> params;
     bool anyAdvanced = false;
+    bool anyMain = false;
+
+    // Each node opens on Main, as the web UI's panel does.
+    if (mShowAdvancedFor != node->id)
+    {
+        mShowAdvancedFor = node->id;
+        mShowAdvanced = false;
+    }
 
     if (boundary)
     {
@@ -477,30 +587,37 @@ Ptr Shell::BuildEffectPage()
                                  ? guitarfx::uiclient::CountSplitBranches(mState.activePreset->graph, node->id)
                                  : 0;
 
-        for (const auto& param : type->parameters)
-        {
+        const auto shown = [&](const EffectParamInfo& param) {
             // The IR Cabinet's A and B controls are on its slots' cards, whichever tab is shown.
-            if (irAb && IsIrAbParam(param.key))
-            {
-                continue;
-            }
-
             // The graphic EQ's own sliders stand for all its controls, and Pickup Match's design
             // controls are in its design blocks, as the web UI shows them.
-            if (node->type == guitarfx::EffectGuids::kEqGraphic ||
-                (node->type == guitarfx::EffectGuids::kPickupMatch && IsPickupDesignParam(param.key)))
+            return !(irAb && IsIrAbParam(param.key)) && node->type != guitarfx::EffectGuids::kEqGraphic &&
+                   !(node->type == guitarfx::EffectGuids::kPickupMatch && IsPickupDesignParam(param.key));
+        };
+
+        for (const auto& param : type->parameters)
+        {
+            if (shown(param))
+            {
+                anyAdvanced = anyAdvanced || param.advanced;
+                anyMain = anyMain || !param.advanced;
+            }
+        }
+
+        // With no main controls there is no Advanced tab: every control shows (panel.ts).
+        if (!anyMain)
+        {
+            anyAdvanced = false;
+        }
+
+        for (const auto& param : type->parameters)
+        {
+            if (!shown(param) || (branches > 0 && !guitarfx::uiclient::IsSplitterParamInUse(param.key, branches)))
             {
                 continue;
             }
 
-            anyAdvanced = anyAdvanced || param.advanced;
-
-            if (branches > 0 && !guitarfx::uiclient::IsSplitterParamInUse(param.key, branches))
-            {
-                continue;
-            }
-
-            if (param.advanced == mShowAdvanced && IsParamVisible(param, *node, type))
+            if ((!anyAdvanced || param.advanced == mShowAdvanced) && IsParamVisible(param, *node, type))
             {
                 params.push_back(param);
             }
@@ -586,8 +703,10 @@ Ptr Shell::BuildEffectPage()
                         std::ceil(MeasureControlText(name, label, metrics::Readable(label.size + 1.0f))) + 4.0f);
     };
 
-    // A control's cell, its width and the cell, named `shown`: a list's chip, a switch or a knob.
-    const auto makeCell = [&](const EffectParamInfo& info, const std::string& shown) -> std::pair<float, Ptr> {
+    // A control's cell, its width and the cell, named `shown`: a list's chip, a switch, an A-B
+    // slider or a knob. `blendAsKnob`: an A/B blend drawn as a knob, as the IR cards draw theirs.
+    const auto makeCell = [&](const EffectParamInfo& info, const std::string& shown,
+                              bool blendAsKnob = false) -> std::pair<float, Ptr> {
         // A right click on any of them: MIDI Learn, for whichever control it is (Automation.cpp).
         auto menu = [this, key = info.key](el::point at) {
             if (const auto* n = SelectedNode())
@@ -645,6 +764,50 @@ Ptr Shell::BuildEffectPage()
                 Mark(kValues | kPage);
             };
             return {cellFor(shown), toggle};
+        }
+
+        if (info.unit == "blend" && !blendAsKnob)
+        {
+            // An A/B blend (panel.ts, .node-param-blend-group): A, the slider, B, and "A", "B" or
+            // the share of B under it.
+            constexpr float kBlendCellWidth = 156.0f;
+            const auto blendText = [](double v) {
+                return v <= 0.01   ? std::string("A")
+                       : v >= 0.99 ? std::string("B")
+                                   : std::to_string(std::lround(v * 100.0)) + "%";
+            };
+            const auto span = [info](double v) {
+                return info.maxValue > info.minValue ? (v - info.minValue) / (info.maxValue - info.minValue) : 0.0;
+            };
+            auto slider = std::make_shared<ParamSlider>(mTheme, "");
+            slider->AccessName(info.name);
+            mLive.Bind(
+                slider, [valueOf, info] { return valueOf(info); },
+                [span, blendText](ParamSlider& sl, double v) { sl.Update(span(v), blendText(v)); });
+            slider->onChange = [this, nodeId, info, blendText, sl = slider.get()](double position) {
+                const double value =
+                    std::round((info.minValue + position * (info.maxValue - info.minValue)) * 100.0) / 100.0;
+                sl->Update(position, blendText(value));
+                mSession.Commands().SetNodeParam(nodeId, info.key, value);
+                NoteChainEdit();
+                Mark(kValues);
+            };
+            slider->onReset = [this, nodeId, info] {
+                mSession.Commands().SetNodeParam(nodeId, info.key, info.defaultValue);
+                NoteChainEdit();
+                Mark(kValues);
+            };
+            const auto small = [this](const std::string& text, Text::Align align) {
+                auto t = std::make_shared<Text>(mTheme, text, metrics::Readable(9.0f), Weight::SemiBold);
+                t->Colour(Theme::Argb(mTheme.Controls().label.colour)).Alignment(align);
+                return t;
+            };
+            return {kBlendCellWidth,
+                    Sized(kBlendCellWidth, kCellHeight,
+                          Col({FixedHeight(12, small(Upper(shown), Text::Align::Centre)), FixedHeight(44, slider),
+                               FixedHeight(14, Pad(6, 0, 6, 0,
+                                                   Row({small("A", Text::Align::Left), Stretch(),
+                                                        small("B", Text::Align::Right)})))}))};
         }
 
         {
@@ -818,8 +981,8 @@ Ptr Shell::BuildEffectPage()
             cnv.stroke_style(mOn || mHover ? mTheme.Accent() : mTheme.BorderStrong());
             cnv.line_width(1.0f);
             cnv.stroke_round_rect(b.inset(0.5f, 0.5f), radius);
-            FillText(cnv, "\xC3\x98", Font(Weight::SemiBold).size(13.0f), mOn ? mTheme.Accent() : mTheme.TextSecondary(),
-                     b, HAlign::Centre);
+            FillText(cnv, "\xC3\x98", Font(Weight::SemiBold).size(13.0f),
+                     mOn ? mTheme.Accent() : mTheme.TextSecondary(), b, HAlign::Centre);
         }
 
       private:
@@ -865,7 +1028,7 @@ Ptr Shell::BuildEffectPage()
                 return {0.0f, nullptr};
             }
 
-            auto [w, c] = makeCell(*info, name);
+            auto [w, c] = makeCell(*info, name, true);
             const float opacity = idle(key) ? 0.4f : emptySlot ? 0.45f : 1.0f;
             return {w, opacity < 1.0f ? Fade(opacity, std::move(c)) : std::move(c)};
         };
@@ -944,10 +1107,9 @@ Ptr Shell::BuildEffectPage()
 
             // The header: the slot's colour (the Alignment section's, darker on the light themes)
             // and name in the group title's letter-spaced capitals, its share, Ø.
-            const el::color key = index == 0 ? (mTheme.IsLight() ? el::rgba(40, 104, 160, 242)
-                                                                 : el::rgba(72, 168, 224, 242))
-                                             : (mTheme.IsLight() ? el::rgba(190, 96, 20, 242)
-                                                                 : el::rgba(240, 160, 64, 242));
+            const el::color key = index == 0
+                                      ? (mTheme.IsLight() ? el::rgba(40, 104, 160, 242) : el::rgba(72, 168, 224, 242))
+                                      : (mTheme.IsLight() ? el::rgba(190, 96, 20, 242) : el::rgba(240, 160, 64, 242));
             auto bar = Rounded(key, 1.5f, std::make_shared<el::element>());
             auto name = std::make_shared<SkinText>(mTheme, slot, &ControlSkin::groupTitle);
             auto share = std::make_shared<Text>(mTheme, "", metrics::Readable(10.0f), Weight::SemiBold);
@@ -956,9 +1118,10 @@ Ptr Shell::BuildEffectPage()
                 .Alignment(Text::Align::Right)
                 .Fixed(true);
             mLive.Bind(share, [shareOf, index] { return shareOf(index); }, &Text::Set);
-            std::vector<Ptr> head{Middle(FixedWidth(14, FixedHeight(3, bar))), HGap(6),
-                                  FixedWidth(MeasureControlText(slot, groupTitle) + 2.0f, Middle(FixedHeight(14, name))),
-                                  Stretch(), Middle(share)};
+            std::vector<Ptr> head{
+                Middle(FixedWidth(14, FixedHeight(3, bar))), HGap(6),
+                FixedWidth(MeasureControlText(slot, groupTitle) + 2.0f, Middle(FixedHeight(14, name))), Stretch(),
+                Middle(share)};
 
             if (const auto* invert = abParam(keys[4]))
             {
@@ -1179,6 +1342,12 @@ Ptr Shell::BuildEffectPage()
         groupsWidth += groupWidth(g) + (groupsWidth > 0.0f ? kGroupGap : 0.0f);
     }
 
+    // The graphic EQ asks for its bands in one row.
+    if (!boundary && node->type == guitarfx::EffectGuids::kEqGraphic)
+    {
+        groupsWidth = std::max(groupsWidth, GraphicEqNaturalWidth(*node));
+    }
+
     // The IR Cabinet asks for room for its two cards and the blend abreast, knobs four abreast.
     if (irAb)
     {
@@ -1186,12 +1355,14 @@ Ptr Shell::BuildEffectPage()
     }
 
     // Split, the effect's artwork stands in a column left of its controls where the stage leaves
-    // the controls room beside it (the full layout always does); staged, as in the web UI's
+    // the controls room beside it (the full layout always does); narrower, it shrinks to a
+    // thumbnail beside the title, as the web UI's does at 900 px; staged, as in the web UI's
     // compact layout, it is left to the chain card.
     std::shared_ptr<artist::image> stockArt;
     std::string artUrl;
+    const bool artColumn = split && stageWidth >= 860.0f;
 
-    if (split && stageWidth >= 860.0f && !boundary && type != nullptr && layout == nullptr)
+    if (split && !boundary && type != nullptr && layout == nullptr)
     {
         stockArt = mImages.Find(mPresentation.EquipmentImage(node->type, category));
 
@@ -1208,8 +1379,13 @@ Ptr Shell::BuildEffectPage()
         }
     }
 
-    const bool hasArt = stockArt != nullptr || !artUrl.empty();
-    constexpr float kArtWidth = 300.0f, kArtGap = 12.0f, kArtMinHeight = 200.0f;
+    const bool anyArt = stockArt != nullptr || !artUrl.empty();
+    const bool hasArt = anyArt && artColumn;
+    const bool artThumb = anyArt && !artColumn;
+    // The web UI's column is minmax(220px, 300px) with a 16 px gap; 296 keeps the controls the
+    // room they had beside a 300 px column 12 px off.
+    constexpr float kArtWidth = 296.0f, kArtGap = 16.0f, kArtMinHeight = 200.0f;
+    constexpr float kThumbWidth = 52.0f, kThumbHeight = 34.0f;
     const float artRoom = hasArt ? kArtWidth + kArtGap : 0.0f;
 
     // A theme's cheeks stand either side of the panel, outside it, where the stage has room for
@@ -1218,11 +1394,11 @@ Ptr Shell::BuildEffectPage()
     const float cheek = cheekSkin > 0.0f && stageWidth - 20.0f - 2.0f * cheekSkin >= kPanelMinWidth ? cheekSkin : 0.0f;
     const float maxPanel = std::max(kPanelMinWidth, stageWidth - 20.0f - 2.0f * cheek);
     const float minPanel = split ? std::clamp((stageWidth - 20.0f) * 0.5f, kPanelMinWidth, maxPanel) : kPanelMinWidth;
-    // The live sections (the analyzer, the spatial panner) want the room too.
-    const bool wideSection = !boundary && (node->type == guitarfx::EffectGuids::kInputAnalyzer ||
-                                           node->type == guitarfx::EffectGuids::kSpatial3D ||
-                                           node->type == guitarfx::EffectGuids::kEqGraphic ||
-                                           MultibandPlot::KindOf(node->type).has_value());
+    // The spatial panner and the multi-band plots want the room too. The analyzer and the
+    // graphic EQ size as any other panel, as the web UI's do (params-panel.css: as wide as its
+    // content, at least half the stage): the analyzer's tiles wrap to the width they get.
+    const bool wideSection =
+        !boundary && (node->type == guitarfx::EffectGuids::kSpatial3D || MultibandPlot::KindOf(node->type).has_value());
     // A layout asks for its own width, or all there is when it may grow past it.
     const bool layoutGrows = layout != nullptr && layout->scaling && layout->scaling->mode != "fixed" &&
                              layout->scaling->maxScale && *layout->scaling->maxScale > 1.0;
@@ -1237,7 +1413,10 @@ Ptr Shell::BuildEffectPage()
     const float sectionInner = panelWidth - 2.0f * (kPanelPad + kSectionPad) - artRoom;
 
     // ── Header ──
-    const auto titleFont = TitleFont(12.5f);
+    // The web UI's .default-effect-shell-title (11 px, bold) and -subtitle (8 px bold capitals,
+    // 0.12 em apart).
+    constexpr float kTitleSize = 11.0f;
+    const auto titleFont = TitleFont(kTitleSize);
     const std::string titleText = NodeDisplayName(mState, *node);
     std::string kind = boundary ? std::string(node->type == guitarfx::kNodeTypeInput ? "Input" : "Output")
                                 : (type != nullptr ? type->name : node->type);
@@ -1323,9 +1502,9 @@ Ptr Shell::BuildEffectPage()
         channelsWidth += metrics::Hit(28.0f) + 8.0f;
     }
 
-    if (!IsSplitterType(node->type) && !IsMixerType(node->type))
+    // Whenever the type has params, the splitter and mixer too, as the web UI's panel has it.
     {
-        if (type != nullptr || boundary)
+        if ((type != nullptr && !type->parameters.empty()) || boundary)
         {
             auto presets = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Chip);
             presets->Size(77, 26).Label("Presets", 11.0f).Caret(true);
@@ -1379,15 +1558,16 @@ Ptr Shell::BuildEffectPage()
     // the head of the controls at the right, hit over 44 by 36.
     const bool touchPencil = metrics::Touch() && !boundary;
     const float pencilWidth = boundary ? 0.0f : touchPencil ? metrics::Hit(20.0f) + 8.0f : 22.0f;
-    const float roomForTitle = panelWidth - 2.0f * kPanelPad - 14.0f - 8.0f - pencilWidth - rightWidth - 16.0f;
+    const float roomForTitle = panelWidth - 2.0f * kPanelPad - 14.0f - 8.0f - pencilWidth - rightWidth - 16.0f -
+                               (artThumb ? kThumbWidth + 10.0f : 0.0f);
     const float titleWidth =
         std::clamp(MeasureTextWidth(titleText, titleFont) + 2.0f, 40.0f, std::max(40.0f, roomForTitle));
 
     auto led = std::make_shared<HeaderLed>(node->enabled, false);
-    auto title = std::make_shared<Text>(mTheme, titleText, 12.5f, Weight::Title);
+    auto title = std::make_shared<Text>(mTheme, titleText, kTitleSize, Weight::Title);
     title->Colour(mTheme.EffectTitleInk());
-    auto subtitle = std::make_shared<Text>(mTheme, subtitleText, metrics::Readable(9.0f, 10.0f), Weight::SemiBold);
-    subtitle->Colour(mTheme.TextMuted()).Fixed(true);
+    auto subtitle = std::make_shared<Text>(mTheme, subtitleText, metrics::Readable(8.0f, 10.0f), Weight::SemiBold);
+    subtitle->Colour(mTheme.TextMuted()).Fixed(true).Tracking(0.12f);
 
     // The titles (.default-effect-shell-titles): the name, and under it the kind and the badge.
     std::vector<Ptr> titleRow{FixedWidth(titleWidth, title)};
@@ -1419,8 +1599,16 @@ Ptr Shell::BuildEffectPage()
     }
 
     subtitleRow.push_back(Stretch());
-    std::vector<Ptr> header{Middle(led), HGap(8),
-                            Col({FixedHeight(20, Row(titleRow)), FixedHeight(14, Row(subtitleRow)), VGap(2)})};
+    std::vector<Ptr> header{Middle(led), HGap(8)};
+
+    if (artThumb)
+    {
+        auto thumb = std::make_shared<ArtworkPanel>(mTheme, [this, artUrl] { return RemoteImage(artUrl); }, stockArt);
+        header.push_back(Middle(Sized(kThumbWidth, kThumbHeight, thumb)));
+        header.push_back(HGap(10));
+    }
+
+    header.push_back(Col({FixedHeight(20, Row(titleRow)), FixedHeight(14, Row(subtitleRow)), VGap(2)}));
 
     for (auto& r : rightSide)
     {
@@ -1462,11 +1650,23 @@ Ptr Shell::BuildEffectPage()
         return t;
     };
 
+    // The DSP status floats in the controls' top right corner, over them, as the web UI's
+    // .effect-dsp-status does: it takes no room of its own. Clicks where it has no tile reach
+    // what is under it (Elements hands a click only to an element that wants it).
+    Ptr dspStatus;
+
     if (mShowDspStatus && !boundary)
     {
-        addToSection(BuildDspStatus(guitarfx::uiclient::EffectDspStatus(), mState.activePresetId + "::" + node->id,
-                                    {"preset", node->id, mState.activePresetId}, false),
-                     40.0f);
+        dspStatus = BuildDspStatus(guitarfx::uiclient::EffectDspStatus(), mState.activePresetId + "::" + node->id,
+                                   {"preset", node->id, mState.activePresetId}, false);
+    }
+
+    if (!boundary && ShowsFullRigCabNote(mState, *node))
+    {
+        auto note = std::make_shared<Text>(mTheme, "Signal chain already includes a Cabinet Model (a \"Full Rig\").",
+                                           metrics::kSmallText);
+        note->Colour(mTheme.TextSecondary());
+        addToSection(Middle(note), 18.0f);
     }
 
     if (hasSlots && !layoutPlacesSlots)
@@ -1498,7 +1698,7 @@ Ptr Shell::BuildEffectPage()
 
     if (hasPlugin)
     {
-        addToSection(BuildPluginHost(*node), 28.0f + 8.0f + 168.0f);
+        addToSection(BuildPluginHost(*node), PluginHostHeight(*node));
     }
 
     if (node->type == guitarfx::EffectGuids::kAmpNamBlend)
@@ -1539,8 +1739,7 @@ Ptr Shell::BuildEffectPage()
     }
 
     // The gates' learn meters, in a card under a card title as gateLearn.ts lays them out.
-    const auto addGateLearn = [&](GateLearnTarget target, const char* titleText)
-    {
+    const auto addGateLearn = [&](GateLearnTarget target, const char* titleText) {
         const float pad = mTheme.Controls().cardPadding;
         const float learn = GateLearnHeight(target);
         auto title = std::make_shared<SkinText>(mTheme, titleText, &ControlSkin::cardTitle);
@@ -1569,7 +1768,16 @@ Ptr Shell::BuildEffectPage()
 
     if (IsSplitterType(node->type))
     {
-        addToSection(BuildSplitBranches(*node), 96.0f);
+        // A line more when the splitter's mode routes the branches (BuildSplitBranches).
+        int outgoing = 0;
+
+        for (const auto& edge : mState.activePreset->graph.edges)
+        {
+            outgoing += edge.from == node->id ? 1 : 0;
+        }
+
+        const bool routed = !guitarfx::uiclient::DescribeSplitRouting(*node, outgoing).empty();
+        addToSection(BuildSplitBranches(*node), routed ? 114.0f : 96.0f);
     }
 
     // The tabs (.node-param-tabs): on their own line, with a rule under them across the section.
@@ -1580,7 +1788,8 @@ Ptr Shell::BuildEffectPage()
     auto tabLine = [&]() -> Ptr {
         auto t = tabs();
         return t ? Col({FixedHeight(tabRow, Row({t, Stretch()})),
-                        FixedHeight(1, Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>()))})
+                        FixedHeight(1,
+                                    Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>()))})
                  : nullptr;
     };
 
@@ -1672,7 +1881,9 @@ Ptr Shell::BuildEffectPage()
 
             if (layout->defaultControlsArea)
             {
-                const auto positive = [](double v) { return std::isfinite(v) && v > 0.0 ? static_cast<float>(v) : 1.0f; };
+                const auto positive = [](double v) {
+                    return std::isfinite(v) && v > 0.0 ? static_cast<float>(v) : 1.0f;
+                };
                 const float scaleX = positive(layout->defaultControlsScale.x);
                 const float scaleY = positive(layout->defaultControlsScale.y);
                 const float areaW = static_cast<float>(layout->defaultControlsArea->width);
@@ -1745,8 +1956,8 @@ Ptr Shell::BuildEffectPage()
         }
 
         float layoutHeight = 0.0f;
-        auto drawn =
-            BuildEffectLayout(*node, *layout, sectionInner, roomBelow, standard, standardSize, layoutHeight, controlsFit);
+        auto drawn = BuildEffectLayout(*node, *layout, sectionInner, roomBelow, standard, standardSize, layoutHeight,
+                                       controlsFit);
         addToSection(drawn, layoutHeight);
     }
     else
@@ -1783,6 +1994,13 @@ Ptr Shell::BuildEffectPage()
     const float panelHeight = kPanelPad + kHeaderHeight + 10.0f + sectionBox + kPanelPad;
     Ptr sectionElement = Over(Pad(kSectionPad, kSectionPad, kSectionPad, kSectionPad, Col(section)),
                               std::make_shared<SkinBox>(mTheme, &ControlSkin::section));
+
+    if (dspStatus)
+    {
+        sectionElement = Over(
+            el::share(el::align_top(el::align_right(el::margin({0.0f, 2.0f, 2.0f, 0.0f}, el::hold_any(dspStatus))))),
+            sectionElement);
+    }
 
     if (hasArt)
     {

@@ -520,10 +520,16 @@ void UiCommands::SetNodeResource(const std::string& nodeId, const std::string& r
         payload["resourceIndex"] = resourceIndex;
     }
 
-    // A third-party plugin takes a while to load; the engine says when it has.
-    if (resourceType == "plugin" && !resourceId.empty())
+    // A third-party plugin takes a while to load; the engine says when it has. What failed
+    // before is no longer the question.
+    if (resourceType == "plugin")
     {
-        mClient.MutableState().pluginLoadsPending.insert(nodeId);
+        mClient.MutableState().pluginLoadFailures.erase(nodeId);
+
+        if (!resourceId.empty())
+        {
+            mClient.MutableState().pluginLoadsPending.insert(nodeId);
+        }
     }
 
     mClient.Send("updateNodeResource", std::move(payload));
@@ -607,6 +613,7 @@ void UiCommands::BrowseNodeResource(const std::string& nodeId, const std::string
 
     if (resourceType == "plugin")
     {
+        mClient.MutableState().pluginLoadFailures.erase(nodeId);
         mClient.MutableState().pluginLoadsPending.insert(nodeId);
     }
 
@@ -984,6 +991,14 @@ void UiCommands::UpdateLibraryResource(const std::string& resourceType, const st
 void UiCommands::DeleteLibraryResource(const std::string& resourceType, const std::string& resourceId)
 {
     mClient.Send("deleteLibraryResource", {{"resourceType", resourceType}, {"resourceId", resourceId}});
+}
+
+void UiCommands::ForgetLibraryResource(const std::string& resourceType, const std::string& resourceId)
+{
+    mClient.Send("cleanupResourceLibrary",
+                 {{"scope", resourceType},
+                  {"removeFiles", false},
+                  {"resources", nlohmann::json::array({{{"type", resourceType}, {"id", resourceId}}})}});
 }
 
 void UiCommands::QueryResourceUsage(const std::string& resourceType, const std::string& resourceId)
