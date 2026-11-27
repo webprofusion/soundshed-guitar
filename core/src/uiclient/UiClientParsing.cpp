@@ -109,6 +109,8 @@ EffectParamInfo EffectParam(const nlohmann::json& param)
             const bool isObject = entry.is_object();
             info.labelGroups.push_back(isObject ? entry.value("group", std::string{}) : std::string{});
             info.labelSubgroups.push_back(isObject ? entry.value("subgroup", std::string{}) : std::string{});
+            info.labelIcons.push_back(isObject ? entry.value("icon", std::string{}) : std::string{});
+            info.labelDetails.push_back(isObject ? entry.value("detail", std::string{}) : std::string{});
         }
     }
 

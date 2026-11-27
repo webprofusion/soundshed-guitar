@@ -6,6 +6,7 @@
 // them, a split's branch count, and the parameters in groups, each a knob, a switch or a list.
 // A parameter the engine declares with `visibleWhen` shows only while that holds.
 
+#include "ui/effects/EnumPicker.h"
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
@@ -50,7 +51,7 @@ EffectParamInfo BoundaryTrim()
 // section padded 8, inside the panel padded 10; the panel at least 448 wide.
 constexpr float kCellWidth = 74.0f;
 constexpr float kCellHeight = 72.0f;
-constexpr float kPickerWidth = 120.0f;
+constexpr float kPickerWidth = 200.0f; // the web's trigger: 180 to 280
 constexpr float kCellGap = 4.0f;
 constexpr float kGroupPadX = 11.0f;
 constexpr float kGroupGap = 13.0f;
@@ -79,6 +80,52 @@ bool IsIrAbParam(const std::string& key)
 
     return std::find(std::begin(kIrAbCentreKeys), std::end(kIrAbCentreKeys), key) != std::end(kIrAbCentreKeys);
 }
+
+/// A mixer input's mute (.mixer-mute-toggle): a small switch, green while the input plays and
+/// red while it is muted.
+class MuteSwitch final : public Pressable
+{
+  public:
+    explicit MuteSwitch(const Theme& theme) : mTheme(theme)
+    {
+    }
+
+    void Set(bool muted)
+    {
+        mMuted = muted;
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.role = AccessRole::Toggle;
+        info.toggled = mMuted ? 1 : 0;
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{28.0f, 16.0f}, {28.0f, 16.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        cnv.fill_style((mMuted ? mTheme.Error() : mTheme.Success()).opacity(mHover ? 1.0f : 0.85f));
+        cnv.fill_round_rect(b, b.height() * 0.5f);
+        const float x = mMuted ? b.right - 7.0f : b.left + 7.0f;
+        cnv.fill_style(el::colors::white);
+        cnv.begin_path();
+        cnv.add_circle(el::circle{x, b.top + b.height() * 0.5f, 5.0f});
+        cnv.fill();
+    }
+
+  private:
+    const Theme& mTheme;
+    bool mMuted = false;
+};
 
 /// "IR A Level" is "Level" on IR A's card, "Mic B Radial" is "Radial" on IR B's.
 std::string NameInSlot(const std::string& name)
@@ -516,6 +563,19 @@ std::string Shell::EffectPageSignature() const
         s += "|route" + guitarfx::uiclient::DescribeSplitRouting(*node, outgoing);
     }
 
+    // The mixer's Input Channels follow what feeds each port.
+    if (IsMixerType(node->type) && mState.activePreset)
+    {
+        for (const auto& edge : mState.activePreset->graph.edges)
+        {
+            if (edge.to == node->id)
+            {
+                const auto* source = mState.activePreset->graph.FindNode(edge.from);
+                s += "|in" + std::to_string(edge.toPort) + ":" + (source != nullptr ? source->type : edge.from);
+            }
+        }
+    }
+
     s += EqSectionSignature(*node);
     return s;
 }
@@ -717,27 +777,22 @@ Ptr Shell::BuildEffectPage()
 
         if (IsEnumParam(info) && WantsPicker(info))
         {
-            // A long list: its current choice on a chip; a tap opens the list.
-            auto picker = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Chip);
-            picker->Size(kPickerWidth, 26).Caret(true);
+            // A long list: its current choice's picture, name and kind; a tap opens the flyout.
+            auto picker = std::make_shared<EnumPickerTrigger>(mTheme, mIcons, info);
             picker->AccessName(info.name);
-            picker->onClick = [this, nodeId, info] { OpenEnumPicker(nodeId, info); };
+            std::weak_ptr<EnumPickerTrigger> weakPicker = picker;
+            picker->onClick = [this, nodeId, info, weakPicker] {
+                const auto p = weakPicker.lock();
+                OpenEnumPicker(nodeId, info, p ? p->Bounds() : el::rect{});
+            };
             picker->onMenu = menu;
             mLive.Bind(
-                picker, [valueOf, info] { return EnumLabelIndex(info, valueOf(info)); },
-                [labels = info.labels](IconButton& p, int index) {
-                    p.Label(index >= 0 && static_cast<std::size_t>(index) < labels.size()
-                                ? labels[static_cast<std::size_t>(index)]
-                                : std::string(),
-                            11.0f);
-                });
+                picker, [valueOf, info] { return EnumLabelIndex(info, valueOf(info)); }, &EnumPickerTrigger::Set);
             auto label = std::make_shared<Text>(mTheme, Upper(shown), metrics::Readable(9.0f), Weight::SemiBold);
             label->Colour(Theme::Argb(mTheme.Controls().label.colour)).Alignment(Text::Align::Centre);
-            // Touch sizes: the chip is hit over 36 px.
-            const bool touch = metrics::Touch();
             return {kPickerWidth, Sized(kPickerWidth, kCellHeight,
-                                        Col({FixedHeight(12, label), VGap(touch ? 2 : 12),
-                                             FixedHeight(touch ? 36 : 26, picker), std::make_shared<el::element>()}))};
+                                        Col({FixedHeight(12, label), VGap(8), FixedHeight(40, picker),
+                                             std::make_shared<el::element>()}))};
         }
 
         if (IsToggleParam(info))
@@ -1908,6 +1963,136 @@ Ptr Shell::BuildEffectPage()
     if (!boundary && MultibandPlot::KindOf(node->type))
     {
         addToSection(BuildMultibandPlot(*node), ResponsePlot::CardHeight(mTheme, MultibandPlot::kPlotHeight));
+    }
+
+    // The mixer's Input Channels (mixerInput.ts): each connected input's Level, Pan and Delay,
+    // and its mute, named for the effect that feeds it.
+    if (IsMixerType(node->type) && mState.activePreset)
+    {
+        const auto& graph = mState.activePreset->graph;
+        std::vector<int> ports;
+
+        for (const auto& edge : graph.edges)
+        {
+            if (edge.to == node->id && std::find(ports.begin(), ports.end(), edge.toPort) == ports.end())
+            {
+                ports.push_back(edge.toPort);
+            }
+        }
+
+        std::sort(ports.begin(), ports.end());
+        auto title = std::make_shared<Text>(mTheme, "INPUT CHANNELS", 11.0f, Weight::SemiBold);
+        title->Colour(mTheme.TextSecondary()).Tracking(0.05f).Fixed(true);
+        std::vector<Ptr> column{FixedHeight(14, title), VGap(12)};
+        float columnHeight = 14.0f + 12.0f;
+        constexpr float kGroupHead = 16.0f;
+
+        if (ports.empty())
+        {
+            auto none = std::make_shared<Text>(
+                mTheme, "No inputs connected. Connect effects to the mixer to control per-input levels.",
+                metrics::kSmallText);
+            none->Colour(mTheme.TextMuted());
+            column.push_back(FixedHeight(16, none));
+            columnHeight += 16.0f;
+        }
+
+        for (std::size_t p = 0; p < ports.size(); ++p)
+        {
+            const int port = ports[p];
+            const auto edge = std::find_if(graph.edges.begin(), graph.edges.end(), [&](const guitarfx::GraphEdge& e) {
+                return e.to == node->id && e.toPort == port;
+            });
+            const auto* source = edge != graph.edges.end() ? graph.FindNode(edge->from) : nullptr;
+            const auto* sourceType = source != nullptr ? mState.FindEffectType(source->type) : nullptr;
+            const std::string inputName = sourceType != nullptr && !sourceType->name.empty() ? sourceType->name
+                                          : source != nullptr ? source->type
+                                                              : "Input " + std::to_string(port + 1);
+            const std::string n = std::to_string(port);
+
+            EffectParamInfo level;
+            level.key = "level_" + n;
+            level.name = "Level";
+            level.unit = "dB";
+            level.minValue = -60.0;
+            level.maxValue = 12.0;
+            EffectParamInfo pan;
+            pan.key = "pan_" + n;
+            pan.name = "Pan";
+            pan.unit = "pan";
+            pan.minValue = -1.0;
+            pan.maxValue = 1.0;
+            EffectParamInfo delay;
+            delay.key = "delay_" + n;
+            delay.name = "Delay";
+            delay.unit = "ms";
+            delay.minValue = 0.0;
+            delay.maxValue = 60.0;
+
+            auto name = std::make_shared<Text>(mTheme, inputName, 11.0f, Weight::SemiBold);
+            name->Colour(mTheme.Ink());
+            auto mute = std::make_shared<MuteSwitch>(mTheme);
+            mute->AccessName("Mute " + inputName);
+            const std::string muteKey = "mute_" + n;
+            const auto muted = [this, nodeId, muteKey] {
+                const auto* m = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+
+                if (m == nullptr)
+                {
+                    return false;
+                }
+
+                const auto it = m->params.find(muteKey);
+                return it != m->params.end() && it->second >= 0.5;
+            };
+            mLive.Bind(mute, muted, &MuteSwitch::Set);
+            mute->onClick = [this, nodeId, muteKey, muted] {
+                mSession.Commands().SetNodeParam(nodeId, muteKey, muted() ? 0.0 : 1.0);
+                NoteChainEdit();
+                Mark(kValues);
+            };
+            auto state = std::make_shared<Text>(mTheme, "", 9.0f);
+            state->Colour(mTheme.TextMuted()).Fixed(true);
+            mLive.Bind(state, [muted] { return std::string(muted() ? "Muted" : "Active"); }, &Text::Set);
+
+            std::vector<Ptr> knobs{Stretch(nullptr, 0.5)};
+            bool first = true;
+
+            for (const auto* info : {&level, &pan, &delay})
+            {
+                auto [w, c] = makeCell(*info, info->name);
+
+                if (!first)
+                {
+                    knobs.push_back(Stretch(nullptr, 1.0));
+                }
+
+                knobs.push_back(FixedWidth(std::max(w, 54.0f), c));
+                first = false;
+            }
+
+            knobs.push_back(Stretch(nullptr, 0.5));
+            auto rule = FixedHeight(1, Fill(Theme::Argb(mTheme.Controls().tabs.rule), std::make_shared<el::element>()));
+            auto group =
+                Col({FixedHeight(kGroupHead,
+                                 Row({Middle(name), HGap(8), Middle(mute), HGap(8), FixedWidth(36, Middle(state))})),
+                     VGap(8), rule, VGap(10), FixedHeight(kCellHeight, Row(knobs))});
+            const float groupHeight = 10.0f + kGroupHead + 8.0f + 1.0f + 10.0f + kCellHeight + 10.0f;
+
+            if (p > 0)
+            {
+                column.push_back(VGap(12));
+                columnHeight += 12.0f;
+            }
+
+            column.push_back(
+                FixedHeight(groupHeight, Over(Pad(10, 10, 10, 10, group),
+                                              Rounded(mTheme.Card(), 8.0f, std::make_shared<el::element>()))));
+            columnHeight += groupHeight;
+        }
+
+        column.push_back(std::make_shared<el::element>());
+        addToSection(Over(Pad(12, 12, 12, 12, Col(column)), std::make_shared<InsetBox>(mTheme)), columnHeight + 24.0f);
     }
 
     if (IsSplitterType(node->type))

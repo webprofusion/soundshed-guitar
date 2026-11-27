@@ -364,49 +364,6 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
          HGap(10), controls});
 }
 
-void Shell::OpenEnumPicker(const std::string& nodeId, const EffectParamInfo& info)
-{
-    const auto* node = SelectedNode();
-
-    if (node == nullptr || node->id != nodeId)
-    {
-        return;
-    }
-
-    const int current = EnumLabelIndex(info, NodeParamValue(*node, info));
-    std::vector<MenuItem> items;
-    std::string group = "\x01";
-
-    for (std::size_t i = 0; i < info.labels.size(); ++i)
-    {
-        // The engine's labelInfo groups a long list (Pickup Match's pickups by maker).
-        if (i < info.labelGroups.size() && info.labelGroups[i] != group)
-        {
-            group = info.labelGroups[i];
-
-            if (!group.empty())
-            {
-                items.push_back({group, false, true, {}});
-            }
-        }
-
-        MenuItem item{info.labels[i], static_cast<int>(i) == current, false, [this, nodeId, info, i] {
-                          mSession.Commands().SetNodeParam(nodeId, info.key, EnumLabelValue(info, i));
-                          NoteChainEdit();
-                          Mark(kValues | kPage);
-                      }};
-
-        if (i < info.labelSubgroups.size())
-        {
-            item.detail = info.labelSubgroups[i];
-        }
-
-        items.push_back(std::move(item));
-    }
-
-    OpenMenu(info.name, std::move(items));
-}
-
 Ptr Shell::BuildSplitBranches(const guitarfx::GraphNode& splitter)
 {
     // The count is the splitter's outgoing edges; a branch holding effects cannot be removed,

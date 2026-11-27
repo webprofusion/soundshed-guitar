@@ -408,7 +408,8 @@ class Shell
     Ptr BuildEffectPage();
     void SyncEffectValues();
     void OpenEffectPresets();
-    void OpenEnumPicker(const std::string& nodeId, const guitarfx::uiclient::EffectParamInfo& info);
+    /// An enum's flyout (EnumPicker.cpp): search, its groups as tiles, its choices; hung from `anchor`.
+    void OpenEnumPicker(const std::string& nodeId, const guitarfx::uiclient::EffectParamInfo& info, el::rect anchor);
     [[nodiscard]] Ptr BuildResourceSlot(const guitarfx::GraphNode& node, const std::string& resourceType,
                                         int resourceIndex, const std::string& label, bool optional,
                                         bool stacked = false);

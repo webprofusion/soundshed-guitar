@@ -71,6 +71,9 @@ struct EffectParamInfo
     // subgroup, so a menu can nest them. Empty, or one entry per label.
     std::vector<std::string> labelGroups;
     std::vector<std::string> labelSubgroups;
+    // And each label's picture (a picker icon name, "pickup-humbucker") and line of detail.
+    std::vector<std::string> labelIcons;
+    std::vector<std::string> labelDetails;
     // "picker" for an enum with too many labels to step through; empty for the default control.
     std::string control;
     // Shown only while the parameter `visibleWhenKey` holds one of `visibleWhenValues` (rounded):
