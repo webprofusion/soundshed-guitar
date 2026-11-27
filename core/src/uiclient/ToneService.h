@@ -92,6 +92,9 @@ class ToneService
     // ── Tone sharing ────────────────────────────────────────────────────────────
     void Get(const std::string& path, Callback callback);
     void Post(const std::string& path, const nlohmann::json& body, Callback callback);
+    /// PATCH with a JSON body (the profile), and DELETE (the account's own preset or pack).
+    void Patch(const std::string& path, const nlohmann::json& body, Callback callback);
+    void Delete(const std::string& path, Callback callback);
 
     /// A picture's bytes by absolute URL: null while it is being fetched (listeners hear when it
     /// arrives), empty when the fetch failed. A failed fetch is not retried.
@@ -205,6 +208,9 @@ class ToneService
 
     void Request(const std::string& method, const std::string& url, const std::string& jsonBody, bool json,
                  BytesCallback done, Headers headers = {});
+    /// A tone sharing request with a JSON answer: the session it carries is kept, a dropped one
+    /// forgotten.
+    void Send(const std::string& method, const std::string& path, const std::string& body, Callback callback);
     /// A GET on Tone3000's own API (`url` is an official one): through the relay while it is on;
     /// off it, with a session started from the player's key, which is kept until near its expiry.
     void Tone3000Get(const std::string& url, BytesCallback done);

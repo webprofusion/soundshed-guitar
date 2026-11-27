@@ -237,6 +237,12 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
         {
             float cx = x;
 
+            // Not yet approved (the account's own lists): the state, in amber, first.
+            if (const auto moderation = tones::ModerationLabel(mTone.moderationStatus); !moderation.empty())
+            {
+                cx += DrawChip(cnv, moderation, cx, y, el::rgba(240, 184, 90, 255), el::rgba(240, 184, 90, 40)) + 4.0f;
+            }
+
             if (mTone.IsPack())
             {
                 cx += DrawChip(cnv, "pack", cx, y, mTheme.TextSecondary(), chipFill) + 4.0f;
@@ -287,8 +293,8 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
             }
         }
 
-        // The creator, at the foot of the face: an avatar and the name.
-        if (!mTone.creatorName.empty())
+        // The creator, at the foot of the face: an avatar and the name and handle.
+        if (const auto creator = tones::CreatorLine(mTone); !creator.empty())
         {
             const float cy = face.bottom - 14.0f;
             const el::point c{x + 8.0f, cy};
@@ -306,12 +312,13 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
                 cnv.fill_style(mTheme.DarkOr(el::rgba(255, 255, 255, 30), mTheme.Text().opacity(0.12f)));
                 cnv.add_circle(artist::circle(c, 8.0f));
                 cnv.fill();
-                FillText(cnv, mTone.creatorName.substr(0, 1), Font(Weight::SemiBold).size(9.0f), mTheme.Ink(),
+                FillText(cnv, creator.substr(creator[0] == '@' && creator.size() > 1 ? 1 : 0, 1),
+                         Font(Weight::SemiBold).size(9.0f), mTheme.Ink(),
                          el::rect{c.x - 8.0f, c.y - 8.0f, c.x + 8.0f, c.y + 8.0f}, HAlign::Centre);
             }
 
             const auto font = Font(Weight::SemiBold).size(10.0f);
-            FillText(cnv, Ellipsize(cnv, mTone.creatorName, font, w - 22.0f), font, mTheme.Ink(),
+            FillText(cnv, Ellipsize(cnv, creator, font, w - 22.0f), font, mTheme.Ink(),
                      el::rect{x + 21.0f, cy - 7.0f, x + w, cy + 7.0f}, HAlign::Left);
         }
 
@@ -352,12 +359,12 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
         const float actionsLeft = actions.empty() ? b.right - 8.0f : ActionRect(b, 0).left - 10.0f;
         float creatorLeft = actionsLeft;
 
-        if (!mTone.creatorName.empty())
+        if (const auto creator = tones::CreatorLine(mTone); !creator.empty())
         {
             const auto font = Font(Weight::SemiBold).size(10.5f);
-            const float w = std::min(MeasureTextWidth(mTone.creatorName, font), 160.0f);
+            const float w = std::min(MeasureTextWidth(creator, font), 160.0f);
             creatorLeft = actionsLeft - w;
-            FillText(cnv, Ellipsize(cnv, mTone.creatorName, font, w), font, mTheme.Ink(),
+            FillText(cnv, Ellipsize(cnv, creator, font, w), font, mTheme.Ink(),
                      el::rect{creatorLeft, cy - 8.0f, actionsLeft, cy + 8.0f}, HAlign::Right);
             creatorLeft -= 12.0f;
         }
@@ -369,7 +376,14 @@ class ToneCard final : public el::element, public Focusable, public TapTarget
         FillText(cnv, title, titleFont, mTheme.Ink(), el::rect{x, cy - 9.0f, x + titleWidth + 2.0f, cy + 9.0f},
                  HAlign::Left);
         const auto chipFill = mTheme.DarkOr(el::rgba(255, 255, 255, 22), mTheme.Panel());
-        const float chipX = x + titleWidth + 10.0f;
+        float chipX = x + titleWidth + 10.0f;
+
+        if (const auto moderation = tones::ModerationLabel(mTone.moderationStatus); !moderation.empty())
+        {
+            chipX +=
+                DrawChip(cnv, moderation, chipX, cy - 8.0f, el::rgba(240, 184, 90, 255), el::rgba(240, 184, 90, 40)) +
+                4.0f;
+        }
 
         if (mTone.IsPack())
         {

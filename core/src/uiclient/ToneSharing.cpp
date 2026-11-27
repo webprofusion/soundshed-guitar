@@ -345,6 +345,7 @@ std::optional<User> ParseUser(const nlohmann::json& data)
     parsed.displayName = Trimmed(Text(*user, "displayName"));
     parsed.handle = NormalizeHandle(Text(*user, "creatorProfileHandle"));
     parsed.role = Text(*user, "role");
+    parsed.bio = Trimmed(Text(*user, "bio"));
     return parsed;
 }
 
@@ -711,6 +712,61 @@ const std::vector<std::string>& StandardTags()
     static const std::vector<std::string> tags = {"lead",    "rhythm",      "bass", "clean",  "crunch", "high-gain",
                                                   "ambient", "atmospheric", "live", "studio", "stereo", "dual-amp"};
     return tags;
+}
+
+std::string CreatorLine(const Tone& tone)
+{
+    const auto& name = tone.creatorName;
+    const auto& handle = tone.creatorHandle;
+
+    if (!name.empty() && !handle.empty() && name != handle)
+    {
+        return name + " (" + handle + ")";
+    }
+
+    return name.empty() ? handle : name;
+}
+
+std::string ModerationLabel(const std::string& status)
+{
+    std::string label;
+    bool space = false;
+
+    for (const char c : Trimmed(status))
+    {
+        if (c == ' ' || c == '_' || c == '	')
+        {
+            space = !label.empty();
+            continue;
+        }
+
+        if (space)
+        {
+            label += ' ';
+            space = false;
+        }
+
+        label += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    return label == "approved" ? std::string() : label;
+}
+
+std::string NoMatchText(const std::string& query, const std::string& tag)
+{
+    const auto q = Trimmed(query);
+    return "No community presets match" + (q.empty() ? std::string() : " \"" + q + "\"") +
+           (tag.empty() ? std::string() : " with the tag \"" + tag + "\"") + ".";
+}
+
+std::string LoadedText(std::size_t loaded, bool more)
+{
+    if (loaded == 0)
+    {
+        return {};
+    }
+
+    return std::to_string(loaded) + " loaded" + (more ? "" : ", end of results");
 }
 
 std::string MissingModelsNotice(std::size_t presetCount, const std::vector<std::string>& missing)

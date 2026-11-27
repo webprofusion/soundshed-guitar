@@ -824,6 +824,23 @@ void TestToneSharing()
                tones::MissingModelsNotice(1, {"Crunch"}).find("its slot is left empty: Crunch.") != std::string::npos,
            "and one reads in the singular");
 
+    // The feed's wording, as the web's feed.ts and format.ts.
+    tones::Tone card;
+    card.creatorName = "Sam";
+    card.creatorHandle = "@sam_plays";
+    Expect(tones::CreatorLine(card) == "Sam (@sam_plays)", "a card names its creator and handle");
+    card.creatorName.clear();
+    Expect(tones::CreatorLine(card) == "@sam_plays", "or the handle alone");
+    Expect(tones::ModerationLabel("approved").empty() && tones::ModerationLabel("").empty(),
+           "approved content has no badge");
+    Expect(tones::ModerationLabel(" Pending_Review ") == "pending review", "other states read in lower case");
+    Expect(tones::NoMatchText("clean", "Blues") == "No community presets match \"clean\" with the tag \"Blues\".",
+           "a search with no results names the words and the tag");
+    Expect(tones::NoMatchText("", "") == "No community presets match.", "and neither when there are none");
+    Expect(tones::LoadedText(36, true) == "36 loaded" && tones::LoadedText(40, false) == "40 loaded, end of results" &&
+               tones::LoadedText(0, false).empty(),
+           "the feed counts what it has loaded");
+
     client.Enqueue(R"({"type":"installedPresetArchiveDeleted","id":"e1","presetIds":["user-9"]})");
     client.DrainPending();
     Expect(client.State().toneInstalls.count("e1") == 0, "a removed install is forgotten");

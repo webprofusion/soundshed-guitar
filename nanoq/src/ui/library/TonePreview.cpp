@@ -220,9 +220,9 @@ void Shell::SyncTonePreview()
                                             IconButton::Look::Ghost);
     dot->Size(24, 24).IconSize(13).Ink(mTheme.Accent());
     dot->Disabled(false);
-    auto text =
-        std::make_shared<Text>(mTheme, (service.IsPreviewLoading() ? "Loading preview: " : "Previewing: ") + item.title,
-                               metrics::kSmallText, Weight::Medium);
+    auto text = std::make_shared<Text>(
+        mTheme, (service.IsPreviewLoading() ? "Loading preview: " : "Previewing preset: ") + item.title,
+        metrics::kSmallText, Weight::Medium);
     auto install =
         std::make_shared<IconButton>(mTheme, mIcons, installed ? "" : "ui-download", IconButton::Look::Boxed);
     install->Size(installed || installing ? 86.0f : 30.0f, 28)

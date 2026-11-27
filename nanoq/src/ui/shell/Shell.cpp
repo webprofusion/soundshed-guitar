@@ -563,6 +563,7 @@ void Shell::OnTick()
     KeyRouter::Retake(mSession.View());
     TickKeyboard();
     TickLooper();
+    TickToneSearch();
     TickFilePicker();
     SyncZoom();
     ShowNativeUiBetaNoticeOnce();

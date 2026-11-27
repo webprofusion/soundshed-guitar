@@ -252,7 +252,22 @@ void ToneService::Get(const std::string& path, Callback callback)
 
 void ToneService::Post(const std::string& path, const nlohmann::json& body, Callback callback)
 {
-    Request("POST", tones::ResolveUrl(path), body.dump(), true,
+    Send("POST", path, body.dump(), std::move(callback));
+}
+
+void ToneService::Patch(const std::string& path, const nlohmann::json& body, Callback callback)
+{
+    Send("PATCH", path, body.dump(), std::move(callback));
+}
+
+void ToneService::Delete(const std::string& path, Callback callback)
+{
+    Send("DELETE", path, {}, std::move(callback));
+}
+
+void ToneService::Send(const std::string& method, const std::string& path, const std::string& body, Callback callback)
+{
+    Request(method, tones::ResolveUrl(path), body, true,
             [this, callback = std::move(callback)](const HttpResult& result) {
                 auto response = tones::ParseResponse(result.status, result.body, result.sessionHeader);
 

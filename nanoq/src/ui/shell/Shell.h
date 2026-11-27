@@ -53,6 +53,7 @@
 #include "uiclient/PresetTrail.h"
 #include "uiclient/ScaleGuide.h"
 
+#include <chrono>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -786,7 +787,13 @@ class Shell
     [[nodiscard]] std::string TonesPageSignature() const;
     /// Asks the service for the open tab's tones: page 1 afresh, or with `more` the next page.
     void LoadTones(bool more);
+    /// The web's Account dialog: signed out, the email and the emailed code; signed in, the
+    /// profile (creator name and bio) and Sign Out.
     void OpenToneAccount(el::rect anchor);
+    /// A search typed into the Presets search runs this long after the last key (the web's 250 ms).
+    void TickToneSearch();
+    /// Deletes the account's own preset or pack from tone sharing, once confirmed (My Content).
+    void DeleteMyTone(const guitarfx::uiclient::tones::Tone& tone);
     void OpenPackDetail(const guitarfx::uiclient::tones::Tone& pack);
     void ShareTone(const guitarfx::uiclient::tones::Tone& tone);
     [[nodiscard]] std::shared_ptr<artist::image> RemoteImage(const std::string& url);
@@ -1187,9 +1194,14 @@ class Shell
     bool mTonesLoaded = false; // the open tab has been asked for since it was opened
     int mTonesGeneration = 0;  // answers to an older request are dropped
     std::string mTonesError;
-    std::vector<guitarfx::uiclient::tones::Tone> mToneItems, mTonePacks, mToneHomePacks;
+    std::vector<guitarfx::uiclient::tones::Tone> mToneItems, mTonePacks;
+    std::vector<guitarfx::uiclient::tones::HomeRow> mToneHomeRows;          // /home's pack rows, a strip each
     std::vector<guitarfx::uiclient::tones::Tone> mToneMine, mToneMinePacks; // My Content
-    bool mTonesList = false;                                                // List rather than Cards
+    bool mTonesList = false;     // List rather than Cards (the shared toneSharing.feedLayout setting)
+    bool mTonesListRead = false; // read from the setting once
+    std::string mTonesTyped;     // the search as typed, run once the keys stop (TickToneSearch)
+    std::chrono::steady_clock::time_point mTonesSearchDue{};
+    bool mTonesSearchPending = false;
     std::shared_ptr<el::basic_input_box> mTonesSearchBox;
     Ptr mTonesSearchElement;
     int mToneListener = 0;

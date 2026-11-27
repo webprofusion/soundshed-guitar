@@ -95,6 +95,7 @@ struct User
     std::string displayName;
     std::string handle;
     std::string role;
+    std::string bio;
 
     /// What the account button shows: the display name, else the email.
     [[nodiscard]] std::string Label() const
@@ -202,6 +203,24 @@ struct InstalledEntry
 
 /// "@name" from a handle the service gives with or without its "@"; empty if it is not one.
 [[nodiscard]] std::string NormalizeHandle(const std::string& handle);
+
+/// The creator line under a card, as the web's feed.ts: "Name (@handle)" where both are given
+/// and differ, else whichever there is.
+[[nodiscard]] std::string CreatorLine(const Tone& tone);
+
+/// A card's moderation badge, as the web's buildModerationBadge: the status in lower case with
+/// spaces ("pending review"), or empty for approved content and none.
+[[nodiscard]] std::string ModerationLabel(const std::string& status);
+
+/// What a search with no results says, as the web's: No community presets match "q" with the
+/// tag "t".
+[[nodiscard]] std::string NoMatchText(const std::string& query, const std::string& tag);
+
+/// The line beside Load More, as the web's feed footer: "36 loaded", "40 loaded, end of results".
+[[nodiscard]] std::string LoadedText(std::size_t loaded, bool more);
+
+/// Where the signed-in account's profile is changed (PATCH, {"displayName", "bio"}).
+inline constexpr const char* kProfilePath = "/auth/profile";
 
 /// The tags a shared preset can carry (core/ui/ts/presetTags.ts), for the tag filter.
 [[nodiscard]] const std::vector<std::string>& StandardTags();
