@@ -10,6 +10,9 @@
 
 #include "ui/shell/Shell.h"
 
+#include "ui/dialogs/DialogChrome.h"
+#include "ui/input/Focus.h"
+#include "ui/performance/MetronomeWidgets.h"
 #include "uiclient/Looper.h"
 
 #include <algorithm>
@@ -24,13 +27,13 @@ using practice::Fader;
 
 namespace
 {
-constexpr float kWaveHeight = 128.0f;
-constexpr float kHandleReach = 8.0f; // how near a press must be to an edge to move it
+constexpr float kWaveHeight = 200.0f; // .practice-tool-waveform
+constexpr float kHandleReach = 8.0f;  // how near a press must be to an edge to move it
 
 /// The track's two channels as lanes, the loops over them, and the playhead (the web UI's
 /// waveform/render.ts as the Practice Tool calls it). A press and release seeks; a sweep marks a
 /// range for a new loop; the picked loop's edges (or the marked range's) drag.
-class PracticeWave final : public el::element, public Drawn
+class PracticeWave final : public el::element, public Drawn, public Focusable
 {
   public:
     struct Band
@@ -158,6 +161,12 @@ class PracticeWave final : public el::element, public Drawn
             for (const float ex : {x0, x1})
             {
                 cnv.fill_style(edge);
+
+                // With focus, the edge the keys move is marked.
+                if (HasFocus() && ex == (mKeyEdge == 0 ? x0 : x1))
+                {
+                    cnv.fill_rect(el::rect{ex - 2.0f, b.bottom - 12.0f, ex + 2.0f, b.bottom});
+                }
 
                 if (active)
                 {
@@ -352,6 +361,98 @@ class PracticeWave final : public el::element, public Drawn
         return true;
     }
 
+    // With focus, as the web's waveform (rangeSelect.ts): Left and Right move the picked loop's (or
+    // the marked range's) selected edge by 0.05 s, 0.5 s with Shift; Up and Down pick the other
+    // edge; Home and End take it to the track's ends.
+    bool wants_focus() const override
+    {
+        return FocusWanted(HasAudio());
+    }
+
+    void begin_focus(focus_request) override
+    {
+        NoteFocus(true);
+    }
+
+    bool end_focus() override
+    {
+        NoteFocus(false);
+        return true;
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info;
+        info.role = AccessRole::Slider;
+        info.name = NameOr("Waveform");
+        info.value = mKeyEdge == 0 ? "Start" : "End";
+        return info;
+    }
+
+    bool key(const el::context& ctx, el::key_info k) override
+    {
+        if (k.action != el::key_action::press && k.action != el::key_action::repeat)
+        {
+            return false;
+        }
+
+        const auto edit = Editable();
+
+        if (!HasAudio() || !edit)
+        {
+            return false;
+        }
+
+        double start = edit->first, end = edit->second;
+        auto& edge = mKeyEdge == 0 ? start : end;
+
+        switch (k.key)
+        {
+        case el::key_code::left:
+        case el::key_code::right: {
+            const double step = (k.modifiers & el::mod_shift) != 0 ? 0.5 : 0.05;
+            edge = std::clamp(edge + (k.key == el::key_code::left ? -step : step), 0.0, mDuration);
+            break;
+        }
+        case el::key_code::up:
+        case el::key_code::down:
+            mKeyEdge = 1 - mKeyEdge;
+            ctx.view.refresh(ctx);
+            return true;
+        case el::key_code::home:
+            edge = 0.0;
+            break;
+        case el::key_code::end:
+            edge = mDuration;
+            break;
+        default:
+            return false;
+        }
+
+        if (start > end)
+        {
+            std::swap(start, end);
+            mKeyEdge = 1 - mKeyEdge;
+        }
+
+        if (auto* active = ActiveBand())
+        {
+            active->start = start, active->end = end;
+        }
+        else
+        {
+            mCandidate = std::make_pair(start, end);
+        }
+
+        if (onRange)
+        {
+            onRange(start, end, true);
+        }
+
+        ctx.view.refresh(ctx);
+        return true;
+    }
+
   private:
     enum class Mode
     {
@@ -403,6 +504,7 @@ class PracticeWave final : public el::element, public Drawn
     std::optional<double> mMarker;
     Mode mMode = Mode::None;
     int mEdge = 0;
+    int mKeyEdge = 0; // the edge the keys move: 0 the start, 1 the end
     double mAnchor = 0.0, mStart = 0.0, mEnd = 0.0;
     float mAnchorX = 0.0f;
 };
@@ -441,7 +543,8 @@ std::string Shell::PracticeToolSignature() const
     const auto& t = mPractice->Track();
     std::string s = t.filePath + "|" + std::to_string(t.loads) + (t.playing ? "|p" : "|") +
                     (mPractice->Candidate() ? "c" : "") + (practice::IsEqShaping(mPractice->GetEq()) ? "e" : "") + "|" +
-                    mPractice->SelectedProjectId();
+                    mPractice->SelectedProjectId() + "|e" + mPracticeEditingLoop +
+                    (mPracticeIncludePreset ? "|i" : "|") + mState.activePresetId;
 
     for (const auto& loop : mPractice->Loops())
     {
@@ -478,67 +581,143 @@ Ptr Shell::BuildPracticeTool(float width)
     const bool hasAudio = tool.HasAudio();
     const auto position = [this] { return mPractice->PositionNow(guitarfx::uiclient::LooperClockNow()); };
     std::vector<Ptr> body;
+    const auto field = [this](std::shared_ptr<el::basic_input_box>& box, Ptr& element, const char* placeholder) {
+        if (!box)
+        {
+            auto [e, b] = el::input_box(placeholder, Font(Weight::Regular), 1.0f);
+            box = b;
+            element = el::share(std::move(e));
+        }
 
-    // ── The project bar: the saved projects, Save, and Browse File ──
+        return Rounded(mTheme.Tertiary(), 6.0f, Pad(8, 0, 8, 0, element));
+    };
+    const auto hintText = [this](const std::string& text, float size = 11.0f) {
+        auto t = std::make_shared<Text>(mTheme, text, size);
+        t->Colour(mTheme.TextMuted());
+        return t;
+    };
+
+    // ── The project bar, as the web's: the saved projects, Delete, the name, Preset and Save ──
     const auto projects = tool.Projects();
     const auto selected = std::find_if(projects.begin(), projects.end(), [&tool](const practice::Project& p) {
         return p.id == tool.SelectedProjectId();
     });
-    auto projectButton = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    projectButton->Size(180, 30)
-        .Label(selected != projects.end() ? selected->name
-               : projects.empty()         ? std::string("No saved projects")
-                                          : std::string("Projects"),
-               11.0f)
-        .Caret(true);
+    auto title = std::make_shared<Text>(mTheme, "Practice Tool", 15.0f, Weight::SemiBold);
+    title->Colour(mTheme.Text());
+    auto projectButton = std::make_shared<PickerField>(mTheme, mIcons);
+    projectButton->Set(selected != projects.end() ? selected->name
+                       : projects.empty()         ? std::string("No saved projects")
+                                                  : std::string("Saved projects"));
+    projectButton->AccessName("Saved projects");
+    projectButton->Enabled(!projects.empty());
     projectButton->onClick = [this, b = projectButton.get()] { OpenPracticeProjects(b->Bounds()); };
-    auto save = std::make_shared<IconButton>(mTheme, mIcons, "ui-save", IconButton::Look::Boxed);
-    save->Size(80, 30).IconSize(13).Label("Save", 11.0f).Disabled(!hasAudio);
-    save->onClick = [this, b = save.get()] {
-        // Under the selected project's name (saving over it), or the track's title.
-        const auto saveAs = [this](bool withPreset) {
-            const auto projects = mPractice->Projects();
-            const auto it = std::find_if(projects.begin(), projects.end(), [this](const practice::Project& p) {
-                return p.id == mPractice->SelectedProjectId();
-            });
-            PostPrompt(withPreset ? "Save project with the preset" : "Save project",
-                       it != projects.end() ? it->name : mPractice->SuggestedProjectName(), "Save",
-                       [this, withPreset](const std::string& text) {
-                           if (!mPractice->SaveProject(text, withPreset))
-                           {
-                               ShowToast("Project not saved", "Give it a name, with a track loaded.", true);
-                           }
-                           else
-                           {
-                               ShowToast("Project saved", text, false);
-                           }
-                       });
-        };
-        OpenDropdown(b->Bounds(),
-                     {{"Save project...", false, false, [saveAs] { saveAs(false); }},
-                      {"Save with the current preset...", false, false, [saveAs] { saveAs(true); }}},
-                     250.0f);
+    auto remove = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    remove->Size(64, 30).Label("Delete", 11.0f).Disabled(selected == projects.end());
+    remove->Tooltip("Delete the selected project");
+    remove->onClick = [this] { DeletePracticeProject(); };
+
+    // The name follows the project picked, and keeps what is typed while the section rebuilds.
+    auto nameField = field(mPracticeNameBox, mPracticeNameField, "Project name");
+    const std::string shownFor = selected != projects.end() ? selected->id : std::string();
+
+    if (mPracticeNameFor != shownFor && !mPracticeNameBox->is_focus())
+    {
+        mPracticeNameFor = shownFor;
+        mPracticeNameBox->set_text(selected != projects.end() ? selected->name : std::string());
+    }
+
+    mPracticeNameBox->on_enter = [this](std::string_view) {
+        SavePracticeProject();
+        return true;
     };
-    auto browse = std::make_shared<IconButton>(mTheme, mIcons, "ui-folder", IconButton::Look::Boxed);
-    browse->Size(120, 30).IconSize(13).Label("Browse File...", 11.0f);
-    browse->onClick = [this] {
-        // A new track resets the faders: ask first when one is loaded.
-        if (!mPractice->HasAudio())
+    auto withPreset = std::make_shared<CheckBox>(mTheme, "Preset", 11.5f);
+    withPreset->Set(mPracticeIncludePreset && !mState.activePresetId.empty());
+    withPreset->Enabled(!mState.activePresetId.empty());
+    withPreset->Tooltip("Also save the currently selected preset, and reload it with the project");
+    withPreset->onClick = [this] {
+        mPracticeIncludePreset = !mPracticeIncludePreset;
+        Mark(kPage);
+    };
+    auto save = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    save->Size(64, 30).Label("Save", 11.0f);
+    // Save waits for a track and a name, as the web's.
+    mLive.Bind(
+        save,
+        [this, box = std::weak_ptr<el::basic_input_box>(mPracticeNameBox)] {
+            const auto b = box.lock();
+            const auto text = b ? b->get_utf8() : std::string();
+            return mPractice->HasAudio() && text.find_first_not_of(" \t") != std::string::npos;
+        },
+        [](IconButton& b, bool ready) { b.Disabled(!ready); });
+    save->onClick = [this] { SavePracticeProject(); };
+    const float nameWidth = std::clamp(width - 520.0f, 140.0f, 260.0f);
+    std::vector<Ptr> bar{FixedWidth(200, projectButton),
+                         HGap(6),
+                         remove,
+                         HGap(12),
+                         FixedWidth(nameWidth, FixedHeight(30, nameField)),
+                         HGap(8),
+                         Middle(withPreset),
+                         HGap(8),
+                         save};
+
+    if (width >= 820.0f)
+    {
+        body.push_back(FixedHeight(30, Row({Middle(title), Stretch(), Row(bar)})));
+    }
+    else
+    {
+        body.push_back(FixedHeight(24, title));
+        body.push_back(VGap(6));
+        body.push_back(FixedHeight(30, Row({Row(bar), Stretch()})));
+    }
+
+    // The hint under the bar (projectsPanel.ts buildHintText).
+    std::string hint;
+
+    if (selected != projects.end())
+    {
+        const auto& p = *selected;
+        hint = p.fileTitle + " \xC2\xB7 " + std::to_string(p.loops.size()) + (p.loops.size() == 1 ? " loop" : " loops");
+
+        if (!p.youtubeVideoId.empty() && p.filePath.empty())
         {
-            mPractice->Browse();
-            return;
+            hint = "YouTube: " + (p.youtubeTitle.empty() ? p.youtubeVideoId : p.youtubeTitle);
         }
 
-        OpenConfirm("Load a new file",
-                    "Volume, Balance, Speed and Pitch go back to their defaults. Save a project first to keep them.",
-                    "Load New File", [this] { mPractice->Browse(); });
-    };
-    body.push_back(FixedHeight(30, Row({projectButton, HGap(6), save, Stretch(), browse})));
+        if (p.kept.contains("tab") && p.kept["tab"].is_object())
+        {
+            hint += " \xC2\xB7 tab \"" + p.kept["tab"].value("fileName", std::string("tab")) + "\"";
+        }
+
+        if (!p.presetName.empty())
+        {
+            hint += " \xC2\xB7 preset \"" + p.presetName + "\"";
+        }
+        else if (!p.presetId.empty())
+        {
+            hint += " \xC2\xB7 a saved preset";
+        }
+    }
+    else if (projects.empty())
+    {
+        hint = hasAudio ? "Save the loaded track, its loops and the Volume/Balance/Speed/Pitch settings as a project "
+                          "you can recall later."
+                        : "Load a track to save it, its loops and its settings as a project.";
+    }
+    else
+    {
+        hint = "Pick a saved project to load it, or save the current one under the name shown.";
+    }
+
+    body.push_back(VGap(6));
+    body.push_back(FixedHeight(18, hintText(hint)));
     body.push_back(VGap(10));
 
-    // ── The waveform ──
+    // ── The waveform, with the file, + Add Loop and Browse over its top corners ──
     auto wave = std::make_shared<PracticeWave>(mTheme);
     wave->Track(track.peaksL, track.peaksR, track.durationSec);
+    wave->AccessName("Waveform");
     wave->onSeek = [this](double seconds) { mPractice->ClickAt(seconds); };
     wave->onSweepOutside = [this] { mPractice->ReleaseActiveLoop(); };
     wave->onRange = [this](double start, double end, bool done) { mPractice->SetRange(start, end, done); };
@@ -561,12 +740,9 @@ Ptr Shell::BuildPracticeTool(float width)
             w.Playhead(shown.head);
             w.Marker(shown.marker);
         });
-    body.push_back(FixedHeight(kWaveHeight, wave));
-    body.push_back(VGap(6));
 
-    // ── The track and where it is, then + Add Loop for a marked range ──
     auto clock =
-        std::make_shared<Text>(mTheme, hasAudio ? track.title : std::string("No file loaded"), 11.5f, Weight::Medium);
+        std::make_shared<Text>(mTheme, hasAudio ? track.title : std::string("No file loaded"), 11.0f, Weight::Medium);
     clock->Colour(hasAudio ? mTheme.Ink() : mTheme.TextMuted());
 
     if (hasAudio)
@@ -578,63 +754,76 @@ Ptr Shell::BuildPracticeTool(float width)
             });
     }
 
-    std::vector<Ptr> info{clock};
+    auto browse = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    browse->Size(104, 26).Label("Browse File...", 11.0f);
+    browse->onClick = [this] {
+        // A new track resets the faders: ask first when one is loaded.
+        if (!mPractice->HasAudio())
+        {
+            mPractice->Browse();
+            return;
+        }
+
+        OpenConfirm("Load a new file",
+                    "Volume, Balance, Speed and Pitch go back to their defaults. Save a project first to keep them.",
+                    "Load New File", [this] { mPractice->Browse(); });
+    };
+    std::vector<Ptr> overlay{
+        Rounded(el::rgba(0, 0, 0, 110), 11.0f,
+                Pad(8, 3, 8, 3, FixedWidth(std::min(360.0f, width * 0.45f), FixedHeight(18, clock)))),
+        Stretch()};
 
     if (hasAudio && tool.Candidate() && !tool.ActiveLoop())
     {
         auto add = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Accent);
-        add->Size(90, 24).Label("+ Add Loop", 10.5f);
-        add->onClick = [this] { mPractice->AddLoop(); };
-        info.push_back(add);
+        add->Size(90, 26).Label("+ Add Loop", 11.0f);
+        add->onClick = [this] {
+            const auto id = mPractice->AddLoop();
+
+            if (!id.empty())
+            {
+                EditPracticeLoop(id, true);
+            }
+        };
+        overlay.push_back(add);
+        overlay.push_back(HGap(6));
     }
 
-    body.push_back(FixedHeight(24, Row(info)));
-    body.push_back(VGap(8));
+    overlay.push_back(browse);
+    body.push_back(
+        FixedHeight(kWaveHeight, Over(Col({Pad(10, 8, 8, 0, FixedHeight(26, Row(overlay))), VGap(0)}), wave)));
+    body.push_back(VGap(12));
 
-    // ── The transport ──
-    auto play =
-        std::make_shared<IconButton>(mTheme, mIcons, track.playing ? "ui-pause" : "ui-play", IconButton::Look::Boxed);
-    play->Size(40, 32).IconSize(14).Disabled(!hasAudio);
-    play->onClick = [this] { mPractice->PlayPause(); };
-    auto stop = std::make_shared<IconButton>(mTheme, mIcons, "ui-stop", IconButton::Look::Boxed);
-    stop->Size(40, 32).IconSize(13).Disabled(!hasAudio);
-    stop->onClick = [this] { mPractice->Stop(); };
-    auto back = std::make_shared<IconButton>(mTheme, mIcons, "ui-jump-back", IconButton::Look::Boxed);
-    back->Size(40, 32).IconSize(14).Disabled(!hasAudio);
-    back->onClick = [this] { mPractice->JumpBack(); };
-    auto eq = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-    // Lit only when the EQ is on and doing something.
-    eq->Size(48, 32).Label("EQ", 11.0f).Lit(practice::IsEqShaping(tool.GetEq()));
-
-    if (practice::IsEqShaping(tool.GetEq()))
+    // ── Tablature: drawn in Soundshed Guitar; a project's tab is kept as it was ──
     {
-        eq->Ink(mTheme.Accent());
-    }
+        std::string tab = "Tablature (Guitar Pro, MusicXML and more, synced to the track) opens in Soundshed Guitar.";
 
-    eq->onClick = [this] { OpenPracticeEq(); };
-    std::vector<Ptr> transport{play, HGap(6), stop, HGap(6), back, HGap(12), eq, HGap(12)};
+        if (selected != projects.end() && selected->kept.contains("tab") && selected->kept["tab"].is_object())
+        {
+            tab = "Tab \"" + selected->kept["tab"].value("fileName", std::string("tab")) +
+                  "\" is kept with this project; it shows in Soundshed Guitar.";
+        }
 
-    if (const auto* active = tool.ActiveLoop(); active && hasAudio)
-    {
-        auto status = std::make_shared<Text>(mTheme, "Looping \"" + active->name + "\"", 11.0f, Weight::Medium);
-        status->Colour(mTheme.Accent());
-        transport.push_back(status);
+        body.push_back(FixedHeight(20, Row({FixedWidth(90, Heading(mTheme, "Tablature")), hintText(tab, 11.5f)})));
+        body.push_back(VGap(12));
     }
-    else
-    {
-        transport.push_back(Stretch());
-    }
-
-    body.push_back(FixedHeight(32, Row(transport)));
-    body.push_back(VGap(14));
 
     // ── The loops ──
     std::vector<Ptr> loops;
+    // The web's grid: the loops 1.1 to the transport's 0.9, set here so a row can size its parts.
+    const float loopsWidth = width >= 620.0f ? std::floor((width - 16.0f) * 0.55f) : width;
     {
         auto newLoop = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-        newLoop->Size(90, 24).Label("+ New Loop", 10.5f).Disabled(!hasAudio);
-        newLoop->onClick = [this] { mPractice->AddLoop(); };
-        loops.push_back(FixedHeight(24, Row({Heading(mTheme, "Loops"), Stretch(), newLoop})));
+        newLoop->Size(90, 26).Label("+ New Loop", 11.0f).Disabled(!hasAudio);
+        newLoop->onClick = [this] {
+            const auto id = mPractice->AddLoop();
+
+            if (!id.empty())
+            {
+                EditPracticeLoop(id, true);
+            }
+        };
+        loops.push_back(FixedHeight(26, Row({Middle(Heading(mTheme, "Loops")), Stretch(), newLoop})));
         loops.push_back(VGap(6));
 
         if (const auto& deleted = tool.DeletedLoop())
@@ -651,20 +840,20 @@ Ptr Shell::BuildPracticeTool(float width)
 
         if (tool.Loops().empty())
         {
-            auto none = std::make_shared<Text>(
-                mTheme, hasAudio ? "No loops saved for this file yet." : "Load a track to mark loops on it.", 11.0f);
-            none->Colour(mTheme.TextMuted());
-            loops.push_back(FixedHeight(28, none));
+            loops.push_back(FixedHeight(
+                28, hintText(hasAudio ? "No loops saved for this file yet." : "Load a track to mark loops on it.")));
         }
 
         for (const auto& loop : tool.Loops())
         {
             const bool active = tool.ActiveLoop() && tool.ActiveLoop()->id == loop.id;
             const bool playingThis = active && track.playing;
+            const bool editing = loop.id == mPracticeEditingLoop;
             const auto id = loop.id;
             auto pick = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
             // U+25CF / U+25CB, as the web UI's row.
             pick->Size(26, 26).Label(active ? "\xE2\x97\x8F" : "\xE2\x97\x8B", 12.0f);
+            pick->Tooltip(active ? "Active loop: click to deactivate" : "Select loop");
 
             if (active)
             {
@@ -676,23 +865,133 @@ Ptr Shell::BuildPracticeTool(float width)
                                                          IconButton::Look::Ghost);
             playLoop->Size(26, 26).IconSize(11);
             playLoop->onClick = [this, id] { mPractice->ToggleLoopPlayback(id); };
-            auto name = std::make_shared<Text>(mTheme, loop.name, 11.5f, active ? Weight::SemiBold : Weight::Regular);
-            name->Colour(active ? mTheme.Ink() : mTheme.Text());
-            auto range = std::make_shared<Text>(mTheme, LoopRange(loop), 10.5f);
-            range->Colour(mTheme.TextSecondary()).Fixed(true);
-            auto edit = std::make_shared<IconButton>(mTheme, mIcons, "ui-edit", IconButton::Look::Ghost);
-            edit->Size(26, 26).IconSize(12);
-            edit->onClick = [this, id, e = edit.get()] { OpenPracticeLoopMenu(id, e->Bounds()); };
-            auto remove = std::make_shared<IconButton>(mTheme, mIcons, "ui-trash", IconButton::Look::Ghost);
-            remove->Size(26, 26).IconSize(12);
-            remove->onClick = [this, id] { mPractice->DeleteLoop(id); };
-            auto row = Row({pick, playLoop, HGap(4), name, HGap(6), range, HGap(4), edit, remove});
-            loops.push_back(FixedHeight(30, active ? Rounded(mTheme.Accent().opacity(0.10f), 6.0f, row) : row));
+            auto erase = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
+            erase->Size(26, 26).Label("\xE2\x9C\x95", 11.0f);
+            erase->AccessName("Delete loop");
+            erase->Tooltip("Delete");
+            erase->onClick = [this, id] {
+                if (mPracticeEditingLoop == id)
+                {
+                    mPracticeEditingLoop.clear();
+                }
+
+                mPractice->DeleteLoop(id);
+            };
+            Ptr row;
+
+            if (editing)
+            {
+                // The web's .is-editing row: the name (with the song sections to pick from) and
+                // the times in seconds; Enter keeps them, Esc drops them.
+                auto names = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
+                names->Size(22, 26).Caret(true);
+                names->AccessName("Song sections");
+                names->onClick = [this, n = names.get()] { OpenPracticeLoopNames(n->Bounds()); };
+                auto keep = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Accent);
+                keep->Size(48, 24).Label("Done", 10.5f);
+                keep->onClick = [this] { CommitPracticeLoopEdit(true); };
+                auto dash = std::make_shared<Text>(mTheme, "\xE2\x80\x93", 11.0f);
+                dash->Colour(mTheme.TextSecondary());
+                auto unit = std::make_shared<Text>(mTheme, "s", 11.0f);
+                unit->Colour(mTheme.TextSecondary());
+                row = Row({pick, playLoop, HGap(4),
+                           Stretch(FixedHeight(26, field(mPracticeLoopName, mPracticeLoopNameField, "Loop name"))),
+                           names, HGap(4),
+                           FixedWidth(64, FixedHeight(26, field(mPracticeLoopStart, mPracticeLoopStartField, "0.00"))),
+                           HGap(3), FixedWidth(10, Middle(dash)), HGap(3),
+                           FixedWidth(64, FixedHeight(26, field(mPracticeLoopEnd, mPracticeLoopEndField, "0.00"))),
+                           HGap(3), FixedWidth(10, Middle(unit)), HGap(6), Middle(keep), erase});
+
+                // Just opened: the name, selected, so typing replaces it.
+                if (std::exchange(mPracticeFocusLoopName, false))
+                {
+                    mSession.View().post([this, box = std::weak_ptr<el::basic_input_box>(mPracticeLoopName)] {
+                        if (const auto b = box.lock(); b && FocusInView(mSession.View(), *b))
+                        {
+                            b->select_all();
+                            mSession.View().refresh();
+                        }
+                    });
+                }
+            }
+            else
+            {
+                auto name =
+                    std::make_shared<Text>(mTheme, loop.name, 11.5f, active ? Weight::SemiBold : Weight::Regular);
+                name->Colour(active ? mTheme.Ink() : mTheme.Text());
+                auto range = std::make_shared<Text>(mTheme, LoopRange(loop), 10.5f);
+                range->Colour(mTheme.TextSecondary()).Fixed(true);
+                // A click on the row's name or times picks the loop, as the web's row.
+                auto main = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
+                main->AccessName("Select " + loop.name);
+                // A button is as wide as its Size: the row's room, past the four 26 px buttons.
+                main->Size(std::max(60.0f, loopsWidth - 4.0f * 26.0f - 8.0f), 26);
+                main->onClick = [this, id] { mPractice->SelectLoop(id); };
+                auto edit = std::make_shared<IconButton>(mTheme, mIcons, "ui-edit", IconButton::Look::Ghost);
+                edit->Size(26, 26).IconSize(12);
+                edit->AccessName("Edit loop name and time");
+                edit->Tooltip("Edit name/time");
+                edit->onClick = [this, id] { EditPracticeLoop(id, true); };
+                row = Row({pick, playLoop, HGap(4),
+                           Stretch(Over(Row({Middle(name), HGap(6), Middle(range), Stretch()}), main)), edit, erase});
+            }
+
+            loops.push_back(
+                FixedHeight(30, active || editing ? Rounded(mTheme.Accent().opacity(0.10f), 6.0f, row) : row));
         }
     }
 
-    // ── The faders: the default in the middle, double click to reset ──
-    std::vector<Ptr> faders{FixedHeight(24, Heading(mTheme, "Track")), VGap(2)};
+    // ── The transport and the faders: the default in the middle, double click to reset, the value typed ──
+    std::vector<Ptr> side;
+    {
+        const auto round = [this](const std::string& icon, bool enabled, std::function<void()> click,
+                                  const std::string& name) {
+            // The web's round transport buttons (.practice-tool-btn).
+            auto b = std::make_shared<metronome::RoundButton>(mTheme, mIcons, 36.0f, "");
+            b->Icon(icon);
+            b->Enabled(enabled);
+            b->AccessName(name);
+            b->onClick = std::move(click);
+            return b;
+        };
+        auto eq = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+        // Lit only when the EQ is on and doing something.
+        eq->Size(48, 32).Label("EQ", 11.0f).Lit(practice::IsEqShaping(tool.GetEq()));
+        eq->Tooltip("Backing track EQ");
+
+        if (practice::IsEqShaping(tool.GetEq()))
+        {
+            eq->Ink(mTheme.Accent());
+        }
+
+        eq->onClick = [this] { OpenPracticeEq(); };
+        std::vector<Ptr> transport{round(
+                                       track.playing ? "ui-pause" : "ui-play", hasAudio,
+                                       [this] { mPractice->PlayPause(); }, track.playing ? "Pause" : "Play"),
+                                   HGap(8),
+                                   round(
+                                       "ui-stop", hasAudio, [this] { mPractice->Stop(); }, "Stop"),
+                                   HGap(8),
+                                   round(
+                                       "ui-jump-back", hasAudio, [this] { mPractice->JumpBack(); }, "Jump back"),
+                                   HGap(12),
+                                   Middle(eq),
+                                   HGap(12)};
+
+        if (const auto* active = tool.ActiveLoop(); active && hasAudio)
+        {
+            auto status = std::make_shared<Text>(mTheme, "Looping \"" + active->name + "\"", 11.0f, Weight::Medium);
+            status->Colour(mTheme.Accent());
+            transport.push_back(Middle(status));
+        }
+        else
+        {
+            transport.push_back(Stretch());
+        }
+
+        side.push_back(FixedHeight(36, Row(transport)));
+        side.push_back(VGap(8));
+    }
 
     for (const auto fader : {Fader::Volume, Fader::Balance, Fader::Speed, Fader::Pitch})
     {
@@ -713,61 +1012,100 @@ Ptr Shell::BuildPracticeTool(float width)
             mPractice->SetFader(fader, practice::FaderValue(mPractice->Faders(), fader), true);
         };
         slider->onReset = [this, fader] { mPractice->SetFader(fader, practice::SpecFor(fader).def, true); };
-        faders.push_back(slider);
+        // The web's value field: an exact value typed ("85%", "L 30", "-2 st").
+        slider->onEditValue = [this, fader] {
+            const auto& spec = practice::SpecFor(fader);
+            OpenPrompt(spec.label, practice::FormatFader(fader, practice::FaderValue(mPractice->Faders(), fader)),
+                       "Set", {.placeholder = practice::FormatFader(fader, spec.def)},
+                       [this, fader](const std::string& text) {
+                           if (const auto value = practice::ParseFader(fader, text))
+                           {
+                               mPractice->SetFader(fader, *value, true);
+                           }
+                           else
+                           {
+                               ShowToast("Value not set", "\"" + text + "\" is not a value it takes.", true);
+                           }
+                       });
+        };
+        side.push_back(slider);
     }
 
-    auto hint = std::make_shared<Text>(mTheme, "Speed and pitch are independent.", 10.5f);
-    hint->Colour(mTheme.TextMuted());
-    faders.push_back(FixedHeight(20, hint));
+    side.push_back(
+        FixedHeight(20, hintText("Speed and pitch are independent: changing one never affects the other.", 10.5f)));
 
     if (width >= 620.0f)
     {
-        const float faderWidth = std::min(300.0f, width * 0.42f);
-        body.push_back(Row({Col(loops), HGap(18), FixedWidth(faderWidth, Col(faders))}));
+        // The web's grid: the loops 1.1 to the transport's 0.9.
+        body.push_back(
+            Row({FixedWidth(loopsWidth, Col(loops)), HGap(16), FixedWidth(width - 16.0f - loopsWidth, Col(side))}));
     }
     else
     {
         body.push_back(Col(loops));
         body.push_back(VGap(14));
-        body.push_back(Col(faders));
+        body.push_back(Col(side));
     }
 
-    // ── The links kept with the saved project ──
-    if (selected != projects.end())
+    // ── Links: always shown, kept with the picked project ──
     {
-        const auto projectId = selected->id;
+        const bool canAdd = selected != projects.end();
         body.push_back(VGap(16));
-        auto add = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
-        add->Size(90, 24).Label("Add Link...", 10.5f);
-        add->onClick = [this, projectId] { AddPracticeLink(projectId); };
-        body.push_back(FixedHeight(24, Row({Heading(mTheme, "Links"), Stretch(), add})));
+        body.push_back(FixedHeight(22, Heading(mTheme, "Links")));
         body.push_back(VGap(4));
 
-        if (selected->links.empty())
+        if (canAdd && selected->links.empty())
         {
-            auto none = std::make_shared<Text>(
-                mTheme, "Keep the tablature, a lesson or the lyrics with \"" + selected->name + "\".", 11.0f);
-            none->Colour(mTheme.TextMuted());
-            body.push_back(FixedHeight(26, none));
+            body.push_back(FixedHeight(24, hintText("No links for this project yet.", 11.5f)));
         }
 
-        for (const auto& link : selected->links)
+        if (canAdd)
         {
-            const auto url = link.url;
-            const auto linkId = link.id;
-            auto open = std::make_shared<IconButton>(mTheme, mIcons, "ui-share", IconButton::Look::Ghost);
-            open->Size(26, 26).IconSize(12);
-            open->onClick = [this, url] { mSession.Commands().OpenUrl(url); };
-            auto title = std::make_shared<Text>(mTheme, practice::DescribeLink(link), 11.5f);
-            title->Colour(mTheme.Ink());
-            auto address = std::make_shared<Text>(mTheme, url, 10.5f);
-            address->Colour(mTheme.TextMuted());
-            auto remove = std::make_shared<IconButton>(mTheme, mIcons, "ui-trash", IconButton::Look::Ghost);
-            remove->Size(26, 26).IconSize(12);
-            remove->onClick = [this, projectId, linkId] { mPractice->RemoveLink(projectId, linkId); };
-            body.push_back(FixedHeight(28, Row({open, HGap(4), FixedWidth(std::min(220.0f, width * 0.35f), title),
-                                                HGap(8), address, remove})));
+            const auto projectId = selected->id;
+
+            for (const auto& link : selected->links)
+            {
+                const auto url = link.url;
+                const auto linkId = link.id;
+                const auto described = practice::DescribeLink(link);
+                // The title opens it, as the web's link; then the address.
+                auto open = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
+                open->Label(described, 11.5f).Ink(mTheme.Accent());
+                open->Tooltip(url);
+                open->onClick = [this, url] { mSession.Commands().OpenUrl(url); };
+                auto address = std::make_shared<Text>(mTheme, url, 10.5f);
+                address->Colour(mTheme.TextMuted());
+                auto erase = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
+                erase->Size(26, 26).Label("\xE2\x9C\x95", 11.0f);
+                erase->AccessName("Remove link");
+                erase->Tooltip("Remove link");
+                erase->onClick = [this, projectId, linkId, described] {
+                    OpenConfirm("Remove link", "Remove the link \"" + described + "\" from this project?",
+                                "Remove link", [this, projectId, linkId] { mPractice->RemoveLink(projectId, linkId); });
+                };
+                body.push_back(FixedHeight(28, Row({FixedWidth(std::min(240.0f, width * 0.35f), open), HGap(8),
+                                                    Stretch(Middle(address)), erase})));
+            }
         }
+
+        auto titleField = field(mPracticeLinkTitle, mPracticeLinkTitleField, "Title (optional)");
+        auto urlField = field(mPracticeLinkUrl, mPracticeLinkUrlField, "https://... e.g. the tablature");
+        mPracticeLinkUrl->on_enter = [this](std::string_view) {
+            AddPracticeLinkInline();
+            return true;
+        };
+        auto add = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+        add->Size(84, 30).Label("Add Link", 11.0f).Disabled(!canAdd);
+        add->onClick = [this] { AddPracticeLinkInline(); };
+        body.push_back(VGap(4));
+        body.push_back(FixedHeight(30, Row({FixedWidth(std::min(200.0f, width * 0.3f), FixedHeight(30, titleField)),
+                                            HGap(6), Stretch(FixedHeight(30, urlField)), HGap(6), add})));
+        body.push_back(VGap(6));
+        body.push_back(FixedHeight(
+            18, hintText(canAdd ? "Links are kept with \"" + selected->name +
+                                      "\" as soon as they're added, and open in your web browser."
+                                : "Save the track as a project, or pick a saved one, to keep links with it: the tab, "
+                                  "a lesson, the lyrics.")));
     }
 
     body.push_back(VGap(20));
@@ -778,11 +1116,6 @@ void Shell::OpenPracticeProjects(el::rect anchor)
 {
     const auto projects = mPractice->Projects();
     std::vector<MenuItem> items;
-
-    if (projects.empty())
-    {
-        items.push_back({"No saved projects", false, true, {}});
-    }
 
     for (const auto& project : projects)
     {
@@ -801,26 +1134,88 @@ void Shell::OpenPracticeProjects(el::rect anchor)
         items.push_back(std::move(item));
     }
 
-    const auto selected = std::find_if(projects.begin(), projects.end(), [this](const practice::Project& p) {
-        return p.id == mPractice->SelectedProjectId();
-    });
-
-    if (selected != projects.end())
-    {
-        const auto id = selected->id;
-        const auto name = selected->name;
-        items.push_back({"Delete \"" + name + "\"...", false, false, [this, id, name] {
-                             OpenConfirm("Delete project",
-                                         "\"" + name + "\" and its links are deleted. The track itself stays.",
-                                         "Delete", [this, id] { mPractice->DeleteProject(id); });
-                         }});
-    }
-
     OpenDropdown(anchor, std::move(items), 300.0f);
 }
 
-void Shell::OpenPracticeLoopMenu(const std::string& loopId, el::rect anchor)
+void Shell::SavePracticeProject()
 {
+    const auto text = mPracticeNameBox ? mPracticeNameBox->get_utf8() : std::string();
+    const auto first = text.find_first_not_of(" \t");
+    const auto name =
+        first == std::string::npos ? std::string() : text.substr(first, text.find_last_not_of(" \t") - first + 1);
+
+    if (!mPractice->HasAudio())
+    {
+        ShowToast("Nothing to save", "Load a backing track first", true);
+        return;
+    }
+
+    if (name.empty())
+    {
+        ShowToast("Name the project", "Type a name before saving", true);
+        return;
+    }
+
+    const bool withPreset = mPracticeIncludePreset && !mState.activePresetId.empty();
+    const auto save = [this, name, withPreset](bool existed) {
+        if (!mPractice->SaveProject(name, withPreset))
+        {
+            ShowToast("Too many saved projects", "Delete one before saving another", true);
+            return;
+        }
+
+        mPracticeNameFor = "-"; // the name box follows the project saved
+        ShowToast(existed ? "Project \"" + name + "\" updated" : "Project \"" + name + "\" saved", "", false);
+    };
+    // Saving over the same name updates that project, once asked (projectsPanel.ts).
+    const auto lower = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return s;
+    };
+    const auto projects = mPractice->Projects();
+    const auto existing = std::find_if(projects.begin(), projects.end(),
+                                       [&](const practice::Project& p) { return lower(p.name) == lower(name); });
+
+    if (existing == projects.end())
+    {
+        save(false);
+        return;
+    }
+
+    OpenConfirm("Overwrite project", "Overwrite the saved project \"" + existing->name + "\"?", "Overwrite project",
+                [save] { save(true); });
+}
+
+void Shell::DeletePracticeProject()
+{
+    const auto projects = mPractice->Projects();
+    const auto it = std::find_if(projects.begin(), projects.end(),
+                                 [this](const practice::Project& p) { return p.id == mPractice->SelectedProjectId(); });
+
+    if (it == projects.end())
+    {
+        return;
+    }
+
+    const auto count = it->links.size();
+    const std::string linkNote =
+        count == 0
+            ? std::string()
+            : " Its " + std::to_string(count) + (count == 1 ? " saved link goes with it." : " saved links go with it.");
+    OpenConfirm("Delete project",
+                "Delete the saved project \"" + it->name + "\"? The track file and its loops are not affected." +
+                    linkNote,
+                "Delete project", [this, id = it->id] { mPractice->DeleteProject(id); });
+}
+
+void Shell::EditPracticeLoop(const std::string& loopId, bool focus)
+{
+    if (!mPracticeEditingLoop.empty() && mPracticeEditingLoop != loopId)
+    {
+        CommitPracticeLoopEdit(true);
+    }
+
     const auto& loops = mPractice->Loops();
     const auto it =
         std::find_if(loops.begin(), loops.end(), [&loopId](const practice::Loop& l) { return l.id == loopId; });
@@ -830,77 +1225,152 @@ void Shell::OpenPracticeLoopMenu(const std::string& loopId, el::rect anchor)
         return;
     }
 
-    const auto loop = *it;
-    std::vector<MenuItem> items{
-        {"Rename...", false, false,
-         [this, loop] {
-             PostPrompt("Rename loop", loop.name, "Rename",
-                        [this, id = loop.id](const std::string& name) { mPractice->RenameLoop(id, name); });
-         }},
-        {"Set times...", false, false,
-         [this, loop] {
-             char text[64];
-             std::snprintf(text, sizeof(text), "%.2f - %.2f", loop.startSec, loop.endSec);
-             PostPrompt("Set times", text, "Set", {.message = "Start - end, in seconds.", .placeholder = "0.00 - 0.00"},
-                        [this, id = loop.id](const std::string& value) {
-                            double start = 0.0, end = 0.0;
-                            char dash = 0;
+    const auto make = [](std::shared_ptr<el::basic_input_box>& box, Ptr& element, const char* placeholder) {
+        if (!box)
+        {
+            auto [e, b] = el::input_box(placeholder, Font(Weight::Regular), 1.0f);
+            box = b;
+            element = el::share(std::move(e));
+        }
+    };
+    make(mPracticeLoopName, mPracticeLoopNameField, "Loop name");
+    make(mPracticeLoopStart, mPracticeLoopStartField, "0.00");
+    make(mPracticeLoopEnd, mPracticeLoopEndField, "0.00");
+    char start[32], end[32];
+    std::snprintf(start, sizeof(start), "%.2f", it->startSec);
+    std::snprintf(end, sizeof(end), "%.2f", it->endSec);
+    mPracticeLoopName->set_text(it->name);
+    mPracticeLoopStart->set_text(start);
+    mPracticeLoopEnd->set_text(end);
 
-                            if (std::sscanf(value.c_str(), " %lf %c %lf", &start, &dash, &end) == 3 && end > start)
-                            {
-                                mPractice->SetLoopTimes(id, start, end);
-                            }
-                            else
-                            {
-                                ShowToast("Times not set", "Write them as start - end, such as 12.5 - 20.", true);
-                            }
-                        });
-         }},
-        {"Name it", false, true, {}}};
-    // The song sections, numbered past those already used.
+    for (auto* box : {mPracticeLoopName.get(), mPracticeLoopStart.get(), mPracticeLoopEnd.get()})
+    {
+        box->on_enter = [this](std::string_view) {
+            CommitPracticeLoopEdit(true);
+            return true;
+        };
+        box->on_escape = [this] { CommitPracticeLoopEdit(false); };
+    }
+
+    mPracticeEditingLoop = loopId;
+    Mark(kPage);
+
+    // The row is built on the next rebuild; the name takes the focus there.
+    mPracticeFocusLoopName = focus;
+}
+
+void Shell::CommitPracticeLoopEdit(bool keep)
+{
+    const auto id = std::exchange(mPracticeEditingLoop, std::string());
+
+    if (id.empty())
+    {
+        return;
+    }
+
+    if (keep && mPracticeLoopName && mPracticeLoopStart && mPracticeLoopEnd)
+    {
+        const auto name = mPracticeLoopName->get_utf8();
+
+        if (name.find_first_not_of(" \t") != std::string::npos)
+        {
+            mPractice->RenameLoop(id, name);
+        }
+
+        char* stop = nullptr;
+        const auto startText = mPracticeLoopStart->get_utf8(), endText = mPracticeLoopEnd->get_utf8();
+        const double start = std::strtod(startText.c_str(), &stop);
+        const bool startOk = stop != startText.c_str();
+        const double end = std::strtod(endText.c_str(), &stop);
+        const bool endOk = stop != endText.c_str();
+
+        if (startOk && endOk && end > start)
+        {
+            mPractice->SetLoopTimes(id, start, end);
+        }
+        else
+        {
+            ShowToast("Times not set", "The end must come after the start, in seconds.", true);
+        }
+    }
+
+    Mark(kPage);
+}
+
+void Shell::OpenPracticeLoopNames(el::rect anchor)
+{
+    // The song sections, numbered past those already used (the web's name datalist).
     std::vector<std::string> names;
 
-    for (const auto& l : loops)
+    for (const auto& l : mPractice->Loops())
     {
-        names.push_back(l.name);
+        if (l.id != mPracticeEditingLoop)
+        {
+            names.push_back(l.name);
+        }
     }
+
+    std::vector<MenuItem> items;
 
     for (const auto& base : practice::kLoopNameTemplates)
     {
         const auto name = practice::SuggestLoopTemplateName(base, names);
-        items.push_back({name, false, false, [this, id = loop.id, name] { mPractice->RenameLoop(id, name); }});
+        items.push_back({name, false, false, [this, name] {
+                             if (mPracticeLoopName)
+                             {
+                                 mPracticeLoopName->set_text(name);
+                                 mSession.View().refresh();
+                             }
+                         }});
     }
 
     OpenDropdown(anchor, std::move(items), 180.0f);
 }
 
-void Shell::AddPracticeLink(const std::string& projectId)
+void Shell::AddPracticeLinkInline()
 {
-    OpenPrompt("Add link", "", "Next",
-               {.message = "The address of the tablature, a lesson or the lyrics.", .placeholder = "https://"},
-               [this, projectId](const std::string& url) {
-                   if (!practice::NormalizeLinkUrl(url))
-                   {
-                       ShowToast("Not a web address", "Links open in the browser: http or https only.", true);
-                       return;
-                   }
+    const auto projectId = mPractice->SelectedProjectId();
 
-                   PostPrompt(
-                       "Add link", "", "Add Link",
-                       {.message = "A title for the link (optional).", .placeholder = "Title", .allowEmpty = true},
-                       [this, projectId, url](const std::string& title) {
-                           const auto result = mPractice->AddLink(projectId, title, url);
+    if (projectId.empty() || !mPracticeLinkUrl)
+    {
+        return;
+    }
 
-                           if (result == "too-many")
-                           {
-                               ShowToast("Link not added", "A project keeps up to 30 links.", true);
-                           }
-                           else if (result != "added")
-                           {
-                               ShowToast("Link not added", "Save the project first.", true);
-                           }
-                       });
-               });
+    const auto url = mPracticeLinkUrl->get_utf8();
+
+    if (url.find_first_not_of(" \t") == std::string::npos)
+    {
+        FocusInView(mSession.View(), *mPracticeLinkUrl);
+        return;
+    }
+
+    const auto result = mPractice->AddLink(projectId, mPracticeLinkTitle ? mPracticeLinkTitle->get_utf8() : "", url);
+
+    if (result == "invalid-url")
+    {
+        ShowToast("Not a web address",
+                  "Paste a link that starts with https://, or a site address like songsterr.com/...", true);
+        return;
+    }
+
+    if (result == "too-many")
+    {
+        ShowToast("Link not added", "A project keeps up to 30 links.", true);
+        return;
+    }
+
+    if (result != "added")
+    {
+        ShowToast("Link not added", "Save the project first.", true);
+        return;
+    }
+
+    mPracticeLinkUrl->set_text("");
+
+    if (mPracticeLinkTitle)
+    {
+        mPracticeLinkTitle->set_text("");
+    }
 }
 
 bool Shell::DropPracticeTrack(const std::vector<std::string>& paths)

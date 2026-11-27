@@ -237,9 +237,13 @@ class ParamSlider : public el::element, public Drawn, public Focusable
     std::function<void()> onReset;
     /// Called when a drag ends: the owner commits what the drag only previewed.
     std::function<void()> onRelease;
+    /// A press on the value (or Enter with focus): the owner asks for a typed one. With it set the
+    /// value is underlined, as the web's typed value fields.
+    std::function<void()> onEditValue;
 
   private:
     void Move(const el::context& ctx, el::point p);
+    float mValueLeft = 0.0f; // where the value text starts, from the last draw
 
     const Theme& mTheme;
     std::string mName;

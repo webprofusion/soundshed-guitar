@@ -111,6 +111,13 @@ void ParamSlider::draw(const el::context& ctx)
     FillText(cnv, Ellipsize(cnv, mName, nameFont, nameBounds.width()), nameFont, mTheme.TextSecondary(), nameBounds,
              Text::Align::Left);
     FillText(cnv, mValueText, nameFont, mTheme.Text(), top, Text::Align::Right);
+    mValueLeft = top.right - valueWidth;
+
+    if (onEditValue)
+    {
+        cnv.fill_style(mTheme.TextSecondary().opacity(0.6f));
+        cnv.fill_rect(el::rect{mValueLeft, top.bottom - 2.0f, top.right, top.bottom - 1.0f});
+    }
 
     // The track, with the travel filled in the accent: the one place an effect page uses it.
     const float trackY = b.bottom - 14.0f;
@@ -159,6 +166,12 @@ bool ParamSlider::click(const el::context& ctx, el::mouse_button btn)
 
     if (btn.down)
     {
+        if (onEditValue && btn.pos.y < ctx.bounds.top + 20.0f && btn.pos.x >= mValueLeft - 4.0f)
+        {
+            onEditValue();
+            return true;
+        }
+
         if (btn.num_clicks == 2 && onReset)
         {
             onReset();
@@ -225,6 +238,12 @@ bool ParamSlider::scroll(const el::context& ctx, el::point dir, el::point)
 
 bool ParamSlider::key(const el::context& ctx, el::key_info k)
 {
+    if (onEditValue && k.key == el::key_code::enter && k.action == el::key_action::press)
+    {
+        onEditValue();
+        return true;
+    }
+
     if (IsResetKey(k) && onReset)
     {
         onReset();

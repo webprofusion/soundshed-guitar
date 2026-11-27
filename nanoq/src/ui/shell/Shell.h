@@ -833,9 +833,17 @@ class Shell
     [[nodiscard]] Ptr BuildPracticeTool(float width);
     [[nodiscard]] std::string PracticeToolSignature() const;
     void OpenPracticeProjects(el::rect anchor);
-    void OpenPracticeLoopMenu(const std::string& loopId, el::rect anchor);
+    /// The song sections a loop being named can take (the web's name datalist).
+    void OpenPracticeLoopNames(el::rect anchor);
     void OpenPracticeEq();
-    void AddPracticeLink(const std::string& projectId);
+    /// Save in the project bar: under the typed name, asking first over a project of that name.
+    void SavePracticeProject();
+    void DeletePracticeProject();
+    /// A loop's row opened for its name and times; `focus` puts the keys in its name.
+    void EditPracticeLoop(const std::string& loopId, bool focus);
+    /// The open row's name and times kept (or dropped), and the row closed.
+    void CommitPracticeLoopEdit(bool keep);
+    void AddPracticeLinkInline();
     /// An audio file dropped on the Practice Tool loads as its track.
     bool DropPracticeTrack(const std::vector<std::string>& paths);
     [[nodiscard]] Ptr BuildBackingTracks(float width);
@@ -924,6 +932,15 @@ class Shell
     Ptr mJamSearchElement;
     std::weak_ptr<el::port_base> mJamScroll; // where the open section is scrolled to
     std::unique_ptr<guitarfx::uiclient::PracticeTool> mPractice;
+    // The Practice Tool's fields, kept over the section's rebuilds as the web's inputs are.
+    std::shared_ptr<el::basic_input_box> mPracticeNameBox, mPracticeLoopName, mPracticeLoopStart, mPracticeLoopEnd,
+        mPracticeLinkTitle, mPracticeLinkUrl;
+    Ptr mPracticeNameField, mPracticeLoopNameField, mPracticeLoopStartField, mPracticeLoopEndField,
+        mPracticeLinkTitleField, mPracticeLinkUrlField;
+    std::string mPracticeNameFor = "-"; // the project the name box shows
+    bool mPracticeIncludePreset = false;
+    std::string mPracticeEditingLoop;
+    bool mPracticeFocusLoopName = false; // the edited loop's name takes the focus once built
     std::string mJamSignature;
     double mPracticeDeletedAt = 0.0; // when the loop shown in the undo banner was deleted
 
