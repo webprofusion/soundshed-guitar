@@ -655,7 +655,10 @@ Ptr Shell::BuildPresetChooser()
 
     if (mShowMultiRigs)
     {
-        column.push_back(BuildMultiRigList());
+        // In the list's slot, so the search refills it as it does the presets.
+        mPresetListSlot = MakeSlot();
+        Fill(*mPresetListSlot, BuildPresetListContent());
+        column.push_back(mPresetListSlot);
     }
     else if (shortScreen)
     {
@@ -842,9 +845,10 @@ Ptr Shell::BuildPresetChooser()
         column.push_back(Row({FixedWidth(220, BuildFolderColumn()), HGap(14), right}));
     }
 
-    if (shortScreen)
+    // Setlists is a tab on a short window, and belongs to the presets, not the Multi-Rigs.
+    if (shortScreen || mShowMultiRigs)
     {
-        return Col(column); // Setlists is a tab
+        return Col(column);
     }
 
     column.push_back(VGap(10));

@@ -1333,6 +1333,36 @@ void TestFeatureFlagsAndFxMarks()
 }
 
 // The preset bar's back and forward, as presets/history.ts keeps it.
+void TestCompositePresetSearch()
+{
+    ClientState state;
+    state.presetList = {{"a", "Clean Chime", "Clean", "user"}, {"b", "Crunch Box", "Crunch", "user"}};
+    state.mixer.compositePresets = {{"r1", "Live Pair", "For the gig", {" Live ", "stage"}, {"a", "b"}},
+                                    {"r2", "Studio", "", {"live"}, {"a", "gone"}}};
+
+    const auto ids = [](const std::vector<const CompositePreset*>& list) {
+        std::vector<std::string> out;
+
+        for (const auto* rig : list)
+        {
+            out.push_back(rig->id);
+        }
+
+        return out;
+    };
+
+    Expect(CompositeSlotNames(state, state.mixer.compositePresets[1]) ==
+               std::vector<std::string>{"Clean Chime", "gone"},
+           "a Multi-Rig's presets by name, an unknown id as it is");
+    Expect(ids(FilterCompositePresets(state, "  ")) == std::vector<std::string>{"r1", "r2"}, "no text keeps all");
+    Expect(ids(FilterCompositePresets(state, "GIG")) == std::vector<std::string>{"r1"}, "the description, any case");
+    Expect(ids(FilterCompositePresets(state, "stage")) == std::vector<std::string>{"r1"}, "a tag");
+    Expect(ids(FilterCompositePresets(state, "crunch")) == std::vector<std::string>{"r1"}, "a preset's name");
+    Expect(ids(FilterCompositePresets(state, "nothing")).empty(), "no match");
+    Expect(CompositePresetTags(state.mixer.compositePresets) == std::vector<std::string>{"live", "stage"},
+           "tags trimmed, lower case, once each, sorted");
+}
+
 void TestPresetTrail()
 {
     PresetTrail trail;
@@ -2784,6 +2814,7 @@ int main()
     TestChainDropRules();
     TestFeatureFlagsAndFxMarks();
     TestPresetTrail();
+    TestCompositePresetSearch();
     TestResourceIndex();
     TestAnalysis();
     TestAnalysisPresentation();

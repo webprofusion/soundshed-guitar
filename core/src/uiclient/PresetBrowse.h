@@ -77,4 +77,15 @@ inline constexpr const char* kPerformancePadCountSetting = "performancePads.padC
 
 /// A real folder by id, searched through the whole tree; null for the virtual ones.
 [[nodiscard]] const PresetFolder* FindPresetFolder(const std::vector<PresetFolder>& folders, const std::string& id);
+
+/// The names of a Multi-Rig's presets in its order (resolveCompositeSlotNames); an id the
+/// library does not have is given as it is.
+[[nodiscard]] std::vector<std::string> CompositeSlotNames(const ClientState& state, const CompositePreset& rig);
+/// The Multi-Rigs the library search leaves (filterCompositePresets): the text in the name, the
+/// description, a tag or one of its presets' names, ignoring case; all of them for no text.
+[[nodiscard]] std::vector<const CompositePreset*> FilterCompositePresets(const ClientState& state,
+                                                                         const std::string& text);
+/// Every tag the Multi-Rigs use, trimmed and in lower case, once each, sorted
+/// (collectCompositePresetTags).
+[[nodiscard]] std::vector<std::string> CompositePresetTags(const std::vector<CompositePreset>& rigs);
 } // namespace guitarfx::uiclient

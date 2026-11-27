@@ -389,4 +389,68 @@ std::vector<PresetSummary> FilterPresets(const ClientState& state, const PresetQ
 
     return base;
 }
+
+std::vector<std::string> CompositeSlotNames(const ClientState& state, const CompositePreset& rig)
+{
+    std::vector<std::string> names;
+
+    for (const auto& id : rig.presetIds)
+    {
+        const auto* summary = state.FindPresetSummary(id);
+        names.push_back(summary != nullptr ? summary->name : id);
+    }
+
+    return names;
+}
+
+std::vector<const CompositePreset*> FilterCompositePresets(const ClientState& state, const std::string& text)
+{
+    const auto needle = Lower(Trim(text));
+    std::vector<const CompositePreset*> kept;
+
+    for (const auto& rig : state.mixer.compositePresets)
+    {
+        if (!needle.empty())
+        {
+            std::string haystack = rig.name + "\n" + rig.description;
+
+            for (const auto& tag : rig.tags)
+            {
+                haystack += "\n" + tag;
+            }
+
+            for (const auto& name : CompositeSlotNames(state, rig))
+            {
+                haystack += "\n" + name;
+            }
+
+            if (Lower(haystack).find(needle) == std::string::npos)
+            {
+                continue;
+            }
+        }
+
+        kept.push_back(&rig);
+    }
+
+    return kept;
+}
+
+std::vector<std::string> CompositePresetTags(const std::vector<CompositePreset>& rigs)
+{
+    std::set<std::string> tags;
+
+    for (const auto& rig : rigs)
+    {
+        for (const auto& tag : rig.tags)
+        {
+            if (auto t = Lower(Trim(tag)); !t.empty())
+            {
+                tags.insert(std::move(t));
+            }
+        }
+    }
+
+    return {tags.begin(), tags.end()};
+}
 } // namespace guitarfx::uiclient
