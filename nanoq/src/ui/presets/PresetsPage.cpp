@@ -79,12 +79,13 @@ void Shell::SelectSetlistSlot(int index)
 void Shell::DeleteWithConfirm(const std::string& presetId)
 {
     const auto* summary = mState.FindPresetSummary(presetId);
+    const std::string name = summary != nullptr ? summary->name : std::string();
     OpenConfirm("Delete preset",
-                "Delete " + (summary != nullptr ? summary->name : std::string("this preset")) +
-                    "? It cannot be undone.",
-                "Delete", [this, presetId] {
+                "Delete " + (name.empty() ? std::string("this preset") : name) + "? It cannot be undone.", "Delete",
+                [this, presetId, name] {
                     const bool wasActive = presetId == mState.activePresetId;
                     mSession.Commands().DeletePreset(presetId);
+                    ShowToast("Preset deleted", name, false);
 
                     // The one playing went with it: load the first one left, as Soundshed Guitar does.
                     if (wasActive)

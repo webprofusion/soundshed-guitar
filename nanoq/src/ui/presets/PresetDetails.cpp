@@ -36,8 +36,6 @@ void Shell::OpenPresetDetails(bool asNew)
 
     using guitarfx::uiclient::PresetFolder;
     const auto& preset = *mState.activePreset;
-    const auto* summary = mState.FindPresetSummary(mState.activePresetId);
-    const bool userPreset = summary != nullptr && summary->source == "user";
 
     struct DetailsState
     {
@@ -54,7 +52,8 @@ void Shell::OpenPresetDetails(bool asNew)
     st->tags = preset.tags;
     st->json = guitarfx::uiclient::InspectablePresetJson(preset);
 
-    // Saved as new it goes in the folder being browsed; otherwise it stays in its own.
+    // The preset's own folder first, then the folder being browsed (resolvePresetModalFolderId);
+    // none is All Presets.
     const std::function<const PresetFolder*(const std::vector<PresetFolder>&)> holding =
         [&](const std::vector<PresetFolder>& folders) -> const PresetFolder* {
         for (const auto& f : folders)
@@ -72,8 +71,12 @@ void Shell::OpenPresetDetails(bool asNew)
 
         return nullptr;
     };
-    const auto* current = asNew ? guitarfx::uiclient::FindPresetFolder(mState.presetFolders, mQuery.folderId)
-                                : holding(mState.presetFolders);
+    const auto* current = holding(mState.presetFolders);
+
+    if (current == nullptr && asNew)
+    {
+        current = guitarfx::uiclient::FindPresetFolder(mState.presetFolders, mQuery.folderId);
+    }
 
     if (current != nullptr)
     {
@@ -88,9 +91,16 @@ void Shell::OpenPresetDetails(bool asNew)
         box->set_text(text);
         return std::make_pair(el::share(el::input_box(el::hold(box), el::rect{10.0f, 8.0f, 10.0f, 8.0f})), box);
     };
-    auto [nameElement, nameBox] = field("My Custom Preset", asNew && userPreset ? preset.name + " copy" : preset.name);
-    auto [categoryElement, categoryBox] = field("User", preset.category);
-    auto [descriptionElement, descriptionBox] = field("Optional description...", preset.description);
+    // Save As keeps the name, as the web's: the copy is told apart by its folder or a rename.
+    auto [nameElement, nameBox] = field("My Custom Preset", preset.name);
+    auto [categoryElement, categoryBox] =
+        field("User", preset.category.empty() ? std::string("User") : preset.category);
+
+    // The description is three rows (a textarea, rows=3), and Enter starts a new line in it.
+    auto descriptionBox =
+        el::share(el::basic_text_box{preset.description, Font(Weight::Regular).size(metrics::kSmallText)});
+    auto descriptionElement =
+        VScroll(el::share(el::margin(el::rect{10.0f, 8.0f, 10.0f, 8.0f}, el::hold(descriptionBox))));
 
     // A form label (.form-group label): small, bold, in capitals.
     const auto label = [this](const std::string& text) {
@@ -102,7 +112,7 @@ void Shell::OpenPresetDetails(bool asNew)
     // ── Save Folder ──
     auto folder = std::make_shared<PickerField>(mTheme, mIcons);
     folder->AccessName("Save Folder");
-    folder->Set(current != nullptr ? current->name : std::string("No folder"));
+    folder->Set(current != nullptr ? current->name : std::string("All Presets"));
     folder->onClick = [this, st, weak = std::weak_ptr<PickerField>(folder)] {
         const auto picker = weak.lock();
 
@@ -121,11 +131,25 @@ void Shell::OpenPresetDetails(bool asNew)
             }
         };
         std::vector<MenuItem> items;
-        items.push_back({"No folder", st->folderId.empty(), false, [choose] { choose({}, "No folder"); }});
-        std::function<void(const std::vector<PresetFolder>&, int)> add = [&](const std::vector<PresetFolder>& folders,
+        // All Presets (no folder) first, then the folders sorted by name at every level
+        // (populatePresetFolderSelect).
+        items.push_back({"All Presets", st->folderId.empty(), false, [choose] { choose({}, "All Presets"); }});
+        std::function<void(const std::vector<PresetFolder>&, int)> add = [&](const std::vector<PresetFolder>& unsorted,
                                                                              int depth) {
-            for (const auto& f : folders)
+            std::vector<const PresetFolder*> folders;
+
+            for (const auto& f : unsorted)
             {
+                folders.push_back(&f);
+            }
+
+            std::stable_sort(folders.begin(), folders.end(), [](const PresetFolder* a, const PresetFolder* b) {
+                return Lower(a->name) < Lower(b->name);
+            });
+
+            for (const auto* fp : folders)
+            {
+                const auto& f = *fp;
                 items.push_back({std::string(static_cast<std::size_t>(depth) * 2, ' ') + f.name, f.id == st->folderId,
                                  false, [choose, id = f.id, name = f.name] { choose(id, name); }});
                 add(f.children, depth + 1);
@@ -179,7 +203,7 @@ void Shell::OpenPresetDetails(bool asNew)
             chip->Selected(on).TextSize(metrics::kSmallText);
             const float w = MeasureTextWidth(tag, Font(Weight::Medium).size(metrics::kSmallText)) + 26.0f;
 
-            if (used + w > 460.0f && !row.empty())
+            if (used + w > 500.0f && !row.empty())
             {
                 row.push_back(Stretch());
                 rows.push_back(FixedHeight(30, Row(row)));
@@ -243,10 +267,10 @@ void Shell::OpenPresetDetails(bool asNew)
 
     // On the drop-down's fill, so the two read as one kind of field.
     const auto box = [this](Ptr element) { return FixedHeight(32, Rounded(mTheme.Tertiary(), 3.0f, element)); };
-    auto details =
-        Col({label("Save Folder"), FixedHeight(34, folder), VGap(12), label("Preset Name"), box(nameElement), VGap(12),
-             label("Category"), box(categoryElement), VGap(12), label("Description"), box(descriptionElement), VGap(12),
-             label("Tags"), tagSlot, VGap(12), label("Input Peak Level"), FixedHeight(74, peakBox)});
+    auto details = Col({label("Save Folder"), FixedHeight(34, folder), VGap(12), label("Preset Name"), box(nameElement),
+                        VGap(12), label("Category"), box(categoryElement), VGap(12), label("Description"),
+                        FixedHeight(64, Rounded(mTheme.Tertiary(), 3.0f, descriptionElement)), VGap(12), label("Tags"),
+                        tagSlot, VGap(12), label("Input Peak Level"), FixedHeight(74, peakBox)});
 
     // ── Advanced: the JSON, read-only, with Validate and Clean Up ──
     auto code = std::make_shared<CodeBlock>(mTheme);
@@ -317,10 +341,12 @@ void Shell::OpenPresetDetails(bool asNew)
 
         if (details.name.empty())
         {
+            ShowToast("Error", "Preset name is required", true);
             return;
         }
 
         details.category = trim(categoryBox->get_utf8());
+        details.category = details.category.empty() ? std::string("User") : details.category;
         details.description = trim(descriptionBox->get_utf8());
         details.tags = st->tags;
         details.folderId = st->folderId;
@@ -328,11 +354,16 @@ void Shell::OpenPresetDetails(bool asNew)
         details.preset = st->cleaned;
         CloseOverlay();
         mSession.Commands().SavePresetWithDetails(details, asNew);
+
+        if (!asNew)
+        {
+            ShowToast("Preset updated", details.name, false);
+        }
     };
 
     // Enter in any of the fields saves, as a web form's does: with the on-screen keyboard up the
     // footer's Save is under it, and its Enter key is the way to commit.
-    for (const auto& box : {nameBox, categoryBox, descriptionBox})
+    for (const auto& box : {nameBox, categoryBox})
     {
         box->on_enter = [save](std::string_view) {
             save();
@@ -345,8 +376,8 @@ void Shell::OpenPresetDetails(bool asNew)
                 .actions = {DialogButton(
                                 "Cancel", [this] { CloseOverlay(); }, false),
                             DialogButton(asNew ? "Save New Preset" : "Overwrite Preset", save, true)},
-                .width = 520.0f,
-                .height = kDialogHeaderHeight + kDialogFooterHeight + 36.0f + 44.0f + 504.0f});
+                .width = 560.0f,
+                .height = kDialogHeaderHeight + kDialogFooterHeight + 36.0f + 44.0f + 536.0f});
 
     // The raw input's peak follows the meters while the dialog is open.
     mInstrumentSubs.push_back(mSession.Client().Subscribe(guitarfx::uiclient::Topic::Telemetry, [this, st, rawPeak] {
