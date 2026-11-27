@@ -3,6 +3,7 @@
  */
 
 #include "uiclient/UiCommands.h"
+#include "uiclient/VisualizerBackground.h"
 
 #include "dsp/FiniteCheck.h"
 #include "presets/PresetStorage.h"
@@ -1079,6 +1080,17 @@ void UiCommands::AudioDevice(const std::string& action, nlohmann::json payload)
 void UiCommands::RunSignalPathTest()
 {
     mClient.Send("runSignalPathTest", {{"frequency", 440}, {"duration", 1.0}});
+}
+
+void UiCommands::BrowseUiBackgroundImage()
+{
+    mClient.Send("browseUiBackgroundImage", nlohmann::json::object());
+}
+
+void UiCommands::ClearUiBackgroundImage()
+{
+    SetSetting(visualizer_background::kImageSetting, nullptr);
+    mClient.Send("clearUiBackgroundImage", nlohmann::json::object());
 }
 
 void UiCommands::OpenUrl(const std::string& url)

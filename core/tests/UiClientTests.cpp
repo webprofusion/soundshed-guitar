@@ -40,6 +40,7 @@
 #include "uiclient/DspStatus.h"
 #include "uiclient/Metronome.h"
 #include "uiclient/UpdateCheck.h"
+#include "uiclient/VisualizerBackground.h"
 #include "uiclient/SignalFlow.h"
 #include "uiclient/BlendMix.h"
 #include "uiclient/ChainDropRules.h"
@@ -2275,6 +2276,32 @@ void TestUpdateCheckVersions()
     Expect(ReleaseNotesFirstLine("\n\n# **v1.9** is out\nMore") == "v1.9 is out", "the banner's first line, plain");
 }
 
+// The effect panel's own picture: only a route the engine hands out is drawn, and Fade reads as
+// the web UI's visualizerBackgroundFade.
+void TestVisualizerBackgroundSettings()
+{
+    namespace vb = guitarfx::uiclient::visualizer_background;
+    Expect(vb::IsStoredUrl("ui-backgrounds/0123456789abcdef.png") &&
+               vb::IsStoredUrl("ui-backgrounds/0123456789abcdef.webp"),
+           "the engine's routes");
+    Expect(!vb::IsStoredUrl("ui-backgrounds/0123456789ABCDEF.png") &&
+               !vb::IsStoredUrl("ui-backgrounds/0123456789abcdef.svg") &&
+               !vb::IsStoredUrl("../ui-backgrounds/0123456789abcdef.png") &&
+               !vb::IsStoredUrl("ui-backgrounds/0123.png") && !vb::IsStoredUrl("ui-backgrounds/0123456789abcdef.png?x"),
+           "nothing else");
+    nlohmann::json settings = nlohmann::json::object();
+    Expect(!vb::Url(settings) && vb::Fade(settings) == vb::kFadeDefault, "none, and the default fade");
+    settings[vb::kImageSetting] = "https://example.com/x.png";
+    Expect(!vb::Url(settings), "a stored value the engine did not give is ignored");
+    settings[vb::kImageSetting] = "ui-backgrounds/fedcba9876543210.jpg";
+    settings[vb::kFadeSetting] = 120;
+    Expect(vb::Url(settings) == std::optional<std::string>("ui-backgrounds/fedcba9876543210.jpg") &&
+               vb::Fade(settings) == vb::kFadeMax,
+           "the route, and the fade held to its most");
+    settings[vb::kFadeSetting] = "42.6";
+    Expect(vb::Fade(settings) == 43, "a number kept as text, rounded");
+}
+
 // The engine applies a global chain edit without echoing it, so the client mirrors it: a switch
 // that read the old state back would send the same state again, and a reset would not show.
 void TestGlobalChainEditsMirror()
@@ -2574,6 +2601,7 @@ int main()
     TestDspDiagnostics();
     TestMetronomeMeters();
     TestUpdateCheckVersions();
+    TestVisualizerBackgroundSettings();
     TestGlobalChainEditsMirror();
     TestLibraryExportAnswer();
     TestRiffMessages();

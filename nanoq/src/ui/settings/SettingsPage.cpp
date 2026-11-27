@@ -12,6 +12,7 @@
 // interrupted by the setting it just changed coming back. The theme is the footer's, as the web UI's.
 
 #include "ui/dialogs/DialogChrome.h"
+#include "ui/effects/PanelBackground.h"
 #include "ui/shell/FrameParts.h"
 #include "ui/shell/Shell.h"
 #include "ui/widgets/ControlSkin.h"
@@ -21,6 +22,7 @@
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/ParamFormat.h"
 #include "uiclient/Tone3000.h"
+#include "uiclient/VisualizerBackground.h"
 #include "util/PathEncoding.h"
 
 #include <algorithm>
@@ -49,6 +51,37 @@ using frame::StringSetting;
 
 /// A value shown in a read-only field (.version-display): fixed-pitch 12 px text in the secondary
 /// ink, on the second background with a 1 px border.
+/// The effect panel's picture, small (.visualizer-background-preview): covering a box with a
+/// faint edge, radius 4.
+class PicturePreview final : public el::element
+{
+  public:
+    PicturePreview(const Theme& theme, std::shared_ptr<artist::image> picture)
+        : mTheme(theme), mPicture(std::move(picture))
+    {
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        {
+            auto state = cnv.new_state();
+            cnv.begin_path();
+            cnv.add_round_rect(b, 4.0f);
+            cnv.clip();
+            DrawImageCovering(cnv, *mPicture, b);
+        }
+        cnv.stroke_style(mTheme.Border());
+        cnv.line_width(1.0f);
+        cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 4.0f);
+    }
+
+  private:
+    const Theme& mTheme;
+    std::shared_ptr<artist::image> mPicture;
+};
+
 class ReadOnlyField final : public el::element
 {
   public:
@@ -650,6 +683,71 @@ Ptr Shell::BuildSettingsPage()
                 setBool("ui.mouseWheelAdjustsControls"));
             describe("Turn off to stop the scroll wheel changing knobs and sliders as the pointer passes over them, so "
                      "it only scrolls the page.");
+            endCard();
+
+            // The player's own picture behind the effect panel (visualizerBackground.ts): Choose
+            // or Change Image, Remove, a preview, and its Fade.
+            beginCard("Effect Panel Background");
+            {
+                namespace vb = guitarfx::uiclient::visualizer_background;
+                mSettingsPanelBackground = vb::Url(mState.appSettings).value_or(std::string());
+                const bool hasPicture = !mSettingsPanelBackground.empty();
+                auto choose = std::make_shared<Button>(
+                    mTheme, hasPicture ? "Change Image\xE2\x80\xA6" : "Choose Image\xE2\x80\xA6",
+                    [&commands] { commands.BrowseUiBackgroundImage(); }, Button::Style::Plain);
+                choose->TextSize(metrics::kSmallText);
+                auto remove = std::make_shared<Button>(
+                    mTheme, "Remove", [&commands] { commands.ClearUiBackgroundImage(); }, Button::Style::Plain);
+                remove->TextSize(metrics::kSmallText).Enabled(hasPicture);
+                row("Image",
+                    Row({Middle(FixedHeight(32, choose)), HGap(8), Middle(FixedHeight(32, remove)), Stretch()}));
+
+                if (const auto picture = PanelBackgroundImage(mState.appSettings))
+                {
+                    // 96 tall, under the controls (.visualizer-background-preview).
+                    auto preview = std::make_shared<PicturePreview>(mTheme, picture);
+                    card.push_back(Row({HGap(stacked ? 0.0f : kLabelWidth + 12.0f), FixedHeight(96, preview)}));
+                    card.push_back(VGap(8));
+                }
+
+                auto fade = std::make_shared<ParamSlider>(mTheme, "");
+                fade->AccessName("Fade");
+                auto percent = std::make_shared<Text>(mTheme, "", metrics::kSmallText);
+                percent->Colour(mTheme.TextSecondary());
+                percent->Fixed(true);
+                const auto fromSlider = [](double v) {
+                    return static_cast<int>(std::lround(std::clamp(v, 0.0, 1.0) * vb::kFadeMax / vb::kFadeStep)) *
+                           vb::kFadeStep;
+                };
+                auto dragged = std::make_shared<int>(-1);
+                fade->onChange = [this, percent, dragged, fromSlider](double v) {
+                    *dragged = fromSlider(v);
+                    percent->Set(std::to_string(*dragged) + "%");
+                    mSession.Repaint(*percent);
+                };
+                // Drawn while dragging, stored once let go.
+                fade->onRelease = [&commands, dragged] {
+                    if (*dragged >= 0)
+                    {
+                        commands.SetSetting(vb::kFadeSetting, *dragged);
+                        *dragged = -1;
+                    }
+                };
+                fade->onReset = [&commands] { commands.SetSetting(vb::kFadeSetting, vb::kFadeDefault); };
+                mLive.Bind(
+                    fade, [this] { return vb::Fade(mState.appSettings); },
+                    [](ParamSlider& s, int f) { s.Update(static_cast<double>(f) / vb::kFadeMax, ""); });
+                mLive.Bind(
+                    percent, [this] { return vb::Fade(mState.appSettings); },
+                    [](Text& t, int f) { t.Set(std::to_string(f) + "%"); });
+                row("Fade",
+                    Row({FixedWidth(std::min(300.0f, textWidth - labelWidth - 80.0f), Middle(fade)), HGap(10),
+                         Pad(0, 16, 0, 0, Middle(FixedWidth(44, percent))), Stretch()}),
+                    52.0f);
+                describe("Your own picture behind the effect panel, in place of the theme's backdrop, whichever "
+                         "theme is on. Fade veils it toward the theme's background so the text over it stays "
+                         "readable.");
+            }
             endCard();
 
             // Hosted in Soundshed Guitar, which can draw itself with either UI: the way back to the web

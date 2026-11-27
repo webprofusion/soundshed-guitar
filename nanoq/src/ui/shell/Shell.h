@@ -668,6 +668,8 @@ class Shell
     /// The relay's health as Settings shows it, and whether a check is under way.
     std::string mTone3000Health = "API health: not checked.";
     bool mTone3000HealthChecking = false;
+    // The effect panel's picture the Settings page was built with (Settings > User Interface).
+    std::string mSettingsPanelBackground;
     bool mUpdateChecked = false;
     double mUpdateCheckAt = 0.0;
     std::optional<guitarfx::uiclient::AvailableUpdate> mUpdate;

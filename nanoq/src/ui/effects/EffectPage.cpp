@@ -7,6 +7,7 @@
 // A parameter the engine declares with `visibleWhen` shows only while that holds.
 
 #include "ui/effects/EnumPicker.h"
+#include "ui/effects/PanelBackground.h"
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
@@ -255,7 +256,8 @@ class PanelCheek final : public el::element
 class EffectBackdrop final : public el::element
 {
   public:
-    EffectBackdrop(const Theme& theme, float shadeTo) : mTheme(theme), mShadeTo(shadeTo)
+    EffectBackdrop(const Theme& theme, const nlohmann::json& appSettings, float shadeTo)
+        : mTheme(theme), mAppSettings(appSettings), mShadeTo(shadeTo)
     {
     }
 
@@ -263,6 +265,15 @@ class EffectBackdrop final : public el::element
     {
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
+
+        // The player's own picture takes the place of all of it (custom-background.css).
+        if (const auto picture = PanelBackgroundImage(mAppSettings))
+        {
+            DrawPanelBackground(cnv, mTheme, *picture, b,
+                                guitarfx::uiclient::visualizer_background::Fade(mAppSettings));
+            return;
+        }
+
         cnv.fill_style(mTheme.Background());
         cnv.fill_rect(b);
         const auto& backdrops = mTheme.Controls().backdrops;
@@ -290,6 +301,7 @@ class EffectBackdrop final : public el::element
 
   private:
     const Theme& mTheme;
+    const nlohmann::json& mAppSettings; // the client's, read as it draws
     float mShadeTo;
 };
 
@@ -616,7 +628,7 @@ Ptr Shell::BuildEffectPage()
         auto hint = std::make_shared<Text>(mTheme, "Choose an effect in the chain to see its controls.", 13.0f);
         hint->Colour(mTheme.TextMuted()).Alignment(Text::Align::Centre);
         return Over(PadXY(24, 48, Col({FixedHeight(24, hint), std::make_shared<el::element>()})),
-                    std::make_shared<EffectBackdrop>(mTheme, 0.0f));
+                    std::make_shared<EffectBackdrop>(mTheme, mState.appSettings, 0.0f));
     }
 
     const std::string nodeId = node->id;
@@ -2575,7 +2587,7 @@ Ptr Shell::BuildEffectPage()
         stage = Col({placed, std::make_shared<el::element>()});
     }
 
-    return Over(stage, std::make_shared<EffectBackdrop>(mTheme, panelHeight + 120.0f));
+    return Over(stage, std::make_shared<EffectBackdrop>(mTheme, mState.appSettings, panelHeight + 120.0f));
 }
 
 void Shell::SyncEffectValues()

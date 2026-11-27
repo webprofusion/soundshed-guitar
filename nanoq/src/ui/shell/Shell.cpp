@@ -5,6 +5,7 @@
 #include "ui/shell/ShellIcons.h"
 #include "ui/widgets/Tooltip.h"
 #include "ui/widgets/ControlSkin.h"
+#include "uiclient/VisualizerBackground.h"
 #include "uiclient/NodeLabels.h"
 
 #include <algorithm>
@@ -133,6 +134,14 @@ void Shell::Subscribe()
     }));
     mSubscriptions.push_back(client.Subscribe(Topic::Session, [this] {
         if (PlayShown())
+        {
+            Mark(kPage);
+        }
+        // Settings is patched in place, but a picture chosen or removed for the effect panel
+        // adds or takes away its preview.
+        else if (mPage == Page::Settings &&
+                 guitarfx::uiclient::visualizer_background::Url(mState.appSettings).value_or(std::string()) !=
+                     mSettingsPanelBackground)
         {
             Mark(kPage);
         }

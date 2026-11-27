@@ -248,6 +248,11 @@ class UiCommands
     void AudioDevice(const std::string& action, nlohmann::json payload = nlohmann::json::object());
     /// Runs a 440 Hz tone through the chain for a second; the result arrives as a notification.
     void RunSignalPathTest();
+    /// Asks the engine for a picture to put behind the effect panel; it answers
+    /// "uiBackgroundImageSelected", which stores its route (VisualizerBackground.h).
+    void BrowseUiBackgroundImage();
+    /// Takes the effect panel's picture away, and the engine's copy of it.
+    void ClearUiBackgroundImage();
     void OpenUrl(const std::string& url);
 
     // ── Tone sharing ────────────────────────────────────────────────────────────

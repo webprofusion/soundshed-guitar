@@ -5,6 +5,7 @@
 
 #include "uiclient/UiClient.h"
 #include "uiclient/UiClientParsing.h"
+#include "uiclient/VisualizerBackground.h"
 
 #include <cstdio>
 
@@ -244,6 +245,21 @@ void UiClient::RegisterLiveHandlers()
 
         PostNotification({passed ? Notification::Kind::Info : Notification::Kind::Error,
                           passed ? "Signal path test passed" : "Signal path test failed", detail});
+    });
+
+    // The engine stored the picture chosen for the effect panel: keep its route, as the web UI's
+    // onUiBackgroundImageSelected does, so every instance shows it.
+    On("uiBackgroundImageSelected", [this](const nlohmann::json& m) {
+        const auto url = m.value("url", std::string());
+
+        if (!visualizer_background::IsStoredUrl(url))
+        {
+            return;
+        }
+
+        mState.appSettings[visualizer_background::kImageSetting] = url;
+        Send("setSetting", {{"key", visualizer_background::kImageSetting}, {"value", url}});
+        Notify(Topic::Session);
     });
 
     On("audioDeviceLevels", [this](const nlohmann::json& m) {
