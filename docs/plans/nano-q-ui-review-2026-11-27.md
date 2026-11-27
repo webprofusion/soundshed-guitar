@@ -32,14 +32,17 @@ Worked through in batches of related items, one commit per batch on main.
 | 7 | `818da269` | Folder files show `metadata.sampleRate`, falling back to `sample_rate` |
 | 8 | none | Not a bug: an unsaved new preset has no library entry, so Save already opens the Save dialog, named as the preset and filed in the open folder |
 | 9 | `818da269` | A confirm or prompt opened over a dialog or popover stacks on it (`ShowOverlay`, `DismissOverlay`). Cancel, Esc and a tap outside go back to it; the confirming button closes both, as before. Checked live: New folder from the preset chooser |
-| 10 | batch 2a | Signal Analyzer and Graphic EQ size as every other editor (content width, at least half the stage); the analyzer's tiles wrap to it, and the graphic EQ asks for its bands in one row |
-| 13 | batch 2a | The gain thumb is a round accent dot. The number boxes were already there (underlined, typed in place); left as they are |
-| 14 | batch 2a | Title 11 px; subtitle 8 px capitals at 0.12 em (`Text::Tracking`, `FillTrackedText`) |
+| 10 | `c896be31` | Signal Analyzer and Graphic EQ size as every other editor (content width, at least half the stage); the analyzer's tiles wrap to it, and the graphic EQ asks for its bands in one row |
+| 11 | batch 2b | The cards follow the web's container widths: over 700 px the blend stands between them, over 520 px the cards share a line with the blend in a row under them, narrower everything stacks. Each card's knobs wrap as the card's width leaves room (Level, Pan, a rule, Radial, Proximity). The fade was there; it shows (0.4) |
+| 12 | batch 2b | An empty slot is a dashed accent drop zone: "+ Choose an IR" (or a model), the file a drop takes, and an accent Browse where the prompt still fits beside it; the clear goes. IR B reads "+ Add a second IR", quietly |
+| 13 | `c896be31` | The gain thumb is a round accent dot. The number boxes were already there (underlined, typed in place); left as they are |
+| 14 | `c896be31` | Title 11 px; subtitle 8 px capitals at 0.12 em (`Text::Tracking`, `FillTrackedText`) |
 | 15 | none | Already there: values bold over smaller labels, and the "Updated" line. The "Waiting" capture was the demo audio not playing |
-| 20 | batch 2a | A blend-unit param (Simple Cab's Mic Blend) is an A-B slider reading A, B or the share of B. The IR cards keep their knob, as the web's do |
-| 22 | batch 2a | With no main params every param shows with no tabs; each node opens on Main |
-| 23 | batch 2a | DSP status floats in the controls' corner; the IR Cabinet's Full Rig note; a custom file's path on the slot's label line; Plugin Host: inline load error, paths, Remove (confirm, file kept), the custom-file row; splitter hint as the web's; Presets chip whenever the type has params, Splitter and Mixer too; art gap 16 and a 52 x 34 thumbnail when the stage is too narrow for the column. Left out: a spinner beside "Loading plugin..." (the text says it). "Back to one lane" stays |
-| 25 | batch 2a | Web fix: Pitch Tracking EQ is no longer an EQ node, so it gets no curve |
+| 19 | batch 2b | The header's peak rail between the titles and the controls, green to red over -48..0 dBFS, faded with no reading, glowing while clipped; a tap shows or hides the DSP status. Hidden below the 900 px stage, as the web's. Not seen with signal: the test profile had no input device |
+| 20 | `c896be31` | A blend-unit param (Simple Cab's Mic Blend) is an A-B slider reading A, B or the share of B. The IR cards keep their knob, as the web's do |
+| 22 | `c896be31` | With no main params every param shows with no tabs; each node opens on Main |
+| 23 | `c896be31` | DSP status floats in the controls' corner; the IR Cabinet's Full Rig note; a custom file's path on the slot's label line; Plugin Host: inline load error, paths, Remove (confirm, file kept), the custom-file row; splitter hint as the web's; Presets chip whenever the type has params, Splitter and Mixer too; art gap 16 and a 52 x 34 thumbnail when the stage is too narrow for the column. Left out: a spinner beside "Loading plugin..." (the text says it). "Back to one lane" stays |
+| 25 | `c896be31` | Web fix: Pitch Tracking EQ is no longer an EQ node, so it gets no curve |
 
 ## How it was compared
 

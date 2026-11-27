@@ -9,6 +9,7 @@
 #include "ui/widgets/SwitchMotion.h"
 
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <string>
@@ -683,6 +684,188 @@ class SelectField final : public Pressable
     Icons& mIcons;
     std::string mText;
     bool mChosen, mWarn;
+};
+
+/// An empty model or IR slot (.resource-picker-label.is-empty): a dashed accent drop zone that
+/// says what to do, "+ Choose an IR", the file a drop takes, and an accent Browse. An optional
+/// slot (the cabinet's second IR) is asked for quietly: a faint dashed line and "+ Add a second IR".
+/// A tap opens the library.
+class EmptySlotField final : public Pressable
+{
+  public:
+    EmptySlotField(const Theme& theme, std::string prompt, std::string hint, bool optional)
+        : mTheme(theme), mPrompt(std::move(prompt)), mHint(std::move(hint)), mOptional(optional)
+    {
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.role = AccessRole::Button;
+        info.name = mHint.empty() ? mPrompt : mPrompt + ", " + mHint;
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{120.0f, 26.0f}, {el::full_extent, el::full_extent}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = metrics::Touch() ? metrics::Face(ctx.bounds, ctx.bounds.width(), 26.0f) : ctx.bounds;
+        const auto accent = mTheme.Accent();
+        const auto ink = mTheme.Ink();
+
+        if (!mOptional)
+        {
+            cnv.fill_style(accent.opacity(mHover ? 0.13f : 0.07f));
+            cnv.fill_round_rect(b, 6.0f);
+        }
+
+        cnv.stroke_style(mOptional ? (mHover ? accent.opacity(0.6f) : ink.opacity(0.22f))
+                                   : (mHover ? accent : accent.opacity(0.6f)));
+        cnv.line_width(1.0f);
+        StrokeDashedRoundRect(cnv, b.inset(0.5f, 0.5f), 6.0f, 4.0f, 3.0f);
+
+        // The plus, 16 px in the accent (12 px in the text's colour, optional).
+        const float cy = b.top + b.height() * 0.5f;
+        const float arm = mOptional ? 5.0f : 6.0f;
+        const float px = b.left + (mOptional ? 10.0f : 12.0f) + arm;
+        const auto plusColour = mOptional ? (mHover ? ink : mTheme.TextSecondary()) : accent;
+        cnv.stroke_style(plusColour);
+        cnv.line_width(1.6f);
+        cnv.begin_path();
+        cnv.move_to({px - arm, cy});
+        cnv.line_to({px + arm, cy});
+        cnv.move_to({px, cy - arm});
+        cnv.line_to({px, cy + arm});
+        cnv.stroke();
+
+        float right = b.right - 4.0f;
+        const float left = px + arm + 10.0f;
+        const auto font = Font(mOptional ? Weight::Medium : Weight::SemiBold).size(12.0f);
+        const float promptWidth = MeasureTextWidth(mPrompt, font);
+        const auto actionFont = Font(Weight::SemiBold).size(11.0f);
+        const float actionWidth = MeasureTextWidth("Browse", actionFont) + 24.0f;
+
+        // Browse, a button-shape at the right (.resource-picker-label-action), where the prompt
+        // still reads whole beside it: the whole zone opens the library anyway.
+        if (!mOptional && right - actionWidth - 10.0f - left >= promptWidth)
+        {
+            const el::rect action{right - actionWidth, b.top + 3.0f, right, b.bottom - 3.0f};
+            cnv.fill_style(accent);
+            cnv.fill_round_rect(action, 4.0f);
+            FillText(cnv, "Browse", actionFont, mTheme.OnAccent(), action, HAlign::Centre);
+            right = action.left - 10.0f;
+        }
+
+        const auto promptColour = mOptional && !mHover ? mTheme.TextSecondary() : ink;
+        FillText(cnv, Ellipsize(cnv, mPrompt, font, std::max(0.0f, right - left)), font, promptColour,
+                 el::rect{left, b.top, right, b.bottom}, HAlign::Left);
+
+        // The drop hint after the prompt where the line has room for it.
+        if (!mOptional && !mHint.empty())
+        {
+            const auto hintFont = Font(Weight::Regular).size(10.0f);
+            const float hintLeft = left + promptWidth + 8.0f;
+
+            if (right - hintLeft >= 60.0f)
+            {
+                FillText(cnv, Ellipsize(cnv, mHint, hintFont, right - hintLeft), hintFont, mTheme.TextMuted(),
+                         el::rect{hintLeft, b.top, right, b.bottom}, HAlign::Left);
+            }
+        }
+    }
+
+  private:
+    const Theme& mTheme;
+    std::string mPrompt;
+    std::string mHint;
+    bool mOptional;
+};
+
+/// The effect header's peak rail (.default-effect-shell-meter): a 4 px strip filled green to red
+/// with the node's peak over -48..0 dBFS, faded with no reading, glowing red while clipped. A tap
+/// shows or hides the DSP status, as the web UI's meter toggle does.
+class PeakRail final : public Pressable
+{
+  public:
+    struct Reading
+    {
+        bool inactive = true;
+        bool clipped = false;
+        int hundredths = 0; // the fill in hundredths: finer steps are sub-pixel
+        int peakTenths = 0;
+        int headroomTenths = 0;
+
+        bool operator==(const Reading&) const = default;
+    };
+
+    void Set(const Reading& reading)
+    {
+        mReading = reading;
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.role = AccessRole::Button;
+        info.name = NameOr("Toggle DSP status");
+
+        if (mReading.inactive)
+        {
+            info.value = "No diagnostics data for this node";
+        }
+        else
+        {
+            char text[96];
+            std::snprintf(text, sizeof text, "Node peak: %.1f dBFS, Headroom: %.1f dB", mReading.peakTenths / 10.0,
+                          mReading.headroomTenths / 10.0);
+            info.value = text;
+        }
+
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{24.0f, 16.0f}, {el::full_extent, 16.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const float cy = ctx.bounds.top + ctx.bounds.height() * 0.5f;
+        const el::rect strip{ctx.bounds.left, cy - 2.0f, ctx.bounds.right, cy + 2.0f};
+        auto group = cnv.new_group(mReading.inactive ? 0.45f : 1.0f);
+
+        if (mReading.clipped)
+        {
+            auto state = cnv.new_state();
+            cnv.shadow_style(el::point{0.0f, 0.0f}, 9.0f, el::rgba(255, 94, 94, 40));
+            cnv.fill_style(el::rgba(255, 110, 110, 31));
+            cnv.fill_round_rect(strip.inset(-1.0f, -1.0f), 3.0f);
+        }
+
+        const float fill = strip.width() * static_cast<float>(mReading.hundredths) / 100.0f;
+
+        if (fill >= 0.5f)
+        {
+            // The gradient spans the filled length, as the web's background-size scales it.
+            cycfi::artist::canvas::linear_gradient ramp{el::point{strip.left, cy}, el::point{strip.left + fill, cy}};
+            ramp.add_color_stop(0.0f, el::rgba(72, 222, 170, 140));
+            ramp.add_color_stop(1.0f, el::rgba(255, 94, 94, 235));
+            cnv.fill_style(ramp);
+            cnv.fill_round_rect(el::rect{strip.left, strip.top, strip.left + fill, strip.bottom}, 2.0f);
+        }
+    }
+
+  private:
+    Reading mReading;
 };
 
 /// An on/off parameter (.node-param-group with a .toggle-switch): its capital label, a small

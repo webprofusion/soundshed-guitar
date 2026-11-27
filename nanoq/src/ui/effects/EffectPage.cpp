@@ -899,8 +899,7 @@ Ptr Shell::BuildEffectPage()
     // picker and its own knobs; between the cards, the blend, L/R Split and Mics. A control that
     // does nothing as things stand is faded where it is, as the web UI's are (the page is rebuilt
     // when L/R Split, Mics or a slot changes).
-    constexpr float kAbPickerMin = 220.0f, kAbDivider = 13.0f, kAbHeadHeight = 22.0f, kAbPadTop = 10.0f,
-                    kAbPadBottom = 8.0f;
+    constexpr float kAbHeadHeight = 22.0f, kAbPadTop = 10.0f, kAbPadBottom = 8.0f;
     // The IR list (NodeControls.cpp BuildIrList): closed, its 30 by 29 button at the top of the
     // middle column (or the end of the blend's row); open, its panel under the cards.
     constexpr float kIrListButton = 30.0f, kIrListClosed = 29.0f, kIrListOpen = 318.0f;
@@ -914,30 +913,26 @@ Ptr Shell::BuildEffectPage()
                                      [key](const EffectParamInfo& p) { return p.key == key; });
         return it != type->parameters.end() ? &*it : nullptr;
     };
-    // The knobs' widths four abreast and two by two, and the middle's.
-    float abKnobRow = 0.0f, abKnobPair = 0.0f, abCentre = 0.0f;
+    // The middle column's width, and the knobs' widths in a card.
+    float abCentre = 0.0f;
+    float abKnobWidths[4] = {};
 
     if (irAb)
     {
-        float w[4] = {};
-
         for (std::size_t i = 0; i < 4; ++i)
         {
             const auto* info = abParam(kIrAbSlotKeys[0][i]);
-            w[i] = info != nullptr ? cellFor(NameInSlot(info->name)) : 0.0f;
+            abKnobWidths[i] = info != nullptr ? std::max(cellFor(NameInSlot(info->name)), 54.0f) : 0.0f;
         }
 
-        abKnobRow = w[0] + w[1] + w[2] + w[3] + 3.0f * kCellGap + kAbDivider;
-        abKnobPair = std::max(w[0] + w[1], w[2] + w[3]) + kCellGap;
         // Blend, L/R Split and Mics one over another (.ir-ab-centre), 10 px inside its sides.
         abCentre = std::max({cellFor("Blend"), cellFor("L/R Split"), cellFor("Mics"), kIrListButton}) + 2.0f * 10.0f;
     }
 
-    // The section's width with the cards' knobs `knobs` wide: a card is never narrower than its
-    // picker needs.
-    const auto abWidth = [&](float knobs) {
-        return 2.0f * (std::max(knobs, kAbPickerMin) + 2.0f * kGroupPadX) + abCentre + 2.0f * kGroupGap;
-    };
+    // The web UI's container widths (ir-ab.css): over 700 px the cards and the blend stand
+    // abreast; over 520 px the cards share a line with the blend in a row under them; narrower,
+    // everything stacks.
+    constexpr float kAbThreeAbreast = 700.0f, kAbTwoAbreast = 520.0f;
 
     // A slot's Invert as a console's phase button (.ir-ab-invert): a small Ø in an input-coloured
     // box with a medium border, its border lit with the accent under the pointer; on, the accent's
@@ -1100,7 +1095,7 @@ Ptr Shell::BuildEffectPage()
         const float slotHeight = metrics::Touch() ? 36.0f : 26.0f;
         const auto& groupTitle = mTheme.Controls().groupTitle;
 
-        const auto card = [&](std::size_t index, bool pairs, float& h) -> Ptr {
+        const auto card = [&](std::size_t index, float cardWidth, float& h) -> Ptr {
             const auto& keys = kIrAbSlotKeys[index];
             const bool empty = !filled(index);
             const std::string slot = index == 0 ? "IR A" : "IR B";
@@ -1160,24 +1155,100 @@ Ptr Shell::BuildEffectPage()
             for (std::size_t i = 0; i < 4; ++i)
             {
                 const auto* info = abParam(keys[i]);
-                knobs.push_back(cell(keys[i], info != nullptr ? NameInSlot(info->name) : std::string(), empty));
+                auto knob = cell(keys[i], info != nullptr ? NameInSlot(info->name) : std::string(), empty);
+                knobs.push_back({knob.second ? abKnobWidths[i] : 0.0f, std::move(knob.second)});
             }
 
             std::vector<Ptr> rows{FixedHeight(kAbHeadHeight, Row(head)), VGap(8), FixedHeight(slotHeight, picker),
                                   VGap(10)};
-            h = kAbPadTop + kAbHeadHeight + 8.0f + slotHeight + 10.0f + kCellHeight + kAbPadBottom;
+            h = kAbPadTop + kAbHeadHeight + 8.0f + slotHeight + 10.0f + kAbPadBottom;
 
-            if (pairs)
+            // Level, Pan, a rule, Radial and Proximity, wrapping as the card's width leaves room
+            // (.ir-ab-slot-controls: 8 px apart, 10 px between lines, spread around each line).
+            struct Item
             {
-                // Level and Pan over the mic's Radial and Proximity.
-                rows.push_back(FixedHeight(kCellHeight, cellsRow({knobs[0], knobs[1]}, SIZE_MAX)));
-                rows.push_back(VGap(6));
-                rows.push_back(FixedHeight(kCellHeight, cellsRow({knobs[2], knobs[3]}, SIZE_MAX)));
-                h += 6.0f + kCellHeight;
+                float width;
+                Ptr element;
+            };
+
+            std::vector<Item> items;
+
+            for (std::size_t i = 0; i < knobs.size(); ++i)
+            {
+                if (i == 2)
+                {
+                    items.push_back({1.0f, FixedWidth(1, Pad(0, 2, 0, 2,
+                                                             Fill(Theme::Argb(mTheme.Controls().tabs.rule),
+                                                                  std::make_shared<el::element>())))});
+                }
+
+                if (knobs[i].second)
+                {
+                    items.push_back({knobs[i].first, knobs[i].second});
+                }
             }
-            else
+
+            const float room = cardWidth - 2.0f * kGroupPadX;
+            std::vector<std::vector<Item>> lines(1);
+            float used = 0.0f;
+
+            for (auto& item : items)
             {
-                rows.push_back(FixedHeight(kCellHeight, cellsRow(knobs, 2)));
+                const float need = (lines.back().empty() ? 0.0f : 8.0f) + item.width;
+
+                if (!lines.back().empty() && used + need > room)
+                {
+                    lines.emplace_back();
+                    used = 0.0f;
+                }
+
+                used += (lines.back().empty() ? 0.0f : 8.0f) + item.width;
+                lines.back().push_back(std::move(item));
+            }
+
+            for (std::size_t l = 0; l < lines.size(); ++l)
+            {
+                // A rule left at a line's end or start divides nothing.
+                auto& line = lines[l];
+
+                while (!line.empty() && line.back().width <= 1.0f)
+                {
+                    line.pop_back();
+                }
+
+                while (!line.empty() && line.front().width <= 1.0f)
+                {
+                    line.erase(line.begin());
+                }
+
+                if (line.empty())
+                {
+                    continue;
+                }
+
+                // space-around: half a share before the first and after the last.
+                std::vector<Ptr> row{Stretch(nullptr, 0.5)};
+
+                for (std::size_t i = 0; i < line.size(); ++i)
+                {
+                    if (i > 0)
+                    {
+                        row.push_back(Stretch(nullptr, 1.0));
+                    }
+
+                    row.push_back(FixedWidth(line[i].width, line[i].element));
+                }
+
+                row.push_back(Stretch(nullptr, 0.5));
+
+                if (l > 0)
+                {
+                    rows.push_back(VGap(10));
+                    h += 10.0f;
+                }
+
+                rows.push_back(FixedHeight(kCellHeight, Row(row)));
+                h += kCellHeight;
             }
 
             rows.push_back(std::make_shared<el::element>());
@@ -1245,26 +1316,37 @@ Ptr Shell::BuildEffectPage()
         };
 
         float hA = 0.0f, hB = 0.0f, hC = 0.0f;
-        const bool four = inner >= abWidth(abKnobRow);
         Ptr cards;
 
-        if (four || inner >= abWidth(abKnobPair))
+        if (inner > kAbThreeAbreast)
         {
-            auto a = card(0, !four, hA);
-            auto b = card(1, !four, hB);
+            const float cardWidth = std::floor((inner - abCentre - 2.0f * 12.0f) * 0.5f);
+            auto a = card(0, cardWidth, hA);
+            auto b = card(1, cardWidth, hB);
             auto c = centre(false, hC);
             height = std::max({hA, hB, hC});
-            const float cardWidth = std::floor((inner - abCentre - 2.0f * kGroupGap) * 0.5f);
-            cards = Row({FixedWidth(cardWidth, a), HGap(kGroupGap), FixedWidth(abCentre, c), HGap(kGroupGap),
+            cards = Row({FixedWidth(cardWidth, a), HGap(12), FixedWidth(abCentre, c), HGap(12),
                          FixedWidth(cardWidth, b), Stretch()});
+        }
+        else if (inner > kAbTwoAbreast)
+        {
+            // The cards share a line, the blend in a row under them.
+            const float cardWidth = std::floor((inner - 12.0f) * 0.5f);
+            auto a = card(0, cardWidth, hA);
+            auto b = card(1, cardWidth, hB);
+            auto c = centre(true, hC);
+            const float cardsHeight = std::max(hA, hB);
+            height = cardsHeight + 8.0f + hC;
+            cards = Col({FixedHeight(cardsHeight,
+                                     Row({FixedWidth(cardWidth, a), HGap(12), FixedWidth(cardWidth, b), Stretch()})),
+                         VGap(8), FixedHeight(hC, c)});
         }
         else
         {
-            // Too narrow for the three abreast: IR A, the blend, IR B, one over another.
-            const bool pairs = inner < abKnobRow + 2.0f * kGroupPadX;
-            auto a = card(0, pairs, hA);
+            // IR A, the blend, IR B, one over another.
+            auto a = card(0, inner, hA);
             auto c = centre(true, hC);
-            auto b = card(1, pairs, hB);
+            auto b = card(1, inner, hB);
             height = hA + 8.0f + hC + 8.0f + hB;
             cards = Col({FixedHeight(hA, a), VGap(8), FixedHeight(hC, c), VGap(8), FixedHeight(hB, b)});
         }
@@ -1348,10 +1430,11 @@ Ptr Shell::BuildEffectPage()
         groupsWidth = std::max(groupsWidth, GraphicEqNaturalWidth(*node));
     }
 
-    // The IR Cabinet asks for room for its two cards and the blend abreast, knobs four abreast.
+    // The IR Cabinet asks for room for its two cards side by side, as the web UI's panel gives
+    // them at its least (half the stage); a wider stage gives the blend a column between them.
     if (irAb)
     {
-        groupsWidth = std::max(groupsWidth, abWidth(abKnobRow));
+        groupsWidth = std::max(groupsWidth, kAbTwoAbreast + 1.0f);
     }
 
     // Split, the effect's artwork stands in a column left of its controls where the stage leaves
@@ -1608,7 +1691,68 @@ Ptr Shell::BuildEffectPage()
         header.push_back(HGap(10));
     }
 
-    header.push_back(Col({FixedHeight(20, Row(titleRow)), FixedHeight(14, Row(subtitleRow)), VGap(2)}));
+    auto titles = Col({FixedHeight(20, Row(titleRow)), FixedHeight(14, Row(subtitleRow)), VGap(2)});
+
+    // The node's peak rail between the titles and the controls (.default-effect-shell-rail),
+    // where the stage is wider than the web UI's 900 px (the artwork's column rule); a tap
+    // shows or hides the DSP status. Narrower, the header keeps its two sides only.
+    if (!boundary && split && stageWidth >= 860.0f)
+    {
+        const auto subtitleFont = Font(Weight::SemiBold).size(metrics::Readable(8.0f, 10.0f));
+        std::size_t glyphs = 0;
+
+        for (const unsigned char ch : subtitleText)
+        {
+            glyphs += (ch & 0xC0) != 0x80 ? 1 : 0;
+        }
+
+        float subtitleWidth =
+            MeasureTextWidth(subtitleText, subtitleFont) + 0.12f * subtitleFont._size * static_cast<float>(glyphs);
+
+        if (!badgeText.empty())
+        {
+            subtitleWidth += 6.0f + MeasureTextWidth(badgeText, Font(Weight::SemiBold).size(8.0f)) + 12.0f;
+        }
+
+        const float titlesWidth =
+            std::min(std::max(titleWidth + (touchPencil || boundary ? 0.0f : 22.0f), subtitleWidth) + 2.0f,
+                     std::max(40.0f, roomForTitle + (touchPencil || boundary ? 0.0f : 22.0f)));
+        auto rail = std::make_shared<PeakRail>();
+        rail->onClick = [this] {
+            mShowDspStatus = !mShowDspStatus;
+            mEffectSignature.clear();
+            Mark(kPage);
+        };
+        mLive.Bind(
+            rail,
+            [this, nodeId] {
+                PeakRail::Reading reading;
+                const auto it = mState.telemetry.nodes.find(mState.activePresetId + "::" + nodeId);
+
+                if (it == mState.telemetry.nodes.end() || it->second.channelCount <= 0 ||
+                    !std::isfinite(it->second.peakDb))
+                {
+                    return reading;
+                }
+
+                const double peak = it->second.peakDb;
+                reading.inactive = false;
+                reading.clipped = it->second.clipped || peak >= -0.3;
+                reading.hundredths = static_cast<int>(std::lround(std::clamp((peak + 48.0) / 48.0, 0.0, 1.0) * 100.0));
+                reading.peakTenths = static_cast<int>(std::lround(peak * 10.0));
+                reading.headroomTenths = static_cast<int>(std::lround(-peak * 10.0));
+                return reading;
+            },
+            &PeakRail::Set);
+        header.push_back(FixedWidth(titlesWidth, titles));
+        header.push_back(HGap(8));
+        header.push_back(Stretch(Middle(rail)));
+        header.push_back(HGap(16));
+    }
+    else
+    {
+        header.push_back(titles);
+    }
 
     for (auto& r : rightSide)
     {

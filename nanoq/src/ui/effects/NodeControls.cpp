@@ -311,7 +311,26 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
     auto next = slate("ui-next", step(1), !list.empty());
     next->AccessName("Next " + what);
 
-    auto controls = Row({previous, HGap(6), choose, HGap(6), next, HGap(6), clear});
+    // Nothing loaded: the field is the slot's call to action (resourcePickerLabel.ts), and a
+    // clear that has nothing to clear goes.
+    const bool empty = ref == nullptr || (ref->resourceId.empty() && !ref->IsFilePath() && ref->embeddedId.empty());
+    Ptr field = choose;
+
+    if (empty && !missing)
+    {
+        const std::string prompt = resourceType == "ir"    ? (optional ? "Add a second IR" : "Choose an IR")
+                                   : resourceType == "nam" ? "Choose a model"
+                                                           : "Choose a resource";
+        const std::string hint = resourceType == "ir"    ? "or drop a .wav file here"
+                                 : resourceType == "nam" ? "or drop a .nam file here"
+                                                         : "";
+        auto zone = std::make_shared<EmptySlotField>(mTheme, prompt, hint, optional);
+        zone->onClick = choose->onClick;
+        field = zone;
+    }
+
+    auto controls = empty && !missing ? Row({previous, HGap(6), field, HGap(6), next})
+                                      : Row({previous, HGap(6), field, HGap(6), next, HGap(6), clear});
 
     // On a card that names the slot itself (the IR Cabinet's A and B), the row alone.
     if (stacked && label.empty())
