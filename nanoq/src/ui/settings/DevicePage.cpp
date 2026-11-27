@@ -577,6 +577,7 @@ Ptr Shell::BuildDeviceContent(bool midi)
     };
     auto meter = [&]() -> Ptr {
         auto bar = std::make_shared<MeterBar>(mTheme);
+        bar->Name("Input level");
         mLive.Feed(
             bar, [this](MeterBar& m) { return m.Set(mState.device.inputLevelDb, mState.device.inputLevelDb > -0.5); });
         auto level = std::make_shared<Text>(mTheme, "", metrics::kSmallText);

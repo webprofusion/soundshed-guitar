@@ -203,6 +203,7 @@ void Shell::OpenEqDialog(EqDialogSpec spec)
     // ── The EQ Curve card (.eq-visualizer) ──
     const auto small = [this](const std::string& text, HAlign align) {
         auto t = std::make_shared<Text>(mTheme, Upper(text), 9.5f, Weight::SemiBold);
+        t->AccessHeading(3); // a section title, to a screen reader
         t->Colour(mTheme.ModalTextSecondary()).Alignment(align);
         return t;
     };

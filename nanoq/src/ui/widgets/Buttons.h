@@ -52,7 +52,10 @@ class IconButton final : public Pressable
         AccessInfo info = Pressable::Describe();
         info.role = mCaret ? AccessRole::ComboBox : AccessRole::Button;
         info.name = NameOr(mLabel.empty() ? IconMeaning(mIcon) : mLabel);
-        info.selected = mLit;
+        // One that lights up (the EQ on, a mode chosen) is a toggle, as the web's aria-pressed;
+        // one with a caret opens a list.
+        info.toggled = mLitSet && !mCaret ? (mLit ? 1 : 0) : -1;
+        info.expanded = mCaret ? 0 : -1;
         return info;
     }
 
@@ -176,6 +179,7 @@ class IconButton final : public Pressable
     IconButton& Lit(bool lit)
     {
         mLit = lit;
+        mLitSet = true;
         return *this;
     }
 
@@ -563,7 +567,7 @@ class IconButton final : public Pressable
     Look mLook;
     float mW = 28.0f, mH = 28.0f, mIconSize = 14.0f, mLabelSize = 10.0f;
     float mTouchTarget = metrics::kTouchTarget;
-    bool mCaret = false, mLit = false, mHasInk = false, mUnsaved = false, mHasLitColour = false;
+    bool mCaret = false, mLit = false, mLitSet = false, mHasInk = false, mUnsaved = false, mHasLitColour = false;
     el::color mInk, mLitColour;
 };
 
@@ -784,6 +788,7 @@ class SelectField final : public Pressable
         info.role = AccessRole::ComboBox;
         info.name = NameOr("Choose");
         info.value = mText;
+        info.expanded = 0;
         return info;
     }
 

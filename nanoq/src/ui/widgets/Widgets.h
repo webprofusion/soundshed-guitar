@@ -26,7 +26,11 @@ namespace nanoq::ui
 class Icons;
 
 /// A line of text. Truncated with an ellipsis when the space is short; it never wraps.
-class Text : public el::element, public Drawn
+///
+/// A screen reader reads it where it is a heading: a title (Weight::Title), or one marked with
+/// AccessHeading (a section's label). Other lines are the labels of the controls beside them,
+/// which name those controls already.
+class Text : public el::element, public Drawn, public AccessStatic
 {
   public:
     using Align = HAlign;
@@ -51,19 +55,30 @@ class Text : public el::element, public Drawn
         return mText;
     }
 
+    /// Read as a heading of `level` (1 the highest), or with 0 not read at all, whatever it
+    /// looks like.
+    Text& AccessHeading(int level)
+    {
+        mHeading = level;
+        return *this;
+    }
+
+    [[nodiscard]] std::optional<AccessInfo> DescribeStatic() const override;
+
   private:
     const Theme& mTheme;
     std::string mText;
     float mSize;
     Weight mWeight;
+    int mHeading = -1; // -1: by how it looks
     el::color mColour;
     Align mAlign = Align::Left;
     bool mFixed = false;
     float mTracking = 0.0f;
 };
 
-/// Text wrapped at word breaks to a fixed width, as tall as its lines.
-class Paragraph : public el::element
+/// Text wrapped at word breaks to a fixed width, as tall as its lines. A screen reader reads it.
+class Paragraph : public el::element, public AccessStatic
 {
   public:
     Paragraph(const Theme& theme, std::string text, float width, float size = metrics::kTextSize);
@@ -76,6 +91,19 @@ class Paragraph : public el::element
     Paragraph& Weighted(Weight weight);
     /// How tall its lines are, before it is drawn: for sizing the dialog it sits in.
     [[nodiscard]] float Height() const;
+
+    [[nodiscard]] std::optional<AccessInfo> DescribeStatic() const override
+    {
+        if (mText.empty())
+        {
+            return std::nullopt;
+        }
+
+        AccessInfo info;
+        info.role = AccessRole::Label;
+        info.name = mText;
+        return info;
+    }
 
   private:
     [[nodiscard]] std::vector<std::string> Lines(cycfi::artist::canvas& cnv) const;
@@ -181,6 +209,13 @@ class Button : public el::element, public Drawn, public Focusable, public TapTar
     HAlign mAlign = HAlign::Centre;
     float mFaceHeight = 0.0f;
 };
+
+/// Where an arrow, Page Up or Down, Home or End takes a control at `value` (0..1): a hundredth a
+/// step (a thousandth with Shift), or one position of `steps`, and a tenth a page. None for any
+/// other key.
+[[nodiscard]] std::optional<double> KeyedPosition(const el::key_info& k, double value, int steps);
+/// Delete or Backspace: puts a control back to its default.
+[[nodiscard]] bool IsResetKey(const el::key_info& k);
 
 /// One effect parameter: its name, its value as text, and a track to drag. The value is
 /// normalised 0..1 (the control does not know the parameter's range); the owner formats it.
@@ -419,10 +454,19 @@ class GroupHeading : public el::element
 /// Controls strip meter: a column of segments under the peak in dB, or, where the theme draws
 /// its meters as needle gauges (ControlSkin::gaugeFace, Studio 1973), a VU meter reading RMS
 /// with a red peak dot riding the scale under its arc.
-class MeterBar : public el::element, public Drawn
+class MeterBar : public el::element, public Drawn, public AccessStatic
 {
   public:
     explicit MeterBar(const Theme& theme);
+
+    /// What a screen reader calls it ("Input level"), which reads it as a meter in dB.
+    MeterBar& Name(std::string name)
+    {
+        mName = std::move(name);
+        return *this;
+    }
+
+    [[nodiscard]] std::optional<AccessInfo> DescribeStatic() const override;
 
     MeterBar& Vertical(bool vertical)
     {
@@ -459,6 +503,7 @@ class MeterBar : public el::element, public Drawn
     double mNeedleAt = -1.0;
     double mPeakDotDb = -120.0;
     float mPeakDotDrawn = 0.0f;
+    std::string mName;
 };
 
 /// One row of a list: text at the left, a muted secondary text at the right. With `heading` it

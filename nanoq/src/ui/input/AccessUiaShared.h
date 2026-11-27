@@ -31,7 +31,30 @@ namespace nanoq::ui::uia
 {
 namespace el = cycfi::elements;
 
-/// One control as the last snapshot saw it.
+// Newer than some SDKs' headers.
+#ifndef UIA_IsDialogPropertyId
+    #define UIA_IsDialogPropertyId 30174
+#endif
+#ifndef UIA_HeadingLevelPropertyId
+    #define UIA_HeadingLevelPropertyId 30173
+#endif
+#ifndef UIA_FullDescriptionPropertyId
+    #define UIA_FullDescriptionPropertyId 30159
+#endif
+#ifndef UIA_PositionInSetPropertyId
+    #define UIA_PositionInSetPropertyId 30152
+#endif
+#ifndef UIA_SizeOfSetPropertyId
+    #define UIA_SizeOfSetPropertyId 30153
+#endif
+constexpr long kHeadingLevelNone = 80050; // HeadingLevel_None; HeadingLevel1 is one more
+// The UIA_Notification event's NotificationKind and NotificationProcessing.
+constexpr int kNotificationKindOther = 4;
+constexpr int kProcessingImportantMostRecent = 2;
+constexpr int kProcessingMostRecent = 3;
+
+/// One control, or a container of controls (a dialog, a menu, a list, a row of tabs), as the
+/// last snapshot saw it. Nodes are in tree order: a container comes before what it holds.
 struct Node
 {
     std::string id; // FocusKey "#" ordinal: stable across rebuilds while the control is the same
@@ -41,6 +64,12 @@ struct Node
     UiaRect screen{}; // physical pixels, on the screen
     bool focused = false;
     bool offscreen = false;
+    /// The container's id; empty for one at the top, under the window.
+    std::string parent;
+    bool container = false;
+    /// An item of a list, a tab of a row, a row of a menu: where it is in its set, from 1.
+    int positionInSet = 0;
+    int sizeOfSet = 0;
 };
 
 struct Action
@@ -69,15 +98,66 @@ struct Shared
 
     const Node* Find(const std::string& id) const
     {
-        for (const auto& n : nodes)
+        const auto i = IndexOf(id);
+        return i >= 0 ? &nodes[static_cast<std::size_t>(i)] : nullptr;
+    }
+
+    [[nodiscard]] int IndexOf(const std::string& id) const
+    {
+        for (std::size_t i = 0; i < nodes.size(); ++i)
         {
-            if (n.id == id)
+            if (nodes[i].id == id)
             {
-                return &n;
+                return static_cast<int>(i);
             }
         }
 
-        return nullptr;
+        return -1;
+    }
+
+    /// The first or last node whose parent is `parent` ("" for the window's own), or "".
+    [[nodiscard]] std::string Child(const std::string& parent, bool last) const
+    {
+        std::string found;
+
+        for (const auto& n : nodes)
+        {
+            if (n.parent == parent)
+            {
+                found = n.id;
+
+                if (!last)
+                {
+                    break;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /// The next or previous node with the same parent as `id`, or "".
+    [[nodiscard]] std::string Sibling(const std::string& id, bool next) const
+    {
+        const auto i = IndexOf(id);
+
+        if (i < 0)
+        {
+            return {};
+        }
+
+        const auto& parent = nodes[static_cast<std::size_t>(i)].parent;
+        const int step = next ? 1 : -1;
+
+        for (int j = i + step; j >= 0 && j < static_cast<int>(nodes.size()); j += step)
+        {
+            if (nodes[static_cast<std::size_t>(j)].parent == parent)
+            {
+                return nodes[static_cast<std::size_t>(j)].id;
+            }
+        }
+
+        return {};
     }
 
     void Queue(Action action)
@@ -153,6 +233,19 @@ inline long ControlType(AccessRole role)
         return UIA_ComboBoxControlTypeId;
     case AccessRole::Edit:
         return UIA_EditControlTypeId;
+    case AccessRole::Heading:
+    case AccessRole::Label:
+        return UIA_TextControlTypeId;
+    case AccessRole::Meter:
+        return UIA_ProgressBarControlTypeId;
+    case AccessRole::Dialog:
+        return UIA_WindowControlTypeId;
+    case AccessRole::Menu:
+        return UIA_MenuControlTypeId;
+    case AccessRole::List:
+        return UIA_ListControlTypeId;
+    case AccessRole::TabList:
+        return UIA_TabControlTypeId;
     }
 
     return UIA_CustomControlTypeId;

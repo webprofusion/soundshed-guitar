@@ -214,6 +214,7 @@ Ptr Shell::BuildSettingsPage()
         if (!cardTitle.empty())
         {
             auto t = std::make_shared<Text>(mTheme, Upper(cardTitle), 13.0f, Weight::SemiBold);
+            t->AccessHeading(2); // a section title, to a screen reader
             column.push_back(FixedHeight(24, Middle(t)));
             column.push_back(VGap(6));
         }
@@ -231,6 +232,7 @@ Ptr Shell::BuildSettingsPage()
     // A row: the label in capitals at the left, the control at the right.
     const auto row = [&](const char* title, Ptr control, float height = 40.0f) {
         auto l = std::make_shared<Text>(mTheme, Upper(title), 11.0f, Weight::SemiBold);
+        l->AccessHeading(3); // a section title, to a screen reader
         l->Colour(mTheme.TextSecondary());
 
         if (stacked)

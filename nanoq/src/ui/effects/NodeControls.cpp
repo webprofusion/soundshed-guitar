@@ -256,6 +256,7 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
     // The row the web UI draws (.resource-slot-row): the slot's name in small capitals, previous,
     // the loaded resource (a tap opens the library, where Browse is too), next, and clear.
     auto heading = std::make_shared<Text>(mTheme, Upper(label), 9.0f, Weight::SemiBold);
+    heading->AccessHeading(2); // a section title, to a screen reader
     heading->Colour(mTheme.DarkOr(el::rgba(220, 227, 243, 173), mTheme.TextSecondary())).Fixed(true);
 
     // Previous and next wrap round the library; with nothing loaded they start at either end.

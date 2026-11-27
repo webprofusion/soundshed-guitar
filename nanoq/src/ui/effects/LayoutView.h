@@ -7,6 +7,7 @@
 // is the drawing and the gestures. Designing layouts stays in Soundshed Guitar.
 
 #include "ui/Drawn.h"
+#include "ui/input/Focus.h"
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
 #include "ui/widgets/Theme.h"
@@ -58,8 +59,10 @@ struct LayoutActions
     std::function<void()> toggleBypass;
 };
 
-/// One placed control: a parameter's knob, switch or slider with its label and value.
-class LayoutControlView final : public el::element, public Drawn
+/// One placed control: a parameter's knob, switch or slider with its label and value. With
+/// focus the arrows move it as a ParamKnob's do (a list by its choices), Space or Enter flips a
+/// switch, Enter or F2 types a value, Delete resets it and the menu key opens MIDI Learn.
+class LayoutControlView final : public el::element, public Drawn, public Focusable
 {
   public:
     struct Look
@@ -95,6 +98,19 @@ class LayoutControlView final : public el::element, public Drawn
         return true;
     }
 
+    bool wants_focus() const override
+    {
+        return FocusWanted(true);
+    }
+
+    void begin_focus(focus_request req) override;
+    bool end_focus() override;
+    bool key(const el::context& ctx, el::key_info k) override;
+
+    [[nodiscard]] AccessInfo Describe() const override;
+    bool Activate(const el::rect& at) override;
+    bool SetPosition(double position) override;
+
     /// Moves the control to the node's value, unless it is being dragged. True when it changed.
     bool Update(const guitarfx::GraphNode& node);
 
@@ -107,6 +123,10 @@ class LayoutControlView final : public el::element, public Drawn
     [[nodiscard]] el::rect ControlBox(el::rect bounds) const;
     [[nodiscard]] el::rect ValueBox(el::rect bounds) const;
     void SetPosition(double position, const el::context& ctx);
+    /// Sets the value at `position` (snapped), telling the owner; true when it changed.
+    bool ApplyPosition(double position);
+    /// How many positions it has from the keyboard: a list's choices, a stepped range's steps.
+    [[nodiscard]] int KeySteps() const;
     void DrawKnob(artist::canvas& cnv, el::rect box);
     void DrawToggle(artist::canvas& cnv, el::rect box);
     /// The knob's or toggle's shadow under the layout's light, behind it (layoutShadows.ts).

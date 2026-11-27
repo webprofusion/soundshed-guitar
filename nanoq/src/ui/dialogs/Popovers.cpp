@@ -300,6 +300,7 @@ void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuIte
 {
     std::vector<Ptr> lists;
     float height = 12.0f;
+    std::weak_ptr<MenuRow> chosen; // the row ticked, which the keys start on
 
     for (auto& items : columns)
     {
@@ -318,6 +319,11 @@ void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuIte
             const bool heading = item.heading || (!item.onChoose && !item.disabled);
             const el::color ink = item.tint != 0 ? Theme::Argb(item.tint) : mTheme.Ink();
             auto row = std::make_shared<MenuRow>(mTheme, item.label, item.selected, heading, ink);
+
+            if (item.selected && !heading && !item.disabled && chosen.expired())
+            {
+                chosen = row;
+            }
 
             if (!item.icon.empty())
             {
@@ -382,6 +388,26 @@ void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuIte
     CloseDropdown();
     mDropdown = KeyLayer(PlacePanel(PadXY(6, 6, list), anchor, width, std::min(height, std::max(120.0f, maxHeight)),
                                     above, [this] { CloseDropdown(); }));
+
+    // A menu, to a screen reader (role=menu).
+    if (auto* router = dynamic_cast<KeyRouter*>(mDropdown.get()))
+    {
+        router->accessKind = KeyRouter::AccessKind::Menu;
+    }
+
     mSession.View().add(mDropdown);
+
+    // Opened from the keys, it starts on the row chosen now (the web's listbox), not the first.
+    if (Focusable::FocusVisible() && !chosen.expired())
+    {
+        mSession.View().post([this, chosen, layer = std::weak_ptr<el::element>(mDropdown)] {
+            const auto row = chosen.lock();
+
+            if (row && layer.lock() == mDropdown)
+            {
+                FocusInView(mSession.View(), *row);
+            }
+        });
+    }
 }
 } // namespace nanoq::ui

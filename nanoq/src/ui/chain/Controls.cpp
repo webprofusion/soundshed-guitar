@@ -341,12 +341,12 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
 
     // The meters, from the telemetry feed (20 Hz): only a bar that moved is redrawn.
     auto inMeter = std::make_shared<MeterBar>(mTheme);
-    inMeter->Vertical(true);
+    inMeter->Vertical(true).Name("Input level");
     mLive.Feed(inMeter, [this](MeterBar& m) {
         return m.Set(mState.telemetry.input.peakDb, mState.telemetry.input.clipped, mState.telemetry.input.rmsDb);
     });
     auto outMeter = std::make_shared<MeterBar>(mTheme);
-    outMeter->Vertical(true);
+    outMeter->Vertical(true).Name("Output level");
     mLive.Feed(outMeter, [this](MeterBar& m) {
         return m.Set(mState.telemetry.output.peakDb, mState.telemetry.output.clipped, mState.telemetry.output.rmsDb);
     });

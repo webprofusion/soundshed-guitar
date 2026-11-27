@@ -13,6 +13,8 @@
 //   drag x1 y1 x2 y2   press, move, release     scroll x y dy a wheel turn (dy > 0 is up)
 //   press x y / dragto x y / release x y   a drag in steps, one per line, drawn between them
 //   shot <file.png>    draws the view offscreen into a PNG (works while the window is hidden)
+//   unnamed <file>     appends to <file> every control of the layer in front that a screen
+//                      reader would hear without a name ("role at x,y"), and "checked N" after
 //   key <spec>         a key press and release: "space", "escape", "delete", "f2", "ctrl+shift+z"
 //   type <text>        characters, as typed into whatever has focus
 //   drop x y <path>    a file dropped there from the desktop

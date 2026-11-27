@@ -530,6 +530,7 @@ void Shell::OpenEnumPicker(const std::string& nodeId, const EffectParamInfo& inf
             if (subgroup != lastSubgroup && !subgroup.empty())
             {
                 auto heading = std::make_shared<Text>(mTheme, Upper(subgroup), 10.0f, Weight::SemiBold);
+                heading->AccessHeading(3); // a section title, to a screen reader
                 heading->Colour(mTheme.TextSecondary()).Tracking(0.06f);
                 list.push_back(FixedHeight(22, Pad(6, 6, 6, 3, heading)));
             }
@@ -558,6 +559,7 @@ void Shell::OpenEnumPicker(const std::string& nodeId, const EffectParamInfo& inf
 
     // The header (.enum-picker-header): the parameter's name and the search.
     auto title = std::make_shared<Text>(mTheme, Upper(info.name), 11.0f, Weight::SemiBold);
+    title->AccessHeading(2); // a section title, to a screen reader
     title->Colour(mTheme.TextSecondary()).Tracking(0.06f).Fixed(true);
     auto [searchElement, searchBox] =
         el::input_box("Search " + std::to_string(info.labels.size()) + " choices", Font(Weight::Regular), 1.0f);

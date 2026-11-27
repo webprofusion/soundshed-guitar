@@ -1,5 +1,6 @@
 #include "ui/shell/Shell.h"
 
+#include "ui/input/SystemPreferences.h"
 #include "uiclient/ChainLayout.h"
 
 // The keyboard shortcuts, as the web UI's (docs/user-interface.md, keyboard shortcuts): chain
@@ -64,7 +65,7 @@ Ptr Shell::KeyLayer(Ptr layer)
 {
     auto router = std::make_shared<KeyRouter>(std::move(layer), true);
     router->onKey = [this](const el::key_info& k) { return HandleKey(k); };
-    router->ringColour = [this] { return mTheme.Accent(); };
+    router->ringColour = [this] { return FocusRingColour(mTheme.Accent(), mTheme.ModalBg()); };
     router->keyboard = mKeyboard;
     return router;
 }
@@ -154,6 +155,29 @@ bool Shell::HandleKey(const el::key_info& k)
         return false;
     }
 
+    // Ctrl+= and Ctrl+- step the UI zoom through the zoom picker's stops, Ctrl+0 puts it back
+    // to 100%, as a browser's zoom keys do: anywhere, as they are the window's.
+    if (CommandHeld(k.modifiers) && !(k.modifiers & el::mod_alt))
+    {
+        if (k.key == key_code::equal || k.key == key_code::kp_add)
+        {
+            StepZoom(1);
+            return true;
+        }
+
+        if (k.key == key_code::minus || k.key == key_code::kp_subtract)
+        {
+            StepZoom(-1);
+            return true;
+        }
+
+        if ((k.key == key_code::_0 || k.key == key_code::kp_0) && !(k.modifiers & el::mod_shift))
+        {
+            StepZoom(0);
+            return true;
+        }
+    }
+
     // Under a menu or dialog the page's shortcuts are off, as the web UI's are under a modal.
     if (mFilePicker || mDropdown || mThemeFlyout || mOverlay || !mState.activePreset)
     {
@@ -183,6 +207,22 @@ bool Shell::HandleKey(const el::key_info& k)
         }
 
         return false;
+    }
+
+    // Alt+Left and Alt+Right move the chosen effect one place, as its menu's Move earlier and
+    // Move later (a scene chip takes them itself).
+    if ((k.modifiers & el::mod_alt) && !(k.modifiers & (el::mod_control | el::mod_super)) &&
+        (k.key == key_code::left || k.key == key_code::right) && mChainFocused)
+    {
+        if (const auto* chosen = SelectedNode())
+        {
+            if (const auto target = MoveTarget(chosen->id, k.key == key_code::left ? -1 : 1); !target.empty())
+            {
+                mSession.Commands().MoveNode(chosen->id, target);
+            }
+
+            return true;
+        }
     }
 
     if (k.modifiers & (el::mod_alt | el::mod_control | el::mod_super))

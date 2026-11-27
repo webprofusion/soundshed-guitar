@@ -1,8 +1,9 @@
 #pragma once
 
 // The UI Automation providers (AccessBridge.cpp, Windows only): the window as a fragment root,
-// and each control as a fragment with the patterns its role takes. They read the snapshot in
-// Shared and queue what a client asks; they never touch an element.
+// and each node (a control, a heading or text, or a container: a dialog, a menu, a list, a row
+// of tabs) as a fragment with the patterns its role takes. They read the snapshot in Shared and
+// queue what a client asks; they never touch an element.
 
 #include "ui/input/AccessUiaShared.h"
 
@@ -10,14 +11,137 @@ namespace nanoq::ui::uia
 {
 class RootProvider;
 
+[[nodiscard]] inline bool IsReadOnlyRole(AccessRole role)
+{
+    return role == AccessRole::Heading || role == AccessRole::Label || role == AccessRole::Meter ||
+           role == AccessRole::Dialog || role == AccessRole::Menu || role == AccessRole::List ||
+           role == AccessRole::TabList;
+}
+
+/// A node's value pattern, apart from its range (both have IsReadOnly): only a text field's
+/// value can be set; a knob's reads its value with its unit.
+class ValueAdapter final : public IValueProvider
+{
+  public:
+    ValueAdapter(std::shared_ptr<Shared> shared, std::string id) : mShared(std::move(shared)), mId(std::move(id))
+    {
+    }
+
+    IFACEMETHODIMP_(ULONG) AddRef() override
+    {
+        return ++mRefs;
+    }
+
+    IFACEMETHODIMP_(ULONG) Release() override
+    {
+        const ULONG refs = --mRefs;
+
+        if (refs == 0)
+        {
+            delete this;
+        }
+
+        return refs;
+    }
+
+    IFACEMETHODIMP QueryInterface(REFIID riid, void** out) override
+    {
+        if (out == nullptr)
+        {
+            return E_INVALIDARG;
+        }
+
+        *out = nullptr;
+
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IValueProvider))
+        {
+            *out = static_cast<IValueProvider*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        return E_NOINTERFACE;
+    }
+
+    IFACEMETHODIMP SetValue(LPCWSTR text) override
+    {
+        Node node;
+
+        if (!Get(node))
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        if (node.info.role != AccessRole::Edit)
+        {
+            return UIA_E_INVALIDOPERATION;
+        }
+
+        if (!node.info.enabled)
+        {
+            return UIA_E_ELEMENTNOTENABLED;
+        }
+
+        BSTR b = SysAllocString(text);
+        const auto utf8 = Narrow(b);
+        SysFreeString(b);
+        mShared->Queue({Action::Kind::Text, node.key, node.ordinal, 0.0, utf8});
+        return S_OK;
+    }
+
+    IFACEMETHODIMP get_Value(BSTR* out) override
+    {
+        Node node;
+
+        if (!Get(node))
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        *out = SysAllocString(Wide(node.info.value).c_str());
+        return S_OK;
+    }
+
+    IFACEMETHODIMP get_IsReadOnly(BOOL* out) override
+    {
+        Node node;
+
+        if (!Get(node))
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        *out = node.info.role == AccessRole::Edit && node.info.enabled ? FALSE : TRUE;
+        return S_OK;
+    }
+
+  private:
+    bool Get(Node& node) const
+    {
+        std::lock_guard lock(mShared->mutex);
+        const auto* found = mShared->alive ? mShared->Find(mId) : nullptr;
+
+        if (found != nullptr)
+        {
+            node = *found;
+        }
+
+        return found != nullptr;
+    }
+
+    std::atomic<ULONG> mRefs{1};
+    std::shared_ptr<Shared> mShared;
+    std::string mId;
+};
+
 /// One control. Holds its id, not the element: every call looks the id up in the snapshot.
 class NodeProvider final : public IRawElementProviderSimple,
                            public IRawElementProviderFragment,
                            public IInvokeProvider,
                            public IToggleProvider,
                            public IRangeValueProvider,
-                           public IValueProvider,
-                           public ISelectionItemProvider
+                           public ISelectionItemProvider,
+                           public IExpandCollapseProvider
 {
   public:
     NodeProvider(std::shared_ptr<Shared> shared, IRawElementProviderFragmentRoot* root, std::string id)
@@ -79,13 +203,13 @@ class NodeProvider final : public IRawElementProviderSimple,
         {
             *out = static_cast<IRangeValueProvider*>(this);
         }
-        else if (riid == __uuidof(IValueProvider))
-        {
-            *out = static_cast<IValueProvider*>(this);
-        }
         else if (riid == __uuidof(ISelectionItemProvider))
         {
             *out = static_cast<ISelectionItemProvider*>(this);
+        }
+        else if (riid == __uuidof(IExpandCollapseProvider))
+        {
+            *out = static_cast<IExpandCollapseProvider*>(this);
         }
         else
         {
@@ -114,14 +238,15 @@ class NodeProvider final : public IRawElementProviderSimple,
         }
 
         const auto role = node.info.role;
+        const bool control = !IsReadOnlyRole(role);
         IUnknown* found = nullptr;
 
-        if (pattern == UIA_TogglePatternId && node.info.toggled >= 0)
+        if (pattern == UIA_TogglePatternId && control && node.info.toggled >= 0)
         {
             found = static_cast<IToggleProvider*>(this);
         }
-        else if (pattern == UIA_InvokePatternId && role != AccessRole::Slider && role != AccessRole::Edit &&
-                 node.info.toggled < 0)
+        else if (pattern == UIA_InvokePatternId && control && role != AccessRole::Slider && role != AccessRole::Edit &&
+                 node.info.toggled < 0 && node.info.expanded < 0)
         {
             found = static_cast<IInvokeProvider*>(this);
         }
@@ -130,14 +255,20 @@ class NodeProvider final : public IRawElementProviderSimple,
             found = static_cast<IRangeValueProvider*>(this);
         }
         else if (pattern == UIA_ValuePatternId &&
-                 (role == AccessRole::Slider || role == AccessRole::Edit || role == AccessRole::ComboBox))
+                 (role == AccessRole::Slider || role == AccessRole::Edit || role == AccessRole::ComboBox ||
+                  role == AccessRole::Meter))
         {
-            found = static_cast<IValueProvider*>(this);
+            *out = new ValueAdapter(mShared, mId);
+            return S_OK;
         }
         else if (pattern == UIA_SelectionItemPatternId &&
                  (role == AccessRole::Tab || role == AccessRole::ListItem || role == AccessRole::MenuItem))
         {
             found = static_cast<ISelectionItemProvider*>(this);
+        }
+        else if (pattern == UIA_ExpandCollapsePatternId && control && node.info.expanded >= 0)
+        {
+            found = static_cast<IExpandCollapseProvider*>(this);
         }
 
         if (found != nullptr)
@@ -182,9 +313,50 @@ class NodeProvider final : public IRawElementProviderSimple,
             SetString(out, "Elements");
             break;
         case UIA_IsKeyboardFocusablePropertyId:
+            SetBool(out, !IsReadOnlyRole(node.info.role) && node.info.enabled);
+            break;
         case UIA_IsControlElementPropertyId:
         case UIA_IsContentElementPropertyId:
             SetBool(out, true);
+            break;
+        case UIA_IsDialogPropertyId:
+            SetBool(out, node.info.role == AccessRole::Dialog);
+            break;
+        case UIA_FullDescriptionPropertyId:
+
+            if (!node.info.description.empty())
+            {
+                SetString(out, node.info.description);
+            }
+
+            break;
+        case UIA_HeadingLevelPropertyId:
+            SetInt(out, static_cast<int>(kHeadingLevelNone) +
+                            (node.info.role == AccessRole::Heading ? std::clamp(node.info.level, 1, 9) : 0));
+            break;
+        case UIA_PositionInSetPropertyId:
+
+            if (node.positionInSet > 0)
+            {
+                SetInt(out, node.positionInSet);
+            }
+
+            break;
+        case UIA_SizeOfSetPropertyId:
+
+            if (node.sizeOfSet > 0)
+            {
+                SetInt(out, node.sizeOfSet);
+            }
+
+            break;
+        case UIA_AcceleratorKeyPropertyId:
+
+            if (!node.info.shortcut.empty())
+            {
+                SetString(out, node.info.shortcut);
+            }
+
             break;
         case UIA_HasKeyboardFocusPropertyId:
             SetBool(out, node.focused);
@@ -296,6 +468,13 @@ class NodeProvider final : public IRawElementProviderSimple,
     // IRangeValueProvider: the position as 0 to 100; the value pattern reads it with its unit.
     IFACEMETHODIMP SetValue(double value) override
     {
+        Node node;
+
+        if (Get(node) && IsReadOnlyRole(node.info.role))
+        {
+            return UIA_E_INVALIDOPERATION;
+        }
+
         return QueueFor(Action::Kind::Position, std::clamp(value, 0.0, 100.0) / 100.0);
     }
 
@@ -321,8 +500,8 @@ class NodeProvider final : public IRawElementProviderSimple,
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
 
-        // The range is settable; of the value pattern only a text field's is.
-        *out = FALSE;
+        // The range is set from a screen reader as from the keys; a meter's only shows.
+        *out = node.info.enabled && !IsReadOnlyRole(node.info.role) ? FALSE : TRUE;
         return S_OK;
     }
 
@@ -338,20 +517,34 @@ class NodeProvider final : public IRawElementProviderSimple,
         return S_OK;
     }
 
+    // A stepped knob (an enum's choices) moves a whole step at a time, as its keys do.
     IFACEMETHODIMP get_LargeChange(double* out) override
     {
-        *out = 10.0;
+        Node node;
+        *out = Get(node) && node.info.steps > 1 ? std::max(10.0, 100.0 / (node.info.steps - 1)) : 10.0;
         return S_OK;
     }
 
     IFACEMETHODIMP get_SmallChange(double* out) override
     {
-        *out = 1.0;
+        Node node;
+        *out = Get(node) && node.info.steps > 1 ? 100.0 / (node.info.steps - 1) : 1.0;
         return S_OK;
     }
 
-    // IValueProvider
-    IFACEMETHODIMP SetValue(LPCWSTR text) override
+    // IExpandCollapseProvider: a picker or a menu button. Opening it is pressing it; its list
+    // takes the screen reader's focus, and closing that list is Esc there.
+    IFACEMETHODIMP Expand() override
+    {
+        return QueueFor(Action::Kind::Invoke);
+    }
+
+    IFACEMETHODIMP Collapse() override
+    {
+        return S_OK;
+    }
+
+    IFACEMETHODIMP get_ExpandCollapseState(ExpandCollapseState* out) override
     {
         Node node;
 
@@ -360,29 +553,7 @@ class NodeProvider final : public IRawElementProviderSimple,
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
 
-        if (node.info.role != AccessRole::Edit)
-        {
-            return UIA_E_INVALIDOPERATION;
-        }
-
-        BSTR b = SysAllocString(text);
-        const auto utf8 = Narrow(b);
-        SysFreeString(b);
-        Action action{Action::Kind::Text, node.key, node.ordinal, 0.0, utf8};
-        mShared->Queue(std::move(action));
-        return S_OK;
-    }
-
-    IFACEMETHODIMP get_Value(BSTR* out) override
-    {
-        Node node;
-
-        if (!Get(node))
-        {
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        }
-
-        *out = SysAllocString(Wide(node.info.value).c_str());
+        *out = node.info.expanded > 0 ? ExpandCollapseState_Expanded : ExpandCollapseState_Collapsed;
         return S_OK;
     }
 
@@ -418,6 +589,13 @@ class NodeProvider final : public IRawElementProviderSimple,
     IFACEMETHODIMP get_SelectionContainer(IRawElementProviderSimple** out) override
     {
         *out = nullptr;
+        Node node;
+
+        if (Get(node) && !node.parent.empty())
+        {
+            *out = new NodeProvider(mShared, mRoot, node.parent);
+        }
+
         return S_OK;
     }
 
@@ -577,13 +755,9 @@ class RootProvider final : public IRawElementProviderSimple,
                 return S_OK;
             }
 
-            if (direction == NavigateDirection_FirstChild)
+            if (direction == NavigateDirection_FirstChild || direction == NavigateDirection_LastChild)
             {
-                id = mShared->nodes.front().id;
-            }
-            else if (direction == NavigateDirection_LastChild)
-            {
-                id = mShared->nodes.back().id;
+                id = mShared->Child({}, direction == NavigateDirection_LastChild);
             }
         }
 
@@ -682,38 +856,36 @@ class RootProvider final : public IRawElementProviderSimple,
 inline IFACEMETHODIMP NodeProvider::Navigate(NavigateDirection direction, IRawElementProviderFragment** out)
 {
     *out = nullptr;
-
-    if (direction == NavigateDirection_Parent)
-    {
-        return mRoot->QueryInterface(IID_PPV_ARGS(out));
-    }
-
-    if (direction != NavigateDirection_NextSibling && direction != NavigateDirection_PreviousSibling)
-    {
-        return S_OK; // no children
-    }
-
     std::string id;
     {
         std::lock_guard lock(mShared->mutex);
-        const auto& nodes = mShared->nodes;
+        const auto* node = mShared->alive ? mShared->Find(mId) : nullptr;
 
-        for (std::size_t i = 0; i < nodes.size(); ++i)
+        if (node == nullptr)
         {
-            if (nodes[i].id != mId)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        switch (direction)
+        {
+        case NavigateDirection_Parent:
+
+            if (node->parent.empty())
             {
-                continue;
+                return mRoot->QueryInterface(IID_PPV_ARGS(out));
             }
 
-            if (direction == NavigateDirection_NextSibling && i + 1 < nodes.size())
-            {
-                id = nodes[i + 1].id;
-            }
-            else if (direction == NavigateDirection_PreviousSibling && i > 0)
-            {
-                id = nodes[i - 1].id;
-            }
-
+            id = node->parent;
+            break;
+        case NavigateDirection_FirstChild:
+        case NavigateDirection_LastChild:
+            id = node->container ? mShared->Child(mId, direction == NavigateDirection_LastChild) : std::string();
+            break;
+        case NavigateDirection_NextSibling:
+        case NavigateDirection_PreviousSibling:
+            id = mShared->Sibling(mId, direction == NavigateDirection_NextSibling);
+            break;
+        default:
             break;
         }
     }

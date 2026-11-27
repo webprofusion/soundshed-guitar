@@ -20,6 +20,29 @@ namespace
 using namespace uia;
 namespace el = cycfi::elements;
 
+/// What Announce() asked to be said, until the next tick.
+std::vector<std::pair<std::string, bool>>& Announcements()
+{
+    static std::vector<std::pair<std::string, bool>> pending;
+    return pending;
+}
+
+/// UiaRaiseNotificationEvent (Windows 10 1709 and later), looked up rather than linked, so the
+/// app still starts where it is missing.
+using RaiseNotification = HRESULT(WINAPI*)(IRawElementProviderSimple*, int kind, int processing, BSTR text,
+                                           BSTR activity);
+
+RaiseNotification NotificationFunction()
+{
+    static const auto fn = [] {
+        const auto module = GetModuleHandleW(L"uiautomationcore.dll");
+        return module != nullptr
+                   ? reinterpret_cast<RaiseNotification>(GetProcAddress(module, "UiaRaiseNotificationEvent"))
+                   : nullptr;
+    }();
+    return fn;
+}
+
 /// The bridge itself: the window's WM_GETOBJECT, and the snapshot the UI thread keeps.
 class WindowsBridge final : public AccessBridge
 {
@@ -108,7 +131,7 @@ void ForEachControl(el::view& view, const std::function<void(const FocusTarget&)
         el::context sctx{ctx, &router->subject(), ctx.bounds};
         router->prepare_subject(sctx);
 
-        for (const auto& t : CollectFocusTargets(sctx, router->subject()))
+        for (const auto& t : CollectFocusTargets(sctx, router->subject(), true))
         {
             f(t);
         }
@@ -116,12 +139,26 @@ void ForEachControl(el::view& view, const std::function<void(const FocusTarget&)
     Focusable::SetFocusVisible(visible);
 }
 
+UiaRect Union(const UiaRect& a, const UiaRect& b)
+{
+    if (a.width <= 0.0 && a.height <= 0.0)
+    {
+        return b;
+    }
+
+    const double left = std::min(a.left, b.left), top = std::min(a.top, b.top);
+    const double right = std::max(a.left + a.width, b.left + b.width);
+    const double bottom = std::max(a.top + a.height, b.top + b.height);
+    return {left, top, right - left, bottom - top};
+}
+
 std::vector<Node> WindowsBridge::Snapshot()
 {
     std::vector<Node> nodes;
     HWND hwnd = mShared->hwnd;
+    auto* router = KeyRouter::Focused(mView);
 
-    if (hwnd == nullptr)
+    if (hwnd == nullptr || router == nullptr)
     {
         return nodes;
     }
@@ -132,22 +169,89 @@ std::vector<Node> WindowsBridge::Snapshot()
     GetClientRect(hwnd, &client);
     POINT origin{0, 0};
     ClientToScreen(hwnd, &origin);
-    auto* router = KeyRouter::Focused(mView);
-    const auto* leaf = router != nullptr ? FocusedLeaf(router->subject()) : nullptr;
+    const auto* leaf = FocusedLeaf(router->subject());
+    std::vector<FocusTarget> targets;
+    ForEachControl(mView, [&](const FocusTarget& t) { targets.push_back(t); });
+    std::vector<Node> controls;
+    std::vector<AccessInfo> infos;
 
-    ForEachControl(mView, [&](const FocusTarget& t) {
+    for (const auto& t : targets)
+    {
         Node n;
         n.key = t.key;
         n.ordinal = t.ordinal;
         n.id = t.key + "#" + std::to_string(t.ordinal);
-        n.info = DescribeTarget(*t.element);
-        n.focused = t.element == leaf && (t.focusable == nullptr || t.focusable->HasFocus());
+        n.info = DescribeTarget(t);
+        n.focused = !t.isStatic && t.element == leaf && (t.focusable == nullptr || t.focusable->HasFocus());
         const double left = t.bounds.left * scale, top = t.bounds.top * scale;
         n.screen = {origin.x + left, origin.y + top, t.bounds.width() * scale, t.bounds.height() * scale};
         n.offscreen = left + n.screen.width <= 0.0 || top + n.screen.height <= 0.0 || left >= client.right ||
                       top >= client.bottom;
-        nodes.push_back(std::move(n));
-    });
+        infos.push_back(n.info);
+        controls.push_back(std::move(n));
+    }
+
+    // A dialog or a menu holds everything in its layer.
+    std::string top;
+
+    if (router->accessKind != KeyRouter::AccessKind::Page)
+    {
+        const bool dialog = router->accessKind == KeyRouter::AccessKind::Dialog;
+        Node layer;
+        layer.container = true;
+        layer.info.role = dialog ? AccessRole::Dialog : AccessRole::Menu;
+        layer.info.name = router->accessTitle;
+        layer.info.description = router->accessDescription;
+        layer.key = std::string(dialog ? "dialog:" : "menu:") + router->accessTitle;
+        layer.id = layer.key + "#0";
+
+        for (const auto& c : controls)
+        {
+            layer.screen = Union(layer.screen, c.screen);
+        }
+
+        top = layer.id;
+        nodes.push_back(std::move(layer));
+    }
+
+    const auto sets = FindFocusSets(targets, infos, router->accessKind == KeyRouter::AccessKind::Menu);
+    std::size_t nextSet = 0;
+
+    for (std::size_t i = 0; i < controls.size(); ++i)
+    {
+        if (nextSet < sets.size() && sets[nextSet].begin == i)
+        {
+            const auto& set = sets[nextSet++];
+            const auto& first = controls[set.items.front()];
+            Node list;
+            list.container = true;
+            list.info.role = set.role;
+            list.key = std::string(set.role == AccessRole::TabList ? "tablist:" : "list:") + first.id;
+            list.id = list.key + "#0";
+            list.parent = top;
+
+            for (auto j = set.begin; j < set.end; ++j)
+            {
+                list.screen = Union(list.screen, controls[j].screen);
+                controls[j].parent = list.id;
+            }
+
+            for (std::size_t k = 0; k < set.items.size(); ++k)
+            {
+                controls[set.items[k]].positionInSet = static_cast<int>(k) + 1;
+                controls[set.items[k]].sizeOfSet = static_cast<int>(set.items.size());
+            }
+
+            nodes.push_back(std::move(list));
+        }
+
+        if (controls[i].parent.empty())
+        {
+            controls[i].parent = top;
+        }
+
+        nodes.push_back(std::move(controls[i]));
+    }
 
     return nodes;
 }
@@ -223,6 +327,19 @@ void WindowsBridge::RaiseChanges(const std::vector<Node>& before, const std::vec
     if (structure)
     {
         UiaRaiseStructureChangedEvent(mRoot, StructureChangeType_ChildrenInvalidated, nullptr, 0);
+
+        // A dialog or menu that has just opened is said as one, with its title and message.
+        for (const auto& n : after)
+        {
+            if ((n.info.role == AccessRole::Dialog || n.info.role == AccessRole::Menu) &&
+                std::none_of(before.begin(), before.end(), [&n](const Node& b) { return b.id == n.id; }))
+            {
+                auto* opened = new NodeProvider(mShared, mRoot, n.id);
+                UiaRaiseAutomationEvent(opened, n.info.role == AccessRole::Dialog ? UIA_Window_WindowOpenedEventId
+                                                                                  : UIA_MenuOpenedEventId);
+                opened->Release();
+            }
+        }
     }
 
     const Node* was = nullptr;
@@ -304,9 +421,24 @@ void WindowsBridge::Tick()
     }
 
     // Nothing to keep while no client has asked (or none is listening).
+    auto said = std::exchange(Announcements(), {});
+
     if (!mAsked || !UiaClientsAreListening())
     {
         return;
+    }
+
+    if (const auto raise = NotificationFunction())
+    {
+        for (const auto& [text, important] : said)
+        {
+            BSTR b = SysAllocString(Wide(text).c_str());
+            BSTR activity = SysAllocString(important ? L"SoundshedAlert" : L"SoundshedStatus");
+            raise(mRoot, kNotificationKindOther, important ? kProcessingImportantMostRecent : kProcessingMostRecent, b,
+                  activity);
+            SysFreeString(b);
+            SysFreeString(activity);
+        }
     }
 
     // Focus moving is told at once; otherwise the list is looked at ten times a second.
@@ -330,6 +462,14 @@ void WindowsBridge::Tick()
 }
 } // namespace
 
+void AccessBridge::Announce(std::string text, bool important)
+{
+    if (!text.empty())
+    {
+        Announcements().emplace_back(std::move(text), important);
+    }
+}
+
 std::unique_ptr<AccessBridge> AccessBridge::Create(el::view& view)
 {
     auto hwnd = static_cast<HWND>(view.host());
@@ -341,15 +481,88 @@ std::unique_ptr<AccessBridge> AccessBridge::Create(el::view& view)
 
     return std::make_unique<WindowsBridge>(view, hwnd);
 }
+
+bool AccessBridge::UnservedScreenReader()
+{
+    return false;
+}
 } // namespace nanoq::ui
 
 #else
+
+    #if defined(__APPLE__)
+        #include <TargetConditionals.h>
+        #include <objc/message.h>
+        #include <objc/runtime.h>
+    #elif defined(__linux__) && !defined(__ANDROID__)
+        #include <filesystem>
+        #include <fstream>
+    #endif
+
+    #if defined(__APPLE__) && TARGET_OS_IPHONE
+extern "C" bool UIAccessibilityIsVoiceOverRunning(void);
+    #endif
 
 namespace nanoq::ui
 {
 std::unique_ptr<AccessBridge> AccessBridge::Create(cycfi::elements::view&)
 {
     return nullptr;
+}
+
+void AccessBridge::Announce(std::string, bool)
+{
+}
+
+bool AccessBridge::UnservedScreenReader()
+{
+    #if defined(__APPLE__) && TARGET_OS_IPHONE
+    return UIAccessibilityIsVoiceOverRunning();
+    #elif defined(__APPLE__)
+    // [[NSWorkspace sharedWorkspace] isVoiceOverEnabled], through the runtime: this file is C++.
+    const auto cls = reinterpret_cast<id>(objc_getClass("NSWorkspace"));
+
+    if (cls == nullptr)
+    {
+        return false;
+    }
+
+    const auto workspace = reinterpret_cast<id (*)(id, SEL)>(objc_msgSend)(cls, sel_registerName("sharedWorkspace"));
+    const SEL voiceOver = sel_registerName("isVoiceOverEnabled");
+
+    if (workspace == nullptr || !class_respondsToSelector(object_getClass(workspace), voiceOver))
+    {
+        return false;
+    }
+
+    return reinterpret_cast<BOOL (*)(id, SEL)>(objc_msgSend)(workspace, voiceOver);
+    #elif defined(__linux__) && !defined(__ANDROID__)
+    // Orca running: a process of that name. Cheaper than asking the desktop's settings, and
+    // what matters is that it is reading now.
+    std::error_code ec;
+
+    for (const auto& entry : std::filesystem::directory_iterator("/proc", ec))
+    {
+        const auto name = entry.path().filename().string();
+
+        if (name.empty() || name.find_first_not_of("0123456789") != std::string::npos)
+        {
+            continue;
+        }
+
+        std::ifstream comm(entry.path() / "comm");
+        std::string command;
+
+        if (std::getline(comm, command) && command == "orca")
+        {
+            return true;
+        }
+    }
+
+    return false;
+    #else
+    return false; // Android: TalkBack is a Java query, not made yet
+    #endif
 }
 } // namespace nanoq::ui
 

@@ -168,7 +168,6 @@ std::string Shell::TonePreviewSignature() const
 void Shell::SyncTonePreview()
 {
     auto& service = mSession.Tones();
-    auto& view = mSession.View();
 
     // A link the standalone was started with, once the engine has said what it has.
     if (!mToneLinkTaken && mState.haveState)
@@ -197,13 +196,13 @@ void Shell::SyncTonePreview()
 
     mTonePreviewBarShown = signature;
 
-    if (mTonePreviewBar)
-    {
-        RemoveLayer(std::exchange(mTonePreviewBar, nullptr));
-    }
-
     if (service.PreviewItemId().empty())
     {
+        if (std::exchange(mTonePreviewBar, nullptr))
+        {
+            ShowBar(mPreviewBarSlot, nullptr);
+        }
+
         return;
     }
 
@@ -241,8 +240,7 @@ void Shell::SyncTonePreview()
     mTonePreviewBar = AvoidKeyboard(el::share(el::align_bottom(
         el::align_center(el::margin({0.0f, 0.0f, 0.0f, kBarAboveFooter},
                                     el::hold_any(FixedWidth(width, FixedHeight(kBarHeight, Expand(face)))))))));
-    view.add(mTonePreviewBar, false);
-    view.refresh();
+    ShowBar(mPreviewBarSlot, mTonePreviewBar);
 }
 
 void Shell::OpenToneLink(const tones::LinkTarget& target)

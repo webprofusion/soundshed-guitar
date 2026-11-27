@@ -202,15 +202,20 @@ class KeyRouter final : public cycfi::elements::proxy_base
             return false;
         }
 
+        // Alt+arrows and the like are shortcuts (moving a scene or an effect), not focus moves.
+        const bool plain =
+            (k.modifiers & (cycfi::elements::mod_alt | cycfi::elements::mod_control | cycfi::elements::mod_super)) == 0;
+
         // Left and Right no focused control took, for the page first (the Scale Guide steps a
         // progression with them, as the web's).
-        if (press && (k.key == key_code::left || k.key == key_code::right) && onPageArrow && onPageArrow(k))
+        if (plain && press && (k.key == key_code::left || k.key == key_code::right) && onPageArrow && onPageArrow(k))
         {
             return true;
         }
 
-        if (press && (k.key == key_code::up || k.key == key_code::down || k.key == key_code::left ||
-                      k.key == key_code::right || k.key == key_code::home || k.key == key_code::end))
+        if (plain && press &&
+            (k.key == key_code::up || k.key == key_code::down || k.key == key_code::left || k.key == key_code::right ||
+             k.key == key_code::home || k.key == key_code::end))
         {
             if (ArrowFocus(ctx, k.key))
             {
@@ -394,8 +399,8 @@ class KeyRouter final : public cycfi::elements::proxy_base
             return;
         }
 
-        // The router on top: a bar added over the page without one (the tone preview's) must not
-        // take the keys from the page under it.
+        // The router on top: a layer added over the page without one must not take the keys
+        // from the page under it.
         for (auto i = static_cast<int>(content.size()) - 1; i >= 0; --i)
         {
             if (const auto* router = dynamic_cast<KeyRouter*>(&content.at(static_cast<std::size_t>(i)));
@@ -546,6 +551,18 @@ class KeyRouter final : public cycfi::elements::proxy_base
         return found;
     }
 
+    /// What a screen reader is told the layer is: the page, a dialog (with its title and
+    /// message, as the web's role=dialog with aria-labelledby and aria-describedby) or a menu.
+    enum class AccessKind
+    {
+        Page,
+        Dialog,
+        Menu,
+    };
+    AccessKind accessKind = AccessKind::Page;
+    std::string accessTitle;
+    std::string accessDescription;
+
     /// The on-screen keyboard, on a device that has one; all the routers share it.
     std::shared_ptr<OnScreenKeyboard> keyboard;
     /// A key no focused element took. Returns whether it was used.
@@ -602,7 +619,9 @@ class KeyRouter final : public cycfi::elements::proxy_base
         mLostTicks = 0;
     }
 
-    /// Tab: the next control round, or the first (the last, going back) when none has focus.
+    /// Tab: the next control round, or the first (the last, going back) when none has focus. A
+    /// list or a row of tabs is one stop (the web's roving tabindex): Tab enters it at the row
+    /// that has focus or is chosen, the arrows move within it, and Tab leaves it.
     void MoveFocus(const cycfi::elements::context& ctx, int direction)
     {
         cycfi::elements::context sctx{ctx, &subject(), ctx.bounds};
@@ -627,12 +646,51 @@ class KeyRouter final : public cycfi::elements::proxy_base
             }
         }
 
-        const int next = at < 0 ? (direction > 0 ? 0 : n - 1) : (at + direction + n) % n;
+        std::vector<bool> stop(targets.size(), true);
+
+        for (const auto& set : FindFocusSets(targets, accessKind == AccessKind::Menu))
+        {
+            if (set.role != AccessRole::List && set.role != AccessRole::TabList)
+            {
+                continue;
+            }
+
+            std::size_t chosen = set.items.front();
+
+            for (const auto i : set.items)
+            {
+                if (static_cast<int>(i) == at)
+                {
+                    chosen = i;
+                    break;
+                }
+
+                if (targets[i].focusable != nullptr && targets[i].focusable->Describe().selected &&
+                    (chosen == set.items.front() || !targets[chosen].focusable->Describe().selected))
+                {
+                    chosen = i;
+                }
+            }
+
+            for (const auto i : set.items)
+            {
+                stop[i] = i == chosen;
+            }
+        }
+
+        int next = at < 0 ? (direction > 0 ? 0 : n - 1) : (at + direction + n) % n;
+
+        for (int tries = 0; tries < n && !stop[static_cast<std::size_t>(next)]; ++tries)
+        {
+            next = (next + direction + n) % n;
+        }
+
         Focus(sctx, targets[static_cast<std::size_t>(next)]);
     }
 
     /// The arrows within a menu (up and down its rows), a list or a row of tabs (any arrow), Home
-    /// and End to its first and last: to the next control of the same role that way.
+    /// and End to its first and last: to the next control of the same role in the same list or
+    /// row, never into another; round from the last tab to the first.
     bool ArrowFocus(const cycfi::elements::context& ctx, cycfi::elements::key_code key)
     {
         using cycfi::elements::key_code;
@@ -660,19 +718,32 @@ class KeyRouter final : public cycfi::elements::proxy_base
         cycfi::elements::context sctx{ctx, &subject(), ctx.bounds};
         prepare_subject(sctx);
         const auto targets = CollectFocusTargets(sctx, subject());
+        std::vector<AccessInfo> infos;
+        std::size_t self = targets.size();
+
+        for (std::size_t i = 0; i < targets.size(); ++i)
+        {
+            infos.push_back(DescribeTarget(targets[i]));
+            self = targets[i].element == leaf ? i : self;
+        }
+
+        if (self == targets.size())
+        {
+            return false;
+        }
+
+        // Its own list or row: the others of its role that share the composite holding it.
+        const int depth = FocusPeerDepth(targets, self, role, infos);
         std::vector<const FocusTarget*> peers;
         int at = -1;
 
-        for (const auto& t : targets)
+        for (std::size_t i = 0; i < targets.size(); ++i)
         {
-            if (t.focusable != nullptr && t.focusable->Describe().role == role)
+            if (targets[i].focusable != nullptr && infos[i].role == role &&
+                (i == self || SamePrefix(targets[i], targets[self], depth)))
             {
-                if (t.element == leaf)
-                {
-                    at = static_cast<int>(peers.size());
-                }
-
-                peers.push_back(&t);
+                at = i == self ? static_cast<int>(peers.size()) : at;
+                peers.push_back(&targets[i]);
             }
         }
 
@@ -681,6 +752,7 @@ class KeyRouter final : public cycfi::elements::proxy_base
             return false;
         }
 
+        const int count = static_cast<int>(peers.size());
         int next = at;
 
         if (key == key_code::home)
@@ -689,16 +761,21 @@ class KeyRouter final : public cycfi::elements::proxy_base
         }
         else if (key == key_code::end)
         {
-            next = static_cast<int>(peers.size()) - 1;
+            next = count - 1;
         }
         else
         {
             next = at + ((key == key_code::up || key == key_code::left) ? -1 : 1);
+
+            if (role == AccessRole::Tab)
+            {
+                next = (next + count) % count;
+            }
         }
 
         Focusable::SetFocusVisible(true);
 
-        if (next >= 0 && next < static_cast<int>(peers.size()) && next != at)
+        if (next >= 0 && next < count && next != at)
         {
             Focus(sctx, *peers[static_cast<std::size_t>(next)]);
         }

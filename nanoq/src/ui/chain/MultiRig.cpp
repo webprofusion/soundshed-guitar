@@ -480,6 +480,7 @@ void Shell::SaveMultiRig()
 
     const auto label = [this](const std::string& text) {
         auto t = std::make_shared<Text>(mTheme, Upper(text), 11.0f, Weight::SemiBold);
+        t->AccessHeading(3); // a section title, to a screen reader
         t->Colour(mTheme.ModalText());
         return FixedHeight(22, Middle(t));
     };

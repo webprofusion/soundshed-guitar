@@ -11,6 +11,7 @@
 #include "ui/shell/Shell.h"
 
 #include "ui/chain/ChainWires.h"
+#include "ui/input/SystemPreferences.h"
 
 #include "uiclient/ChainDropRules.h"
 #include "uiclient/ChainLayout.h"
@@ -322,6 +323,12 @@ Ptr Shell::BuildChain()
             mChainFocused = true;
         };
         card->onMenu = [this, nodeId] { OpenNodeMenu(nodeId); };
+        card->onMove = [this, nodeId](int step) {
+            if (const auto target = MoveTarget(nodeId, step); !target.empty())
+            {
+                mSession.Commands().MoveNode(nodeId, target);
+            }
+        };
         card->onPowerMenu = [this, nodeId](el::point at) {
             if (const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr)
             {
@@ -396,10 +403,12 @@ Ptr Shell::BuildChain()
             }
         }
 
-        // Lit with the signal; the pulses move one spacing every 0.4 s, as the web UI's animation does.
+        // Lit with the signal; the pulses move one spacing every 0.4 s, as the web UI's animation
+        // does, and hold still under reduced motion (its prefers-reduced-motion rule).
         mLive.Feed(connector, [this, source = connector->Source()](Connector& c) {
             const bool live = !source.empty() && mSignalFlow.IsLive(source);
-            return c.SetFlow(live, static_cast<float>(std::fmod(UiSession::Now() / 0.4, 1.0)));
+            const double phase = ReducedMotion() ? 0.0 : std::fmod(UiSession::Now() / 0.4, 1.0);
+            return c.SetFlow(live, static_cast<float>(phase));
         });
         return connector;
     };

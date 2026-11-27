@@ -2,6 +2,7 @@
 
 #include "WindowChrome.h"
 #include "ui/debug/DrawProbe.h"
+#include "ui/input/SystemPreferences.h"
 #include "ui/shell/ShellIcons.h"
 #include "ui/widgets/Tooltip.h"
 #include "ui/widgets/ControlSkin.h"
@@ -231,6 +232,10 @@ void Shell::BuildRoot()
     // because a theme change repaints it.
     mBgSlot = MakeSlot();
     Fill(*mBgSlot, el::share(el::box(mTheme.Background())));
+    mPreviewBarSlot = MakeSlot();
+    Fill(*mPreviewBarSlot, std::make_shared<NoHit>());
+    mJamBarSlot = MakeSlot();
+    Fill(*mJamBarSlot, std::make_shared<NoHit>());
     mFrameSlot = MakeSlot();
     mWide = WantsWide();
     mSplit = !mWide && WantsSplit();
@@ -252,11 +257,12 @@ void Shell::BuildRoot()
             mTheme, [this](std::function<void()> fn) { mSession.PostToUi(std::move(fn)); });
     }
 
-    mKeys = std::make_shared<KeyRouter>(Over(MinSize(metrics::kMinWidth, metrics::kMinHeight, frame), mBgSlot));
+    mKeys = std::make_shared<KeyRouter>(Over(Over(mJamBarSlot, mPreviewBarSlot),
+                                             Over(MinSize(metrics::kMinWidth, metrics::kMinHeight, frame), mBgSlot)));
     mKeys->keyboard = mKeyboard;
     mKeys->onKey = [this](const el::key_info& k) { return HandleKey(k); };
     mKeys->onPageArrow = [this](const el::key_info& k) { return ScaleGuideArrow(k.key == el::key_code::right); };
-    mKeys->ringColour = [this] { return mTheme.Accent(); };
+    mKeys->ringColour = [this] { return FocusRingColour(mTheme.Accent(), mTheme.Background()); };
     mKeys->drawOver = [this](const el::context& ctx) { Tooltips::Draw(ctx, mTheme); };
     mKeys->onPointerDown = [this] { mChainFocused = false; };
     mKeys->onTrackDrop = [this](const el::drop_info& info, bool leaving) { TrackFileDrop(info, leaving); };
@@ -717,7 +723,93 @@ void Shell::OnTick()
 
     if (mAccess)
     {
+        AnnounceRigChanges();
         mAccess->Tick();
+    }
+}
+
+void Shell::AnnounceRigChanges()
+{
+    SaidRig now;
+    now.known = mState.activePreset.has_value();
+
+    if (now.known)
+    {
+        now.presetId = mState.activePresetId;
+        const auto* scene = mState.ActiveScene();
+        now.sceneId = scene != nullptr ? scene->id : std::string();
+
+        for (const auto& node : mState.activePreset->graph.nodes)
+        {
+            now.nodes.emplace_back(node.id, node.enabled);
+        }
+    }
+
+    const auto was = std::exchange(mSaidRig, now);
+
+    // The first state, and a preset with nothing loaded, are not news.
+    if (!was.known || !now.known)
+    {
+        return;
+    }
+
+    const auto nameOf = [this](const std::string& id) {
+        const auto* node = mState.activePreset->graph.FindNode(id);
+        return node != nullptr ? guitarfx::uiclient::NodeDisplayName(mState, *node) : std::string();
+    };
+
+    if (now.presetId != was.presetId)
+    {
+        AccessBridge::Announce("Preset " + mState.activePreset->name);
+        return;
+    }
+
+    if (now.sceneId != was.sceneId && !now.sceneId.empty())
+    {
+        if (const auto* scene = mState.ActiveScene())
+        {
+            AccessBridge::Announce("Scene " + scene->title);
+        }
+
+        return;
+    }
+
+    std::vector<std::string> said;
+
+    for (const auto& [id, enabled] : now.nodes)
+    {
+        const auto it =
+            std::find_if(was.nodes.begin(), was.nodes.end(), [&id](const auto& n) { return n.first == id; });
+
+        if (it == was.nodes.end())
+        {
+            said.push_back(nameOf(id) + " added");
+        }
+        else if (it->second != enabled)
+        {
+            said.push_back(nameOf(id) + (enabled ? " on" : " bypassed"));
+        }
+    }
+
+    for (const auto& [id, enabled] : was.nodes)
+    {
+        if (std::none_of(now.nodes.begin(), now.nodes.end(), [&id](const auto& n) { return n.first == id; }))
+        {
+            said.push_back("Effect removed");
+        }
+    }
+
+    // A whole chain swapped (undo, a scene's graph): one line, not one per effect.
+    if (said.size() > 3)
+    {
+        AccessBridge::Announce("Chain changed");
+    }
+    else
+    {
+        for (auto& line : said)
+        {
+            AccessBridge::Announce(std::move(line));
+        }
     }
 }
 

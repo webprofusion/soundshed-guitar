@@ -1,16 +1,11 @@
 #include "ui/widgets/SwitchMotion.h"
 
+#include "ui/input/SystemPreferences.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <vector>
-
-#if defined(_WIN32)
-    #ifndef NOMINMAX
-        #define NOMINMAX
-    #endif
-    #include <windows.h>
-#endif
 
 namespace nanoq::ui
 {
@@ -25,28 +20,6 @@ double Now()
 {
     using namespace std::chrono;
     return duration<double>(steady_clock::now().time_since_epoch()).count();
-}
-
-/// Windows' "Show animations in Windows" (Settings, Accessibility, Visual effects). Read once a
-/// second, not on every draw.
-bool ReducedMotion()
-{
-#if defined(_WIN32)
-    static double checked = -10.0;
-    static bool reduced = false;
-    const double now = Now();
-
-    if (now - checked > 1.0)
-    {
-        checked = now;
-        BOOL animate = TRUE;
-        reduced = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animate, 0) && !animate;
-    }
-
-    return reduced;
-#else
-    return false;
-#endif
 }
 
 struct Pressed

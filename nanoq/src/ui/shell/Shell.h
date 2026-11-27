@@ -108,6 +108,8 @@ struct DialogParts
     float padY = 18.0f;
     /// What the close cross does, when it is more than closing (Cancel undoing a preview).
     std::function<void()> onClose;
+    /// What a screen reader says the dialog is about, after its title (a confirm's question).
+    std::string description;
     /// The body takes the dialog's whole height (a list that scrolls in itself), rather than
     /// sitting at its top.
     bool stretch = false;
@@ -330,6 +332,8 @@ class Shell
     [[nodiscard]] float CurrentZoom() const;
     /// A zoom chosen in the UI: applied and stored.
     void SetZoom(float zoom);
+    /// The next zoom stop up (1) or down (-1) from the zoom in force, or 100% (0).
+    void StepZoom(int direction);
     /// Puts `zoom` on the view, and places what is open (the flyout, the Options sheet) again.
     void ApplyZoom(float zoom);
     /// Each tick: a stored zoom the view has not applied yet is applied, and one the host changed
@@ -341,6 +345,9 @@ class Shell
     [[nodiscard]] Ptr BuildAppUiChoice(float& height);
     /// Once, the first time this UI opens in Soundshed Guitar: it is a beta, and bugs are wanted.
     void ShowNativeUiBetaNoticeOnce();
+    /// With a screen reader that cannot read this UI (AccessBridge::UnservedScreenReader), offers
+    /// the standard (web) UI, which it can, once a session. Returns whether it asked.
+    bool OfferStandardUiForScreenReader();
     /// Touch sizes' Auto, On or Off, in a drop-down (the Options popover, ShellFrame.cpp).
     [[nodiscard]] std::shared_ptr<IconButton> TouchControlsButton();
 
@@ -602,7 +609,7 @@ class Shell
     [[nodiscard]] std::string TonePreviewSignature() const;
     void OpenToneLink(const guitarfx::uiclient::tones::LinkTarget& target);
     void ShowPackDetail(const guitarfx::uiclient::tones::PackDetail& detail);
-    Ptr mTonePreviewBar;
+    Ptr mTonePreviewBar; // shown in mPreviewBarSlot
     std::string mTonePreviewBarShown;
     bool mToneLinkTaken = false;
     std::optional<guitarfx::uiclient::tones::PackDetail> mPackDetail; // the pack view last shown,
@@ -916,7 +923,7 @@ class Shell
     bool mJamWebViewUnavailable = false;
     bool mJamPlayerAudible = false; // the player was making sound at the last tick
     std::weak_ptr<WebViewSlot> mJamPlayerSlot;
-    Ptr mJamPlayerBar;
+    Ptr mJamPlayerBar; // shown in mJamBarSlot
     std::string mJamPlayerBarShown;
     void RunJamSearch();
     void ToggleJamFavorite(const guitarfx::uiclient::jam::Video& video);
@@ -1185,11 +1192,29 @@ class Shell
     /// window.
     std::unique_ptr<AccessBridge> mAccess;
     bool mAccessTried = false;
+
+    /// What a screen reader was last told of the rig (AnnounceRigChanges): changes from a
+    /// footswitch, MIDI, the keys or another UI are said, as the web's live region says them.
+    struct SaidRig
+    {
+        bool known = false;
+        std::string presetId, sceneId;
+        std::vector<std::pair<std::string, bool>> nodes; // id, enabled
+    } mSaidRig;
+
+    void AnnounceRigChanges();
     /// The last click picked a chain card: Space bypasses it and Delete removes it, as when
     /// a card has focus in the web UI. Any other click clears it.
     bool mChainFocused = false;
     SlotPtr mFrameSlot, mEffectSlot;
     SlotPtr mBgSlot, mRailSlot, mTopSlot, mSceneSlot, mChainSlot, mPageSlot, mTransportSlot;
+    /// The bars over the bottom of the page (the tone preview's, the Jam player's). They sit
+    /// inside the page's KeyRouter, so Tab reaches their buttons after the page's and a screen
+    /// reader finds them with the page.
+    SlotPtr mPreviewBarSlot, mJamBarSlot;
+    /// Shows `bar` in `slot`, or nothing for null. Posted, as RemoveLayer is: the bar going may
+    /// be the one whose button was pressed.
+    void ShowBar(const SlotPtr& slot, Ptr bar);
 
     Page mPage = Page::Chain;
     bool mWide = false;               // the full layout is in force

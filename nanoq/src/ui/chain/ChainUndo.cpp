@@ -136,6 +136,7 @@ void Shell::UndoChain()
     if (const auto* target = mHistory.Undo())
     {
         ApplyChainSnapshot(*target);
+        AccessBridge::Announce("Undo");
     }
 }
 
@@ -146,6 +147,7 @@ void Shell::RedoChain()
     if (const auto* target = mHistory.Redo())
     {
         ApplyChainSnapshot(*target);
+        AccessBridge::Announce("Redo");
     }
 }
 

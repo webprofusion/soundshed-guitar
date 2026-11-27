@@ -23,10 +23,6 @@ using cycfi::artist::canvas;
 
 // ── Turning a knob or slider from the keyboard ─────────────────────────────────
 
-namespace
-{
-/// Where an arrow, Page Up or Down, Home or End takes a control at `value` (0..1): a hundredth a
-/// step (a thousandth with Shift), or one position of `steps`, and a tenth a page.
 std::optional<double> KeyedPosition(const el::key_info& k, double value, int steps)
 {
     using el::key_code;
@@ -82,7 +78,6 @@ bool IsResetKey(const el::key_info& k)
 {
     return k.action == el::key_action::press && (k.key == el::key_code::_delete || k.key == el::key_code::backspace);
 }
-} // namespace
 
 // ── ParamSlider ─────────────────────────────────────────────────────────────────
 
@@ -546,6 +541,7 @@ AccessInfo ParamKnob::Describe() const
     info.name = NameOr(mName);
     info.value = mEdit.Active() ? mEdit.Value() : mValueText;
     info.position = mValue;
+    info.steps = mKeySteps;
     return info;
 }
 

@@ -4,6 +4,7 @@
 
 #include "ui/dialogs/DialogChrome.h"
 #include "ui/shell/Shell.h"
+#include "ui/input/AccessBridge.h"
 
 #include <algorithm>
 #include <chrono>
@@ -118,6 +119,14 @@ void Shell::ShowDialog(DialogParts parts)
 
     ShowOverlay(Over(Col(column), std::make_shared<DialogFace>(mTheme, footer)), width, height);
     mOverlayCancel = std::move(cancel);
+
+    // Told to a screen reader as a dialog with its title and message (role=dialog).
+    if (auto* router = dynamic_cast<KeyRouter*>(mOverlay.get()))
+    {
+        router->accessKind = KeyRouter::AccessKind::Dialog;
+        router->accessTitle = parts.title;
+        router->accessDescription = parts.description;
+    }
 }
 
 void Shell::CancelOverlay()
@@ -207,6 +216,16 @@ void Shell::CloseOverlay()
 
         RemoveLayer(std::move(parent.layer));
     }
+}
+
+void Shell::ShowBar(const SlotPtr& slot, Ptr bar)
+{
+    auto& view = mSession.View();
+    view.post([&view, slot, bar = std::move(bar)] {
+        Fill(*slot, bar ? bar : std::make_shared<NoHit>());
+        view.layout();
+        view.refresh();
+    });
 }
 
 void Shell::RemoveLayer(Ptr layer)
@@ -356,7 +375,8 @@ void Shell::OpenPrompt(const std::string& title, const std::string& initial, con
             return b ? b->get_utf8() : std::string();
         };
         box->on_escape = [this] { DismissOverlay(); };
-        rows.push_back(FixedHeight(40, el::share(std::move(boxElement))));
+        // Named from the prompt's title, as the web's field labelled by its heading.
+        rows.push_back(FixedHeight(40, Labelled(title, el::share(std::move(boxElement)))));
         bodyHeight += 40.0f;
         line = box;
     }
@@ -403,7 +423,8 @@ void Shell::OpenPrompt(const std::string& title, const std::string& initial, con
                                 "Cancel", [this] { DismissOverlay(); }, false),
                             DialogButton(confirmLabel, submit, true)},
                 .width = width,
-                .height = kDialogHeaderHeight + kDialogFooterHeight + 36.0f + bodyHeight});
+                .height = kDialogHeaderHeight + kDialogFooterHeight + 36.0f + bodyHeight,
+                .description = options.message});
 }
 
 namespace
@@ -433,7 +454,8 @@ void Shell::OpenConfirm(const std::string& title, const std::string& detail, con
                                 "Cancel", [this] { DismissOverlay(); }, false),
                             DialogButton(confirmLabel, yes, true)},
                 .width = width,
-                .height = TextDialogHeight(*body)});
+                .height = TextDialogHeight(*body),
+                .description = detail});
 }
 
 void Shell::OpenAlert(const std::string& title, const std::string& message, std::function<void()> onClose)
@@ -456,7 +478,8 @@ void Shell::OpenAlert(const std::string& title, const std::string& message, std:
                 .actions = {DialogButton("OK", done, true)},
                 .width = width,
                 .height = TextDialogHeight(*body),
-                .onClose = done});
+                .onClose = done,
+                .description = message});
 }
 
 void Shell::ShowToast(const std::string& title, const std::string& detail, bool isError)
@@ -472,6 +495,8 @@ void Shell::ShowToast(const std::string& title, const std::string& detail, bool 
     // no clicks.
     const float above = mKeyboard && mKeyboard->Showing() ? OnScreenKeyboard::PanelHeight(ViewSize().y) + 8.0f : 64.0f;
     auto toast = std::make_shared<Toast>(mTheme, title, detail, isError);
+    // Said too, as the web's toast region (aria-live): an error at once.
+    AccessBridge::Announce(detail.empty() ? title : title + ". " + detail, isError);
     mToast = el::share(el::align_bottom(el::align_center(el::margin({0.0f, 0.0f, 0.0f, above}, el::hold_any(toast)))));
     view.add(mToast, false);
 

@@ -16,6 +16,7 @@
     #include <windows.h>
 #endif
 
+#include <algorithm>
 #include <map>
 
 namespace nanoq::ui
@@ -44,6 +45,20 @@ const char* RoleName(AccessRole role)
         return "combobox";
     case AccessRole::Edit:
         return "edit";
+    case AccessRole::Heading:
+        return "heading";
+    case AccessRole::Label:
+        return "text";
+    case AccessRole::Meter:
+        return "meter";
+    case AccessRole::Dialog:
+        return "dialog";
+    case AccessRole::Menu:
+        return "menu";
+    case AccessRole::List:
+        return "list";
+    case AccessRole::TabList:
+        return "tablist";
     }
 
     return "control";
@@ -51,17 +66,40 @@ const char* RoleName(AccessRole role)
 
 using Path = std::vector<std::pair<el::composite_base*, std::size_t>>;
 
-void Walk(const el::context& ctx, el::element& e, Path& path, std::vector<FocusTarget>& out)
+struct WalkOptions
 {
+    bool forAccess = false;
+    const std::string* label = nullptr; // the nearest AccessLabel's
+};
+
+void Walk(const el::context& ctx, el::element& e, Path& path, std::vector<FocusTarget>& out, WalkOptions options)
+{
+    const auto label = [&options] { return options.label != nullptr ? *options.label : std::string(); };
+
     // A control is a leaf of the walk, whatever it is built from.
     if (auto* f = dynamic_cast<Focusable*>(&e))
     {
-        if (e.wants_focus() && ctx.bounds.width() > 0.0f && ctx.bounds.height() > 0.0f)
+        // A screen reader hears a disabled control too, as the web's disabled button: Tab skips it.
+        if (ctx.bounds.width() > 0.0f && ctx.bounds.height() > 0.0f &&
+            (e.wants_focus() || (options.forAccess && !f->Describe().enabled)))
         {
-            out.push_back({&e, f, ctx.bounds, path, {}, 0});
+            out.push_back({&e, f, ctx.bounds, path, {}, 0, label(), false, !e.wants_focus()});
         }
 
         return;
+    }
+
+    if (options.forAccess)
+    {
+        if (const auto* s = dynamic_cast<const AccessStatic*>(&e))
+        {
+            if (ctx.bounds.width() > 0.0f && ctx.bounds.height() > 0.0f && s->DescribeStatic())
+            {
+                out.push_back({&e, nullptr, ctx.bounds, path, {}, 0, {}, true, true});
+            }
+
+            return;
+        }
     }
 
     if (auto* c = dynamic_cast<el::composite_base*>(&e))
@@ -71,7 +109,7 @@ void Walk(const el::context& ctx, el::element& e, Path& path, std::vector<FocusT
             auto& child = c->at(i);
             el::context cctx{ctx, &child, c->bounds_of(ctx, i)};
             path.emplace_back(c, i);
-            Walk(cctx, child, path, out);
+            Walk(cctx, child, path, out, options);
             path.pop_back();
         }
 
@@ -80,9 +118,14 @@ void Walk(const el::context& ctx, el::element& e, Path& path, std::vector<FocusT
 
     if (auto* p = dynamic_cast<el::proxy_base*>(&e))
     {
+        if (const auto* named = dynamic_cast<const AccessLabel*>(p))
+        {
+            options.label = &named->Label();
+        }
+
         el::context sctx{ctx, &p->subject(), ctx.bounds};
         p->prepare_subject(sctx);
-        Walk(sctx, p->subject(), path, out);
+        Walk(sctx, p->subject(), path, out, options);
         p->restore_subject(sctx);
         return;
     }
@@ -91,15 +134,36 @@ void Walk(const el::context& ctx, el::element& e, Path& path, std::vector<FocusT
     if (auto* i = dynamic_cast<el::indirect_base*>(&e))
     {
         el::context ictx{ctx, &i->get(), ctx.bounds};
-        Walk(ictx, i->get(), path, out);
+        Walk(ictx, i->get(), path, out, options);
         return;
     }
 
     // An Elements text field.
     if (dynamic_cast<el::basic_text_box*>(&e) != nullptr && e.wants_focus() && ctx.bounds.width() > 0.0f)
     {
-        out.push_back({&e, nullptr, ctx.bounds, path, {}, 0});
+        out.push_back({&e, nullptr, ctx.bounds, path, {}, 0, label(), false});
     }
+}
+
+/// How many of the walk's steps two paths share.
+std::size_t CommonPrefix(const FocusTarget& a, const FocusTarget& b)
+{
+    std::size_t n = 0;
+
+    while (n < a.path.size() && n < b.path.size() && a.path[n] == b.path[n])
+    {
+        ++n;
+    }
+
+    return n;
+}
+
+/// Under the same composite as the set's: its first `depth` steps are `first`'s, and the next
+/// step is in the same composite.
+bool UnderSet(const FocusTarget& t, const FocusTarget& first, std::size_t depth)
+{
+    return t.path.size() > depth && first.path.size() > depth && CommonPrefix(t, first) >= depth &&
+           t.path[depth].first == first.path[depth].first;
 }
 } // namespace
 
@@ -115,7 +179,17 @@ AccessInfo DescribeTarget(const el::element& element)
             info.help = std::move(tip);
         }
 
+        if (info.shortcut.empty())
+        {
+            info.shortcut = f->Shortcut();
+        }
+
         return info;
+    }
+
+    if (const auto* s = dynamic_cast<const AccessStatic*>(&element))
+    {
+        return s->DescribeStatic().value_or(AccessInfo{AccessRole::Label});
     }
 
     AccessInfo info;
@@ -130,25 +204,144 @@ AccessInfo DescribeTarget(const el::element& element)
     return info;
 }
 
+AccessInfo DescribeTarget(const FocusTarget& target)
+{
+    auto info = DescribeTarget(*target.element);
+
+    if (info.name.empty())
+    {
+        info.name = target.label;
+    }
+
+    return info;
+}
+
+std::vector<FocusSet> FindFocusSets(const std::vector<FocusTarget>& targets, const std::vector<AccessInfo>& infos,
+                                    bool inMenu)
+{
+    std::vector<FocusSet> sets;
+    std::vector<bool> taken(targets.size(), false);
+
+    for (std::size_t i = 0; i < targets.size(); ++i)
+    {
+        const auto role = infos[i].role;
+
+        if (taken[i] ||
+            (role != AccessRole::ListItem && role != AccessRole::Tab && (role != AccessRole::MenuItem || inMenu)))
+        {
+            continue;
+        }
+
+        // The next of its role decides the composite they share.
+        std::size_t k = i + 1;
+
+        while (k < targets.size() && infos[k].role != role)
+        {
+            ++k;
+        }
+
+        if (k >= targets.size())
+        {
+            continue;
+        }
+
+        const auto depth = CommonPrefix(targets[i], targets[k]);
+
+        if (!UnderSet(targets[k], targets[i], depth))
+        {
+            continue;
+        }
+
+        FocusSet set;
+        set.role = role == AccessRole::Tab        ? AccessRole::TabList
+                   : role == AccessRole::MenuItem ? AccessRole::Menu
+                                                  : AccessRole::List;
+        set.begin = i;
+
+        while (set.begin > 0 && UnderSet(targets[set.begin - 1], targets[i], depth))
+        {
+            --set.begin;
+        }
+
+        set.end = i;
+
+        while (set.end < targets.size() && UnderSet(targets[set.end], targets[i], depth))
+        {
+            if (infos[set.end].role == role && !targets[set.end].isStatic)
+            {
+                set.items.push_back(set.end);
+            }
+
+            ++set.end;
+        }
+
+        for (auto j = set.begin; j < set.end; ++j)
+        {
+            taken[j] = true;
+        }
+
+        if (set.items.size() >= 2)
+        {
+            sets.push_back(std::move(set));
+        }
+    }
+
+    return sets;
+}
+
+std::vector<FocusSet> FindFocusSets(const std::vector<FocusTarget>& targets, bool inMenu)
+{
+    std::vector<AccessInfo> infos;
+
+    for (const auto& t : targets)
+    {
+        infos.push_back(DescribeTarget(t));
+    }
+
+    return FindFocusSets(targets, infos, inMenu);
+}
+
+int FocusPeerDepth(const std::vector<FocusTarget>& targets, std::size_t at, AccessRole role,
+                   const std::vector<AccessInfo>& infos)
+{
+    int depth = -1;
+
+    for (std::size_t i = 0; i < targets.size(); ++i)
+    {
+        if (i != at && infos[i].role == role)
+        {
+            depth = std::max(depth, static_cast<int>(CommonPrefix(targets[at], targets[i])));
+        }
+    }
+
+    return depth;
+}
+
+bool SamePrefix(const FocusTarget& a, const FocusTarget& b, int depth)
+{
+    return depth >= 0 && static_cast<int>(CommonPrefix(a, b)) >= depth;
+}
+
 std::string FocusKey(const el::element& element)
 {
     const auto info = DescribeTarget(element);
     return std::string(RoleName(info.role)) + ":" + info.name;
 }
 
-std::vector<FocusTarget> CollectFocusTargets(const el::context& ctx, el::element& root)
+std::vector<FocusTarget> CollectFocusTargets(const el::context& ctx, el::element& root, bool forAccess)
 {
     std::vector<FocusTarget> out;
     Path path;
-    Walk(ctx, root, path, out);
+    Walk(ctx, root, path, out, {forAccess, nullptr});
 
     // Two knobs both called Level are told apart by their order.
-    std::map<std::string, int> seen;
+    std::map<std::string, int> seen, seenExtra;
 
     for (auto& t : out)
     {
-        t.key = FocusKey(*t.element);
-        t.ordinal = seen[t.key]++;
+        const auto info = DescribeTarget(t);
+        t.key = std::string(RoleName(info.role)) + ":" + info.name;
+        t.ordinal = t.accessOnly ? 1000 + seenExtra[t.key]++ : seen[t.key]++;
     }
 
     return out;

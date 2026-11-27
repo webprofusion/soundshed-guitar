@@ -244,9 +244,11 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             info.value += info.value.empty() ? "missing" : ", missing";
         }
 
-        if (mLook.canBypass)
+        // Bypassed is part of what it reads, as the web's card says it; Space toggles it. The
+        // card's own action is choosing it, so it is not a toggle to a screen reader.
+        if (mLook.canBypass && !mLook.enabled)
         {
-            info.toggled = mLook.enabled ? 1 : 0;
+            info.value += info.value.empty() ? "bypassed" : ", bypassed";
         }
 
         info.selected = mLook.selected;
@@ -293,6 +295,14 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
         if ((k.key == key_code::enter || k.key == key_code::kp_enter) && command)
         {
             return RunFromCopy(onReplace);
+        }
+
+        // Alt+Left and Alt+Right: one place earlier or later, as its menu's Move earlier/later.
+        if ((k.modifiers & el::mod_alt) && !(k.modifiers & (el::mod_control | el::mod_super)) &&
+            (k.key == key_code::left || k.key == key_code::right) && onMove)
+        {
+            onMove(k.key == key_code::left ? -1 : 1);
+            return true;
         }
 
         if (k.modifiers & (el::mod_control | el::mod_alt | el::mod_super))
@@ -951,6 +961,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
     }
 
     std::function<void()> onSelect, onToggle, onMenu, onReplace, onRemove;
+    /// Alt+Left (-1) and Alt+Right (1).
+    std::function<void(int step)> onMove;
     /// A right click on the power: where it was, in view coordinates.
     std::function<void(el::point)> onPowerMenu;
     /// A drag from `from` that is now at `to` (view coordinates); `done` when it is let go.

@@ -187,6 +187,30 @@ Paragraph& Paragraph::Colour(el::color c)
     return *this;
 }
 
+std::optional<AccessInfo> Text::DescribeStatic() const
+{
+    int level = mHeading;
+
+    // A title is a heading of its own; a section's label says so (AccessHeading), as small
+    // capitals also caption knobs and badges.
+    if (level < 0)
+    {
+        level = mWeight == Weight::Title ? 1 : 0;
+    }
+
+    if (level <= 0 || mText.empty())
+    {
+        return std::nullopt;
+    }
+
+    AccessInfo info;
+    info.role = AccessRole::Heading;
+    info.level = level;
+    // Small capitals are drawn from the text as written; a screen reader spells out capitals.
+    info.name = mText;
+    return info;
+}
+
 Text& Text::Set(std::string text)
 {
     mText = std::move(text);
@@ -517,6 +541,24 @@ void GroupHeading::draw(const el::context& ctx)
 
 MeterBar::MeterBar(const Theme& theme) : mTheme(theme)
 {
+}
+
+std::optional<AccessInfo> MeterBar::DescribeStatic() const
+{
+    AccessInfo info;
+    info.role = AccessRole::Meter;
+    info.name = mName.empty() ? std::string("Level") : mName;
+    // Whole decibels: a reader polling it hears a number that holds still long enough to say.
+    const double db = std::round(mPeakDb);
+    info.value = db <= -60.0 ? std::string("silent") : std::to_string(static_cast<int>(db)) + " dB";
+
+    if (mClipped)
+    {
+        info.value += ", clipping";
+    }
+
+    info.position = std::clamp((mPeakDb + 60.0) / 60.0, 0.0, 1.0);
+    return info;
 }
 
 namespace

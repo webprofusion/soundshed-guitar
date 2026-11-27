@@ -449,11 +449,12 @@ void LayoutControlView::DrawSlider(artist::canvas& cnv, el::rect box)
     cnv.stroke();
 }
 
-void LayoutControlView::SetPosition(double position, const el::context& ctx)
+bool LayoutControlView::ApplyPosition(double position)
 {
     const double value = SnapParamValue(mParam, ParamPositionToValue(mParam, std::clamp(position, 0.0, 1.0)));
+    const bool changed = value != mValue;
 
-    if (value != mValue)
+    if (changed)
     {
         mValue = value;
 
@@ -466,7 +467,132 @@ void LayoutControlView::SetPosition(double position, const el::context& ctx)
     // A stepped control sits on its steps; a continuous one follows the pointer.
     mPosition = mParam.step > 0.0 || IsEnumParam(mParam) ? ParamValueToPosition(mParam, mValue)
                                                          : std::clamp(position, 0.0, 1.0);
+    return changed;
+}
+
+void LayoutControlView::SetPosition(double position, const el::context& ctx)
+{
+    ApplyPosition(position);
     ctx.view.refresh(ctx);
+}
+
+int LayoutControlView::KeySteps() const
+{
+    const double span = mParam.maxValue - mParam.minValue;
+
+    if (span <= 0.0 || (!IsEnumParam(mParam) && mParam.step <= 0.0))
+    {
+        return 0;
+    }
+
+    const double step = mParam.step > 0.0 ? mParam.step : 1.0;
+    const double count = std::floor(span / step + 0.5) + 1.0;
+    // A fine step (a hundredth of a dB) is as good as smooth from the keyboard.
+    return count >= 2.0 && count <= 101.0 ? static_cast<int>(count) : 0;
+}
+
+void LayoutControlView::begin_focus(focus_request)
+{
+    NoteFocus(true);
+}
+
+bool LayoutControlView::end_focus()
+{
+    NoteFocus(false);
+    return true;
+}
+
+AccessInfo LayoutControlView::Describe() const
+{
+    AccessInfo info;
+    info.name = NameOr(mLook.label.empty() ? mParam.name : mLook.label);
+
+    if (mLook.kind == LayoutControlKind::Toggle)
+    {
+        info.role = AccessRole::Toggle;
+        info.toggled = mValue >= 0.5 ? 1 : 0;
+        return info;
+    }
+
+    info.role = AccessRole::Slider;
+    info.value = FormatParamValue(mParam, mValue);
+    info.position = mPosition;
+    info.steps = KeySteps();
+    return info;
+}
+
+bool LayoutControlView::Activate(const el::rect&)
+{
+    if (mLook.kind == LayoutControlKind::Toggle && mActions.setParam)
+    {
+        mValue = std::clamp(mValue >= 0.5 ? 0.0 : 1.0, mParam.minValue, mParam.maxValue);
+        mActions.setParam(mParam, mValue);
+        RepaintSoon(DrawnArea());
+        return true;
+    }
+
+    if (!IsEnumParam(mParam) && mActions.editValue)
+    {
+        mActions.editValue(mParam);
+        return true;
+    }
+
+    return false;
+}
+
+bool LayoutControlView::SetPosition(double position)
+{
+    if (mLook.kind == LayoutControlKind::Toggle)
+    {
+        return false;
+    }
+
+    ApplyPosition(position);
+    RepaintSoon(DrawnArea());
+    return true;
+}
+
+bool LayoutControlView::key(const el::context& ctx, el::key_info k)
+{
+    if (IsMenuKey(k) && mActions.menu)
+    {
+        mActions.menu(mParam, ToView(ctx, cycfi::artist::center_point(ControlBox(ctx.bounds))));
+        return true;
+    }
+
+    if (mLook.kind == LayoutControlKind::Toggle)
+    {
+        if (IsPressKey(k))
+        {
+            Activate(ctx.bounds);
+            ctx.view.refresh(ctx);
+            return true;
+        }
+
+        return false;
+    }
+
+    if (IsResetKey(k))
+    {
+        SetPosition(ParamValueToPosition(mParam, mParam.defaultValue), ctx);
+        return true;
+    }
+
+    const bool plain = (k.modifiers & (el::mod_control | el::mod_alt | el::mod_super)) == 0;
+
+    if (k.action == el::key_action::press && plain &&
+        (k.key == el::key_code::f2 || k.key == el::key_code::enter || k.key == el::key_code::kp_enter))
+    {
+        return Activate(ctx.bounds);
+    }
+
+    if (const auto next = KeyedPosition(k, mPosition, KeySteps()))
+    {
+        SetPosition(*next, ctx);
+        return true;
+    }
+
+    return false;
 }
 
 bool LayoutControlView::click(const el::context& ctx, el::mouse_button btn)

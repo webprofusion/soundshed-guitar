@@ -36,6 +36,16 @@ enum class AccessRole
     MenuItem,
     ComboBox, // opens a list to choose from: a picker, a select
     Edit,     // a text field
+    // Not controls: what a screen reader reads round them (AccessStatic), never a Tab stop.
+    Heading, // a section's title
+    Label,   // a line or paragraph of text
+    Meter,   // a level shown, not set: a read-only range
+    // Containers, which only the bridge makes: the controls of a dialog, a menu, a list or a
+    // row of tabs.
+    Dialog,
+    Menu,
+    List,
+    TabList,
 };
 
 /// What assistive technology reads of a control.
@@ -54,11 +64,32 @@ struct AccessInfo
     double position = -1.0;
     /// More than the name says, as its tooltip does (UIA's HelpText).
     std::string help;
+    /// A combo box or a button that opens a menu: 0 closed, 1 open; -1 for anything else.
+    int expanded = -1;
+    /// How many positions a stepped knob has (an enum's choices); 0 for a smooth one.
+    int steps = 0;
+    /// A heading's level, 1 the highest.
+    int level = 0;
+    /// The key that does what it does, as the platform writes it ("Ctrl+Z").
+    std::string shortcut;
+    /// More than a container's name: a dialog's message.
+    std::string description;
 };
 
 class Focusable
 {
   public:
+    /// The key that does what the control does ("Ctrl+Z"), read with its name.
+    void AccessShortcut(std::string shortcut)
+    {
+        mShortcut = std::move(shortcut);
+    }
+
+    [[nodiscard]] const std::string& Shortcut() const
+    {
+        return mShortcut;
+    }
+
     virtual ~Focusable() = default;
 
     [[nodiscard]] virtual AccessInfo Describe() const = 0;
@@ -152,12 +183,60 @@ class Focusable
 
     std::string mAccessName;
     std::string mTooltip;
+    std::string mShortcut;
 
   private:
     bool mFocused = false;
     static inline bool sFocusVisible = false;
     static inline unsigned sSerial = 0;
 };
+
+/// What is read round the controls but is not one: a heading, a paragraph, a meter. Only a
+/// screen reader's walk collects these (CollectFocusTargets with `forAccess`); Tab never stops on
+/// one.
+class AccessStatic
+{
+  public:
+    virtual ~AccessStatic() = default;
+
+    /// Nothing while it has nothing to say (an empty line of text).
+    [[nodiscard]] virtual std::optional<AccessInfo> DescribeStatic() const = 0;
+};
+
+/// Names what is inside it for a screen reader, where it has no name of its own: a text field's
+/// label (the web UI's <label for=>), as the field itself is drawn with only a placeholder.
+class AccessLabel final : public el::proxy_base
+{
+  public:
+    AccessLabel(std::string label, el::element_ptr subject) : mLabel(std::move(label)), mSubject(std::move(subject))
+    {
+    }
+
+    el::element& subject() override
+    {
+        return *mSubject;
+    }
+
+    const el::element& subject() const override
+    {
+        return *mSubject;
+    }
+
+    [[nodiscard]] const std::string& Label() const
+    {
+        return mLabel;
+    }
+
+  private:
+    std::string mLabel;
+    el::element_ptr mSubject;
+};
+
+/// `content` with its text field (or unnamed control) named `label` for a screen reader.
+[[nodiscard]] inline el::element_ptr Labelled(std::string label, el::element_ptr content)
+{
+    return std::make_shared<AccessLabel>(std::move(label), std::move(content));
+}
 
 /// A key that presses a button: Enter (either) or Space, not a repeat.
 [[nodiscard]] inline bool IsPressKey(const el::key_info& k)
@@ -186,19 +265,53 @@ struct FocusTarget
     /// FocusKey(), and how many targets before this one share it.
     std::string key;
     int ordinal = 0;
+    /// The name an AccessLabel round it gives, for a control with none of its own.
+    std::string label;
+    /// Read, not a control (AccessStatic): only in a walk `forAccess`.
+    bool isStatic = false;
+    /// In a walk `forAccess` only (disabled, or read): its ordinal is counted apart, from 1000, so
+    /// the controls Tab reaches keep the ordinals a plain walk gives them.
+    bool accessOnly = false;
 };
+
+/// The rows of a list, the tabs of a row: two or more items of one role (ListItem, Tab, or
+/// MenuItem outside a menu) in one composite, which the web marks up as a list or a tablist.
+/// Each runs over the targets from its first to its last under that composite (what else its
+/// rows hold, their buttons, included); `items` are the ones of its role.
+struct FocusSet
+{
+    std::size_t begin = 0, end = 0; // targets [begin, end)
+    AccessRole role = AccessRole::List;
+    std::vector<std::size_t> items;
+};
+
+[[nodiscard]] std::vector<FocusSet> FindFocusSets(const std::vector<FocusTarget>& targets,
+                                                  const std::vector<AccessInfo>& infos, bool inMenu);
+/// The same, describing each target.
+[[nodiscard]] std::vector<FocusSet> FindFocusSets(const std::vector<FocusTarget>& targets, bool inMenu);
+
+/// How deep the walk paths of target `at` and its nearest other of `role` agree: the depth of
+/// the composite holding its row or list. -1 when it has no other.
+[[nodiscard]] int FocusPeerDepth(const std::vector<FocusTarget>& targets, std::size_t at, AccessRole role,
+                                 const std::vector<AccessInfo>& infos);
+/// Whether `a` and `b` agree to `depth` steps (FocusPeerDepth): in the same row or list.
+[[nodiscard]] bool SamePrefix(const FocusTarget& a, const FocusTarget& b, int depth);
 
 /// The role and name: what makes a control the same control after the region holding it is
 /// rebuilt.
 [[nodiscard]] std::string FocusKey(const el::element& element);
 
 /// What a control says of itself: Describe() for a Focusable, a text field's text for an
-/// Elements text box.
+/// Elements text box, DescribeStatic() for what is only read.
 [[nodiscard]] AccessInfo DescribeTarget(const el::element& element);
+/// The same, with the name an AccessLabel gives where the control has none.
+[[nodiscard]] AccessInfo DescribeTarget(const FocusTarget& target);
 
 /// Every control under `root` that wants focus now, in tab order (the order the layout gives
-/// them), with its bounds; `ctx` is root's own context.
-[[nodiscard]] std::vector<FocusTarget> CollectFocusTargets(const el::context& ctx, el::element& root);
+/// them), with its bounds; `ctx` is root's own context. `forAccess` (a screen reader's walk) adds
+/// the disabled controls, which Tab skips, and what is only read (AccessStatic).
+[[nodiscard]] std::vector<FocusTarget> CollectFocusTargets(const el::context& ctx, el::element& root,
+                                                           bool forAccess = false);
 
 /// The control holding focus under `root` (following each composite's focus), or null.
 [[nodiscard]] el::element* FocusedLeaf(el::element& root);

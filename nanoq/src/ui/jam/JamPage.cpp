@@ -619,9 +619,9 @@ void Shell::SyncJamPlayerBar()
 
     mJamPlayerBarShown = signature;
 
-    if (mJamPlayerBar)
+    if (std::exchange(mJamPlayerBar, nullptr))
     {
-        RemoveLayer(std::exchange(mJamPlayerBar, nullptr));
+        ShowBar(mJamBarSlot, nullptr);
     }
 
     if (!wanted)
@@ -654,8 +654,7 @@ void Shell::SyncJamPlayerBar()
     mJamPlayerBar = AvoidKeyboard(el::share(el::align_bottom(
         el::align_center(el::margin({0.0f, 0.0f, 0.0f, kBarAboveFooter},
                                     el::hold_any(FixedWidth(width, FixedHeight(kBarHeight, Expand(face)))))))));
-    mSession.View().add(mJamPlayerBar, false);
-    mSession.View().refresh();
+    ShowBar(mJamBarSlot, mJamPlayerBar);
 }
 
 Ptr Shell::BuildBackingTracks(float width)

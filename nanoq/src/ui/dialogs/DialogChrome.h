@@ -266,6 +266,7 @@ class PickerField final : public Pressable
         AccessInfo info = Pressable::Describe();
         info.role = AccessRole::ComboBox;
         info.value = mText;
+        info.expanded = 0;
         return info;
     }
 
@@ -439,7 +440,16 @@ class Segmented final : public el::element, public Drawn, public Focusable
     {
         AccessInfo info;
         info.role = AccessRole::ComboBox;
-        info.name = mAccessName;
+
+        // Unnamed, it is its choices ("All or Favourites"), so it is never read as its value alone.
+        if (info.name = mAccessName; info.name.empty())
+        {
+            for (const auto& option : mOptions)
+            {
+                info.name += (info.name.empty() ? "" : " or ") + option;
+            }
+        }
+
         info.value = mSelected >= 0 && mSelected < static_cast<int>(mOptions.size())
                          ? mOptions[static_cast<std::size_t>(mSelected)]
                          : std::string();

@@ -9,8 +9,8 @@
 // drawn in that place soon after starts its slide from there. Only a press does that, so turning
 // to another effect never slides its switches from the last one's.
 //
-// The slide is drawn by redrawing the switch's area each tick until it ends (Tick). With Windows'
-// "Show animations" off (reduced motion), switches jump, as the web UI's do under
+// The slide is drawn by redrawing the switch's area each tick until it ends (Tick). With reduced
+// motion asked for (SystemPreferences.h), switches jump, as the web UI's do under
 // prefers-reduced-motion.
 
 #include "ui/Drawn.h"

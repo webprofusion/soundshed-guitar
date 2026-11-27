@@ -16,6 +16,7 @@
 
 #include "IPluginHost.h"
 #include "ui/dialogs/DialogChrome.h"
+#include "ui/input/AccessBridge.h"
 
 #include <algorithm>
 #include <cmath>
@@ -429,6 +430,11 @@ void Shell::ShowNativeUiBetaNoticeOnce()
 
     mBetaNoticeChecked = true;
 
+    if (OfferStandardUiForScreenReader())
+    {
+        return;
+    }
+
     if (!mState.environment.nativeEditor || mState.environment.nativeEditorOnly ||
         FlagSetting(mState.appSettings, kBetaNoticeSetting, false))
     {
@@ -463,6 +469,25 @@ void Shell::ShowNativeUiBetaNoticeOnce()
                                 "OK", [this] { CloseOverlay(); }, true)},
                 .width = width,
                 .height = kDialogHeaderHeight + kDialogFooterHeight + 150.0f});
+}
+
+bool Shell::OfferStandardUiForScreenReader()
+{
+    // Only where the standard UI can be had: Soundshed Guitar hosting this one.
+    if (!mState.environment.nativeEditor || mState.environment.nativeEditorOnly ||
+        !AccessBridge::UnservedScreenReader())
+    {
+        return false;
+    }
+
+    const bool standalone = mState.environment.standalone;
+    OpenConfirm("A screen reader is running",
+                std::string("The native UI (Nano) can't be read by a screen reader on this system yet. The standard "
+                            "UI can. Use the standard UI?") +
+                    (standalone ? "" : " It opens when the plugin window next opens."),
+                "Use the standard UI",
+                [this] { mSession.Commands().SetSetting(guitarfx::kNativeEditorSettingKey, false); });
+    return true;
 }
 
 Ptr Shell::BuildZoomPicker()
@@ -516,6 +541,39 @@ void Shell::SetZoom(float zoom)
     mZoomStored = zoom;
     ApplyZoom(zoom);
     mSession.Commands().PatchNativeUiSettings({{"zoom", zoom}});
+}
+
+void Shell::StepZoom(int direction)
+{
+    if (direction == 0)
+    {
+        SetZoom(1.0f);
+        return;
+    }
+
+    const float current = CurrentZoom();
+    float next = current;
+
+    if (direction > 0)
+    {
+        const auto* up = std::find_if(std::begin(kZoomStops), std::end(kZoomStops),
+                                      [current](float stop) { return stop > current + 0.001f; });
+        next = up != std::end(kZoomStops) ? *up : kZoomMax;
+    }
+    else
+    {
+        for (const float stop : kZoomStops)
+        {
+            if (stop < current - 0.001f)
+            {
+                next = stop;
+            }
+        }
+
+        next = next == current ? kZoomMin : next;
+    }
+
+    SetZoom(next);
 }
 
 void Shell::ApplyZoom(float zoom)

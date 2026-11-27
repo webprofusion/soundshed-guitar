@@ -86,6 +86,7 @@ std::string Numeral(std::string token)
 Ptr Label(const Theme& theme, const std::string& text)
 {
     auto t = std::make_shared<Text>(theme, Upper(text), 10.0f, Weight::SemiBold);
+    t->AccessHeading(2); // a section title, to a screen reader
     t->Colour(theme.TextMuted());
     return FixedHeight(16, t);
 }

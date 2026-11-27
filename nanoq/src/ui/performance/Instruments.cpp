@@ -2,6 +2,7 @@
 // place from the engine's feed rather than rebuilt. The metronome is in Metronome.cpp.
 
 #include "ui/dialogs/DialogChrome.h"
+#include "ui/input/AccessBridge.h"
 #include "ui/Drawn.h"
 #include "ui/performance/IntonationPanel.h"
 #include "ui/shell/Shell.h"
@@ -72,7 +73,7 @@ bool gTunerReopening = false;
 /// The tuner's display (tuner-modal.html, css/modals/tuner.css): -50 and +50 either side of
 /// the flat or sharp mark and the reading in cents or Hz; the puck sliding along its track
 /// over the in-tune ring, green when in tune; and the note between its neighbours.
-class TunerFace final : public el::element, public Drawn
+class TunerFace final : public el::element, public Drawn, public AccessStatic
 {
   public:
     static constexpr float kHeight = 300.0f;
@@ -219,9 +220,75 @@ class TunerFace final : public el::element, public Drawn
             mReading.inTune = std::abs(fret->cents) < TunerModel::kInTuneCents;
             mReading.needle = std::clamp(0.5 + (fret->cents / 50.0) * 0.45, 0.05, 0.95);
         }
+
+        SayChange();
+    }
+
+    /// The reading as words: the note (or fret) and how far off it is.
+    [[nodiscard]] std::string Spoken() const
+    {
+        const auto& r = mReading;
+
+        if (!r.detected)
+        {
+            return "No note";
+        }
+
+        std::string note = mFretMode ? "Fret " + r.note : r.note;
+
+        // "C#" read as "C sharp", not "C number".
+        if (const auto hash = note.find('#'); hash != std::string::npos)
+        {
+            note.replace(hash, 1, " sharp");
+        }
+
+        if (r.inTune)
+        {
+            return note + ", in tune";
+        }
+
+        const int cents = static_cast<int>(std::lround(std::abs(r.cents)));
+        return note + ", " + std::to_string(cents) + (cents == 1 ? " cent " : " cents ") +
+               (r.cents < 0.0 ? "flat" : "sharp");
+    }
+
+    [[nodiscard]] std::optional<AccessInfo> DescribeStatic() const override
+    {
+        AccessInfo info;
+        info.role = AccessRole::Label;
+        info.name = "Tuner: " + Spoken();
+        return info;
     }
 
   private:
+    /// Tells a screen reader when the note, or which side of in tune it is, changes: at most
+    /// once a second, and only once a reading has held for a quarter of one, so a string
+    /// settling is not read out at every step.
+    void SayChange()
+    {
+        const auto& r = mReading;
+        const std::string state = !r.detected ? std::string() : r.note + (r.inTune ? "=" : r.cents < 0.0 ? "<" : ">");
+        const double now = UiSession::Now();
+
+        if (state != mHeldState)
+        {
+            mHeldState = state;
+            mHeldSince = now;
+            return;
+        }
+
+        if (state.empty() || state == mSaidState || now - mHeldSince < 0.25 || now - mSaidAt < 1.0)
+        {
+            return;
+        }
+
+        mSaidState = state;
+        mSaidAt = now;
+        AccessBridge::Announce(Spoken());
+    }
+
+    std::string mHeldState, mSaidState;
+    double mHeldSince = 0.0, mSaidAt = -10.0;
     float mShown = 0.5f; // where the puck is drawn, sliding to the reading
     double mShownAt = 0.0;
     const Theme& mTheme;

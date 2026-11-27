@@ -54,6 +54,16 @@ inline void Fill(Slot& slot, Ptr content)
     slot = std::move(content);
 }
 
+/// Nothing, which no click lands on: an empty layer over others leaves the pointer to them.
+class NoHit final : public el::element
+{
+  public:
+    el::element* hit_test(const el::context&, el::point, bool, bool) override
+    {
+        return nullptr;
+    }
+};
+
 /// Lets its subject grow without limit in the chosen directions: the subject's own minimum, and
 /// no maximum. A scroller otherwise reports its content's height as its maximum, which would
 /// cap the whole window at the height of the page it is showing.

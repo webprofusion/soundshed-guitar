@@ -523,6 +523,7 @@ struct WaveShown
 Ptr Heading(const Theme& theme, const std::string& text)
 {
     auto t = std::make_shared<Text>(theme, Upper(text), 9.5f, Weight::SemiBold);
+    t->AccessHeading(2); // a section title, to a screen reader
     t->Colour(theme.TextSecondary());
     return t;
 }

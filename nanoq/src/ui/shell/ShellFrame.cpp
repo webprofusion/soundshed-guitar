@@ -504,6 +504,13 @@ Ptr Shell::BuildHistoryControls()
     undo->Disabled(!mHistory.CanUndo());
     auto redo = ToolButton(mTheme, mIcons, "ui-redo", [this] { RedoChain(); }, key, 15.0f);
     redo->Disabled(!mHistory.CanRedo());
+#if defined(__APPLE__)
+    undo->AccessShortcut("Cmd+Z");
+    redo->AccessShortcut("Cmd+Shift+Z");
+#else
+    undo->AccessShortcut("Ctrl+Z");
+    redo->AccessShortcut("Ctrl+Y");
+#endif
     auto a = std::make_shared<AbButton>(mTheme, "A", mHistory.ActiveSlot() == Slot::A);
     a->onClick = [this] { SetChainSlot(Slot::A); };
     auto b = std::make_shared<AbButton>(mTheme, "B", mHistory.ActiveSlot() == Slot::B);

@@ -197,6 +197,7 @@ Ptr Shell::BuildDspDiagnostics(float width)
     };
     const auto heading = [this](const std::string& text, bool right) {
         auto t = std::make_shared<Text>(mTheme, Upper(text), 9.5f, Weight::SemiBold);
+        t->AccessHeading(3); // a section title, to a screen reader
         t->Colour(mTheme.TextSecondary()).Alignment(right ? HAlign::Right : HAlign::Left);
         return t;
     };
