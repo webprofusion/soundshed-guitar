@@ -363,6 +363,15 @@ class UiCommands
     /// Saves the pending take (riffSaved, then riffLibraryState).
     void SaveRiffTake(const RiffSave& save);
     void DeleteRiff(const std::string& riffId);
+    /// Where the takes and their index are kept (the web's Storage > Set Path); a riffLibraryState
+    /// with the folder's riffs follows.
+    void SetRiffLibraryPath(const std::string& path);
+    /// An audio file (WAV, AIFF or MP3) made the pending take, to trim and save as a riff (the web's
+    /// drop import); its bars are counted from its length at this tempo and time signature.
+    void ImportRiffWav(const std::vector<std::uint8_t>& bytes, const std::string& fileName, double tempoBpm,
+                       int timeSigNum, int timeSigDen);
+    /// The host's file browser for that audio file (browseRiffImportFile), then imported as above.
+    void BrowseRiffImportFile(double tempoBpm, int timeSigNum, int timeSigDen);
     void SetRiffFavorite(const std::string& riffId, bool favorite);
     void MarkRiffUsed(const std::string& riffId, bool used, const std::string& songTitle = {});
     /// Plays a library take, looping, with the guidance click (the riff list's Preview).

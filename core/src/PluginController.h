@@ -518,6 +518,9 @@ class PluginController
     void HandleStartRiffCaptureRequest(const nlohmann::json& payload);
     void HandleStopRiffCaptureRequest(const nlohmann::json& payload);
     void HandleImportRiffWavRequest(const nlohmann::json& payload);
+    /// Asks the host for an audio file, then imports it as importRiffWav does (Nano Q's Import
+    /// Audio; the web drops a file instead).
+    void HandleBrowseRiffImportFileRequest(const nlohmann::json& payload);
     void HandleTrimCapturedRiffRequest(const nlohmann::json& payload);
     void HandleLoadRiffTakeForEditRequest(const nlohmann::json& payload);
     void HandleSaveRiffTakeRequest(const nlohmann::json& payload);

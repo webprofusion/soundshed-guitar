@@ -271,6 +271,32 @@ void PluginController::HandleStopRiffCaptureRequest(const nlohmann::json& payloa
     FinalizeRiffCapture(canceled);
 }
 
+void PluginController::HandleBrowseRiffImportFileRequest(const nlohmann::json& payload)
+{
+    // The same import as a dropped file's: the file's bytes travel as importRiffWav's data, with
+    // the tempo and time signature the request carried.
+    mHost.BrowseFileAsync(BrowseFileType::AudioFile, "Import Riff Audio",
+                          [this, payload](const BrowseFileResult& result) {
+                              if (!result.success)
+                              {
+                                  return;
+                              }
+
+                              const auto bytes = util::ReadFileBytes(result.path);
+
+                              if (bytes.empty())
+                              {
+                                  ReportErrorToUI("Riff Library", "The audio file could not be read");
+                                  return;
+                              }
+
+                              auto request = payload;
+                              request["data"] = util::EncodeBase64(bytes);
+                              request["fileName"] = util::PathToUtf8(result.path.filename());
+                              HandleImportRiffWavRequest(request);
+                          });
+}
+
 void PluginController::HandleImportRiffWavRequest(const nlohmann::json& payload)
 {
     const std::string base64 = payload.value("data", std::string{});

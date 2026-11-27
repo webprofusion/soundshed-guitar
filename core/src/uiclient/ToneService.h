@@ -210,7 +210,7 @@ class ToneService
                  BytesCallback done, Headers headers = {});
     /// A tone sharing request with a JSON answer: the session it carries is kept, a dropped one
     /// forgotten.
-    void Send(const std::string& method, const std::string& path, const std::string& body, Callback callback);
+    void ToneRequest(const std::string& method, const std::string& path, const std::string& body, Callback callback);
     /// A GET on Tone3000's own API (`url` is an official one): through the relay while it is on;
     /// off it, with a session started from the player's key, which is kept until near its expiry.
     void Tone3000Get(const std::string& url, BytesCallback done);

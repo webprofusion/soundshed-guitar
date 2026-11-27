@@ -1041,7 +1041,15 @@ class Shell
     /// The riff capture dialog; `arm` starts counting in at once (the footer's Rec), and
     /// `appendRiffId` saves the take as another take of that riff (the library's Edit).
     void OpenRiffCapture(bool arm, const std::string& appendRiffId = {});
+    /// Shows the Jam page's Riff Library section (the riff library is inline there, as the web's).
     void OpenRiffLibrary();
+    /// The Riff Library's saved riffs, a row each, and what it is built from.
+    [[nodiscard]] Ptr BuildRiffRows();
+    [[nodiscard]] std::string RiffSectionSignature() const;
+    [[nodiscard]] bool RiffLooperOn() const;
+    /// An audio file picked (the host's browser) and made the pending take, then New Riff opened
+    /// to trim and save it.
+    void ImportRiffAudio();
 
     // LooperStrip.cpp
     [[nodiscard]] bool LooperShown() const; // the feature is on and the app is the standalone one
@@ -1279,7 +1287,14 @@ class Shell
     std::optional<SuspendedOverlay> mSuspendedOverlay;
     bool mNextOverlayInterrupts = false;                           // the next ShowOverlay is a confirm or prompt
     std::vector<guitarfx::uiclient::Subscription> mInstrumentSubs; // an open dialog's live feeds
-    guitarfx::uiclient::Subscription mImportWatch;                 // a preset archive import, until it answers
+    // The Riff Library's folder as typed, kept while the section is rebuilt; the engine's path is
+    // put back in it when that changes.
+    std::shared_ptr<el::basic_input_box> mRiffPathBox;
+    Ptr mRiffPathField;
+    std::string mRiffPathShown;
+    bool mRiffImportWaiting = false; // Import Audio asked for a file: New Riff opens on its take
+    int mRiffImportSerial = 0;
+    guitarfx::uiclient::Subscription mImportWatch; // a preset archive import, until it answers
     std::string mPickerCategory;
     std::optional<guitarfx::GraphEdge> mPickerEdge;  // the open picker adds on this edge, not after a node
     el::rect mEditorArea;                            // where the full layout's editor is: the FX Library opens over it

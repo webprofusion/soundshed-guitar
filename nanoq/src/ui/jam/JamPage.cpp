@@ -361,6 +361,7 @@ std::string Shell::JamPageSignature() const
         s += "|" + ScaleGuideSignature();
         break;
     case JamSection::Riffs:
+        s += "|" + RiffSectionSignature();
         break;
     }
 
@@ -789,24 +790,92 @@ Ptr Shell::BuildBackingTracks(float width)
 
 Ptr Shell::BuildRiffSection()
 {
-    // The web UI's Riff Library section: capture a new riff, or open the library (where the
-    // storage folder is set too). Both are RiffDialogs.cpp's.
-    auto heading = std::make_shared<Text>(mTheme, "Riff Library", 15.0f, Weight::SemiBold);
-    heading->Colour(mTheme.Ink());
-    auto hint = std::make_shared<Paragraph>(
-        mTheme,
-        "Riffs are saved as measure-aligned DI WAV takes with metadata for tempo, time signature, "
-        "pattern and preset context. Capture one from your playing, then keep, audition and reuse "
-        "takes from the library - or add one to the looper.",
-        std::min(560.0f, StageWidth() - 32.0f), 12.0f);
+    // The web's Riff Library section (jam-panel.html): capture or import a riff, where the library
+    // is kept (Storage), then the saved riffs, inline. Capture and the list's rows are
+    // RiffDialogs.cpp's.
+    if (!mState.riffs.known)
+    {
+        mSession.Commands().GetRiffLibrary();
+    }
+
+    const float width = std::min(760.0f, StageWidth() - (mWide ? 245.0f : 0.0f) - 40.0f);
+    const auto heading = [this](const char* text) {
+        auto t = std::make_shared<Text>(mTheme, text, 14.0f, Weight::SemiBold);
+        t->Colour(mTheme.Ink());
+        return FixedHeight(24, t);
+    };
+    const auto hint = [this, width](const char* text, float height) {
+        auto p = std::make_shared<Paragraph>(mTheme, text, width - 28.0f, 11.5f);
+        p->Colour(mTheme.TextSecondary());
+        return FixedHeight(height, p);
+    };
+    const auto card = [this](std::vector<Ptr> rows) {
+        return Rounded(mTheme.Text().opacity(0.04f), 8.0f, Pad(14, 12, 14, 12, Col(std::move(rows))));
+    };
+
+    // ── Riff Library: New Riff, and a file made a take ──
     auto capture = std::make_shared<IconButton>(mTheme, mIcons, "ui-record", IconButton::Look::Accent);
     capture->Size(120, 32).IconSize(14).Label("New Riff", 11.5f);
     capture->onClick = [this] { OpenRiffCapture(false); };
-    auto library = std::make_shared<IconButton>(mTheme, mIcons, "ui-folder", IconButton::Look::Boxed);
-    library->Size(150, 32).IconSize(14).Label("Open Riff Library", 11.5f);
-    library->onClick = [this] { OpenRiffLibrary(); };
-    return Col({FixedHeight(28, heading), VGap(6), FixedHeight(60, hint), VGap(10),
-                FixedHeight(32, Row({capture, HGap(10), library, Stretch()})), Stretch()});
+    auto import = std::make_shared<IconButton>(mTheme, mIcons, "ui-folder", IconButton::Look::Boxed);
+    import->Size(150, 32).IconSize(14).Label("Import Audio...", 11.5f);
+    import->onClick = [this] { ImportRiffAudio(); };
+    auto top = card({heading("Riff Library"), VGap(2),
+                     hint("Riffs are saved as measure-aligned DI WAV takes with metadata for tempo, time signature, "
+                          "pattern, and preset context. Import Audio makes a WAV, AIFF or MP3 the current take.",
+                          36.0f),
+                     VGap(8), FixedHeight(32, Row({capture, HGap(10), import, Stretch()}))});
+
+    // ── Storage: the library's folder, kept as typed while the section is rebuilt ──
+    if (!mRiffPathBox)
+    {
+        auto [element, box] = el::input_box("C:\\Users\\you\\Documents\\SoundshedRiffs", Font(Weight::Regular), 1.0f);
+        mRiffPathBox = box;
+        mRiffPathField = el::share(std::move(element));
+    }
+
+    if (mRiffPathShown != mState.riffs.path && !mRiffPathBox->is_focus())
+    {
+        mRiffPathShown = mState.riffs.path;
+        mRiffPathBox->set_text(mRiffPathShown);
+    }
+
+    const auto setPath = [this] {
+        const auto text = mRiffPathBox ? mRiffPathBox->get_utf8() : std::string();
+        const auto first = text.find_first_not_of(" \t");
+        const auto path =
+            first == std::string::npos ? std::string() : text.substr(first, text.find_last_not_of(" \t") - first + 1);
+
+        if (path.empty())
+        {
+            ShowToast("Riff Library path is required", {}, true);
+            return;
+        }
+
+        mSession.Commands().SetRiffLibraryPath(path);
+    };
+    mRiffPathBox->on_enter = [setPath](std::string_view) {
+        setPath();
+        return true;
+    };
+    auto set = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Accent);
+    set->Size(84, 30).Label("Set Path", 11.5f);
+    set->onClick = setPath;
+    auto refresh = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+    refresh->Size(80, 30).Label("Refresh", 11.5f);
+    refresh->onClick = [this] { mSession.Commands().GetRiffLibrary(); };
+    auto pathLabel = std::make_shared<Text>(mTheme, "Library Path", 11.5f);
+    pathLabel->Colour(mTheme.TextSecondary()).Fixed(true);
+    auto storage =
+        card({heading("Storage"),
+              FixedHeight(30, Row({Middle(pathLabel), HGap(10), Rounded(mTheme.Tertiary(), 4.0f, mRiffPathField),
+                                   HGap(8), set, HGap(6), refresh})),
+              VGap(6), hint("Sets where riff takes and riff metadata are stored on disk.", 18.0f)});
+
+    // ── Saved Riffs ──
+    auto saved = card({heading("Saved Riffs"), VGap(4), BuildRiffRows()});
+
+    return KeptVScroll(FixedWidth(width, Col({top, VGap(12), storage, VGap(12), saved, VGap(16)})), mJamScroll);
 }
 
 Ptr Shell::BuildJamPage()
@@ -899,8 +968,7 @@ Ptr Shell::BuildJamPage()
         content = KeptVScroll(Pad(12, 10, 14, 0, BuildScaleGuide(contentWidth)), mJamScroll);
         break;
     case JamSection::Riffs:
-        content = mWide ? Pad(16, 14, 16, 0, BuildRiffSection())
-                        : Pad(metrics::kPagePad, metrics::kPagePadTop, metrics::kPagePad, 0, BuildRiffSection());
+        content = Pad(12, 10, 14, 0, BuildRiffSection());
         break;
     case JamSection::Practice:
         content = KeptVScroll(Pad(12, 10, 14, 0, BuildPracticeTool(contentWidth)), mJamScroll);

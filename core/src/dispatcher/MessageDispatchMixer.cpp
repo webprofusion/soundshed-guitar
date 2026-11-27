@@ -198,6 +198,12 @@ bool MessageDispatcher::DispatchMixerAndMonitoring(PluginController& c, const nl
         return true;
     }
 
+    if (type == "browseRiffImportFile")
+    {
+        c.HandleBrowseRiffImportFileRequest(msg);
+        return true;
+    }
+
     if (type == "trimCapturedRiff")
     {
         c.HandleTrimCapturedRiffRequest(msg);

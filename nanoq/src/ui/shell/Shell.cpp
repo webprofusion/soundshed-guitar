@@ -130,13 +130,43 @@ void Shell::Subscribe()
     on(Topic::GlobalChain, kTransport);
     on(Topic::Mixer, kTransport | kScenes | kChain);
     on(Topic::Demo, kTransport);
-    // The Scale Guide's Play button turns to Stop and back (ScaleGuideSignature).
+    // The Scale Guide's Play button turns to Stop and back (ScaleGuideSignature), and the Riff
+    // Library's Play too (RiffSectionSignature).
     mSubscriptions.push_back(client.Subscribe(Topic::Demo, [this] {
         if (mPage == Page::Jam)
         {
             Mark(kPage);
         }
     }));
+
+    // An imported take, once the engine has made it the pending one: New Riff opens on it.
+    mSubscriptions.push_back(client.Subscribe(Topic::Riffs, [this] {
+        const auto& capture = mState.riffs.capture;
+
+        if (mRiffImportWaiting && capture.serial != mRiffImportSerial &&
+            capture.phase == guitarfx::uiclient::RiffCapture::Phase::Complete && capture.source == "import")
+        {
+            mRiffImportWaiting = false;
+            mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive)] {
+                if (alive.lock())
+                {
+                    OpenRiffCapture(false);
+                }
+            });
+        }
+    }));
+
+    // The Riff Library section lists the riffs, and Loop while the looper can take one.
+    for (const auto topic : {Topic::Riffs, Topic::Looper})
+    {
+        mSubscriptions.push_back(client.Subscribe(topic, [this] {
+            if (mPage == Page::Jam && mJamSection == JamSection::Riffs)
+            {
+                Mark(kPage); // rebuilt only if what it lists changed (JamPageSignature)
+            }
+        }));
+    }
+
     // The layout library and its pictures, and the setting that picks a layout per effect: the
     // effect page is rebuilt only when what it shows changes (EffectPageSignature).
     mSubscriptions.push_back(client.Subscribe(Topic::EffectLayouts, [this] {

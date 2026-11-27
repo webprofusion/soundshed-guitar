@@ -412,138 +412,133 @@ void Shell::OpenRiffCapture(bool arm, const std::string& appendRiffId)
 
 void Shell::OpenRiffLibrary()
 {
+    // The library is the Jam page's Riff Library section, as the web's (BuildRiffSection).
     CloseOverlay();
+    mJamSection = JamSection::Riffs;
     mSession.Commands().GetRiffLibrary();
-    auto body = MakeSlot();
-    auto signature = std::make_shared<std::string>("-");
+    mJamSignature.clear();
+    ShowPage(Page::Jam);
+    Mark(kPage);
+}
 
-    auto rebuild = [this, body, signature] {
-        const auto& riffs = mState.riffs;
-        const bool looperOn = guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::Looper) &&
-                              mState.looper.available;
-        std::string s = mState.demo.previewId + (looperOn ? "|L" : "|-");
+std::string Shell::RiffSectionSignature() const
+{
+    const auto& riffs = mState.riffs;
+    std::string s = mState.demo.previewId + (mState.demo.playing ? "|p" : "|-") + (RiffLooperOn() ? "|L" : "|-") +
+                    (riffs.known ? "|k" : "|-") + riffs.path;
 
-        for (const auto& r : riffs.riffs)
-        {
-            s += "|" + r.id + r.title + (r.favorite ? "*" : "") + (r.used ? "u" : "") + std::to_string(r.takes.size()) +
-                 JoinList(r.tags);
-        }
+    for (const auto& r : riffs.riffs)
+    {
+        s += "|" + r.id + r.title + (r.favorite ? "*" : "") + (r.used ? "u" : "") + std::to_string(r.takes.size()) +
+             JoinList(r.tags);
+    }
 
-        if (s == *signature)
-        {
-            return;
-        }
+    return s;
+}
 
-        *signature = s;
+bool Shell::RiffLooperOn() const
+{
+    return guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::Looper) && mState.looper.available;
+}
 
-        std::vector<Ptr> rows;
+Ptr Shell::BuildRiffRows()
+{
+    // The web's Saved Riffs list (riffLibrary.ts renderRiffLibrary): a riff a row, its takes'
+    // summary under its name, and what can be done with it.
+    const auto& riffs = mState.riffs;
+    const bool looperOn = RiffLooperOn();
+    std::vector<Ptr> rows;
 
-        if (riffs.riffs.empty())
-        {
-            auto none = std::make_shared<Text>(
-                mTheme, riffs.known ? "No riffs yet. Record one with New Riff." : "Loading...", 12.0f);
-            none->Colour(mTheme.TextSecondary());
-            rows.push_back(FixedHeight(40, none));
-        }
+    if (riffs.riffs.empty())
+    {
+        auto none = std::make_shared<Text>(
+            mTheme, riffs.known ? "No riffs yet. Record one with New Riff." : "Loading...", 12.0f);
+        none->Colour(mTheme.TextSecondary());
+        rows.push_back(FixedHeight(40, none));
+    }
 
-        for (const auto& riff : riffs.riffs)
-        {
-            const auto* take = riff.PreferredTake();
-            const std::string takeId = take != nullptr ? take->id : std::string();
-            auto name = std::make_shared<Text>(mTheme, (riff.favorite ? "\xE2\x98\x85 " : "") + riff.title, 13.0f,
-                                               Weight::SemiBold);
-            auto meta = std::make_shared<Text>(mTheme, guitarfx::uiclient::RiffMeta(riff), 10.5f);
-            meta->Colour(mTheme.TextSecondary());
-            auto summary = std::make_shared<Text>(
-                mTheme, take != nullptr ? guitarfx::uiclient::RiffTakeSummary(*take) : std::string("No takes"), 10.5f);
-            summary->Colour(mTheme.TextMuted());
+    for (const auto& riff : riffs.riffs)
+    {
+        const auto* take = riff.PreferredTake();
+        const std::string takeId = take != nullptr ? take->id : std::string();
+        auto name = std::make_shared<Text>(mTheme, (riff.favorite ? "\xE2\x98\x85 " : "") + riff.title, 13.0f,
+                                           Weight::SemiBold);
+        auto meta = std::make_shared<Text>(mTheme, guitarfx::uiclient::RiffMeta(riff), 10.5f);
+        meta->Colour(mTheme.TextSecondary());
+        auto summary = std::make_shared<Text>(
+            mTheme, take != nullptr ? guitarfx::uiclient::RiffTakeSummary(*take) : std::string("No takes"), 10.5f);
+        summary->Colour(mTheme.TextMuted());
 
-            const auto button = [this](const std::string& text, std::function<void()> onClick) {
-                auto b = std::make_shared<Button>(mTheme, text, std::move(onClick), Button::Style::Plain);
-                b->MinWidth(54).TextSize(11.0f);
-                return b;
-            };
-            const bool playing = !takeId.empty() && mState.demo.playing && mState.demo.previewId == takeId;
-            auto play = button(playing ? "Stop" : "Play", [this, takeId, playing] {
-                if (playing)
-                {
-                    mSession.Commands().StopDemo();
-                }
-                else
-                {
-                    mSession.Commands().PreviewRiffTake(takeId);
-                }
-            });
-            play->Enabled(!takeId.empty());
-            auto star =
-                button(riff.favorite ? "\xE2\x98\x85" : "\xE2\x98\x86",
-                       [this, id = riff.id, on = riff.favorite] { mSession.Commands().SetRiffFavorite(id, !on); });
-            star->MinWidth(34);
-            auto used =
-                button("Used", [this, id = riff.id, on = riff.used] { mSession.Commands().MarkRiffUsed(id, !on); });
-            used->Dot(true).On(riff.used);
-            auto edit = button("Edit", [this, id = riff.id, takeId] {
-                OpenRiffCapture(false, id);
-                mSession.Commands().LoadRiffTakeForEdit(takeId);
-            });
-            edit->Enabled(!takeId.empty());
-            std::vector<Ptr> actions{play, HGap(4), star, HGap(4), used, HGap(4), edit};
-
-            if (looperOn)
+        const auto button = [this](const std::string& text, std::function<void()> onClick) {
+            auto b = std::make_shared<Button>(mTheme, text, std::move(onClick), Button::Style::Plain);
+            b->MinWidth(54).TextSize(11.0f);
+            return b;
+        };
+        const bool playing = !takeId.empty() && mState.demo.playing && mState.demo.previewId == takeId;
+        auto play = button(playing ? "Stop" : "Play", [this, takeId, playing] {
+            if (playing)
             {
-                auto loop = button("Loop", [this, takeId] { mSession.Commands().AddRiffAsLooperLayer(takeId); });
-                loop->Enabled(!takeId.empty());
-                actions.push_back(HGap(4));
-                actions.push_back(loop);
+                mSession.Commands().StopDemo();
             }
+            else
+            {
+                mSession.Commands().PreviewRiffTake(takeId);
+            }
+        });
+        play->Enabled(!takeId.empty());
+        auto star = button(riff.favorite ? "\xE2\x98\x85" : "\xE2\x98\x86",
+                           [this, id = riff.id, on = riff.favorite] { mSession.Commands().SetRiffFavorite(id, !on); });
+        star->MinWidth(34);
+        auto used = button("Used", [this, id = riff.id, on = riff.used] { mSession.Commands().MarkRiffUsed(id, !on); });
+        used->Dot(true).On(riff.used);
+        auto edit = button("Edit", [this, id = riff.id, takeId] {
+            OpenRiffCapture(false, id);
+            mSession.Commands().LoadRiffTakeForEdit(takeId);
+        });
+        edit->Enabled(!takeId.empty());
+        std::vector<Ptr> actions{play, HGap(4), star, HGap(4), used, HGap(4), edit};
 
-            auto remove = button("Delete", [this, id = riff.id, titleText = riff.title] {
-                OpenConfirm("Delete riff", "\"" + titleText + "\" and all its takes are deleted.", "Delete",
-                            [this, id] {
-                                mSession.Commands().DeleteRiff(id);
-                                mSession.View().post([this, alive = mAlive] {
-                                    if (*alive)
-                                    {
-                                        OpenRiffLibrary();
-                                    }
-                                });
-                            });
-            });
+        if (looperOn)
+        {
+            auto loop = button("Loop", [this, takeId] { mSession.Commands().AddRiffAsLooperLayer(takeId); });
+            loop->Enabled(!takeId.empty());
             actions.push_back(HGap(4));
-            actions.push_back(remove);
-
-            rows.push_back(FixedHeight(20, name));
-            rows.push_back(FixedHeight(16, meta));
-            rows.push_back(FixedHeight(16, summary));
-            rows.push_back(VGap(4));
-            rows.push_back(FixedHeight(30, Row(actions)));
-            rows.push_back(VGap(6));
-            rows.push_back(FixedHeight(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
-            rows.push_back(VGap(8));
+            actions.push_back(loop);
         }
 
-        Fill(*body, VScroll(Col(rows)));
-        mSession.View().layout();
-        mSession.View().refresh();
-    };
+        auto remove = button("Delete", [this, id = riff.id, titleText = riff.title] {
+            OpenConfirm("Delete riff", "Delete \"" + titleText + "\" and all of its takes? This cannot be undone.",
+                        "Delete", [this, id] { mSession.Commands().DeleteRiff(id); });
+        });
+        actions.push_back(HGap(4));
+        actions.push_back(remove);
+        actions.push_back(Stretch());
 
-    auto path = std::make_shared<Text>(
-        mTheme, mState.riffs.path.empty() ? std::string() : "Kept in " + mState.riffs.path, 10.5f);
-    path->Colour(mTheme.TextMuted());
-    auto newRiff =
-        std::make_shared<Button>(mTheme, "New Riff", [this] { OpenRiffCapture(false); }, Button::Style::Primary);
-    newRiff->MinWidth(100);
-    const auto view = ViewSize();
-    ShowDialog({.title = "Riff Library",
-                .body = Col({FixedHeight(18, path), VGap(10), body}),
-                .headerExtras = {newRiff},
-                .width = 640.0f,
-                .height = std::min(560.0f, std::max(260.0f, view.y - 60.0f)),
-                .padY = 12.0f});
+        rows.push_back(FixedHeight(20, name));
+        rows.push_back(FixedHeight(16, meta));
+        rows.push_back(FixedHeight(16, summary));
+        rows.push_back(VGap(4));
+        rows.push_back(FixedHeight(30, Row(actions)));
+        rows.push_back(VGap(6));
+        rows.push_back(FixedHeight(1, Fill(mTheme.Text().opacity(0.08f), std::make_shared<el::element>())));
+        rows.push_back(VGap(8));
+    }
 
-    mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Riffs, rebuild));
-    mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Demo, rebuild));
-    mInstrumentSubs.push_back(mSession.Client().Subscribe(Topic::Looper, rebuild));
-    rebuild();
+    return Col(rows);
+}
+
+void Shell::ImportRiffAudio()
+{
+    // The web imports a file dropped on the page into the current take (importRiffWav), then asks
+    // to save it; here the host's file browser picks it, and once the engine has made it the
+    // pending take New Riff opens on it to trim and save (the Topic::Riffs feed, Shell.cpp).
+    if (mRiffTempo <= 0.0)
+    {
+        mRiffTempo = mState.metronome.bpm;
+    }
+
+    mRiffImportSerial = mState.riffs.capture.serial;
+    mRiffImportWaiting = true;
+    mSession.Commands().BrowseRiffImportFile(mRiffTempo, mState.metronome.timeSigNum, mState.metronome.timeSigDen);
 }
 } // namespace nanoq::ui

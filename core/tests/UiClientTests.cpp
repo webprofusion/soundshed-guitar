@@ -2829,6 +2829,22 @@ void TestRiffMessages()
     Expect(client.State().demo.riffClips.size() == 1 && client.State().demo.riffClips[0].takeId == "t2",
            "favourites are still demo clips");
 
+    // The web's Storage and drop import.
+    commands.SetRiffLibraryPath("D:/riffs");
+    Expect(!sent.empty() && sent.back().value("type", "") == "setRiffLibraryPath" &&
+               sent.back().value("path", "") == "D:/riffs",
+           "the library's folder is set");
+    commands.ImportRiffWav({'R', 'I', 'F', 'F'}, "take.wav", 400.0, 3, 4);
+    Expect(!sent.empty() && sent.back().value("type", "") == "importRiffWav" &&
+               sent.back().value("data", "") == "UklGRg==" && sent.back().value("fileName", "") == "take.wav" &&
+               sent.back().value("tempoBpm", 0.0) == 300.0 && sent.back().value("timeSigNum", 0) == 3 &&
+               !sent.back().contains("bars"),
+           "an audio file is sent as base64, its bars left to the engine");
+    commands.BrowseRiffImportFile(120.0, 4, 4);
+    Expect(!sent.empty() && sent.back().value("type", "") == "browseRiffImportFile" &&
+               sent.back().value("tempoBpm", 0.0) == 120.0,
+           "or the host is asked for the file");
+
     // Armed with 64 bars, as the web UI arms, so the live waveform's scale matches.
     commands.ArmRiffCapture(120.0, 4, 4, 1, true);
     Expect(!sent.empty() && sent.back().value("type", "") == "armRiffCapture" && sent.back().value("bars", 0) == 64,

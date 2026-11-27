@@ -7,6 +7,9 @@
 #include "uiclient/Riffs.h"
 #include "uiclient/UiClient.h"
 #include "uiclient/UiCommands.h"
+#include "util/Base64.h"
+
+#include <algorithm>
 
 namespace guitarfx::uiclient
 {
@@ -126,6 +129,30 @@ void UiClient::RegisterRiffHandlers()
 void UiCommands::GetRiffLibrary()
 {
     mClient.Send("getRiffLibrary");
+}
+
+void UiCommands::SetRiffLibraryPath(const std::string& path)
+{
+    mClient.Send("setRiffLibraryPath", {{"path", path}});
+}
+
+void UiCommands::ImportRiffWav(const std::vector<std::uint8_t>& bytes, const std::string& fileName, double tempoBpm,
+                               int timeSigNum, int timeSigDen)
+{
+    mClient.Send("importRiffWav", {{"data", util::EncodeBase64(bytes)},
+                                   {"fileName", fileName},
+                                   {"tempoBpm", std::clamp(tempoBpm, 30.0, 300.0)},
+                                   {"timeSigNum", std::max(1, timeSigNum)},
+                                   {"timeSigDen", std::max(1, timeSigDen)},
+                                   {"patternType", "click"}});
+}
+
+void UiCommands::BrowseRiffImportFile(double tempoBpm, int timeSigNum, int timeSigDen)
+{
+    mClient.Send("browseRiffImportFile", {{"tempoBpm", std::clamp(tempoBpm, 30.0, 300.0)},
+                                          {"timeSigNum", std::max(1, timeSigNum)},
+                                          {"timeSigDen", std::max(1, timeSigDen)},
+                                          {"patternType", "click"}});
 }
 
 void UiCommands::ArmRiffCapture(double tempoBpm, int timeSigNum, int timeSigDen, int countInBars, bool click)
