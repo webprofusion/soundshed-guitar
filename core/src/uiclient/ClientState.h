@@ -826,6 +826,18 @@ struct ResourceFolderListing
     std::string error; // resourceFolderListingFailed
 };
 
+/// What the engine's input and output can carry ("inputModeChanged"), for the input mode control
+/// (InputMode.h): a mode they cannot deliver is greyed, and a fallback is said.
+struct InputCapabilities
+{
+    bool known = false;          // heard from the engine
+    bool hostControlled = false; // a DAW's track decides mono or stereo
+    int inputChannels = 2;
+    int outputChannels = 2;
+    std::string effectiveMode = "mono"; // what runs: "mono", "stereo" or "dualMono"
+    int dualMonoShared = 0;             // in dual mono, hosted plugins that still hear both sides
+};
+
 struct ClientState
 {
     bool haveState = false;
@@ -888,6 +900,7 @@ struct ClientState
     std::map<std::string, ResourceUsage> resourceUsage;
 
     GlobalSignalChainConfig globalChain;
+    InputCapabilities inputCapabilities;
     bool outputMuted = false;
     MixerState mixer;
 

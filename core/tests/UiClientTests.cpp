@@ -51,6 +51,7 @@
 #include "uiclient/FeatureFlags.h"
 #include "uiclient/FxMarks.h"
 #include "uiclient/InputLevelling.h"
+#include "uiclient/InputMode.h"
 #include "uiclient/Instruments.h"
 #include "uiclient/LayoutMode.h"
 #include "uiclient/NodeLabels.h"
@@ -2276,6 +2277,50 @@ void TestUpdateCheckVersions()
     Expect(ReleaseNotesFirstLine("\n\n# **v1.9** is out\nMore") == "v1.9 is out", "the banner's first line, plain");
 }
 
+// The input mode control's choices, as inputMode.ts: greyed with what they need, the track in a
+// DAW, and what runs when it is not what was chosen.
+void TestInputModeChoices()
+{
+    using namespace guitarfx::uiclient::input_mode;
+    InputCapabilities caps;
+    caps.known = true;
+    Expect(Listed(caps).size() == 5 && !UnavailableReason(Mode::DualMono, caps),
+           "standalone, two in and out: all five");
+    Expect(FromSettings(true, 2, false) == Mode::MonoSum && ToSettings(Mode::DualMono).dualMono &&
+               !ToSettings(Mode::DualMono).monoMode,
+           "settings both ways");
+    caps.inputChannels = 1;
+    Expect(UnavailableReason(Mode::Stereo, caps) == std::optional<std::string>("Needs a second input") &&
+               !UnavailableReason(Mode::Mono1, caps) &&
+               UnavailableReason(Mode::DualMono, caps) ==
+                   std::optional<std::string>("Needs two inputs and two outputs"),
+           "one input");
+    caps.effectiveMode = "mono";
+    Expect(FallsBack(Mode::Stereo, caps) && !FallsBack(Mode::Mono1, caps), "Stereo on one input runs mono");
+    Expect(StatusNote(Mode::Stereo, caps) == "The audio device has one input, so the chain runs in mono.",
+           "the one-input note");
+    Expect(Tooltip(Mode::Stereo, caps) == "Input: Stereo. Input 1 left, input 2 right. Running in mono. The audio "
+                                          "device has one input, so the chain runs in mono.",
+           "the trigger's tooltip");
+    caps = {};
+    caps.known = true;
+    caps.hostControlled = true;
+    caps.inputChannels = 1;
+    Expect(Listed(caps).size() == 2 && Displayed(Mode::Mono2, caps) == Mode::Stereo, "a DAW: the track, and dual mono");
+    Expect(Present(Mode::Stereo, caps).name == "Track" &&
+               Present(Mode::Stereo, caps).description == "Mono, as the track is" &&
+               Present(Mode::Stereo, caps).icon == "mono",
+           "a mono track");
+    Expect(UnavailableReason(Mode::DualMono, caps) == std::optional<std::string>("Needs a stereo track"),
+           "dual mono needs a stereo track");
+    caps.inputChannels = 2;
+    caps.effectiveMode = "dualMono";
+    caps.dualMonoShared = 2;
+    Expect(StatusNote(Mode::DualMono, caps) ==
+               "2 hosted plugins hear both inputs: a plugin cannot be doubled up for dual mono.",
+           "shared hosted plugins");
+}
+
 // The effect panel's own picture: only a route the engine hands out is drawn, and Fade reads as
 // the web UI's visualizerBackgroundFade.
 void TestVisualizerBackgroundSettings()
@@ -2602,6 +2647,7 @@ int main()
     TestMetronomeMeters();
     TestUpdateCheckVersions();
     TestVisualizerBackgroundSettings();
+    TestInputModeChoices();
     TestGlobalChainEditsMirror();
     TestLibraryExportAnswer();
     TestRiffMessages();

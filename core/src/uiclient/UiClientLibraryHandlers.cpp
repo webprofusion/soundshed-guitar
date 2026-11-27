@@ -218,6 +218,13 @@ void UiClient::RegisterLibraryHandlers()
         mState.globalChain.monoMode = m.value("monoMode", mState.globalChain.monoMode);
         mState.globalChain.inputChannel = m.value("inputChannel", mState.globalChain.inputChannel);
         mState.globalChain.dualMono = m.value("dualMono", mState.globalChain.dualMono);
+        auto& caps = mState.inputCapabilities;
+        caps.known = true;
+        caps.hostControlled = m.value("hostControlled", caps.hostControlled);
+        caps.inputChannels = m.value("inputChannels", caps.inputChannels);
+        caps.outputChannels = m.value("outputChannels", caps.outputChannels);
+        caps.effectiveMode = m.value("effectiveMode", caps.effectiveMode);
+        caps.dualMonoShared = m.value("dualMonoShared", caps.dualMonoShared);
         Notify(Topic::GlobalChain);
     });
 

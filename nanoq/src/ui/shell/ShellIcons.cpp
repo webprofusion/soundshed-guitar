@@ -168,12 +168,16 @@ void AddShellIcons(Icons& icons)
         const std::string stereoChain = R"(<rect x="11.5" y="1.5" width="7" height="17" rx="2"/>)";
         const std::string dualChains = R"(<rect x="11.5" y="1.5" width="7" height="7" rx="1.8"/>)"
                                        R"(<rect x="11.5" y="11.5" width="7" height="7" rx="1.8"/>)";
+        const std::string inCentre = R"(<circle cx="3" cy="10" r="2.2" fill="currentColor" stroke="none"/>)"
+                                     R"(<path d="M5.2 10h6.3"/>)";
         const std::string close = "</svg>";
         icons.Add("input-mono1", open + in1 + in2Unused + from1 + monoChain + close);
         icons.Add("input-mono2", open + in1Unused + in2 + from2 + monoChain + close);
         icons.Add("input-monoSum", open + in1 + in2 + from1 + from2 + monoChain + close);
         icons.Add("input-stereo", open + in1 + in2 + lanes + stereoChain + close);
         icons.Add("input-dualMono", open + in1 + in2 + lanes + dualChains + close);
+        // One input and no choice of which: a DAW's mono track.
+        icons.Add("input-mono", open + inCentre + monoChain + close);
     }
 
     // The preset chooser's tools (preset-library-popover.html).

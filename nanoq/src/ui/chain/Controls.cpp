@@ -8,6 +8,7 @@
 
 #include "dsp/EffectGuids.h"
 
+#include "uiclient/InputMode.h"
 #include "uiclient/ParamFormat.h"
 
 #include <cmath>
@@ -174,65 +175,84 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     };
 
     // ── IN: the level, and which inputs feed it ──
-    auto inputModeLabel = [chain, this] {
+    // As the web UI's input mode control (inputMode.ts, uiclient's InputMode.h): the trigger names
+    // the mode, in the warning colour when what runs is not what was chosen, and says why under
+    // the pointer.
+    namespace im = guitarfx::uiclient::input_mode;
+    auto currentMode = [chain] {
         const auto& c = chain();
+        return im::FromSettings(c.monoMode, c.inputChannel, c.dualMono);
+    };
 
-        if (c.dualMono)
-        {
-            return std::string("Dual mono");
-        }
+    struct ModeLook
+    {
+        std::string label;
+        std::string tooltip;
+        bool fallback = false;
 
-        if (!c.monoMode)
-        {
-            return std::string(mState.environment.standalone ? "Stereo" : "Track");
-        }
+        bool operator==(const ModeLook&) const = default;
+    };
 
-        return std::string(c.inputChannel == 1 ? "Mono In 2" : c.inputChannel == 2 ? "Mono 1+2" : "Mono In 1");
+    auto modeLook = [this, currentMode] {
+        const auto& caps = mState.inputCapabilities;
+        const auto current = currentMode();
+        const auto shown = im::Displayed(current, caps);
+        return ModeLook{im::Present(shown, caps).name, im::Tooltip(current, caps), im::FallsBack(shown, caps)};
     };
     auto mode = std::make_shared<IconButton>(mTheme, mIcons, "");
-    mode->Size(70, 16).Label(inputModeLabel(), 10.0f).Caret(true).Ink(mTheme.TextSecondary());
-    mode->onClick = [this, chain, m = mode.get()] {
-        auto set = [this](bool mono, int channel, bool dual) {
-            return [this, mono, channel, dual] { mSession.Commands().SetInputMode(mono, channel, dual); };
-        };
+    mode->Size(70, 16).Label(modeLook().label, 10.0f).Caret(true).Ink(mTheme.TextSecondary());
+    mode->onClick = [this, chain, currentMode, m = mode.get()] {
         const auto& c = chain();
-        // As the web UI's input mode flyout (inputMode.ts): each mode with its routing icon, its
-        // name and what it does.
-        const auto mode = [](std::string name, std::string description, std::string icon, bool chosen,
-                             std::function<void()> choose) {
-            MenuItem item{std::move(name), chosen, false, std::move(choose)};
-            item.icon = std::move(icon);
-            item.subtitle = std::move(description);
-            return item;
-        };
-        std::vector<MenuItem> items{{"Input mode", false, true, {}}};
+        const auto& caps = mState.inputCapabilities;
+        const auto shown = im::Displayed(currentMode(), caps);
+        MenuItem title{"Input mode", false, true, {}};
+
+        // Said only when it is not what the ticked mode would run: Stereo on a one-input device.
+        if (im::FallsBack(shown, caps))
+        {
+            title.detail = "Running " + Lower(im::EffectiveName(caps));
+        }
+
+        std::vector<MenuItem> items{std::move(title)};
 
         // In the standalone app the player picks mono (input 1, input 2 or both summed), stereo or
-        // dual mono; in a DAW the track decides mono or stereo, and dual mono is the one choice left.
-        if (mState.environment.standalone)
+        // dual mono; in a DAW the track decides mono or stereo, and dual mono is the one choice
+        // left. A mode the input or output cannot carry is greyed, with what it needs.
+        for (const auto listed : im::Listed(caps))
         {
-            const bool mono = c.monoMode && !c.dualMono;
-            items.push_back(mode("Mono In 1", "Input 1 on both sides", "input-mono1", mono && c.inputChannel == 0,
-                                 set(true, 0, false)));
-            items.push_back(mode("Mono In 2", "Input 2 on both sides", "input-mono2", mono && c.inputChannel == 1,
-                                 set(true, 1, false)));
-            items.push_back(mode("Mono 1+2", "Inputs 1 and 2 summed", "input-monoSum", mono && c.inputChannel == 2,
-                                 set(true, 2, false)));
-            items.push_back(mode("Stereo", "Input 1 left, input 2 right", "input-stereo", !c.monoMode && !c.dualMono,
-                                 set(false, c.inputChannel, false)));
-        }
-        else
-        {
-            items.push_back(
-                mode("Track", "As the track is", "input-stereo", !c.dualMono, set(c.monoMode, c.inputChannel, false)));
+            const auto look = im::Present(listed, caps);
+            const auto reason = im::UnavailableReason(listed, caps);
+            auto settings = im::ToSettings(listed);
+
+            // In a DAW, the track keeps the mono choice it had.
+            if (caps.hostControlled && listed == im::Mode::Stereo)
+            {
+                settings = {c.monoMode, c.inputChannel, false};
+            }
+
+            MenuItem item{look.name, listed == shown, false, [this, settings] {
+                              mSession.Commands().SetInputMode(settings.monoMode, settings.inputChannel,
+                                                               settings.dualMono);
+                          }};
+            item.icon = "input-" + look.icon;
+            item.subtitle = reason.value_or(look.description);
+            item.disabled = reason.has_value();
+            items.push_back(std::move(item));
         }
 
-        // Dual mono needs both inputs kept apart, so it turns mono off.
-        items.push_back(mode("Dual mono", "A separate rig per input", "input-dualMono", c.dualMono,
-                             set(false, c.inputChannel, true)));
+        if (const auto note = im::StatusNote(currentMode(), caps); !note.empty())
+        {
+            MenuItem remark{note, false, false, {}};
+            remark.note = true;
+            items.push_back(std::move(remark));
+        }
+
         OpenDropdown(m->Bounds(), std::move(items), 250.0f);
     };
-    mLive.Bind(mode, inputModeLabel, [](IconButton& m, const std::string& label) { m.Label(label, 10.0f); });
+    mLive.Bind(mode, modeLook, [this](IconButton& m, const ModeLook& look) {
+        m.Label(look.label, 10.0f).Ink(look.fallback ? mTheme.Warning() : mTheme.TextSecondary());
+        m.Tooltip(look.tooltip);
+    });
 
     auto in = knobCell(
         "IN", Param("inputGain", "In", "dB", -12.0, 12.0, 0.0), [chain] { return chain().inputGain; },

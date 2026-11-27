@@ -79,7 +79,9 @@ struct MenuItem
     std::string detail; // muted, at the right
     std::string icon;   // an icon name (images/icons), drawn at the left in `tint`
     std::uint32_t tint = 0;
-    std::string subtitle; // a second, muted line under the label (a drop-down's description)
+    std::string subtitle;  // a second, muted line under the label (a drop-down's description)
+    bool disabled = false; // listed, greyed and not chosen (a drop-down's mode that cannot be had)
+    bool note = false;     // a drop-down's closing remark: `label` wrapped, muted, over a rule
 };
 
 /// What a dialog holds, for Shell::ShowDialog: the web UI's modal, with its title and a close
