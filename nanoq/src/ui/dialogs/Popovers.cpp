@@ -252,7 +252,10 @@ void Shell::ShowPopover(Ptr panel, el::rect anchor, float width, float height, b
         mKeyboard->OpenQuietly();
     }
 
-    mOverlay = KeyLayer(PlacePanel(std::move(panel), anchor, width, height, above, [this] { CloseOverlay(); }));
+    // It fades while a preset dragged out of it is elsewhere (PresetDrag.cpp).
+    *mOverlayAlpha = 1.0f;
+    mOverlay = KeyLayer(std::make_shared<FadeLayer>(
+        mOverlayAlpha, PlacePanel(std::move(panel), anchor, width, height, above, [this] { CloseOverlay(); })));
     mSession.View().add(mOverlay);
 }
 

@@ -690,7 +690,11 @@ Ptr Shell::BuildPadsView()
                     cells.push_back(HGap(11));
                 }
 
-                cells.push_back(pad);
+                // A preset dragged here goes on this pad (setlistPadDrop.ts).
+                DropSpot spot;
+                spot.kind = DropSpot::Kind::Pad;
+                spot.index = index;
+                cells.push_back(DropTarget(std::move(spot), pad));
             }
 
             if (!rows.empty())
@@ -724,10 +728,10 @@ Ptr Shell::BuildPadsView()
     return Dressed(mTheme, mTheme.Background(), &Backdrops::main, Pad(18, edge, 18, edge, Col(column)));
 }
 
-void Shell::AssignSetlistPad(int index)
+void Shell::AssignSetlistPad(int index, const std::string& dropped)
 {
     const Setlist* setlist = ActiveSetlist(mState);
-    const std::string presetId = mState.activePresetId;
+    const std::string presetId = dropped.empty() ? mState.activePresetId : dropped;
 
     if (setlist == nullptr || presetId.empty())
     {

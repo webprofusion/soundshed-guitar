@@ -29,6 +29,7 @@
 #include "ui/effects/MultibandPlot.h"
 #include "ui/effects/ResponsePlot.h"
 #include "ui/chain/EffectRows.h"
+#include "ui/presets/PresetDrag.h"
 #include "ui/shell/FrameWidgets.h"
 #include "ui/widgets/Buttons.h"
 #include "ui/widgets/Panels.h"
@@ -431,6 +432,15 @@ class Shell
     /// An effect dragged out of the FX Library: lights where it would land, and adds it there when
     /// let go.
     void DragLibraryEffect(const std::string& type, const std::string& name, el::point to, bool done);
+
+    // PresetDrag.cpp: dragging in the preset library (PresetDrag.h).
+    /// What is dragged follows the pointer, the place it would land is lit, and on `done` it lands.
+    void DragLibraryItem(const LibraryDrag& item, el::point to, bool done);
+    /// `subject` wrapped so a library drag can land on it (`spot` says how).
+    [[nodiscard]] Ptr DropTarget(DropSpot spot, Ptr subject);
+    /// `subject` wrapped so it can be dragged as `item`.
+    [[nodiscard]] Ptr LibraryDragSource(LibraryDrag item, Ptr subject);
+
     /// The round + over the chain: Add FX... (the FX Library) or Add Scene.
     void OpenAddMenu(el::rect anchor);
 
@@ -706,7 +716,9 @@ class Shell
 
     // PadsView.cpp
     [[nodiscard]] Ptr BuildPadsView();
-    void AssignSetlistPad(int index); // puts the preset playing on a pad of the active setlist
+    /// Puts a preset (`presetId`, else the one playing) on a pad of the active setlist, asking
+    /// before it replaces another.
+    void AssignSetlistPad(int index, const std::string& presetId = {});
     void ClearSetlistPad(int index);
     void LeavePads(); // the pads give way to the editor: refill it, and unlight the footer's pads button
 
@@ -1204,9 +1216,15 @@ class Shell
     std::vector<guitarfx::uiclient::Subscription> mInstrumentSubs; // an open dialog's live feeds
     guitarfx::uiclient::Subscription mImportWatch;                 // a preset archive import, until it answers
     std::string mPickerCategory;
-    std::optional<guitarfx::GraphEdge> mPickerEdge; // the open picker adds on this edge, not after a node
-    el::rect mEditorArea;                           // where the full layout's editor is: the FX Library opens over it
-    Ptr mDragGhost;                                 // the FX Library's effect being dragged, by the pointer
+    std::optional<guitarfx::GraphEdge> mPickerEdge;  // the open picker adds on this edge, not after a node
+    el::rect mEditorArea;                            // where the full layout's editor is: the FX Library opens over it
+    Ptr mDragGhost;                                  // the FX Library's effect being dragged, by the pointer
+    Ptr mLibraryGhost;                               // a preset, folder or slot being dragged (PresetDrag.cpp)
+    std::vector<std::weak_ptr<DropSpot>> mDropSpots; // where one can land, as last drawn
+    std::weak_ptr<DropSpot> mDropLit;                // the one lit
+    bool mLibraryDragging = false;                   // a drag has begun (the window redrawn)
+    bool mLibraryDragLeftChooser = false;            // it left the chooser, which has faded
+    std::shared_ptr<float> mOverlayAlpha = std::make_shared<float>(1.0f); // the popover's fade
     guitarfx::uiclient::EffectPresentation mPresentation;
 
     // After adding an effect, the node that appears next is selected and shown.

@@ -450,18 +450,37 @@ Ptr Shell::BuildFolderColumn()
     // web's (.preset-folder-item): no icons, no heading. The virtual ones count what they list; a
     // folder counts its own presets, not those in folders inside it. Multi-Rigs are the chooser's
     // other tab, and new folders come from its folder tools.
+    // Each takes a preset or another folder dragged onto it, and a folder of the user's can be
+    // dragged onto another (presets/drag.ts, folderDrag.ts).
     std::vector<Ptr> rows;
+    std::vector<std::string> parents; // the folder at each depth above the one being added
     const auto add = [&](const std::string& id, const std::string& label, std::size_t count, int depth, bool editable) {
         const bool chosen = mQuery.folderId == id && !mShowMultiRigs;
         auto row = std::make_shared<ListRow>(mTheme, label, std::to_string(count), chosen, false,
                                              [this, id] { SelectPresetBrowserFolder(id); });
+        Ptr content = row;
 
         if (editable)
         {
             row->onMenu = [this, id] { OpenFolderMenu(id); };
+            LibraryDrag drag;
+            drag.what = LibraryDrag::What::Folder;
+            drag.id = id;
+            drag.name = label;
+            drag.fromChooser = true;
+            content = LibraryDragSource(std::move(drag), content);
         }
 
-        rows.push_back(FixedHeight(36, Pad(static_cast<float>(depth) * 12.0f, 0, 0, 0, row)));
+        parents.resize(static_cast<std::size_t>(depth));
+        DropSpot spot;
+        spot.kind = DropSpot::Kind::Folder;
+        spot.id = id;
+        spot.depth = depth;
+        spot.parentId = depth > 0 ? parents.back() : std::string();
+        spot.inChooser = true;
+        parents.push_back(id);
+        rows.push_back(
+            FixedHeight(36, DropTarget(std::move(spot), Pad(static_cast<float>(depth) * 12.0f, 0, 0, 0, content))));
     };
     const auto listed = [this](const std::string& folderId) {
         PresetQuery q;
@@ -694,8 +713,8 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
         {
             const auto& presetId = active->presetIds[static_cast<std::size_t>(i)];
             const auto* summary = mState.FindPresetSummary(presetId);
-            auto slot = std::make_shared<SetlistSlotRow>(mTheme, summary != nullptr ? summary->name : presetId,
-                                                         i == mState.setlistCursor);
+            const std::string title = summary != nullptr ? summary->name : presetId;
+            auto slot = std::make_shared<SetlistSlotRow>(mTheme, title, i == mState.setlistCursor);
             slot->onClick = [this, i] { SelectSetlistSlot(i); };
             slot->onRemove = [this, id, i] {
                 mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), id, i] {
@@ -731,7 +750,19 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
                                  [this, id, i] { mSession.Commands().RemoveSetlistSlot(id, i); }});
                 OpenMenu("Slot " + std::to_string(i + 1), std::move(items));
             };
-            editor.push_back(slot);
+            // Dragged onto another slot, it moves there (setlists.ts).
+            LibraryDrag drag;
+            drag.what = LibraryDrag::What::SetlistSlot;
+            drag.id = id;
+            drag.name = title;
+            drag.index = i;
+            drag.fromChooser = !tabs;
+            DropSpot spot;
+            spot.kind = DropSpot::Kind::SetlistSlot;
+            spot.id = id;
+            spot.index = i;
+            spot.inChooser = !tabs;
+            editor.push_back(DropTarget(std::move(spot), LibraryDragSource(std::move(drag), slot)));
         }
 
         if (count == 0)
@@ -747,7 +778,13 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
         return Over(Pad(10, 10, 10, 10, VScroll(content)),
                     el::share(Surface(mTheme.Text().opacity(0.03f), mTheme.Border(), 10.0f)));
     };
-    auto body = Row({FixedWidth(220, panel(Col(list))), HGap(12), panel(Col(editor))});
+    // A preset dropped on the setlist's side joins the setlist (#setlist-slots).
+    DropSpot setlistSpot;
+    setlistSpot.kind = DropSpot::Kind::SetlistPanel;
+    setlistSpot.id = active != nullptr ? active->id : std::string();
+    setlistSpot.inChooser = !tabs;
+    auto body =
+        Row({FixedWidth(220, panel(Col(list))), HGap(12), DropTarget(std::move(setlistSpot), panel(Col(editor)))});
     auto content = Col({header, VGap(10), body});
 
     if (!tabs)

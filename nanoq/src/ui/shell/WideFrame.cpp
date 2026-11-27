@@ -429,13 +429,24 @@ Ptr Shell::BuildHeader()
         }
     };
 
+    // Dragged onto a folder of the chooser, the setlist or a pad (presets/drag.ts).
+    Ptr pillItem = pill;
+
+    if (!presetId.empty())
+    {
+        LibraryDrag drag;
+        drag.id = presetId;
+        drag.name = PresetTitle(mState);
+        pillItem = LibraryDragSource(std::move(drag), pill);
+    }
+
     // The middle gets what the knobs leave, up to the web UI's 800 px (.preset-group, padded
     // 6 x 8); 14 between the toolbar and the selector, whose row is 6 apart.
     auto centre = WidthRange(
         330.0f, 800.0f,
         Pad(8, 0, 8, 0,
             Col({VGap(26), FixedHeight(28, Row({Stretch(), toolbar, Stretch()})), VGap(14),
-                 FixedHeight(36, Row({Pad(0, 4, 0, 4, prev), HGap(6), pill, HGap(6), Pad(0, 4, 0, 4, next)})),
+                 FixedHeight(36, Row({Pad(0, 4, 0, 4, prev), HGap(6), pillItem, HGap(6), Pad(0, 4, 0, 4, next)})),
                  std::make_shared<el::element>()})));
 
     // As wide as the ladder, or the theme's needle gauge (Studio 1973's VU meters).

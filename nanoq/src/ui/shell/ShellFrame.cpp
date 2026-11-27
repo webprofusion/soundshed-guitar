@@ -143,6 +143,17 @@ Ptr Shell::BuildTopBar()
         }
     };
 
+    // Dragged onto a folder of the chooser, the setlist or a pad (presets/drag.ts).
+    Ptr pillItem = pill;
+
+    if (!presetId.empty())
+    {
+        LibraryDrag drag;
+        drag.id = presetId;
+        drag.name = PresetTitle(mState);
+        pillItem = LibraryDragSource(std::move(drag), pill);
+    }
+
     auto create = ToolButton(mTheme, mIcons, "ui-new", {});
     create->Size(30, 28).Caret(true);
     create->onClick = [this, b = create.get()] { OpenNewPresetMenu(b->Bounds()); };
@@ -184,7 +195,7 @@ Ptr Shell::BuildTopBar()
         // and what a narrow bar has no room for goes: Share first (only a pointer to Soundshed
         // Guitar), then Random.
         const int extras = TouchBarExtras(StageWidth(), update != nullptr);
-        std::vector<Ptr> items{HGap(7), prev, pill, next, HGap(2), create, edit, save};
+        std::vector<Ptr> items{HGap(7), prev, pillItem, next, HGap(2), create, edit, save};
 
         if (extras >= 1)
         {
@@ -213,8 +224,8 @@ Ptr Shell::BuildTopBar()
     // pixel of gap comes out of the preset's name.
     const bool roomy = ViewSize().x >= 720.0f;
     const float g = roomy ? 6.0f : 4.0f, group = roomy ? 10.0f : 4.0f;
-    std::vector<Ptr> items{HGap(15), prev, HGap(g), pill,   HGap(g), next,    HGap(group), create, HGap(g),    edit,
-                           HGap(g),  save, HGap(g), random, HGap(g), publish, HGap(g),     more,   HGap(group)};
+    std::vector<Ptr> items{HGap(15), prev, HGap(g), pillItem, HGap(g), next,    HGap(group), create, HGap(g),    edit,
+                           HGap(g),  save, HGap(g), random,   HGap(g), publish, HGap(g),     more,   HGap(group)};
 
     if (update)
     {

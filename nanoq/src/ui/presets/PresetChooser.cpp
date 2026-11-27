@@ -453,7 +453,10 @@ void Shell::OpenPresetChooser(el::rect anchor)
         std::clamp((anchor.left + anchor.right) * 0.5f, 12.0f + width * 0.5f, view.x - 12.0f - width * 0.5f);
     const float footer = mWide ? metrics::kWideFooterHeight : metrics::FooterHeight();
     const float height = std::max(260.0f, view.y - anchor.bottom - footer - 14.0f);
-    ShowPopover(Pad(14, 12, 14, 12, mChooserSlot),
+    // Its face covers what is under it from a drag (PresetDrag.h).
+    DropSpot cover;
+    cover.inChooser = true;
+    ShowPopover(DropTarget(std::move(cover), Pad(14, 12, 14, 12, mChooserSlot)),
                 el::rect{centre - width * 0.5f, anchor.top, centre + width * 0.5f, anchor.bottom}, width, height);
     mChooserOpen = true;
     mOnOverlayClosed = [this] {
@@ -901,6 +904,12 @@ Ptr Shell::BuildPresetCard(const PresetSummary& p)
             mSession.Commands().RemoveActivePreset(id);
         }
     };
-    return card;
+
+    // Dragged onto a folder, the setlist or a pad (presets/drag.ts).
+    LibraryDrag drag;
+    drag.id = p.id;
+    drag.name = p.name;
+    drag.fromChooser = true;
+    return LibraryDragSource(std::move(drag), card);
 }
 } // namespace nanoq::ui

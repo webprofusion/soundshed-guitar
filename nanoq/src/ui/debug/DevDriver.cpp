@@ -334,6 +334,21 @@ bool DevDriver::Play(el::view& view, const std::string& line)
 
         view.click(button(false, 1, el::mouse_button::left, x2, y2));
     }
+    // A drag in steps, each its own line, so the window draws between them (a drop target that
+    // has to be drawn first, as PresetDrag.h's are): press, dragto as often as wanted, release.
+    else if (verb == "press")
+    {
+        view.cursor(el::point{x, y}, el::cursor_tracking::hovering);
+        view.click(button(true, 1, el::mouse_button::left, x, y));
+    }
+    else if (verb == "dragto")
+    {
+        view.drag(button(true, 1, el::mouse_button::left, x, y));
+    }
+    else if (verb == "release")
+    {
+        view.click(button(false, 1, el::mouse_button::left, x, y));
+    }
     else if (verb == "scroll")
     {
         float dy = 0.0f;
