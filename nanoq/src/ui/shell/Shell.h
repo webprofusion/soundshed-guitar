@@ -375,7 +375,10 @@ class Shell
     void OpenOptions(el::rect anchor);
     void OpenNewPresetMenu(el::rect anchor);
     /// "New preset" for a menu: it asks first if the preset has unsaved changes.
-    [[nodiscard]] MenuItem NewPresetItem();
+    /// New: an empty preset or the basic signal chain (the web's New menu), asking first when
+    /// the preset shown has unsaved changes.
+    [[nodiscard]] MenuItem NewPresetItem(const std::string& label = "New preset",
+                                         const std::string& configuration = "basic");
     void LoadRandomPreset();
 
     // The chain's undo/redo and A/B (ShellFrame.cpp), as the web UI's footer (history.ts).
@@ -1129,9 +1132,12 @@ class Shell
     SlotPtr mPresetListSlot;
     SlotPtr mChooserSlot; // the preset chooser's content, rebuilt as the library changes
     bool mChooserOpen = false;
-    bool mChooserSetlistsOpen = false;                   // its Setlists section unfolded
-    std::string mLoadingPresetId;                        // the card clicked, dimmed until it is the one playing
-    std::shared_ptr<el::basic_input_box> mFolderNameBox; // its New Folder Name, kept across rebuilds
+    bool mChooserSetlistsOpen = false;                    // its Setlists section unfolded
+    std::string mLoadingPresetId;                         // the card clicked, dimmed until it is the one playing
+    std::shared_ptr<el::basic_input_box> mFolderNameBox;  // its New Folder Name, kept across rebuilds
+    std::shared_ptr<el::basic_input_box> mSetlistNameBox; // its Setlists' new name and bank, kept across rebuilds
+    std::shared_ptr<el::basic_input_box> mSetlistBankBox;
+    Ptr mSetlistNameElement, mSetlistBankElement;
     Ptr mFolderNameElement;
     std::string mPadsEditingId;                        // the setlist the pads' bank editor is open on
     std::optional<std::string> mPadsEditAfterCreate;   // Add bank: edit the new one, not this one, once made

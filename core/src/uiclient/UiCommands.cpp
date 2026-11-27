@@ -210,9 +210,9 @@ void UiCommands::RenamePreset(const std::string& name, const std::string& catego
                                 {"includeGlobalSignalChain", false}});
 }
 
-void UiCommands::NewPreset()
+void UiCommands::NewPreset(const std::string& configuration)
 {
-    mClient.Send("newPreset");
+    mClient.Send("newPreset", {{"configuration", configuration}});
 }
 
 void UiCommands::DeletePreset(const std::string& presetId)

@@ -237,25 +237,27 @@ int Shell::TouchBarExtras(float width, bool update)
     return width >= base + 2.0f * kHit ? 2 : width >= base + kHit ? 1 : 0;
 }
 
-MenuItem Shell::NewPresetItem()
+MenuItem Shell::NewPresetItem(const std::string& label, const std::string& configuration)
 {
-    return {"New preset", false, false, [this] {
+    return {label, false, false, [this, configuration] {
                 if (mState.activePresetDirty)
                 {
                     OpenConfirm("Unsaved changes", "Start a new preset and lose the changes to this one?", "New preset",
-                                [this] { mSession.Commands().NewPreset(); });
+                                [this, configuration] { mSession.Commands().NewPreset(configuration); });
                 }
                 else
                 {
-                    mSession.Commands().NewPreset();
+                    mSession.Commands().NewPreset(configuration);
                 }
             }};
 }
 
 void Shell::OpenNewPresetMenu(el::rect anchor)
 {
+    // The web's New menu (presets/newPresetMenu.ts): Empty Preset, Basic Signal Chain.
     std::vector<MenuItem> items;
-    items.push_back(NewPresetItem());
+    items.push_back(NewPresetItem("Empty Preset", "empty"));
+    items.push_back(NewPresetItem("Basic Signal Chain", "basic"));
 
     if (mState.activePreset)
     {

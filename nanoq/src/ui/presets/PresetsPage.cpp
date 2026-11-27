@@ -134,6 +134,173 @@ int TypedBank(const std::string& text)
     const long bank = std::strtol(text.c_str(), &end, 10);
     return end != text.c_str() && bank >= 0 && bank < 10000 ? static_cast<int>(bank) : -1;
 }
+
+/// A setlist in the Setlists list (.setlist-item): its name and a pill with its bank ("Bank 2",
+/// "No Bank"); the one chosen filled with the accent.
+class SetlistItemRow final : public Pressable
+{
+  public:
+    SetlistItemRow(const Theme& theme, std::string name, std::string bank, bool active)
+        : mTheme(theme), mName(std::move(name)), mBank(std::move(bank)), mActive(active)
+    {
+        AccessName(mName);
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.role = AccessRole::ListItem;
+        info.value = mBank;
+        info.selected = mActive;
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{120.0f, 32.0f}, {el::full_extent, 32.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds.inset(0.0f, 2.0f);
+
+        if (mActive || mHover || HasFocus())
+        {
+            cnv.fill_style(mActive ? mTheme.Accent() : mTheme.Text().opacity(0.06f));
+            cnv.fill_round_rect(b, 6.0f);
+        }
+
+        const auto ink = mActive ? mTheme.OnAccent() : mTheme.Text();
+        const auto pillFont = Font(Weight::Medium).size(10.0f);
+        const float pillWidth = MeasureTextWidth(mBank, pillFont) + 12.0f;
+        const float cy = b.top + b.height() * 0.5f;
+        const el::rect pill{b.right - 8.0f - pillWidth, cy - 9.0f, b.right - 8.0f, cy + 9.0f};
+        cnv.fill_style(ink.opacity(0.14f));
+        cnv.fill_round_rect(pill, 9.0f);
+        FillText(cnv, mBank, pillFont, ink, pill, HAlign::Centre);
+        const auto nameFont = Font(Weight::Regular).size(12.5f);
+        FillText(cnv, Ellipsize(cnv, mName, nameFont, pill.left - b.left - 16.0f), nameFont, ink,
+                 el::rect{b.left + 8.0f, b.top, pill.left - 8.0f, b.bottom}, HAlign::Left);
+    }
+
+  private:
+    const Theme& mTheme;
+    std::string mName, mBank;
+    bool mActive;
+};
+
+/// A slot of the setlist being edited (.setlist-slot): a dashed box with the preset's name and a
+/// x that takes it out; the slot the setlist is on is filled with the accent. A tap loads it.
+class SetlistSlotRow final : public Pressable
+{
+  public:
+    SetlistSlotRow(const Theme& theme, std::string title, bool active)
+        : mTheme(theme), mTitle(std::move(title)), mActive(active)
+    {
+        AccessName(mTitle);
+    }
+
+    std::function<void()> onRemove;
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.role = AccessRole::ListItem;
+        info.selected = mActive;
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context&) const override
+    {
+        return {{120.0f, 40.0f}, {el::full_extent, 40.0f}};
+    }
+
+    bool key(const el::context& ctx, el::key_info k) override
+    {
+        if (onRemove && k.action == el::key_action::press && k.key == el::key_code::_delete)
+        {
+            onRemove();
+            return true;
+        }
+
+        return Pressable::key(ctx, k);
+    }
+
+    bool click(const el::context& ctx, el::mouse_button btn) override
+    {
+        if (btn.state == el::mouse_button::left && Cross(ctx.bounds).inset(-4.0f, -4.0f).includes(btn.pos))
+        {
+            if (!btn.down && onRemove)
+            {
+                onRemove();
+            }
+
+            return true;
+        }
+
+        return Pressable::click(ctx, btn);
+    }
+
+    bool cursor(const el::context& ctx, el::point p, el::cursor_tracking status) override
+    {
+        const bool over = status != el::cursor_tracking::leaving && Cross(ctx.bounds).inset(-4.0f, -4.0f).includes(p);
+
+        if (over != mCrossHover)
+        {
+            mCrossHover = over;
+            ctx.view.refresh(ctx.bounds);
+        }
+
+        return Pressable::cursor(ctx, p, status);
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds.inset(0.0f, 3.0f);
+
+        if (mActive)
+        {
+            cnv.fill_style(mTheme.Accent());
+            cnv.fill_round_rect(b, 8.0f);
+        }
+        else
+        {
+            if (mHover)
+            {
+                cnv.fill_style(mTheme.Text().opacity(0.05f));
+                cnv.fill_round_rect(b, 8.0f);
+            }
+
+            cnv.stroke_style(HasFocus() ? mTheme.Accent() : mTheme.BorderStrong());
+            cnv.line_width(1.0f);
+            StrokeDashedRoundRect(cnv, b.inset(0.5f, 0.5f), 8.0f, 4.0f, 3.0f);
+        }
+
+        const auto ink = mActive ? mTheme.OnAccent() : mTheme.Text();
+        const auto cross = Cross(ctx.bounds);
+        const auto font = Font(Weight::Medium).size(12.0f);
+        FillText(cnv, Ellipsize(cnv, mTitle, font, cross.left - b.left - 16.0f), font, ink,
+                 el::rect{b.left + 8.0f, b.top, cross.left - 4.0f, b.bottom}, HAlign::Left);
+        FillText(cnv, "\xC3\x97", Font(Weight::Regular).size(15.0f),
+                 mCrossHover ? (mActive ? ink : mTheme.Error()) : ink.opacity(0.7f), cross, HAlign::Centre);
+    }
+
+  private:
+    [[nodiscard]] static el::rect Cross(const el::rect& bounds)
+    {
+        const float cy = bounds.top + bounds.height() * 0.5f;
+        return el::rect{bounds.right - 30.0f, cy - 11.0f, bounds.right - 8.0f, cy + 11.0f};
+    }
+
+    const Theme& mTheme;
+    std::string mTitle;
+    bool mActive;
+    bool mCrossHover = false;
+};
 } // namespace
 
 void Shell::OpenPresetRowMenu(const PresetSummary& preset)
@@ -374,8 +541,10 @@ void Shell::RebuildPresetList()
 
 Ptr Shell::BuildSetlistsView(Ptr tabs)
 {
-    auto& commands = mSession.Commands();
-
+    // The web UI's setlist panel (setlist-panel, presets/setlists.ts): a new setlist's name and
+    // bank with Create Setlist; then the setlists as a 220 px list with their banks, beside the
+    // one chosen: "Name (Bank N)" over its slots, each a dashed box with a x. A right click on a
+    // setlist edits or deletes it; on a slot it moves or replaces it.
     const Setlist* active = nullptr;
 
     for (const auto& s : mState.setlists)
@@ -386,93 +555,114 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
         }
     }
 
-    if (active == nullptr && !mState.setlists.empty())
+    // ── The header (.setlist-header): name, bank (120 px), Create Setlist ──
+    // As tall as the button beside them, with the dialogs' 10 px inset (PresetDetails.cpp).
+    const auto field = [](const char* placeholder, std::shared_ptr<el::basic_input_box>& box, Ptr& element) {
+        if (!box)
+        {
+            box = el::share(el::basic_input_box{placeholder, Font(Weight::Regular).size(metrics::kSmallText)});
+            element = el::share(el::input_box(el::hold(box), el::rect{10.0f, 8.0f, 10.0f, 8.0f}));
+        }
+    };
+    field("New setlist name", mSetlistNameBox, mSetlistNameElement);
+    field("Bank", mSetlistBankBox, mSetlistBankElement);
+    const auto createSetlist = [this] {
+        auto name = mSetlistNameBox->get_utf8();
+        const auto first = name.find_first_not_of(" \t");
+        name =
+            first == std::string::npos ? std::string() : name.substr(first, name.find_last_not_of(" \t") - first + 1);
+
+        if (name.empty())
+        {
+            ShowToast("Setlist name required", "Enter a setlist name.", true);
+            return;
+        }
+
+        const int bank = TypedBank(mSetlistBankBox->get_utf8());
+
+        if (bank >= 0 && std::any_of(mState.setlists.begin(), mState.setlists.end(),
+                                     [bank](const Setlist& s) { return s.bank && *s.bank == bank; }))
+        {
+            ShowToast("Bank already used", "Only one setlist can use a bank number.", true);
+            return;
+        }
+
+        mSession.Commands().CreateSetlist(name, bank);
+        mSetlistNameBox->set_text("");
+        mSetlistBankBox->set_text("");
+    };
+    mSetlistNameBox->on_enter = [createSetlist](std::string_view) {
+        createSetlist();
+        return true;
+    };
+    auto create = std::make_shared<Button>(mTheme, "Create Setlist", createSetlist, Button::Style::Primary);
+    create->TextSize(11.0f);
+    const auto inputBox = [this](Ptr e) { return Rounded(mTheme.Tertiary(), 6.0f, e); };
+    auto header = FixedHeight(34, Row({inputBox(mSetlistNameElement), HGap(8),
+                                       FixedWidth(120, inputBox(mSetlistBankElement)), HGap(8), Middle(create)}));
+
+    // ── The setlists (.setlist-list) ──
+    std::vector<Ptr> list;
+
+    for (const auto& s : mState.setlists)
     {
-        active = &mState.setlists.front();
+        const std::string id = s.id, name = s.name;
+        const std::string bank = s.bank ? std::to_string(*s.bank) : std::string();
+        auto row = std::make_shared<SetlistItemRow>(mTheme, s.name,
+                                                    s.bank ? "Bank " + std::to_string(*s.bank) : std::string("No Bank"),
+                                                    active != nullptr && active->id == s.id);
+        row->onClick = [this, id] {
+            if (id != mState.activeSetlistId)
+            {
+                mSession.Commands().SelectSetlist(id);
+            }
+        };
+        row->onMenu = [this, id, name, bank](el::point) {
+            OpenMenu(name, {{"Edit...", false, false,
+                             [this, id, name, bank] {
+                                 PostPrompt("Setlist name", name, "Next", [this, id, bank](const std::string& entered) {
+                                     if (entered.find_first_not_of(" \t") == std::string::npos)
+                                     {
+                                         ShowToast("Setlist name required", "Enter a setlist name.", true);
+                                         return;
+                                     }
+
+                                     PostPrompt("Bank number (blank for none)", bank, "Save",
+                                                [this, id, entered](const std::string& b) {
+                                                    mSession.Commands().UpdateSetlist(id, entered, TypedBank(b));
+                                                });
+                                 });
+                             }},
+                            {"Delete...", false, false, [this, id, name] {
+                                 OpenConfirm("Delete setlist", "Delete " + name + "? Its presets stay in the library.",
+                                             "Delete", [this, id] { mSession.Commands().DeleteSetlist(id); });
+                             }}});
+        };
+        list.push_back(row);
     }
 
-    auto picker = std::make_shared<Button>(
-        mTheme, active != nullptr ? active->name : std::string("No setlists"),
-        [this] {
-            std::vector<MenuItem> items;
+    if (list.empty())
+    {
+        auto none = std::make_shared<Text>(mTheme, "No setlists yet.", 12.0f);
+        none->Colour(mTheme.TextMuted());
+        list.push_back(FixedHeight(28, PadXY(8, 0, none)));
+    }
 
-            for (const auto& s : mState.setlists)
-            {
-                items.push_back({s.name + (s.bank ? "  (bank " + std::to_string(*s.bank) + ")" : std::string()),
-                                 s.id == mState.activeSetlistId, false,
-                                 [this, id = s.id] { mSession.Commands().SelectSetlist(id); }});
-            }
-
-            if (items.empty())
-            {
-                items.push_back({"No setlists yet", false, true, {}});
-            }
-
-            OpenMenu("Setlist", std::move(items));
-        },
-        Button::Style::Plain);
-    picker->MinWidth(200);
-
-    const int cursor = mState.setlistCursor;
-    const int count = active != nullptr ? static_cast<int>(active->presetIds.size()) : 0;
-    auto prev = std::make_shared<Button>(
-        mTheme, "\xE2\x80\xB9",
-        [this, cursor, count] {
-            if (count > 0)
-            {
-                SelectSetlistSlot((cursor - 1 + count) % count);
-            }
-        },
-        Button::Style::Plain);
-    auto next = std::make_shared<Button>(
-        mTheme, "\xE2\x80\xBA",
-        [this, cursor, count] {
-            if (count > 0)
-            {
-                SelectSetlistSlot((cursor + 1) % count);
-            }
-        },
-        Button::Style::Plain);
-    prev->MinWidth(44).TextSize(20);
-    next->MinWidth(44).TextSize(20);
-
-    // Making, editing and deleting setlists, as the web UI's setlist panel and pad editor do.
-    auto create = std::make_shared<Button>(
-        mTheme, "New",
-        [this] {
-            OpenPrompt("New setlist", "", "Next", [this](const std::string& name) {
-                PostPrompt("Bank number (blank for none)", "", "Create", [this, name](const std::string& bank) {
-                    mSession.Commands().CreateSetlist(name, TypedBank(bank));
-                });
-            });
-        },
-        Button::Style::Plain);
-    std::vector<Ptr> toolbar{picker, HGap(6), prev, HGap(4), next, HGap(12), create};
+    // ── The one chosen (.setlist-editor) ──
+    std::vector<Ptr> editor;
+    auto title = std::make_shared<Text>(
+        mTheme,
+        active != nullptr
+            ? active->name + (active->bank ? " (Bank " + std::to_string(*active->bank) + ")" : std::string())
+            : std::string("Select a setlist"),
+        13.0f, Weight::SemiBold);
+    std::vector<Ptr> titleRow{title};
 
     if (active != nullptr)
     {
         const std::string id = active->id;
-        const std::string name = active->name;
-        const std::string bank = active->bank ? std::to_string(*active->bank) : std::string();
-        auto edit = std::make_shared<Button>(
-            mTheme, "Edit",
-            [this, id, name, bank] {
-                OpenPrompt("Setlist name", name, "Next", [this, id, bank](const std::string& entered) {
-                    PostPrompt("Bank number (blank for none)", bank, "Save", [this, id, entered](const std::string& b) {
-                        mSession.Commands().UpdateSetlist(id, entered, TypedBank(b));
-                    });
-                });
-            },
-            Button::Style::Plain);
-        auto remove = std::make_shared<Button>(
-            mTheme, "Delete",
-            [this, id, name] {
-                OpenConfirm("Delete setlist", "Delete " + name + "? Its presets stay in the library.", "Delete",
-                            [this, id] { mSession.Commands().DeleteSetlist(id); });
-            },
-            Button::Style::Plain);
         auto addCurrent = std::make_shared<Button>(
-            mTheme, "Add current preset",
+            mTheme, "+ Current preset",
             [this, id] {
                 if (!mState.activePresetId.empty())
                 {
@@ -480,87 +670,91 @@ Ptr Shell::BuildSetlistsView(Ptr tabs)
                 }
             },
             Button::Style::Plain);
-        addCurrent->Enabled(!mState.activePresetId.empty());
-        toolbar.insert(toolbar.end(), {HGap(4), edit, HGap(4), remove, HGap(12), addCurrent});
+        addCurrent->TextSize(11.0f).Enabled(!mState.activePresetId.empty());
+        auto pads = std::make_shared<Button>(
+            mTheme, "Pads",
+            [this] {
+                CloseOverlay();
+                ShowPage(Page::Pads);
+            },
+            Button::Style::Flat);
+        pads->TextSize(11.0f);
+        titleRow.insert(titleRow.end(), {HGap(8), Middle(addCurrent), HGap(4), Middle(pads)});
     }
 
-    auto view = std::make_shared<Button>(
-        mTheme, "Pads",
-        [this] {
-            CloseOverlay();
-            ShowPage(Page::Pads);
-        },
-        Button::Style::Flat);
-    toolbar.push_back(HGap(12));
-    toolbar.push_back(view);
+    editor.push_back(FixedHeight(32, Row(titleRow)));
+    editor.push_back(VGap(6));
 
-    Ptr body;
-
+    if (active != nullptr)
     {
-        std::vector<Ptr> rows;
+        const std::string id = active->id;
+        const int count = static_cast<int>(active->presetIds.size());
 
-        if (active != nullptr)
+        for (int i = 0; i < count; ++i)
         {
-            const std::string id = active->id;
-
-            for (int i = 0; i < count; ++i)
-            {
-                const auto& presetId = active->presetIds[static_cast<std::size_t>(i)];
-                const auto* summary = mState.FindPresetSummary(presetId);
-                auto row = std::make_shared<ListRow>(
-                    mTheme, std::to_string(i + 1) + ".  " + (summary != nullptr ? summary->name : presetId),
-                    summary != nullptr ? summary->category : std::string(), i == cursor, false,
-                    [this, i] { SelectSetlistSlot(i); });
-                row->onMenu = [this, id, i, count] {
-                    std::vector<MenuItem> items;
-
-                    if (i > 0)
+            const auto& presetId = active->presetIds[static_cast<std::size_t>(i)];
+            const auto* summary = mState.FindPresetSummary(presetId);
+            auto slot = std::make_shared<SetlistSlotRow>(mTheme, summary != nullptr ? summary->name : presetId,
+                                                         i == mState.setlistCursor);
+            slot->onClick = [this, i] { SelectSetlistSlot(i); };
+            slot->onRemove = [this, id, i] {
+                mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), id, i] {
+                    if (alive.lock())
                     {
-                        items.push_back({"Move up", false, false,
-                                         [this, id, i] { mSession.Commands().MoveSetlistSlot(id, i, i - 1); }});
+                        mSession.Commands().RemoveSetlistSlot(id, i);
                     }
+                });
+            };
+            slot->onMenu = [this, id, i, count](el::point) {
+                std::vector<MenuItem> items;
 
-                    if (i + 1 < count)
-                    {
-                        items.push_back({"Move down", false, false,
-                                         [this, id, i] { mSession.Commands().MoveSetlistSlot(id, i, i + 1); }});
-                    }
+                if (i > 0)
+                {
+                    items.push_back({"Move up", false, false,
+                                     [this, id, i] { mSession.Commands().MoveSetlistSlot(id, i, i - 1); }});
+                }
 
-                    if (!mState.activePresetId.empty())
-                    {
-                        items.push_back({"Put the current preset here", false, false, [this, id, i] {
-                                             mSession.Commands().SetSetlistSlot(id, i, mState.activePresetId);
-                                         }});
-                    }
+                if (i + 1 < count)
+                {
+                    items.push_back({"Move down", false, false,
+                                     [this, id, i] { mSession.Commands().MoveSetlistSlot(id, i, i + 1); }});
+                }
 
-                    items.push_back({"Remove from the setlist", false, false,
-                                     [this, id, i] { mSession.Commands().RemoveSetlistSlot(id, i); }});
-                    OpenMenu("Slot " + std::to_string(i + 1), std::move(items));
-                };
-                rows.push_back(row);
-            }
+                if (!mState.activePresetId.empty())
+                {
+                    items.push_back({"Put the current preset here", false, false, [this, id, i] {
+                                         mSession.Commands().SetSetlistSlot(id, i, mState.activePresetId);
+                                     }});
+                }
+
+                items.push_back({"Remove from the setlist", false, false,
+                                 [this, id, i] { mSession.Commands().RemoveSetlistSlot(id, i); }});
+                OpenMenu("Slot " + std::to_string(i + 1), std::move(items));
+            };
+            editor.push_back(slot);
         }
 
-        if (rows.empty())
+        if (count == 0)
         {
-            auto none = std::make_shared<Text>(
-                mTheme,
-                active != nullptr ? "This setlist is empty: add the preset playing, or add one from a preset's menu."
-                                  : "No setlists yet: New makes one.",
-                14.0f);
+            auto none = std::make_shared<Text>(mTheme, "Load a preset, then + Current preset adds it here.", 12.0f);
             none->Colour(mTheme.TextMuted());
-            rows.push_back(FixedHeight(32, PadXY(12, 0, none)));
+            editor.push_back(FixedHeight(28, PadXY(4, 0, none)));
         }
-
-        body = VScroll(Col(rows));
     }
+
+    // Each half on a faint face with an edge (.setlist-list, .setlist-editor).
+    const auto panel = [this](Ptr content) {
+        return Over(Pad(10, 10, 10, 10, VScroll(content)),
+                    el::share(Surface(mTheme.Text().opacity(0.03f), mTheme.Border(), 10.0f)));
+    };
+    auto body = Row({FixedWidth(220, panel(Col(list))), HGap(12), panel(Col(editor))});
+    auto content = Col({header, VGap(10), body});
 
     if (!tabs)
     {
-        return Col({FixedHeight(48, PadXY(0, 4, Row(toolbar))), body});
+        return content;
     }
 
-    return Dressed(mTheme, mTheme.Background(), &Backdrops::main,
-                   Pad(16, 8, 16, 8, Col({tabs, FixedHeight(48, PadXY(0, 4, Row(toolbar))), body})));
+    return Dressed(mTheme, mTheme.Background(), &Backdrops::main, Pad(16, 8, 16, 8, Col({tabs, VGap(8), content})));
 }
 } // namespace nanoq::ui

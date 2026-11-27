@@ -58,7 +58,8 @@ class UiCommands
     /// Saves the preset playing with these details: over itself, or (`asNew`) as a new preset.
     void SavePresetWithDetails(const PresetDetails& details, bool asNew);
     void RenamePreset(const std::string& name, const std::string& category, const std::string& description);
-    void NewPreset();
+    /// A new, unsaved preset (newPreset): "basic" (the engine's starting chain) or "empty".
+    void NewPreset(const std::string& configuration = "basic");
     void DeletePreset(const std::string& presetId);
     void SetPresetFavorite(const std::string& presetId, bool favorite);
     /// 1 to 5 stars, or 0 to clear.
