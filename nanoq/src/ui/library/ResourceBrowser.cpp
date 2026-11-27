@@ -55,6 +55,7 @@ struct ResourceBrowserMemory
     std::vector<t3::Tone> t3Tones;
     std::string t3Open;
     std::vector<t3::Model> t3Models;
+    bool t3Favourites = false;
 
     // What the slot's previous and next walk: the list its choice was last picked from.
     int stepFrom = 0;                                     // the Tab it was picked on
@@ -118,6 +119,14 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         std::optional<t3::Model> t3HearingModel;
         std::vector<t3::Model> t3Models;
         bool t3ModelsLoading = false;
+        std::string t3ModelsError;        // why the open tone's models could not be listed
+        bool t3Favourites = false;        // Search | Favourites
+        std::string t3Section = "models"; // the open tone's Models | Details
+        bool t3HearingLoading = false;    // the heard model's download still on its way
+        std::string t3BulkTone;           // the tone Import All is working through
+        std::size_t t3BulkTotal = 0;
+        int t3Sequence = 0; // bumped by every search: an older answer is dropped
+        bool open = true;   // until the dialog closes
 
         SlotPtr tabs = MakeSlot(), controls = MakeSlot(), list = MakeSlot(), footer = MakeSlot();
         SlotPtr pager = MakeSlot();             // Tone 3000's Prev / Page / Next, under its list
@@ -205,6 +214,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     b->t3Tones = memory->t3Tones;
     b->t3Open = memory->t3Open;
     b->t3Models = memory->t3Models;
+    b->t3Favourites = memory->t3Favourites;
 
     // The library opens on the slot's category (the reverb IR on reverbs, Neural FX on pedals),
     // or on everything when the library has none; on the chosen entry's own when it is elsewhere.
@@ -1339,35 +1349,74 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     };
 
     // ── Tone 3000 ───────────────────────────────────────────────────────────────
-    const auto search = [this, b, refillList](int page) {
-        b->t3Loading = true;
+    // Favourites are the player's own (tones/favorited), so only with their own key.
+    const auto canListFavourites = [this] {
+        return !mSession.Tones().Tone3000UsesRelay() && !mSession.Tones().Tone3000NeedsKey();
+    };
+    const auto search = [this, b, canListFavourites](int page) {
+        const int sequence = ++b->t3Sequence;
         b->t3Error.clear();
         b->t3Page = std::max(1, page);
         b->t3Open.clear();
+        b->t3Tones.clear();
+        const auto done = [b, sequence](const t3::Page<t3::Tone>& result, const std::string& error) {
+            if (sequence != b->t3Sequence)
+            {
+                return;
+            }
+
+            b->t3Loading = false;
+            b->t3Error = error;
+            b->t3Tones = result.items;
+            b->t3Pages = result.totalPages;
+
+            if (b->fillList)
+            {
+                b->fillList();
+            }
+
+            if (b->fillFooter)
+            {
+                b->fillFooter();
+            }
+        };
+
+        // Without a way in, the list says so (its message) and nothing is asked.
+        if ((b->t3Favourites && !canListFavourites()) || mSession.Tones().Tone3000NeedsKey())
+        {
+            b->t3Loading = false;
+            b->t3Pages = 1;
+            b->fillList();
+
+            if (b->fillFooter)
+            {
+                b->fillFooter();
+            }
+
+            return;
+        }
+
+        b->t3Loading = true;
         b->fillList();
+
+        if (b->fillFooter)
+        {
+            b->fillFooter(); // the old pages go while the new ones load
+        }
+
+        if (b->t3Favourites)
+        {
+            mSession.Tones().Tone3000Favourites(b->t3Page, done);
+            return;
+        }
+
         mSession.Tones().SearchTone3000(b->t3Query, b->t3Gear, b->t3Sort,
-                                        b->resourceType == "nam" ? b->t3Arch : std::string(), b->t3Page,
-                                        [b, refillList](const t3::Page<t3::Tone>& result, const std::string& error) {
-                                            b->t3Loading = false;
-                                            b->t3Error = error;
-                                            b->t3Tones = result.items;
-                                            b->t3Pages = result.totalPages;
-
-                                            if (b->fillList)
-                                            {
-                                                b->fillList();
-                                            }
-
-                                            if (b->fillFooter)
-                                            {
-                                                b->fillFooter();
-                                            }
-                                        });
+                                        b->resourceType == "nam" ? b->t3Arch : std::string(), b->t3Page, done);
     };
 
     b->searchTone3000 = search;
 
-    const auto tone3000List = [this, b, preview, refillList]() -> Ptr {
+    const auto tone3000List = [this, b, preview, refillList, canListFavourites]() -> Ptr {
         std::vector<Ptr> rows;
         const auto message = [this](const std::string& text, el::color colour) {
             auto t = std::make_shared<Text>(mTheme, text, 12.0f);
@@ -1375,31 +1424,160 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             return FixedHeight(60, t);
         };
 
+        // The web UI's states (.resource-browser-empty).
+        if (b->t3Favourites && !canListFavourites())
+        {
+            return message("To view your favourites, add your own Tone3000 API key under Settings.",
+                           mTheme.TextMuted());
+        }
+
+        if (mSession.Tones().Tone3000NeedsKey())
+        {
+            return message("Add a Tone3000 API key in Settings to browse.", mTheme.TextMuted());
+        }
+
         if (b->t3Loading)
         {
-            return message("Searching Tone3000...", mTheme.TextMuted());
+            return message("Loading...", mTheme.TextMuted());
         }
 
         if (!b->t3Error.empty())
         {
-            return message(b->t3Error, mTheme.Error());
+            return message("Error: " + b->t3Error, mTheme.Error());
         }
 
         if (b->t3Tones.empty())
         {
-            return message("Search Tone3000 for models to add to your library.", mTheme.TextMuted());
+            return message(b->t3Favourites ? "No favourite tones found. Favourite them on Tone3000 first, then refresh."
+                                           : "No tones found. Try a different search.",
+                           mTheme.TextMuted());
         }
+
+        const float listWidth = std::min(944.0f, ViewSize().x - 16.0f) - 32.0f - 10.0f;
+
+        // A model heard in the slot without importing it (the web UI's preview): its download,
+        // then the engine plays it. "Loading..." until the download is in.
+        const auto hear = [this, b, refillList](const t3::Tone& tone, const t3::Model& model) {
+            b->t3Hearing = model.id;
+            b->t3HearingTone = tone;
+            b->t3HearingModel = model;
+            b->t3HearingLoading = true;
+            b->previewed = true;
+            b->pickedFrom = static_cast<int>(Tab::Tone3000);
+            b->selectedId.clear();
+            b->selectedPath.clear();
+            refillList();
+
+            if (b->fillFooter)
+            {
+                b->fillFooter();
+            }
+
+            mSession.Tones().DownloadTone3000(
+                model, b->resourceType,
+                [this, b, refillList, id = model.id](const std::string& base64, const std::string& error) {
+                    if (b->t3Hearing != id)
+                    {
+                        return;
+                    }
+
+                    b->t3HearingLoading = false;
+
+                    if (!error.empty())
+                    {
+                        b->t3Hearing.clear();
+                        ShowToast("Could not play the model", error, true);
+                        refillList();
+                        return;
+                    }
+
+                    mSession.Commands().PreviewRemoteResource(b->resourceType, "tone3000-preview:" + id, b->nodeId,
+                                                              b->index, false, base64);
+                    refillList();
+                });
+        };
+        // The preview button on the model playing stops it: the slot gets back what it held.
+        const auto stopHearing = [this, b, refillList] {
+            mSession.Commands().CancelPreviewResource(b->nodeId, b->index, true);
+            b->t3Hearing.clear();
+            b->t3HearingTone.reset();
+            b->t3HearingModel.reset();
+            b->t3HearingLoading = false;
+            b->previewed = false;
+            refillList();
+
+            if (b->fillFooter)
+            {
+                b->fillFooter();
+            }
+        };
+        // Select (or a double click): the model into the slot, imported first unless the library
+        // has it, and the dialog closed (selectAndImportModel).
+        const auto take = [this, b, preview, refillList](const t3::Tone& tone, const t3::Model& model) {
+            if (const auto* imported = t3::FindImported(mState, b->resourceType, model))
+            {
+                preview(imported->id, {});
+                CloseOverlay();
+                return;
+            }
+
+            if (mSession.Tones().IsImporting(model.id))
+            {
+                return;
+            }
+
+            const auto nodeId = b->nodeId, resourceType = b->resourceType;
+            const int index = b->index;
+            mSession.Tones().ImportTone3000(
+                tone, model, resourceType, resourceType == "ir" ? b->role.gear : std::string(),
+                [this, b, preview, nodeId, resourceType, index, name = model.name](const std::string& id,
+                                                                                   const std::string& error) {
+                    if (!error.empty())
+                    {
+                        ShowToast("Import failed", error, true);
+
+                        if (b->open && b->fillList)
+                        {
+                            b->fillList();
+                        }
+
+                        return;
+                    }
+
+                    ShowToast("Imported", name, false);
+
+                    if (b->open)
+                    {
+                        preview(id, {});
+                        CloseOverlay();
+                    }
+                    else
+                    {
+                        mSession.Commands().SetNodeResource(nodeId, resourceType, id, index);
+                    }
+                });
+            refillList();
+        };
 
         for (const auto& tone : b->t3Tones)
         {
-            const int count = b->resourceType == "ir" ? tone.irsCount : tone.modelsCount;
-            std::string detail = (tone.creatorName.empty() ? std::string() : "by " + tone.creatorName + " \xC2\xB7 ") +
-                                 std::to_string(count) + (b->resourceType == "ir" ? " IRs" : " models") +
-                                 (tone.platform.empty() ? "" : " \xC2\xB7 " + tone.platform);
-            auto row = std::make_shared<BrowserRow>(mTheme, mIcons, tone.title, detail);
+            const bool open = b->t3Open == tone.id;
+            const auto* models = open && !b->t3ModelsLoading && b->t3ModelsError.empty() ? &b->t3Models : nullptr;
+            // Who, how many, how popular; a favourite's gear (favourites span every gear); then
+            // how much of it is in the library (.resource-browser-tone-imported).
+            auto line = t3::ToneMetaLine(tone, b->resourceType,
+                                         models != nullptr ? static_cast<int>(models->size()) : -1, b->t3Favourites);
+
+            if (const auto badge = t3::ToneImportedBadge(mState, b->resourceType, tone, models); !badge.empty())
+            {
+                line += " \xC2\xB7 " + badge;
+            }
+
+            auto row =
+                std::make_shared<BrowserRow>(mTheme, mIcons, tone.title.empty() ? "Untitled Tone" : tone.title, line);
             row->picture = [this, url = tone.imageUrl] { return RemoteImage(url); };
             row->pictureSlot = true; // .resource-browser-tone-image, or its placeholder
-            row->note = b->t3Open == tone.id ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
+            row->note = open ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
             row->onClick = [this, b, tone, refillList] {
                 if (b->t3Open == tone.id)
                 {
@@ -1409,17 +1587,20 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 }
 
                 b->t3Open = tone.id;
+                b->t3Section = "models";
                 b->t3Models.clear();
+                b->t3ModelsError.clear();
                 b->t3ModelsLoading = true;
                 refillList();
                 mSession.Tones().Tone3000Models(
-                    tone.id, [b, id = tone.id](const std::vector<t3::Model>& models, const std::string&) {
+                    tone.id, [b, id = tone.id](const std::vector<t3::Model>& models, const std::string& error) {
                         if (b->t3Open != id)
                         {
                             return;
                         }
 
                         b->t3Models = models;
+                        b->t3ModelsError = models.empty() ? error : std::string();
                         b->t3ModelsLoading = false;
 
                         if (b->fillList)
@@ -1430,21 +1611,145 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             };
             rows.push_back(row);
 
-            // The web UI's Import All: every model of the open tone into the library.
-            if (b->t3Open == tone.id && !b->t3Models.empty())
+            if (!open)
             {
-                const auto missing =
-                    std::count_if(b->t3Models.begin(), b->t3Models.end(), [this, b](const t3::Model& m) {
-                        return t3::FindImported(mState, b->resourceType, m) == nullptr;
-                    });
+                continue;
+            }
 
-                if (missing > 0)
+            // Models | Details (.resource-browser-tone-section-tabs).
+            auto sections = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Models", "Details"});
+            sections->Select(b->t3Section == "details" ? 1 : 0);
+            sections->onSelect = [b, refillList](int index) {
+                b->t3Section = index == 1 ? "details" : "models";
+                refillList();
+            };
+            rows.push_back(Pad(16, 4, 0, 4, FixedHeight(30, Row({FixedWidth(170, sections), Stretch()}))));
+
+            const auto muted = [this](const std::string& text) -> Ptr {
+                auto t = std::make_shared<Text>(mTheme, text, 12.0f);
+                t->Colour(mTheme.TextMuted());
+                return Pad(28, 0, 0, 0, FixedHeight(36, t));
+            };
+
+            if (b->t3Section == "details")
+            {
+                // renderToneDetails: badges, the description, the tags.
+                const auto badge = [this](const std::string& label, const std::string& value) -> Ptr {
+                    auto name = std::make_shared<Text>(mTheme, label, 10.5f);
+                    name->Colour(mTheme.TextMuted()).Fixed(true);
+                    auto text = std::make_shared<Text>(mTheme, value, 11.0f, Weight::SemiBold);
+                    text->Colour(mTheme.Ink()).Fixed(true);
+                    return Over(PadXY(8, 0, Middle(Row({name, HGap(5), text}))),
+                                el::share(Surface(mTheme.Input(), mTheme.Border(), 4.0f)));
+                };
+                const auto user = tone.creatorUsername.empty() ? tone.creatorName : tone.creatorUsername;
+                const int count = b->resourceType == "ir" && tone.irsCount > 0 ? tone.irsCount : tone.modelsCount;
+                std::vector<Ptr> badges;
+
+                for (const auto& [label, value] : std::vector<std::pair<std::string, std::string>>{
+                         {"Gear", tone.gear.empty() ? "Unknown" : tone.gear},
+                         {"Platform", tone.platform.empty() ? "Unknown" : tone.platform},
+                         {"Models", std::to_string(count)},
+                         {"Downloads", t3::FormatCount(std::max<std::int64_t>(0, tone.downloads))},
+                         {"Author", user.empty() ? "Unknown" : user}})
                 {
-                    auto all = std::make_shared<BrowserRow>(
-                        mTheme, mIcons, "Import all " + std::to_string(missing) + " into the library", "");
-                    all->indent = true;
-                    all->icon = "ui-download";
-                    all->onClick = [this, b, tone, refillList] {
+                    badges.push_back(badge(label, value));
+                    badges.push_back(HGap(6));
+                }
+
+                badges.push_back(Stretch());
+                auto description = tone.description.find_first_not_of(" \t\r\n") == std::string::npos
+                                       ? std::string("No description provided.")
+                                       : tone.description;
+                auto paragraph = std::make_shared<Paragraph>(mTheme, description, listWidth - 40.0f, 11.5f);
+                paragraph->Colour(mTheme.TextSecondary());
+                std::vector<Ptr> tags;
+
+                for (const auto& tag : tone.tags)
+                {
+                    tags.push_back(badge("", tag));
+                    tags.push_back(HGap(4));
+                }
+
+                if (tags.empty())
+                {
+                    auto none = std::make_shared<Text>(mTheme, "No tags", 11.0f);
+                    none->Colour(mTheme.TextMuted()).Fixed(true);
+                    tags.push_back(none);
+                }
+
+                tags.push_back(Stretch());
+                rows.push_back(Pad(28, 2, 0, 10,
+                                   Col({FixedHeight(24, HScroll(Row(badges))), VGap(8), paragraph, VGap(8),
+                                        FixedHeight(24, HScroll(Row(tags)))})));
+                continue;
+            }
+
+            if (b->t3ModelsLoading)
+            {
+                rows.push_back(muted("Loading models..."));
+                continue;
+            }
+
+            if (!b->t3ModelsError.empty())
+            {
+                rows.push_back(muted("Could not load models: " + b->t3ModelsError));
+                continue;
+            }
+
+            if (b->t3Models.empty())
+            {
+                rows.push_back(muted("No models available."));
+                continue;
+            }
+
+            // The bar over the models (renderToolbar): how many are in the library, and Import
+            // All for the rest, counting through them while it works.
+            if (b->t3Models.size() >= 2)
+            {
+                const auto total = b->t3Models.size();
+                const auto imported = static_cast<std::size_t>(
+                    std::count_if(b->t3Models.begin(), b->t3Models.end(), [this, b](const t3::Model& m) {
+                        return t3::FindImported(mState, b->resourceType, m) != nullptr;
+                    }));
+                const auto importing = static_cast<std::size_t>(
+                    std::count_if(b->t3Models.begin(), b->t3Models.end(),
+                                  [this](const t3::Model& m) { return mSession.Tones().IsImporting(m.id); }));
+
+                if (b->t3BulkTone == tone.id && importing == 0)
+                {
+                    b->t3BulkTone.clear();
+                }
+
+                const auto remaining = total - imported;
+                std::string status;
+
+                if (b->t3BulkTone == tone.id)
+                {
+                    const auto at = std::min(b->t3BulkTotal - std::min(importing, b->t3BulkTotal) + 1, b->t3BulkTotal);
+                    status = "Importing " + std::to_string(at) + " of " + std::to_string(b->t3BulkTotal) + "...";
+                }
+                else
+                {
+                    status = remaining == 0
+                                 ? "All " + std::to_string(total) + " models imported"
+                                 : std::to_string(imported) + " of " + std::to_string(total) + " models imported";
+                }
+
+                auto statusText = std::make_shared<Text>(mTheme, status, 11.5f);
+                statusText->Colour(mTheme.TextSecondary());
+                std::vector<Ptr> bar{statusText, Stretch()};
+
+                if (remaining > 0)
+                {
+                    auto all = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+                    all->Size(imported > 0 ? 128.0f : 92.0f, 28)
+                        .Label(imported > 0 ? "Import Remaining" : "Import All", 11.0f)
+                        .Disabled(!b->t3BulkTone.empty());
+                    all->onClick = [this, b, tone, refillList, remaining] {
+                        b->t3BulkTone = tone.id;
+                        b->t3BulkTotal = remaining;
+
                         for (const auto& m : b->t3Models)
                         {
                             if (t3::FindImported(mState, b->resourceType, m) == nullptr &&
@@ -1452,34 +1757,26 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                             {
                                 mSession.Tones().ImportTone3000(
                                     tone, m, b->resourceType, b->resourceType == "ir" ? b->role.gear : std::string(),
-                                    [this, refillList](const std::string&, const std::string& error) {
+                                    [this, b](const std::string&, const std::string& error) {
                                         if (!error.empty())
                                         {
                                             ShowToast("Could not import a model", error, true);
                                         }
 
-                                        refillList();
+                                        if (b->open && b->fillList)
+                                        {
+                                            b->fillList();
+                                        }
                                     });
                             }
                         }
 
                         refillList();
                     };
-                    rows.push_back(all);
+                    bar.push_back(all);
                 }
-            }
 
-            if (b->t3Open != tone.id)
-            {
-                continue;
-            }
-
-            if (b->t3ModelsLoading)
-            {
-                auto loading = std::make_shared<BrowserRow>(mTheme, mIcons, "Loading models...", "");
-                loading->indent = true;
-                rows.push_back(loading);
-                continue;
+                rows.push_back(Pad(28, 0, 0, 2, FixedHeight(34, Row(bar))));
             }
 
             for (const auto& model : b->t3Models)
@@ -1488,85 +1785,60 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                     mTheme, mIcons, model.name, model.architecture.empty() ? std::string() : "A" + model.architecture);
                 modelRow->indent = true;
                 const auto* imported = t3::FindImported(mState, b->resourceType, model);
-                modelRow->selected = imported != nullptr && imported->id == b->selectedId;
+                const bool hearing = b->t3Hearing == model.id;
+                const auto importedId = imported != nullptr ? imported->id : std::string();
+                modelRow->selected = hearing || (!importedId.empty() && importedId == b->selectedId);
 
                 if (mSession.Tones().IsImporting(model.id))
                 {
                     modelRow->note = "Importing...";
                 }
+                else if (hearing)
+                {
+                    modelRow->note = b->t3HearingLoading ? "Loading..." : "Playing";
+                    modelRow->noteColour = b->t3HearingLoading ? el::color{} : mTheme.Accent();
+                }
                 else if (imported != nullptr)
                 {
                     modelRow->note = "In library";
                     modelRow->noteColour = mTheme.Success();
-                    modelRow->button = "Select";
-                    modelRow->onButton = [preview, refillList, id = imported->id] {
-                        preview(id, {});
-                        refillList();
-                    };
                 }
-                else
-                {
-                    // A click plays it on the slot without importing it (the web UI's preview);
-                    // Select (or OK while it plays) imports it and keeps it.
-                    modelRow->selected = b->t3Hearing == model.id;
 
+                // A click hears it (from the library when it is there); a click on the one
+                // loading or playing does nothing, its preview button stops it.
+                const auto listen = [b, preview, refillList, hear, tone, model, importedId] {
                     if (b->t3Hearing == model.id)
                     {
-                        modelRow->note = "Playing";
+                        return;
                     }
 
-                    modelRow->onClick = [this, b, tone, model, refillList] {
-                        b->t3Hearing = model.id;
-                        b->t3HearingTone = tone;
-                        b->t3HearingModel = model;
-                        b->previewed = true;
-                        b->pickedFrom = static_cast<int>(Tab::Tone3000);
-                        b->selectedId.clear();
-                        b->selectedPath.clear();
+                    if (!importedId.empty())
+                    {
+                        preview(importedId, {});
                         refillList();
+                        return;
+                    }
 
-                        if (b->fillFooter)
-                        {
-                            b->fillFooter();
-                        }
+                    hear(tone, model);
+                };
+                modelRow->onClick = listen;
+                modelRow->onDouble = [take, tone, model] { take(tone, model); };
+                modelRow->actions.push_back({hearing && !b->t3HearingLoading ? "ui-stop" : "ui-play",
+                                             [b, listen, stopHearing, id = model.id](el::rect) {
+                                                 if (b->t3Hearing == id)
+                                                 {
+                                                     if (!b->t3HearingLoading)
+                                                     {
+                                                         stopHearing();
+                                                     }
 
-                        mSession.Tones().DownloadTone3000(
-                            model, b->resourceType,
-                            [this, b, id = model.id](const std::string& base64, const std::string& error) {
-                                if (b->t3Hearing != id)
-                                {
-                                    return;
-                                }
+                                                     return;
+                                                 }
 
-                                if (!error.empty())
-                                {
-                                    ShowToast("Could not play the model", error, true);
-                                    return;
-                                }
-
-                                mSession.Commands().PreviewRemoteResource(b->resourceType, "tone3000-preview:" + id,
-                                                                          b->nodeId, b->index, false, base64);
-                            });
-                    };
-                    modelRow->button = "Select";
-                    modelRow->onButton = [this, b, tone, model, preview, refillList] {
-                        mSession.Tones().ImportTone3000(
-                            tone, model, b->resourceType, b->resourceType == "ir" ? b->role.gear : std::string(),
-                            [this, preview, refillList](const std::string& id, const std::string& error) {
-                                if (!error.empty())
-                                {
-                                    ShowToast("Could not import the model", error, true);
-                                    refillList();
-                                    return;
-                                }
-
-                                preview(id, {});
-                                refillList();
-                            });
-                        refillList();
-                    };
-                }
-
+                                                 listen();
+                                             }});
+                modelRow->button = "Select";
+                modelRow->onButton = [take, tone, model] { take(tone, model); };
                 rows.push_back(modelRow);
             }
         }
@@ -1575,11 +1847,35 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     };
 
     const auto tone3000Controls = [this, b, search]() -> Ptr {
+        // Search | Favourites (.resource-browser-tone3000-mode-tabs); favourites need no filters.
+        auto mode = std::make_shared<Segmented>(mTheme, std::vector<std::string>{"Search", "Favourites"});
+        mode->Select(b->t3Favourites ? 1 : 0);
+        mode->onSelect = [this, b, search](int index) {
+            if ((index == 1) == b->t3Favourites)
+            {
+                return;
+            }
+
+            b->t3Favourites = index == 1;
+            // Refilled once this click is over: the switch is in the row the refill replaces.
+            mSession.View().post([weak = b->self, search] {
+                if (const auto st = weak.lock(); st && st->fillControls)
+                {
+                    st->fillControls();
+                    search(1);
+                }
+            });
+        };
+
+        if (b->t3Favourites)
+        {
+            return Row({FixedWidth(170, mode), Stretch()});
+        }
+
         if (!b->t3Box)
         {
-            auto [element, box] =
-                el::input_box(b->resourceType == "ir" ? "Search cabinets and rooms..." : "Search amps and pedals...",
-                              Font(Weight::Regular), 1.0f);
+            auto [element, box] = el::input_box(b->resourceType == "ir" ? "Search IRs..." : "Search amps and pedals...",
+                                                Font(Weight::Regular), 1.0f);
             b->t3Box = box;
             b->t3Element = el::share(std::move(element));
             b->t3Box->set_text(b->t3Query);
@@ -1628,18 +1924,20 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
             return options.empty() ? std::string() : options.front().second;
         };
-        const std::vector<std::pair<std::string, std::string>> sorts{{"downloads-all-time", "Popular"},
-                                                                     {"newest", "Recent"},
-                                                                     {"trending", "Trending"},
-                                                                     {"best-match", "Best match"}};
+        // The web UI's selects: its sorts, and A2 first with Custom and any.
+        const std::vector<std::pair<std::string, std::string>> sorts{
+            {"downloads-all-time", "Popular"}, {"newest", "Recent"}, {"trending", "Trending"}};
         const std::vector<std::pair<std::string, std::string>> architectures{
-            {"", "Any Architecture"}, {"1", "A1"}, {"2", "A2"}};
+            {"2", "A2"}, {"1", "A1"}, {"custom", "Custom"}, {"", "Any Architecture"}};
 
-        std::vector<Ptr> row{b->t3Element,
+        std::vector<Ptr> row{FixedWidth(170, mode),
+                             HGap(8),
+                             b->t3Element,
                              HGap(8),
                              go,
                              HGap(8),
-                             choice(labelOf(b->role.gears, b->t3Gear), b->role.gears, &Browser::t3Gear, 110),
+                             choice(labelOf(b->role.gears, b->t3Gear), b->role.gears, &Browser::t3Gear,
+                                    b->resourceType == "ir" ? 150.0f : 120.0f),
                              HGap(6),
                              choice(labelOf(sorts, b->t3Sort), sorts, &Browser::t3Sort, 96)};
 
@@ -2126,6 +2424,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         st->t3Page = st->t3Pages = 1;
         st->t3Loading = false;
         st->t3Error.clear();
+        ++st->t3Sequence; // a search still on its way must not replace it
         st->t3Tones = {tone};
         st->t3Open = tone.id;
         st->t3Models.clear();
@@ -2248,6 +2547,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 .stretch = true});
     showSelected(state);
     mOnOverlayClosed = [this, state, memory] {
+        state->open = false;
         // Kept for the slot's next open; a list still on its way is asked for again then.
         memory->tab = static_cast<int>(state->tab);
         memory->category = state->category;
@@ -2259,6 +2559,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         memory->openPacks = state->openPacks;
         memory->t3Query = state->t3Query;
         memory->t3Gear = state->t3Gear;
+        memory->t3Favourites = state->t3Favourites;
         memory->t3Sort = state->t3Sort;
         memory->t3Arch = state->t3Arch;
         memory->t3Page = state->t3Page;

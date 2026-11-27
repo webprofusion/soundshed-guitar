@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -137,6 +138,11 @@ std::string TonesSearchPath(const std::string& query, const std::string& gear, c
     return path;
 }
 
+std::string FavoritesPath(int page, int pageSize)
+{
+    return "/tones/favorited?page=" + std::to_string(std::max(1, page)) + "&page_size=" + std::to_string(pageSize);
+}
+
 std::string ModelsPath(const std::string& toneId, int page, const std::string& architecture, int pageSize)
 {
     std::string path = "/models?tone_id=" + tones::EncodeQueryValue(toneId) +
@@ -220,7 +226,8 @@ Tone ParseTone(const nlohmann::json& t)
     tone.license = Text(t, "license");
     tone.modelsCount = Int(t, "models_count");
     tone.irsCount = Int(t, "irs_count");
-    tone.downloads = Int(t, "downloads_count");
+    const auto downloads = t.find("downloads_count");
+    tone.downloads = downloads != t.end() && !downloads->is_null() ? Int(t, "downloads_count") : -1;
 
     // The picture: the first of the images, else whichever named field has one.
     if (const auto images = t.find("images");
@@ -321,6 +328,83 @@ std::string CaptureScope(const std::string& gear)
 std::string LibraryId(const Model& model, const std::string& zipEntry)
 {
     return "tone3000:" + model.id + (zipEntry.empty() ? std::string() : ":" + util::SanitizeFilename(zipEntry));
+}
+
+std::string FormatCount(std::int64_t count)
+{
+    const bool negative = count < 0;
+    auto digits = std::to_string(negative ? -count : count);
+
+    for (auto at = static_cast<std::ptrdiff_t>(digits.size()) - 3; at > 0; at -= 3)
+    {
+        digits.insert(static_cast<std::size_t>(at), ",");
+    }
+
+    return negative ? "-" + digits : digits;
+}
+
+std::string ToneMetaLine(const Tone& tone, const std::string& resourceType, int modelCount, bool withGear)
+{
+    std::vector<std::string> parts;
+    const auto add = [&parts](const std::string& text) {
+        if (text.find_first_not_of(" \t") != std::string::npos)
+        {
+            parts.push_back(text);
+        }
+    };
+
+    add(withGear ? tone.gear : std::string());
+    const auto& user = tone.creatorUsername.empty() ? tone.creatorName : tone.creatorUsername;
+    add(user.empty() ? std::string() : "by " + user);
+    const bool ir = resourceType == "ir";
+    const int count = modelCount >= 0 ? modelCount : (ir && tone.irsCount > 0 ? tone.irsCount : tone.modelsCount);
+    add(std::to_string(count) + (ir ? " IR" : " model") + (count == 1 ? "" : "s"));
+    add(tone.downloads >= 0 ? FormatCount(tone.downloads) + " downloads" : std::string());
+    add(tone.platform);
+    std::string line;
+
+    for (const auto& p : parts)
+    {
+        line += (line.empty() ? "" : " \xC2\xB7 ") + p;
+    }
+
+    return line;
+}
+
+std::string ToneImportedBadge(const ClientState& state, const std::string& resourceType, const Tone& tone,
+                              const std::vector<Model>* models)
+{
+    if (models != nullptr && !models->empty())
+    {
+        const auto imported = std::count_if(models->begin(), models->end(), [&](const Model& m) {
+            return FindImported(state, resourceType, m) != nullptr;
+        });
+
+        if (imported == 0)
+        {
+            return {};
+        }
+
+        return static_cast<std::size_t>(imported) == models->size()
+                   ? std::string("Imported")
+                   : std::to_string(imported) + "/" + std::to_string(models->size()) + " imported";
+    }
+
+    std::set<std::string> modelIds;
+
+    if (const auto it = state.resources.find(resourceType); it != state.resources.end())
+    {
+        for (const auto& r : it->second)
+        {
+            if (!r.fileMissing && Meta(r, "toneId") == tone.id)
+            {
+                const auto modelId = Meta(r, "modelId");
+                modelIds.insert(modelId.empty() ? r.id : modelId);
+            }
+        }
+    }
+
+    return modelIds.empty() ? std::string() : std::to_string(modelIds.size()) + " imported";
 }
 
 const LibraryResource* FindImported(const ClientState& state, const std::string& resourceType, const Model& model)

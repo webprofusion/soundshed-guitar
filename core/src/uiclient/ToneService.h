@@ -158,6 +158,8 @@ class ToneService
     /// Every model of a tone, both the default listing (A1 and custom) and the A2 twins, in the
     /// creator's order with A2 after.
     void Tone3000Models(const std::string& toneId, ModelsCallback callback);
+    /// The player's favourite tones, a page at a time: only with their own key (the relay off).
+    void Tone3000Favourites(int page, TonesCallback callback);
     /// Tone3000's models whose content hash is `contentHash` (reposts share one), oldest first.
     void Tone3000ModelsByContentHash(const std::string& contentHash, ModelsCallback callback);
     /// One tone by its id; nullopt with no error when Tone3000 does not show it (private, deleted).

@@ -53,7 +53,7 @@ struct Tone
     std::string creatorId, creatorName, creatorUsername, creatorUrl;
     int modelsCount = 0;
     int irsCount = 0;
-    std::int64_t downloads = 0;
+    std::int64_t downloads = -1; // -1 when not known (a tone rebuilt from an import's metadata)
     std::vector<std::string> tags;
 };
 
@@ -87,6 +87,8 @@ template <typename T> struct Page
 [[nodiscard]] std::string ModelLookupPath(const std::string& contentHash);
 /// One tone by its id.
 [[nodiscard]] std::string TonePath(const std::string& toneId);
+/// The player's favourite tones (tones/favorited), on Tone3000's own API with their own key.
+[[nodiscard]] std::string FavoritesPath(int page, int pageSize = kSearchPageSize);
 [[nodiscard]] std::string Url(const std::string& path);
 /// A path on Tone3000's own API.
 [[nodiscard]] std::string OfficialUrl(const std::string& path);
@@ -106,6 +108,19 @@ template <typename T> struct Page
 /// The library id a model is imported under (`tone3000:<model>`, `tone3000:<model>:<entry>` for
 /// one file of a zip), as the web UI names it, so either UI finds the other's import.
 [[nodiscard]] std::string LibraryId(const Model& model, const std::string& zipEntry = {});
+
+/// A count as the web UI's toLocaleString writes it: "1,234,567".
+[[nodiscard]] std::string FormatCount(std::int64_t count);
+/// A tone's line under its title (renderToneMetaParts): its gear when `withGear` (favourites span
+/// every gear), "by" its uploader, how many models (`modelCount`, or the tone's own count when
+/// negative; IRs for an IR tone), its downloads and its platform, joined by middle dots.
+[[nodiscard]] std::string ToneMetaLine(const Tone& tone, const std::string& resourceType, int modelCount,
+                                       bool withGear);
+/// The tone's import badge (renderToneBadge): with its models known, "Imported" when all are in
+/// the library, else "k/n imported"; before that, how many of the library's entries came from it,
+/// "k imported"; empty when none.
+[[nodiscard]] std::string ToneImportedBadge(const ClientState& state, const std::string& resourceType, const Tone& tone,
+                                            const std::vector<Model>* models);
 
 /// The library entry a model was imported as, by its id or the model id its metadata records.
 [[nodiscard]] const LibraryResource* FindImported(const ClientState& state, const std::string& resourceType,

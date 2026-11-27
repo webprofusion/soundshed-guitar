@@ -58,76 +58,94 @@ Paragraph::Paragraph(const Theme& theme, std::string text, float width, float si
 
 std::vector<std::string> Paragraph::Lines(cycfi::artist::canvas& cnv) const
 {
-    // As many words as fit each line; a word wider than the line has one to itself.
+    // As many words as fit each line; a word wider than the line has one to itself. A line
+    // break in the text starts a new line (an empty one for a blank line), as a description's
+    // paragraphs read; the drawing would otherwise break there unmeasured.
     const auto font = Font(mWeight).size(mSize);
     std::vector<std::string> lines;
-    std::string line;
-    std::size_t i = 0;
+    std::string text = mText;
+    text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
+    std::size_t from = 0;
 
-    while (i < mText.size())
+    while (from <= text.size())
     {
-        const auto space = mText.find(' ', i);
-        const auto word = mText.substr(i, space == std::string::npos ? std::string::npos : space - i);
-        i = space == std::string::npos ? mText.size() : space + 1;
+        const auto end = std::min(text.find('\n', from), text.size());
+        const auto segment = text.substr(from, end - from);
+        from = end + 1;
+        const auto before = lines.size();
+        std::string line;
+        std::size_t i = 0;
 
-        if (word.empty())
+        while (i < segment.size())
         {
-            continue;
-        }
+            const auto space = segment.find(' ', i);
+            const auto word = segment.substr(i, space == std::string::npos ? std::string::npos : space - i);
+            i = space == std::string::npos ? segment.size() : space + 1;
 
-        // A word wider than a whole line (a path, an id) is broken where it reaches the edge,
-        // between characters (overflow-wrap: anywhere), never inside one.
-        if (el::measure_text(cnv, word, font).x > mWidth)
-        {
-            if (!line.empty())
+            if (word.empty())
+            {
+                continue;
+            }
+
+            // A word wider than a whole line (a path, an id) is broken where it reaches the edge,
+            // between characters (overflow-wrap: anywhere), never inside one.
+            if (el::measure_text(cnv, word, font).x > mWidth)
+            {
+                if (!line.empty())
+                {
+                    lines.push_back(line);
+                    line.clear();
+                }
+
+                std::string piece;
+
+                for (std::size_t c = 0; c < word.size();)
+                {
+                    std::size_t next = c + 1;
+
+                    while (next < word.size() && (static_cast<unsigned char>(word[next]) & 0xC0) == 0x80)
+                    {
+                        ++next;
+                    }
+
+                    const auto glyph = word.substr(c, next - c);
+
+                    if (!piece.empty() && el::measure_text(cnv, piece + glyph, font).x > mWidth)
+                    {
+                        lines.push_back(piece);
+                        piece.clear();
+                    }
+
+                    piece += glyph;
+                    c = next;
+                }
+
+                line = piece;
+                continue;
+            }
+
+            const auto joined = line.empty() ? word : line + " " + word;
+
+            if (!line.empty() && el::measure_text(cnv, joined, font).x > mWidth)
             {
                 lines.push_back(line);
-                line.clear();
+                line = word;
             }
-
-            std::string piece;
-
-            for (std::size_t c = 0; c < word.size();)
+            else
             {
-                std::size_t next = c + 1;
-
-                while (next < word.size() && (static_cast<unsigned char>(word[next]) & 0xC0) == 0x80)
-                {
-                    ++next;
-                }
-
-                const auto glyph = word.substr(c, next - c);
-
-                if (!piece.empty() && el::measure_text(cnv, piece + glyph, font).x > mWidth)
-                {
-                    lines.push_back(piece);
-                    piece.clear();
-                }
-
-                piece += glyph;
-                c = next;
+                line = joined;
             }
-
-            line = piece;
-            continue;
         }
 
-        const auto joined = line.empty() ? word : line + " " + word;
-
-        if (!line.empty() && el::measure_text(cnv, joined, font).x > mWidth)
+        if (!line.empty())
         {
             lines.push_back(line);
-            line = word;
         }
-        else
-        {
-            line = joined;
-        }
-    }
 
-    if (!line.empty())
-    {
-        lines.push_back(line);
+        if (lines.size() == before && end < text.size())
+        {
+            lines.emplace_back(); // a blank line between paragraphs
+        }
     }
 
     return lines;
@@ -349,9 +367,9 @@ bool Button::click(const el::context& ctx, el::mouse_button btn)
     mDown = false;
     ctx.view.refresh(ctx);
 
-    if (wasDown && ctx.bounds.includes(btn.pos) && mOnClick)
+    if (wasDown && ctx.bounds.includes(btn.pos))
     {
-        mOnClick();
+        RunFromCopy(mOnClick); // it may rebuild the row this button is in
     }
 
     return true;

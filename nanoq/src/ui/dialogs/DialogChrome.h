@@ -561,7 +561,8 @@ class Segmented final : public el::element, public Drawn, public Focusable
 
         if (const int i = Hit(ctx.bounds, btn.pos); i >= 0 && onSelect)
         {
-            onSelect(i);
+            const auto select = onSelect; // a copy: it may rebuild the controls this sits in
+            select(i);
         }
 
         return true;

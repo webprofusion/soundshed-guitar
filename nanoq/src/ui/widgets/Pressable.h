@@ -124,7 +124,7 @@ class Pressable : public el::element, public Drawn, public Focusable, public Tap
         if (fire && onClick)
         {
             Pressed();
-            onClick();
+            RunFromCopy(onClick); // it may rebuild the row this button is in
         }
 
         return true;

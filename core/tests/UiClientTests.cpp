@@ -587,6 +587,49 @@ void TestTone3000AndHttp()
         "tone3000: a search path");
     Expect(t3::ModelsPath("87866", 1, "2") == "/models?tone_id=87866&page=1&page_size=100&architecture=2",
            "tone3000: a models path");
+    Expect(t3::FavoritesPath(2) == "/tones/favorited?page=2&page_size=20", "tone3000: the favourites path");
+    Expect(t3::FormatCount(0) == "0" && t3::FormatCount(999) == "999" && t3::FormatCount(1234) == "1,234" &&
+               t3::FormatCount(1234567) == "1,234,567",
+           "tone3000: counts as the web writes them");
+    {
+        const std::string dot = " \xC2\xB7 ";
+        t3::Tone tone;
+        tone.id = "7";
+        tone.gear = "amp";
+        tone.creatorUsername = "mad";
+        tone.creatorName = "Mad Hatter";
+        tone.modelsCount = 3;
+        tone.downloads = 1234;
+        tone.platform = "nam";
+        Expect(t3::ToneMetaLine(tone, "nam", -1, false) ==
+                   "by mad" + dot + "3 models" + dot + "1,234 downloads" + dot + "nam",
+               "tone3000: a tone's line");
+        Expect(t3::ToneMetaLine(tone, "nam", 1, true) ==
+                   "amp" + dot + "by mad" + dot + "1 model" + dot + "1,234 downloads" + dot + "nam",
+               "tone3000: a favourite's line names its gear; a fetched count wins");
+        t3::Tone unknown = tone;
+        unknown.downloads = -1;
+        Expect(t3::ToneMetaLine(unknown, "nam", -1, false) == "by mad" + dot + "3 models" + dot + "nam",
+               "tone3000: downloads not known are left out");
+        Expect(t3::ParseTone(nlohmann::json{{"id", 1}}).downloads == -1 &&
+                   t3::ParseTone(nlohmann::json{{"id", 1}, {"downloads_count", 0}}).downloads == 0,
+               "tone3000: a missing downloads count is not known");
+
+        guitarfx::uiclient::ClientState state;
+        guitarfx::uiclient::LibraryResource a;
+        a.id = "tone3000:m1";
+        a.metadata = {{"provider", "tone3000"}, {"toneId", "7"}, {"modelId", "m1"}};
+        state.resources["nam"] = {a};
+        t3::Model m1, m2;
+        m1.id = "m1";
+        m2.id = "m2";
+        const std::vector<t3::Model> both{m1, m2}, one{m1};
+        Expect(t3::ToneImportedBadge(state, "nam", tone, &both) == "1/2 imported" &&
+                   t3::ToneImportedBadge(state, "nam", tone, &one) == "Imported" &&
+                   t3::ToneImportedBadge(state, "nam", tone, nullptr) == "1 imported" &&
+                   t3::ToneImportedBadge(state, "ir", tone, nullptr).empty(),
+               "tone3000: a tone's imported badge");
+    }
     Expect(t3::ThroughRelay("https://www.tone3000.com/api/v1/models/742072/download/x.nam") ==
                "https://api-guitar.soundshed.com/v1/resourcesearch/models/742072/download/x.nam",
            "tone3000: a model download goes through the relay");

@@ -618,7 +618,7 @@ inline SlotRole RoleFor(const ClientState& state, const guitarfx::GraphNode& nod
         role.context =
             reverb ? "ir-reverb" : (resourceIndex > 0 ? "ir-cab#" + std::to_string(resourceIndex) : "ir-cab");
         role.gear = reverb ? "space" : "cab";
-        role.gears = {{"cab", "Cabinets"}, {"space", "Rooms"}, {"ir", "All IRs"}};
+        role.gears = {{"cab", "Cab IRs"}, {"space", "Room & Reverb IRs"}, {"ir", "All IRs"}};
         return role;
     }
 
@@ -646,8 +646,8 @@ inline SlotRole RoleFor(const ClientState& state, const guitarfx::GraphNode& nod
         role.gear = cabInPath ? "amp" : "full-rig";
     }
 
-    role.gears = {
-        {"full-rig", "Full Rigs"}, {"amp", "Amps"}, {"pedal", "Pedals"}, {"outboard", "Preamps"}, {"", "Any gear"}};
+    // The web UI's order and labels (TONE3000 category select); Preamps search the outboard gear.
+    role.gears = {{"amp", "Amps"}, {"pedal", "Pedals (FX)"}, {"outboard", "Preamps"}, {"full-rig", "Full Rigs"}};
     return role;
 }
 } // namespace nanoq::ui::resource_browser

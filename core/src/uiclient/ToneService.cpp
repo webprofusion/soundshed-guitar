@@ -862,6 +862,32 @@ void ToneService::SearchTone3000(const std::string& query, const std::string& ge
     });
 }
 
+void ToneService::Tone3000Favourites(int page, TonesCallback callback)
+{
+    Tone3000Get(tone3000::OfficialUrl(tone3000::FavoritesPath(page)),
+                [callback = std::move(callback)](const HttpResult& result) {
+                    if (result.status != 200)
+                    {
+                        // Tone3000 answers these for a key that cannot list favourites (the web UI's wording).
+                        callback({}, result.status == 401 || result.status == 403 || result.status == 404
+                                         ? std::string("Favourites are only available in BYOK direct API mode.")
+                                     : result.status == 0 ? result.error
+                                                          : "Search failed: " + std::to_string(result.status));
+                        return;
+                    }
+
+                    const auto body = nlohmann::json::parse(result.body, nullptr, false);
+
+                    if (body.is_discarded())
+                    {
+                        callback({}, "Tone3000 sent an answer that could not be read");
+                        return;
+                    }
+
+                    callback(tone3000::ParseTones(body), {});
+                });
+}
+
 void ToneService::Tone3000Models(const std::string& toneId, ModelsCallback callback)
 {
     // The default listing (A1 and custom, in the creator's order) page by page, then the A2 twins.
