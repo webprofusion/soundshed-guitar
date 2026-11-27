@@ -34,6 +34,7 @@
 #include "ui/widgets/Panels.h"
 #include "ui/UiSession.h"
 #include "ui/widgets/Widgets.h"
+#include "uiclient/Automation.h"
 #include "uiclient/ChainDropRules.h"
 #include "uiclient/ChainHistory.h"
 #include "uiclient/ChainLayout.h"
@@ -566,10 +567,12 @@ class Shell
     std::optional<guitarfx::uiclient::tones::Tone> mTonesShared;      // the tone a link opened the page on
     // Automation.cpp: MIDI and automation, as the web UI's midiLearnMenu.ts and automationPanel.ts.
     /// A control's right-click MIDI Learn menu, for the address it drives.
-    void OpenMidiLearnMenu(const std::string& address, const std::string& label, el::point at);
-    /// The same, for an effect parameter (nothing for one a mapping cannot reach), and for the
-    /// global input and output knobs ("input", "output").
-    void OpenNodeParamMidiMenu(const std::string& nodeType, const std::string& paramKey, el::point at);
+    void OpenMidiLearnMenu(const guitarfx::uiclient::MidiLearnTarget& target, el::point at);
+    /// The same, for one node's parameter (nothing for one a mapping cannot reach), for its on/off
+    /// (its card's power, its panel's switch), and for the global input and output knobs
+    /// ("input", "output").
+    void OpenNodeParamMidiMenu(const guitarfx::GraphNode& node, const std::string& paramKey, el::point at);
+    void OpenNodeBypassMidiMenu(const guitarfx::GraphNode& node, el::point at);
     void OpenGlobalKnobMidiMenu(const std::string& knob, el::point at);
     /// The MIDI & Automation dialog: Mappings, Keyboard and MIDI Log.
     void OpenMidiAutomation();

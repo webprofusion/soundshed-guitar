@@ -11,6 +11,7 @@
  * passes on the keys it does not use, and KeyIsMapped says which to hold back.
  */
 
+#include "automation/AutomationTypes.h"
 #include "uiclient/ClientState.h"
 
 #include <nlohmann/json.hpp>
@@ -29,12 +30,36 @@ class UiCommands;
 
 // ── What a control drives ────────────────────────────────────────────────────────
 
-/// An automation address a control drives, and a label for it.
+/// An automation address a control drives, and a label for it. A control on one node (an
+/// effect's parameter or its on/off) names the node too, so a per-preset mapping drives that node
+/// and not the first of its type (`id:<nodeId>`), labelled by what the user calls the node.
 struct MidiLearnTarget
 {
     std::string address;
     std::string label;
+    std::string nodeId;
+    std::string nodeLabel;
 };
+
+/// The MIDI mapping modes, as the engine numbers them (MidiControlMap::Mode).
+inline constexpr int kMidiModeAbsolute = 0;
+inline constexpr int kMidiModeRelative = 1;
+inline constexpr int kMidiModeToggle = 2;
+inline constexpr int kMidiModePickup = 3;
+
+/// The modes a mapping can take, as the panel's picker lists them, with what each does.
+struct MidiModeOption
+{
+    int mode;
+    const char* label;
+    const char* title;
+};
+
+[[nodiscard]] const std::vector<MidiModeOption>& MidiModeOptions();
+
+/// The node selector that ties a per-preset mapping to one node (the node a selector names is the
+/// engine's NodeIdFromSelector).
+[[nodiscard]] std::string NodeSelectorFor(const std::string& nodeId);
 
 /// An address from the engine's registry (global.*, setlist.*), with its label; nothing when the
 /// registry does not offer it.
@@ -50,6 +75,13 @@ struct MidiLearnTarget
 /// what a node has loaded rather than to its type.
 [[nodiscard]] std::optional<MidiLearnTarget> NodeParamLearnTarget(const EffectTypeInfo* type,
                                                                   const std::string& paramKey);
+/// The same for one node's parameter: named by the node, labelled "<node name>: Param" for its
+/// per-preset mapping.
+[[nodiscard]] std::optional<MidiLearnTarget> NodeParamLearnTarget(const ClientState& state, const GraphNode& node,
+                                                                  const std::string& paramKey);
+/// An effect's on/off (its card's power, its panel's switch): node.<type>.enabled, labelled
+/// "Effect: On/Off", so a footswitch's 127 turns it on.
+[[nodiscard]] std::optional<MidiLearnTarget> NodeBypassLearnTarget(const ClientState& state, const GraphNode& node);
 
 /// A setlist pad: setlist.preset<N>, the Nth slot of whichever setlist is active (0-based index).
 [[nodiscard]] std::optional<MidiLearnTarget> SetlistPadLearnTarget(const AutomationState& automation, int slotIndex);
@@ -60,9 +92,13 @@ struct MidiLearnTarget
 [[nodiscard]] const AutomationSlotInfo* FindSlotForAddress(const std::vector<AutomationSlotInfo>& slots,
                                                            const std::string& address);
 /// The mapping `presetId` holds for `address` itself, live only while that preset is active.
+/// With a `nodeId`, the mapping for that node: one tied to it, else one from before mappings
+/// named their node (no selector), which a new learn then ties to it. One tied to another node of
+/// the same type is that node's.
 [[nodiscard]] const AutomationSlotInfo* FindPresetSlotForAddress(const std::vector<AutomationSlotInfo>& slots,
                                                                  const std::string& presetId,
-                                                                 const std::string& address);
+                                                                 const std::string& address,
+                                                                 const std::string& nodeId = {});
 /// Whether a control can have a mapping of its own in each preset: effect parameters and the
 /// input and output levels; not the setlist and bank controls, which pick the preset.
 [[nodiscard]] bool AllowsPresetMapping(const std::string& address);
@@ -94,6 +130,7 @@ enum class MidiLearnMenuAction
 {
     Learn,
     LearnPreset,
+    LearnPresetToggle, // on an effect's on/off: each press switches it (LearnPreset is the latch there)
     Cancel,
     Clear
 };
@@ -109,7 +146,8 @@ struct MidiLearnMenuItem
 /// What the menu offers for `target` (midiMapping.ts buildMidiLearnMenuItems): MIDI Learn, and
 /// MIDI Learn for this preset on a signal chain control (Cancel instead while either of the
 /// control's slots is listening), and Clear Mapping when there is a mapping to clear, the active
-/// preset's own first.
+/// preset's own first. On an effect's on/off the per-preset learn comes twice: a latch (127 on,
+/// 0 off) and a toggle (each press switches it).
 [[nodiscard]] std::vector<MidiLearnMenuItem> BuildMidiLearnMenuItems(const AutomationState& automation,
                                                                      const MidiLearnTarget& target,
                                                                      const std::string& activePresetId);

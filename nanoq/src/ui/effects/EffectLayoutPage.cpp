@@ -84,7 +84,7 @@ Ptr Shell::BuildEffectLayout(const guitarfx::GraphNode& node, const EffectLayout
     actions.menu = [this](const EffectParamInfo& param, el::point at) {
         if (const auto* n = SelectedNode())
         {
-            OpenNodeParamMidiMenu(n->type, param.key, at);
+            OpenNodeParamMidiMenu(*n, param.key, at);
         }
     };
     // Read the node at the time of the click: the layout outlives the value it was built with.

@@ -850,7 +850,7 @@ Ptr Shell::BuildEffectPage()
         auto menu = [this, key = info.key](el::point at) {
             if (const auto* n = SelectedNode())
             {
-                OpenNodeParamMidiMenu(n->type, key, at);
+                OpenNodeParamMidiMenu(*n, key, at);
             }
         };
 
@@ -1387,7 +1387,7 @@ Ptr Shell::BuildEffectPage()
                 button->onMenu = [this, key = invert->key](el::point at) {
                     if (const auto* n = SelectedNode())
                     {
-                        OpenNodeParamMidiMenu(n->type, key, at);
+                        OpenNodeParamMidiMenu(*n, key, at);
                     }
                 };
                 mLive.Bind(button, [valueOf, info = *invert] { return valueOf(info) >= 0.5; }, &PhaseButton::Set);
@@ -1866,6 +1866,14 @@ Ptr Shell::BuildEffectPage()
             }
 
             mSession.Commands().SetNodeBypassed(nodeId, n->enabled);
+        };
+        bypass->onMenu = [this, nodeId, boundary](el::point at) {
+            const auto* n = SelectedNode();
+
+            if (!boundary && n != nullptr && n->id == nodeId)
+            {
+                OpenNodeBypassMidiMenu(*n, at);
+            }
         };
         mLive.Bind(
             bypass,

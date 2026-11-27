@@ -6,6 +6,7 @@
 
 #include "automation/AutomationSlotTable.h"
 #include "dsp/EffectGuids.h"
+#include "uiclient/NodeLabels.h"
 #include "uiclient/UiCommands.h"
 
 #include <algorithm>
@@ -231,6 +232,54 @@ std::optional<MidiLearnTarget> NodeParamLearnTarget(const EffectTypeInfo* type, 
                                                                       (param->name.empty() ? paramKey : param->name)};
 }
 
+std::optional<MidiLearnTarget> NodeParamLearnTarget(const ClientState& state, const GraphNode& node,
+                                                    const std::string& paramKey)
+{
+    auto target = NodeParamLearnTarget(state.FindEffectType(node.type), paramKey);
+
+    if (target)
+    {
+        const auto* type = state.FindEffectType(node.type);
+        const auto* param = type != nullptr ? type->FindParam(paramKey) : nullptr;
+        target->nodeId = node.id;
+        target->nodeLabel =
+            NodeDisplayName(state, node) + ": " + (param != nullptr && !param->name.empty() ? param->name : paramKey);
+    }
+
+    return target;
+}
+
+std::optional<MidiLearnTarget> NodeBypassLearnTarget(const ClientState& state, const GraphNode& node)
+{
+    const auto* type = state.FindEffectType(node.type);
+
+    if (type == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    const std::string effect = type->name.empty() ? type->type : type->name;
+    return MidiLearnTarget{"node." + type->type + ".enabled", effect + ": On/Off", node.id,
+                           NodeDisplayName(state, node) + ": On/Off"};
+}
+
+const std::vector<MidiModeOption>& MidiModeOptions()
+{
+    static const std::vector<MidiModeOption> options{
+        {kMidiModeAbsolute, "Absolute",
+         "The control's value sets the target. On an effect's on/off: 127 one way, 0 the other (latch)."},
+        {kMidiModeToggle, "Toggle", "Each press (value 64 or more) switches the target; releases are ignored."},
+        {kMidiModeRelative, "Relative", "An endless encoder: values above 64 step up, below 64 step down."},
+        {kMidiModePickup, "Pickup", "The target only follows once the control reaches its current value."},
+    };
+    return options;
+}
+
+std::string NodeSelectorFor(const std::string& nodeId)
+{
+    return std::string(kNodeSelectorIdPrefix) + nodeId;
+}
+
 std::optional<MidiLearnTarget> SetlistPadLearnTarget(const AutomationState& automation, int slotIndex)
 {
     return slotIndex >= 0 ? RegistryLearnTarget(automation, "setlist.preset" + std::to_string(slotIndex + 1))
@@ -261,17 +310,30 @@ const AutomationSlotInfo* FindSlotForAddress(const std::vector<AutomationSlotInf
 }
 
 const AutomationSlotInfo* FindPresetSlotForAddress(const std::vector<AutomationSlotInfo>& slots,
-                                                   const std::string& presetId, const std::string& address)
+                                                   const std::string& presetId, const std::string& address,
+                                                   const std::string& nodeId)
 {
+    const AutomationSlotInfo* untied = nullptr;
+
     for (const auto& slot : slots)
     {
-        if (!presetId.empty() && slot.presetId == presetId && slot.address == address)
+        if (presetId.empty() || slot.presetId != presetId || slot.address != address)
+        {
+            continue;
+        }
+
+        if (nodeId.empty() || NodeIdFromSelector(slot.nodeSelector) == nodeId)
         {
             return &slot;
         }
+
+        if (slot.nodeSelector.empty() && untied == nullptr)
+        {
+            untied = &slot;
+        }
     }
 
-    return nullptr;
+    return untied;
 }
 
 bool AllowsPresetMapping(const std::string& address)
@@ -391,7 +453,7 @@ std::vector<MidiLearnMenuItem> BuildMidiLearnMenuItems(const AutomationState& au
                                                        const std::string& activePresetId)
 {
     const auto* slot = FindSlotForAddress(automation.slots, target.address);
-    const auto* presetSlot = FindPresetSlotForAddress(automation.slots, activePresetId, target.address);
+    const auto* presetSlot = FindPresetSlotForAddress(automation.slots, activePresetId, target.address, target.nodeId);
     const auto& armed = automation.midiLearnSlotId;
     const bool listening = !armed.empty() && ((slot != nullptr && slot->slotId == armed) ||
                                               (presetSlot != nullptr && presetSlot->slotId == armed));
@@ -414,10 +476,22 @@ std::vector<MidiLearnMenuItem> BuildMidiLearnMenuItems(const AutomationState& au
         {
             const bool noPresetSlot = presetSlot == nullptr &&
                                       CountPresetSlots(automation.slots, activePresetId) >= automation.maxPresetSlots;
-            items.push_back(
-                {MidiLearnMenuAction::LearnPreset, "MIDI Learn for this preset\xE2\x80\xA6",
-                 noPresetSlot ? "All " + std::to_string(automation.maxPresetSlots) + " preset slots in use" : "",
-                 noPresetSlot});
+            const std::string full =
+                noPresetSlot ? "All " + std::to_string(automation.maxPresetSlots) + " preset slots in use" : "";
+
+            if (IsBypassAddress(target.address))
+            {
+                items.push_back({MidiLearnMenuAction::LearnPreset, "MIDI Learn latch for this preset\xE2\x80\xA6",
+                                 full.empty() ? "127 on, 0 off" : full, noPresetSlot});
+                items.push_back({MidiLearnMenuAction::LearnPresetToggle,
+                                 "MIDI Learn toggle for this preset\xE2\x80\xA6",
+                                 full.empty() ? "Each press switches it" : full, noPresetSlot});
+            }
+            else
+            {
+                items.push_back(
+                    {MidiLearnMenuAction::LearnPreset, "MIDI Learn for this preset\xE2\x80\xA6", full, noPresetSlot});
+            }
         }
     }
 
@@ -443,7 +517,7 @@ std::string MidiLearnMenuTitle(const AutomationState& automation, const MidiLear
         return slot->label;
     }
 
-    if (const auto* slot = FindPresetSlotForAddress(automation.slots, activePresetId, target.address);
+    if (const auto* slot = FindPresetSlotForAddress(automation.slots, activePresetId, target.address, target.nodeId);
         slot != nullptr && !slot->label.empty())
     {
         return slot->label;
@@ -458,7 +532,7 @@ std::string RunMidiLearnMenuAction(UiCommands& commands, const ClientState& stat
     const auto& automation = state.automation;
     const std::string& presetId = state.activePresetId;
     const auto* slot = FindSlotForAddress(automation.slots, target.address);
-    const auto* presetSlot = FindPresetSlotForAddress(automation.slots, presetId, target.address);
+    const auto* presetSlot = FindPresetSlotForAddress(automation.slots, presetId, target.address, target.nodeId);
 
     switch (action)
     {
@@ -497,10 +571,11 @@ std::string RunMidiLearnMenuAction(UiCommands& commands, const ClientState& stat
 
     case MidiLearnMenuAction::Learn:
     case MidiLearnMenuAction::LearnPreset:
+    case MidiLearnMenuAction::LearnPresetToggle:
         break;
     }
 
-    const bool forPreset = action == MidiLearnMenuAction::LearnPreset;
+    const bool forPreset = action != MidiLearnMenuAction::Learn;
 
     if (forPreset && presetId.empty())
     {
@@ -509,6 +584,8 @@ std::string RunMidiLearnMenuAction(UiCommands& commands, const ClientState& stat
 
     const auto* existing = forPreset ? presetSlot : slot;
     std::string slotId = existing != nullptr ? existing->slotId : std::string();
+    // A per-preset mapping drives the node it was learned on, not the first of its type.
+    const std::string nodeSelector = forPreset && !target.nodeId.empty() ? NodeSelectorFor(target.nodeId) : "";
 
     // The engine handles messages in order, so a slot made here exists by the time learn is armed on it.
     if (slotId.empty() && forPreset)
@@ -520,7 +597,13 @@ std::string RunMidiLearnMenuAction(UiCommands& commands, const ClientState& stat
         }
 
         slotId = NextPresetSlotId(automation.slots);
-        commands.SetAutomationSlot(slotId, target.label, target.address, presetId);
+        const std::string label = !nodeSelector.empty() && !target.nodeLabel.empty() ? target.nodeLabel : target.label;
+        commands.SetAutomationSlot(slotId, label, target.address, presetId, nodeSelector);
+    }
+    else if (!slotId.empty() && !nodeSelector.empty() && existing->nodeSelector != nodeSelector)
+    {
+        // A mapping from before mappings named their node: tie it to the one learned on.
+        commands.SetAutomationSlot(slotId, std::nullopt, std::nullopt, {}, nodeSelector);
     }
     else if (slotId.empty())
     {
@@ -534,7 +617,24 @@ std::string RunMidiLearnMenuAction(UiCommands& commands, const ClientState& stat
         commands.SetAutomationSlot(slotId, target.label, target.address);
     }
 
-    commands.ArmMidiLearn(slotId);
+    // The latch on an effect's on/off learns as one whatever the slot had; the toggle as a toggle;
+    // anything else keeps the mode a re-learned slot had (Absolute for a new one).
+    std::optional<int> mode;
+
+    if (action == MidiLearnMenuAction::LearnPresetToggle)
+    {
+        mode = kMidiModeToggle;
+    }
+    else if (action == MidiLearnMenuAction::LearnPreset && IsBypassAddress(target.address))
+    {
+        mode = kMidiModeAbsolute;
+    }
+    else if (existing != nullptr && existing->midiMap)
+    {
+        mode = existing->midiMap->mode;
+    }
+
+    commands.ArmMidiLearn(slotId, mode);
     return {};
 }
 

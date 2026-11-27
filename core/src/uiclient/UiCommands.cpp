@@ -1159,7 +1159,8 @@ void UiCommands::GetAutomation()
 }
 
 void UiCommands::SetAutomationSlot(const std::string& slotId, const std::optional<std::string>& label,
-                                   const std::optional<std::string>& address, const std::string& presetId)
+                                   const std::optional<std::string>& address, const std::string& presetId,
+                                   const std::string& nodeSelector)
 {
     nlohmann::json payload = {{"slotId", slotId}};
 
@@ -1178,7 +1179,24 @@ void UiCommands::SetAutomationSlot(const std::string& slotId, const std::optiona
         payload["presetId"] = presetId;
     }
 
+    if (!nodeSelector.empty())
+    {
+        payload["nodeSelector"] = nodeSelector;
+    }
+
     mClient.Send("setAutomationSlot", std::move(payload));
+}
+
+void UiCommands::SetAutomationMidiMap(const std::string& slotId, const AutomationMidiMap& map)
+{
+    mClient.Send("setAutomationSlot", {{"slotId", slotId},
+                                       {"midiMap",
+                                        {{"eventType", map.eventType},
+                                         {"channel", map.channel},
+                                         {"controller", map.controller},
+                                         {"mode", map.mode},
+                                         {"sensitivity", map.sensitivity},
+                                         {"pickupRange", map.pickupRange}}}});
 }
 
 void UiCommands::ClearAutomationMidiMap(const std::string& slotId)
@@ -1208,11 +1226,18 @@ void UiCommands::SetAutomationValue(const std::string& slotId, double value, boo
     mClient.Send("setAutomationValue", std::move(payload));
 }
 
-void UiCommands::ArmMidiLearn(const std::string& slotId)
+void UiCommands::ArmMidiLearn(const std::string& slotId, std::optional<int> mode)
 {
     // The engine does not say which slot listens; this UI keeps it, as the web UI does.
     mClient.MutableState().automation.midiLearnSlotId = slotId;
-    mClient.Send("armMidiLearn", {{"slotId", slotId}});
+    nlohmann::json payload = {{"slotId", slotId}};
+
+    if (mode)
+    {
+        payload["mode"] = *mode;
+    }
+
+    mClient.Send("armMidiLearn", std::move(payload));
     mClient.Notify(Topic::Automation);
 }
 

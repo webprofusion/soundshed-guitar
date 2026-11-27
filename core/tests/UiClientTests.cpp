@@ -2005,6 +2005,76 @@ void TestAutomation()
                "MIDI Learn for this preset learns into the preset's own slot");
         RunMidiLearnMenuAction(commands, state, MidiLearnMenuAction::Cancel, *target);
         Expect(automation.midiLearnSlotId.empty(), "Cancel stops listening");
+
+        // An effect's on/off, learned on one node as a toggle: the slot names the node, and the
+        // captured mapping toggles.
+        GraphNode gain;
+        gain.id = "gain-node-1";
+        gain.type = EffectGuids::kGain;
+        const auto power = NodeBypassLearnTarget(state, gain);
+        Expect(power && power->address == std::string("node.") + EffectGuids::kGain + ".enabled" &&
+                   power->label == "Gain: On/Off" && power->nodeId == gain.id,
+               "an effect's on/off drives node.<type>.enabled, for its node");
+
+        if (power)
+        {
+            items = BuildMidiLearnMenuItems(automation, *power, state.activePresetId);
+            Expect(items.size() == 3 && items[1].action == MidiLearnMenuAction::LearnPreset &&
+                       items[1].hint == "127 on, 0 off" && items[2].action == MidiLearnMenuAction::LearnPresetToggle,
+                   "an on/off offers a latch and a toggle for this preset");
+            RunMidiLearnMenuAction(commands, state, MidiLearnMenuAction::LearnPresetToggle, *power);
+            Pump(controller, client);
+            const auto* tied =
+                FindPresetSlotForAddress(automation.slots, state.activePresetId, power->address, gain.id);
+            Expect(tied != nullptr && tied->nodeSelector == NodeSelectorFor(gain.id) &&
+                       automation.midiLearnSlotId == tied->slotId,
+                   "the per-preset slot is tied to the node and armed");
+            controller.EnqueueMidi(MidiEvent{0xB0, 64, 127, 0});
+            controller.ProcessQueuedMidi();
+            Pump(controller, client);
+            tied = FindPresetSlotForAddress(automation.slots, state.activePresetId, power->address, gain.id);
+            Expect(tied != nullptr && tied->midiMap && tied->midiMap->mode == kMidiModeToggle,
+                   "the toggle learn captures a Toggle mapping");
+            Expect(FindPresetSlotForAddress(automation.slots, state.activePresetId, power->address, "other-node") ==
+                       nullptr,
+                   "another node of the type has no mapping of its own");
+
+            if (tied != nullptr && tied->midiMap)
+            {
+                auto changed = *tied->midiMap;
+                changed.mode = kMidiModeAbsolute;
+                commands.SetAutomationMidiMap(tied->slotId, changed);
+                Pump(controller, client);
+                tied = FindPresetSlotForAddress(automation.slots, state.activePresetId, power->address, gain.id);
+                Expect(tied != nullptr && tied->midiMap && tied->midiMap->mode == kMidiModeAbsolute &&
+                           tied->midiMap->controller == 64,
+                       "the mode picker changes the mode and keeps the control");
+            }
+        }
+    }
+
+    // The node selector, and a mapping from before selectors, which any node of its type may take.
+    Expect(NodeSelectorFor("abc") == "id:abc" && NodeIdFromSelector("id:abc") == "abc" &&
+               NodeIdFromSelector("first").empty(),
+           "a node selector names its node");
+    {
+        std::vector<AutomationSlotInfo> slots(3);
+        slots[0].slotId = "preset.1";
+        slots[0].presetId = "p";
+        slots[0].address = "node.x.enabled";
+        slots[0].nodeSelector = "id:a";
+        slots[1].slotId = "preset.2";
+        slots[1].presetId = "p";
+        slots[1].address = "node.x.enabled";
+        slots[2].slotId = "preset.3";
+        slots[2].presetId = "q";
+        slots[2].address = "node.x.enabled";
+        const auto* a = FindPresetSlotForAddress(slots, "p", "node.x.enabled", "a");
+        const auto* b = FindPresetSlotForAddress(slots, "p", "node.x.enabled", "b");
+        const auto* any = FindPresetSlotForAddress(slots, "p", "node.x.enabled");
+        Expect(a != nullptr && a->slotId == "preset.1" && b != nullptr && b->slotId == "preset.2" && any != nullptr &&
+                   any->slotId == "preset.1",
+               "a node finds its own mapping, else an untied one; no node takes the first");
     }
 
     // ── Keyboard mappings, run by the engine ──

@@ -294,6 +294,8 @@ class BankCurrent final : public el::element, public Drawn
     }
 
     std::function<void()> onEdit;
+    /// A right click anywhere on it: the bank select MIDI Learn menu, at the click.
+    std::function<void(el::point)> onMenu;
 
     el::view_limits limits(const el::basic_context&) const override
     {
@@ -336,6 +338,16 @@ class BankCurrent final : public el::element, public Drawn
 
     bool click(const el::context& ctx, el::mouse_button btn) override
     {
+        if (btn.state == el::mouse_button::right && onMenu)
+        {
+            if (btn.down)
+            {
+                onMenu(btn.pos);
+            }
+
+            return true;
+        }
+
         if (!mEditable || btn.state != el::mouse_button::left || !EditRect(ctx.bounds).includes(btn.pos))
         {
             return false;
@@ -471,6 +483,14 @@ Ptr Shell::BuildPadsView()
         auto b = std::make_shared<BankStep>(
             mTheme, up, can ? mState.setlists[static_cast<std::size_t>(to)].name : std::string(end));
         b->Enabled(can);
+        // Learnable at either end too: a footswitch steps whichever setlist is next.
+        b->onMenu = [this, up](el::point at) {
+            if (const auto target = guitarfx::uiclient::RegistryLearnTarget(mState.automation,
+                                                                            up ? "setlist.bankUp" : "setlist.bankDown"))
+            {
+                OpenMidiLearnMenu(*target, at);
+            }
+        };
 
         if (can)
         {
@@ -574,6 +594,17 @@ Ptr Shell::BuildPadsView()
                                                 "Create a bank to start assigning paths.", false);
     }
 
+    // Bank select: a controller's value picks the setlist by number.
+    if (auto* bank = dynamic_cast<BankCurrent*>(current.get()))
+    {
+        bank->onMenu = [this](el::point at) {
+            if (const auto target = guitarfx::uiclient::RegistryLearnTarget(mState.automation, "setlist.bankSelect"))
+            {
+                OpenMidiLearnMenu(*target, at);
+            }
+        };
+    }
+
     auto strip = Row({step(activeIndex - 1, false, "First"), HGap(11), Stretch(current, 1.0), HGap(11),
                       step(activeIndex < 0 ? -1 : activeIndex + 1, true, "Last")});
 
@@ -611,7 +642,7 @@ Ptr Shell::BuildPadsView()
                 }
 
                 pad->onAssign = [this, index] { AssignSetlistPad(index); };
-                pad->onMenu = [this, id, index, presetId](el::point) {
+                pad->onMenu = [this, id, index, presetId](el::point at) {
                     std::vector<MenuItem> items;
 
                     if (!mState.activePresetId.empty())
@@ -623,6 +654,18 @@ Ptr Shell::BuildPadsView()
                     if (!presetId.empty())
                     {
                         items.push_back({"Clear this pad", false, false, [this, index] { ClearSetlistPad(index); }});
+                    }
+
+                    // Pad N calls up the setlist's Nth preset, whichever setlist is active.
+                    if (guitarfx::uiclient::SetlistPadLearnTarget(mState.automation, index))
+                    {
+                        items.push_back({"MIDI Learn\xE2\x80\xA6", false, false, [this, index, at] {
+                                             if (const auto target = guitarfx::uiclient::SetlistPadLearnTarget(
+                                                     mState.automation, index))
+                                             {
+                                                 OpenMidiLearnMenu(*target, at);
+                                             }
+                                         }});
                     }
 
                     if (!items.empty())

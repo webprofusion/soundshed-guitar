@@ -276,8 +276,12 @@ class UiCommands
     void GetAutomation();
     /// Creates or edits a slot. Only the fields given change: `label` and `address` (a custom
     /// slot's target; "" for none yet), and `presetId` for a new per-preset slot.
+    /// `nodeSelector` ("id:<nodeId>") ties a per-preset slot to one node of its type.
     void SetAutomationSlot(const std::string& slotId, const std::optional<std::string>& label,
-                           const std::optional<std::string>& address, const std::string& presetId = {});
+                           const std::optional<std::string>& address, const std::string& presetId = {},
+                           const std::string& nodeSelector = {});
+    /// Replaces a slot's MIDI mapping (the panel's mode picker changes its mode).
+    void SetAutomationMidiMap(const std::string& slotId, const AutomationMidiMap& map);
     /// Removes a slot's MIDI mapping, or its key mappings; the slot itself stays.
     void ClearAutomationMidiMap(const std::string& slotId);
     void ClearAutomationKeyMap(const std::string& slotId);
@@ -287,7 +291,8 @@ class UiCommands
     /// the state it is in, rather than set `value`, which can be out of date.
     void SetAutomationValue(const std::string& slotId, double value, bool toggle = false);
     /// Listens for the next MIDI event on a slot, replacing any learn already armed.
-    void ArmMidiLearn(const std::string& slotId);
+    /// With a `mode`, the captured mapping takes it (MidiControlMap::Mode); without, Absolute.
+    void ArmMidiLearn(const std::string& slotId, std::optional<int> mode = std::nullopt);
     void CancelMidiLearn();
     /// The engine forwards incoming MIDI as midiLog while enabled; a UI enables it only while
     /// its log is on screen.

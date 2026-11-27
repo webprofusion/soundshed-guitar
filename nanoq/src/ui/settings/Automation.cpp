@@ -12,6 +12,7 @@
 #include "ui/shell/Shell.h"
 
 #include "uiclient/Automation.h"
+#include "uiclient/NodeLabels.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -141,11 +142,19 @@ bool BoolSettingOr(const nlohmann::json& settings, const char* key, bool fallbac
 
 // ── The right-click menu ─────────────────────────────────────────────────────────
 
-void Shell::OpenNodeParamMidiMenu(const std::string& nodeType, const std::string& paramKey, el::point at)
+void Shell::OpenNodeParamMidiMenu(const guitarfx::GraphNode& node, const std::string& paramKey, el::point at)
 {
-    if (const auto target = NodeParamLearnTarget(mState.FindEffectType(nodeType), paramKey))
+    if (const auto target = NodeParamLearnTarget(mState, node, paramKey))
     {
-        OpenMidiLearnMenu(target->address, target->label, at);
+        OpenMidiLearnMenu(*target, at);
+    }
+}
+
+void Shell::OpenNodeBypassMidiMenu(const guitarfx::GraphNode& node, el::point at)
+{
+    if (const auto target = NodeBypassLearnTarget(mState, node))
+    {
+        OpenMidiLearnMenu(*target, at);
     }
 }
 
@@ -153,11 +162,11 @@ void Shell::OpenGlobalKnobMidiMenu(const std::string& knob, el::point at)
 {
     if (const auto target = GlobalKnobLearnTarget(mState.automation, knob))
     {
-        OpenMidiLearnMenu(target->address, target->label, at);
+        OpenMidiLearnMenu(*target, at);
     }
 }
 
-void Shell::OpenMidiLearnMenu(const std::string& address, const std::string& label, el::point at)
+void Shell::OpenMidiLearnMenu(const MidiLearnTarget& target, el::point at)
 {
     // Until the engine has sent its slots there is nothing to arm, and no telling which slot
     // already drives the control.
@@ -167,7 +176,6 @@ void Shell::OpenMidiLearnMenu(const std::string& address, const std::string& lab
         return;
     }
 
-    const MidiLearnTarget target{address, label};
     const auto& automation = mState.automation;
     std::vector<MenuItem> items;
     items.push_back({MidiLearnMenuTitle(automation, target, mState.activePresetId), false, true, nullptr});
@@ -176,13 +184,17 @@ void Shell::OpenMidiLearnMenu(const std::string& address, const std::string& lab
     {
         MenuItem row;
         row.label = item.label;
-        row.detail = item.hint;
+        // The hint under the label, as the web menu's (a drop-down shows `detail` on headings only);
+        // a learn with no slot free is listed greyed, not as a heading.
+        row.subtitle = item.hint;
+        row.disabled = item.disabled;
 
         if (!item.disabled)
         {
             row.onChoose = [this, target, action = item.action] {
+                const bool toggle = action == MidiLearnMenuAction::LearnPresetToggle;
                 const bool learning =
-                    action == MidiLearnMenuAction::Learn || action == MidiLearnMenuAction::LearnPreset;
+                    action == MidiLearnMenuAction::Learn || action == MidiLearnMenuAction::LearnPreset || toggle;
                 const auto message = RunMidiLearnMenuAction(mSession.Commands(), mState, action, target);
 
                 if (!message.empty())
@@ -199,14 +211,17 @@ void Shell::OpenMidiLearnMenu(const std::string& address, const std::string& lab
                     // Announced when the engine captures it (SyncAutomation).
                     mMenuLearnSlotId = mState.automation.midiLearnSlotId;
                     const auto* slot = mState.automation.FindSlot(mMenuLearnSlotId);
-                    mMenuLearnLabel = slot != nullptr && !slot->label.empty() ? slot->label : target.label;
-                    const bool forPreset = action == MidiLearnMenuAction::LearnPreset;
+                    const bool forPreset = action == MidiLearnMenuAction::LearnPreset || toggle;
+                    // A new per-preset slot is named by its node, before the engine has sent it.
+                    mMenuLearnLabel = slot != nullptr && !slot->label.empty()  ? slot->label
+                                      : forPreset && !target.nodeLabel.empty() ? target.nodeLabel
+                                                                               : target.label;
                     const auto* preset = forPreset ? mState.FindPresetSummary(mState.activePresetId) : nullptr;
                     ShowToast("MIDI Learn",
                               "Move a MIDI control to map " + mMenuLearnLabel +
                                   (forPreset ? " for " + (preset != nullptr ? preset->name : mState.activePresetId)
                                              : std::string()) +
-                                  " (Esc cancels)",
+                                  (toggle ? " as a toggle" : "") + " (Esc cancels)",
                               false);
                 }
             };
@@ -334,7 +349,8 @@ void Shell::OpenMidiAutomation()
                 .body = mMidiDialogBody,
                 .width = DialogWidthFor(view, 860.0f),
                 .height = std::max(320.0f, view.y - 60.0f),
-                .padY = 12.0f});
+                .padY = 12.0f,
+                .stretch = true}); // the slots scroll in their own list
 
     mOnOverlayClosed = [this] {
         // Nothing listens or logs once the dialog has gone.
@@ -481,7 +497,15 @@ Ptr Shell::BuildMidiAutomationBody()
             if (!slot.presetId.empty())
             {
                 const auto* preset = mState.FindPresetSummary(slot.presetId);
-                address = (preset != nullptr ? preset->name : slot.presetId) + " \xC2\xB7 " + slot.address;
+                address = (preset != nullptr ? preset->name : slot.presetId) + " \xC2\xB7 ";
+
+                // Tied to one node: named as the chain names it, while its preset is the one loaded.
+                const auto nodeId = guitarfx::NodeIdFromSelector(slot.nodeSelector);
+                const auto* node = !nodeId.empty() && mState.activePreset && mState.activePresetId == slot.presetId
+                                       ? mState.activePreset->graph.FindNode(nodeId)
+                                       : nullptr;
+                address +=
+                    node != nullptr ? NodeDisplayName(mState, *node) + " \xC2\xB7 " + slot.address : slot.address;
             }
 
             const std::string range = DescribeRange(entry);
@@ -493,20 +517,61 @@ Ptr Shell::BuildMidiAutomationBody()
                 FixedWidth(210, text(address + (range.empty() ? "" : " " + range), 10.5f, mTheme.TextMuted())),
                 HGap(6)};
             cells.push_back(
-                FixedWidth(104, text(slot.midiMap ? DescribeMidiMap(*slot.midiMap) : "\xE2\x80\x94", 10.5f)));
+                FixedWidth(86, text(slot.midiMap ? DescribeMidiMap(slot.midiMap->eventType, slot.midiMap->channel,
+                                                                   slot.midiMap->controller, std::nullopt)
+                                                 : "\xE2\x80\x94",
+                                    10.5f)));
 
             if (slot.midiMap)
             {
+                // The mapping's mode, as the web panel's picker (Absolute, Toggle, Relative, Pickup).
+                const auto& options = MidiModeOptions();
+                const auto current = std::find_if(options.begin(), options.end(), [&](const MidiModeOption& o) {
+                    return o.mode == slot.midiMap->mode;
+                });
+                auto mode = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+                mode->Size(78, 24).Label(current != options.end() ? current->label : "Absolute", 10.5f).Caret(true);
+                mode->Tooltip(current != options.end() ? current->title : "");
+                mode->onClick = [this, &commands, slotId, map = *slot.midiMap, b = mode.get()] {
+                    std::vector<MenuItem> items;
+
+                    for (const auto& option : MidiModeOptions())
+                    {
+                        MenuItem item{option.label, option.mode == map.mode, false,
+                                      [&commands, slotId, map, m = option.mode] {
+                                          auto changed = map;
+                                          changed.mode = m;
+                                          commands.SetAutomationMidiMap(slotId, changed);
+                                      }};
+                        item.subtitle = option.title;
+                        items.push_back(std::move(item));
+                    }
+
+                    OpenDropdown(b->Bounds(), std::move(items), 260.0f);
+                };
+                cells.push_back(mode);
+                cells.push_back(HGap(2));
                 cells.push_back(
                     button("\xC3\x97", [&commands, slotId] { commands.ClearAutomationMidiMap(slotId); }, 24.0f));
+            }
+            else
+            {
+                cells.push_back(HGap(104));
+            }
+
+            cells.push_back(HGap(6));
+            cells.push_back(FixedWidth(70, text(DescribeKeyMaps(slot), 10.5f)));
+
+            if (!slot.keyMap.empty())
+            {
+                cells.push_back(
+                    button("\xC3\x97", [&commands, slotId] { commands.ClearAutomationKeyMap(slotId); }, 24.0f));
             }
             else
             {
                 cells.push_back(HGap(24));
             }
 
-            cells.push_back(HGap(6));
-            cells.push_back(FixedWidth(90, text(DescribeKeyMaps(slot), 10.5f)));
             cells.push_back(Stretch());
 
             auto learn = button(
@@ -542,6 +607,18 @@ Ptr Shell::BuildMidiAutomationBody()
 
             if (!slot.isDefault && slot.presetId.empty())
             {
+                cells.push_back(HGap(4));
+                cells.push_back(button(
+                    "Rename",
+                    [this, slotId, label = slot.label] {
+                        OpenPrompt("Rename Slot", label, "Rename", [this, slotId](const std::string& name) {
+                            if (!name.empty())
+                            {
+                                mSession.Commands().SetAutomationSlot(slotId, name, std::nullopt);
+                            }
+                        });
+                    },
+                    60.0f));
                 cells.push_back(HGap(4));
                 auto target = button("Target", nullptr, 56.0f);
                 target->onClick = [this, slotId, t = target.get()] {

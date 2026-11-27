@@ -749,7 +749,16 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
     {
         if (btn.state == el::mouse_button::right)
         {
-            if (btn.down && onMenu)
+            // On the power, the effect's on/off MIDI Learn menu; elsewhere the card's own.
+            const auto r = CardRect(ctx.bounds, CardHeight());
+            const bool power =
+                mLook.canBypass && (CornersLive() || !mLook.enabled) && CornerHit(PowerRect(r)).includes(btn.pos);
+
+            if (btn.down && power && onPowerMenu)
+            {
+                onPowerMenu(btn.pos);
+            }
+            else if (btn.down && onMenu)
             {
                 onMenu();
             }
@@ -942,6 +951,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
     }
 
     std::function<void()> onSelect, onToggle, onMenu, onReplace, onRemove;
+    /// A right click on the power: where it was, in view coordinates.
+    std::function<void(el::point)> onPowerMenu;
     /// A drag from `from` that is now at `to` (view coordinates); `done` when it is let go.
     std::function<void(el::point from, el::point to, bool done)> onDrag;
 

@@ -295,6 +295,12 @@ Ptr Shell::BuildChain()
             mChainFocused = true;
         };
         card->onMenu = [this, nodeId] { OpenNodeMenu(nodeId); };
+        card->onPowerMenu = [this, nodeId](el::point at) {
+            if (const auto* n = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr)
+            {
+                OpenNodeBypassMidiMenu(*n, at);
+            }
+        };
         // Every card is somewhere to drop; effects can be dragged, the input and output stay put.
         card->Draggable(mHitMap, nodeId);
 
