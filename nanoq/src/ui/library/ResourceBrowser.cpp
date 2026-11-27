@@ -54,6 +54,13 @@ struct ResourceBrowserMemory
     std::vector<t3::Tone> t3Tones;
     std::string t3Open;
     std::vector<t3::Model> t3Models;
+
+    // What the slot's previous and next walk: the list its choice was last picked from.
+    int stepFrom = 0;                                     // the Tab it was picked on
+    std::vector<ResourceFolderListing::File> folderFiles; // the Folder list then shown
+    std::map<std::string, std::vector<t3::Model>> t3ModelsByTone;
+    std::optional<std::string> category; // the library category the browser last showed ("" all)
+    bool stepping = false;               // a Tone3000 step fetching or importing
 };
 
 void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& resourceType, int resourceIndex,
@@ -126,6 +133,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         std::weak_ptr<Browser> self;
         std::function<void(const std::string&)> onPick; // pick only: what to do with the choice
         bool controlsTwoRows = false;                   // the Library's search over its filters, on a narrow window
+        int pickedFrom = -1;                            // the Tab the choice being heard came from; -1 for none kept
     };
 
     auto state = std::make_shared<Browser>();
@@ -269,6 +277,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         b->previewed = true;
         b->selectedId = id;
         b->selectedPath = path;
+        b->pickedFrom = static_cast<int>(b->tab);
 
         if (b->onPick)
         {
@@ -1281,6 +1290,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                         b->t3HearingTone = tone;
                         b->t3HearingModel = model;
                         b->previewed = true;
+                        b->pickedFrom = static_cast<int>(Tab::Tone3000);
                         b->selectedId.clear();
                         b->selectedPath.clear();
                         refillList();
@@ -1539,6 +1549,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             }
 
             b->previewed = false;
+            b->pickedFrom = -1;
             CloseOverlay();
         };
         auto ok = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Primary);
@@ -1868,6 +1879,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             }
         }
 
+        b->pickedFrom = -1;
         CloseOverlay();
     };
 
@@ -1896,6 +1908,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     mOnOverlayClosed = [this, state, memory] {
         // Kept for the slot's next open; a list still on its way is asked for again then.
         memory->tab = static_cast<int>(state->tab);
+        memory->category = state->category;
         memory->query = state->query;
         memory->arch = state->arch;
         memory->creator = state->creator;
@@ -1911,6 +1924,21 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         memory->t3Tones = state->t3Loading ? std::vector<t3::Tone>() : state->t3Tones;
         memory->t3Open = state->t3ModelsLoading ? std::string() : state->t3Open;
         memory->t3Models = state->t3ModelsLoading ? std::vector<t3::Model>() : state->t3Models;
+
+        if (!memory->t3Open.empty() && !memory->t3Models.empty())
+        {
+            memory->t3ModelsByTone[memory->t3Open] = memory->t3Models;
+        }
+
+        // A choice kept: the slot's arrows walk the list it came from.
+        if (state->pickedFrom >= 0)
+        {
+            memory->stepFrom = state->pickedFrom;
+            memory->folderFiles = state->pickedFrom == static_cast<int>(Tab::Folder)
+                                      ? state->listedFiles
+                                      : std::vector<ResourceFolderListing::File>();
+        }
+
         mSession.Tones().RemoveListener(state->toneListener);
         state->subscriptions.clear();
         state->thumbnailFor = nullptr;
@@ -1919,5 +1947,334 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         state->searchTone3000 = nullptr;
     };
     (void)commands;
+}
+
+namespace
+{
+/// Where a slot's previous or next lands, worked out from the list it walks.
+struct SlotStep
+{
+    bool possible = false;
+    std::string resourceId, filePath; // a library entry or a folder file
+    std::optional<t3::Tone> tone;     // a Tone3000 model, imported first
+    std::optional<t3::Model> model;
+    std::string fetchToneId; // a tone whose models are not known yet
+};
+
+/// The slot's library list for its arrows: its category (else everything), its browser's
+/// other filters, in the order the browser draws it.
+std::vector<const LibraryResource*> SlotLibraryList(const ClientState& state, const std::string& resourceType,
+                                                    const SlotRole& role, const ResourceBrowserMemory& memory,
+                                                    const std::string& currentId)
+{
+    ResourceFilter filter;
+    filter.query = memory.query;
+    filter.architecture = memory.arch.empty() ? std::string("all") : memory.arch;
+    filter.creator = memory.creator.empty() ? std::string("all") : memory.creator;
+    filter.tags = memory.tags;
+    filter.favouritesOnly = memory.favouritesOnly;
+
+    // What the browser last showed; before it has been opened, the slot's own category, or the
+    // loaded entry's when it is elsewhere (as the browser opens).
+    if (memory.category)
+    {
+        filter.category = memory.category->empty() ? std::string("all") : *memory.category;
+    }
+    else
+    {
+        const auto available = LibraryCategories(state, resourceType);
+        const auto hint = resourceType == "ir" ? std::string(role.gear == "space" ? "reverb" : "cab") : role.gear;
+        filter.category = ResolveLibraryCategoryFromHint(hint, available).value_or("all");
+        const auto* current = currentId.empty() ? nullptr : state.FindLibraryResource(resourceType, currentId);
+        const auto own = current == nullptr          ? std::string()
+                         : current->category.empty() ? std::string("Uncategorized")
+                                                     : current->category;
+
+        if (current != nullptr && filter.category != "all" && filter.category != own)
+        {
+            filter.category =
+                std::find(available.begin(), available.end(), own) != available.end() ? own : std::string("all");
+        }
+    }
+
+    auto list = NavigationOrder(state, FilterLibrary(state, resourceType, filter, currentId));
+
+    // A category with nothing in it would leave the arrows nothing to do.
+    if (list.empty() && filter.category != "all")
+    {
+        filter.category = "all";
+        list = NavigationOrder(state, FilterLibrary(state, resourceType, filter, currentId));
+    }
+
+    std::erase_if(list, [](const LibraryResource* r) { return r->fileMissing; });
+    return list;
+}
+
+SlotStep NextInSlotList(const ClientState& state, const std::string& resourceType, const SlotRole& role,
+                        const ResourceBrowserMemory& memory, const guitarfx::ResourceRef* current, int delta)
+{
+    SlotStep step;
+    const auto currentId = current != nullptr ? current->resourceId : std::string();
+    const auto currentPath = current != nullptr ? guitarfx::util::PathToUtf8(current->filePath) : std::string();
+    const int direction = delta >= 0 ? 1 : -1;
+
+    // Tone3000: the results' models in order, tone after tone, and no further at either end.
+    if (memory.stepFrom == 2 && !memory.t3Tones.empty())
+    {
+        std::string modelId, toneId;
+
+        if (const auto* resource = currentId.empty() ? nullptr : state.FindLibraryResource(resourceType, currentId))
+        {
+            modelId = MetaText(resource->metadata, "modelId");
+            toneId = MetaText(resource->metadata, "toneId");
+        }
+
+        if (modelId.empty() && currentId.rfind("tone3000:", 0) == 0)
+        {
+            modelId = currentId.substr(9, currentId.find(':', 9) - 9);
+        }
+
+        const auto modelsOf = [&memory](const std::string& id) -> const std::vector<t3::Model>* {
+            const auto it = memory.t3ModelsByTone.find(id);
+            return it != memory.t3ModelsByTone.end() ? &it->second : nullptr;
+        };
+        int toneAt = -1, modelAt = -1;
+
+        for (int t = 0; t < static_cast<int>(memory.t3Tones.size()) && modelAt < 0; ++t)
+        {
+            const auto& tone = memory.t3Tones[static_cast<std::size_t>(t)];
+            const auto* models = modelsOf(tone.id);
+
+            for (int m = 0; models != nullptr && m < static_cast<int>(models->size()); ++m)
+            {
+                if (!modelId.empty() && (*models)[static_cast<std::size_t>(m)].id == modelId)
+                {
+                    toneAt = t;
+                    modelAt = m;
+                }
+            }
+
+            toneAt = modelAt < 0 && !toneId.empty() && tone.id == toneId ? t : toneAt;
+        }
+
+        // Within the tone, else into the next tone along (its models fetched first).
+        if (toneAt >= 0 && modelAt >= 0)
+        {
+            const auto& models = *modelsOf(memory.t3Tones[static_cast<std::size_t>(toneAt)].id);
+            const int next = modelAt + direction;
+
+            if (next >= 0 && next < static_cast<int>(models.size()))
+            {
+                step.possible = true;
+                step.tone = memory.t3Tones[static_cast<std::size_t>(toneAt)];
+                step.model = models[static_cast<std::size_t>(next)];
+                return step;
+            }
+        }
+
+        const int toneCount = static_cast<int>(memory.t3Tones.size());
+
+        for (int t = toneAt < 0 ? (direction > 0 ? 0 : toneCount - 1) : toneAt + direction; t >= 0 && t < toneCount;
+             t += direction)
+        {
+            const auto& tone = memory.t3Tones[static_cast<std::size_t>(t)];
+            const auto* models = modelsOf(tone.id);
+
+            if (models == nullptr)
+            {
+                step.possible = true;
+                step.fetchToneId = tone.id;
+                return step;
+            }
+
+            if (!models->empty())
+            {
+                step.possible = true;
+                step.tone = tone;
+                step.model = direction > 0 ? models->front() : models->back();
+                return step;
+            }
+        }
+
+        return step;
+    }
+
+    // The folder: its files of this type as the Folder tab listed them, round and round.
+    if (memory.stepFrom == 1 && !memory.folderFiles.empty())
+    {
+        const auto& files = memory.folderFiles;
+        const auto it = std::find_if(files.begin(), files.end(), [&](const ResourceFolderListing::File& f) {
+            return (!currentPath.empty() && f.path == currentPath) ||
+                   (!currentId.empty() && f.inLibrary && f.libraryId == currentId);
+        });
+        const int count = static_cast<int>(files.size());
+        const int at = it == files.end() ? -1 : static_cast<int>(it - files.begin());
+        const int next = at < 0 ? (direction > 0 ? 0 : count - 1) : ((at + direction) % count + count) % count;
+
+        if (at >= 0 && next == at)
+        {
+            return step;
+        }
+
+        const auto& file = files[static_cast<std::size_t>(next)];
+        step.possible = true;
+        step.resourceId = file.inLibrary ? file.libraryId : std::string();
+        step.filePath = file.inLibrary ? std::string() : file.path;
+        return step;
+    }
+
+    // The library as the slot's browser filters it, round and round.
+    const auto list = SlotLibraryList(state, resourceType, role, memory, currentId);
+
+    if (list.empty())
+    {
+        return step;
+    }
+
+    const auto it = std::find_if(list.begin(), list.end(), [&](const LibraryResource* r) {
+        return (!currentId.empty() && r->id == currentId) || (!currentPath.empty() && r->filePath == currentPath);
+    });
+    const int count = static_cast<int>(list.size());
+    const int at = it == list.end() ? -1 : static_cast<int>(it - list.begin());
+    const int next = at < 0 ? (direction > 0 ? 0 : count - 1) : ((at + direction) % count + count) % count;
+
+    if (at >= 0 && next == at)
+    {
+        return step;
+    }
+
+    step.possible = true;
+    step.resourceId = list[static_cast<std::size_t>(next)]->id;
+    return step;
+}
+
+const guitarfx::ResourceRef* SlotResourceRef(const guitarfx::GraphNode& node, int resourceIndex)
+{
+    const auto index = static_cast<std::size_t>(std::max(0, resourceIndex));
+    const auto* ref = index < node.resources.size() ? &node.resources[index] : nullptr;
+    return ref != nullptr && (ref->IsLibraryRef() || ref->IsFilePath()) ? ref : nullptr;
+}
+} // namespace
+
+bool Shell::CanStepSlotResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex,
+                                int delta)
+{
+    const auto* node = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+
+    if (node == nullptr)
+    {
+        return false;
+    }
+
+    const auto role = RoleFor(mState, *node, resourceType, resourceIndex);
+    const auto it = mResourceBrowserMemory.find(resourceType + ":" + role.context);
+    const ResourceBrowserMemory none;
+    const auto& memory = it != mResourceBrowserMemory.end() && it->second ? *it->second : none;
+    return NextInSlotList(mState, resourceType, role, memory, SlotResourceRef(*node, resourceIndex), delta).possible;
+}
+
+void Shell::StepSlotResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex, int delta)
+{
+    const auto* node = mState.activePreset ? mState.activePreset->graph.FindNode(nodeId) : nullptr;
+
+    if (node == nullptr)
+    {
+        return;
+    }
+
+    const auto role = RoleFor(mState, *node, resourceType, resourceIndex);
+    auto& slot = mResourceBrowserMemory[resourceType + ":" + role.context];
+
+    if (!slot)
+    {
+        slot = std::make_shared<ResourceBrowserMemory>();
+    }
+
+    const auto memory = slot;
+
+    if (memory->stepping)
+    {
+        return; // a Tone3000 step still fetching or importing: this click would repeat it
+    }
+
+    const auto step = NextInSlotList(mState, resourceType, role, *memory, SlotResourceRef(*node, resourceIndex), delta);
+    auto& commands = mSession.Commands();
+
+    if (!step.possible)
+    {
+        return;
+    }
+
+    if (!step.resourceId.empty())
+    {
+        commands.SetNodeResource(nodeId, resourceType, step.resourceId, resourceIndex);
+        return;
+    }
+
+    if (!step.filePath.empty())
+    {
+        commands.SetNodeResourceFile(nodeId, resourceType, step.filePath, resourceIndex);
+        return;
+    }
+
+    const auto alive = std::weak_ptr<bool>(mAlive);
+
+    // The next tone's models, then the step again from there.
+    if (!step.fetchToneId.empty())
+    {
+        memory->stepping = true;
+        mSession.Tones().Tone3000Models(
+            step.fetchToneId,
+            [this, alive, memory, nodeId, resourceType, resourceIndex, delta,
+             toneId = step.fetchToneId](const std::vector<t3::Model>& models, const std::string& error) {
+                memory->stepping = false;
+
+                if (!alive.lock())
+                {
+                    return;
+                }
+
+                if (!error.empty())
+                {
+                    ShowToast("Could not list the tone's models", error, true);
+                    return;
+                }
+
+                memory->t3ModelsByTone[toneId] = models;
+                StepSlotResource(nodeId, resourceType, resourceIndex, delta);
+            });
+        return;
+    }
+
+    if (!step.tone || !step.model)
+    {
+        return;
+    }
+
+    if (const auto* imported = t3::FindImported(mState, resourceType, *step.model))
+    {
+        commands.SetNodeResource(nodeId, resourceType, imported->id, resourceIndex);
+        return;
+    }
+
+    memory->stepping = true;
+    mSession.Tones().ImportTone3000(
+        *step.tone, *step.model, resourceType, resourceType == "ir" ? role.gear : std::string(),
+        [this, alive, memory, nodeId, resourceType, resourceIndex](const std::string& id, const std::string& error) {
+            memory->stepping = false;
+
+            if (!alive.lock())
+            {
+                return;
+            }
+
+            if (!error.empty())
+            {
+                ShowToast("Could not import the model", error, true);
+                return;
+            }
+
+            mSession.Commands().SetNodeResource(nodeId, resourceType, id, resourceIndex);
+        });
 }
 } // namespace nanoq::ui

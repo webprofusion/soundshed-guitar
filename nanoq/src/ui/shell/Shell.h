@@ -859,6 +859,12 @@ class Shell
     void OpenResourceBrowser(const std::string& nodeId, const std::string& resourceType, int resourceIndex,
                              std::function<void(const std::string& resourceId)> onPick = {},
                              const std::string& title = {}, const std::string& category = {});
+    /// A model or IR slot's previous and next (ResourceBrowser.cpp): through the list it was last
+    /// picked from, the library as its browser filters it, the folder, or the Tone3000 results
+    /// (importing as it goes, and stopping at their ends), as the web UI's resource arrows.
+    void StepSlotResource(const std::string& nodeId, const std::string& resourceType, int resourceIndex, int delta);
+    [[nodiscard]] bool CanStepSlotResource(const std::string& nodeId, const std::string& resourceType,
+                                           int resourceIndex, int delta);
     /// What each slot's browser keeps between opens, by slot (the web UI's persistedStateBySlot).
     std::map<std::string, std::shared_ptr<ResourceBrowserMemory>> mResourceBrowserMemory;
     /// A library row's menu: details, rename, recategorise, copy the path, delete.

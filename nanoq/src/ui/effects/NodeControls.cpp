@@ -350,9 +350,25 @@ Ptr Shell::BuildResourceSlot(const guitarfx::GraphNode& node, const std::string&
         },
         ref != nullptr);
     clear->AccessName("Clear " + what);
-    auto previous = slate("ui-prev", step(-1), !list.empty());
+    // A model or IR walks the list it was last picked from (the browser keeps it); stepping a
+    // Tone3000 set stops at its ends.
+    const auto stepper = [this, nodeId, resourceType, resourceIndex, step,
+                          library](int delta) -> std::function<void()> {
+        if (!library)
+        {
+            return step(delta);
+        }
+
+        return [this, nodeId, resourceType, resourceIndex, delta] {
+            StepSlotResource(nodeId, resourceType, resourceIndex, delta);
+        };
+    };
+    const auto canStep = [this, nodeId, resourceType, resourceIndex, library, &list](int delta) {
+        return library ? CanStepSlotResource(nodeId, resourceType, resourceIndex, delta) : !list.empty();
+    };
+    auto previous = slate("ui-prev", stepper(-1), canStep(-1));
     previous->AccessName("Previous " + what);
-    auto next = slate("ui-next", step(1), !list.empty());
+    auto next = slate("ui-next", stepper(1), canStep(1));
     next->AccessName("Next " + what);
 
     // Nothing loaded: the field is the slot's call to action (resourcePickerLabel.ts), and a
