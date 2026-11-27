@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -497,10 +498,15 @@ class ListRow : public el::element, public Focusable, public TapTarget
 
     /// An icon at the left, in `tint`.
     ListRow& Icon(Icons* icons, std::string name, el::color tint);
+    /// A second, muted line under the text (the levelling flyout's notes): the row is 44 tall.
+    ListRow& Note(std::string note);
+    /// The text in `ink` (an action row's accent) rather than the text colour.
+    ListRow& TextInk(el::color ink);
 
   private:
     const Theme& mTheme;
-    std::string mText, mSecondary;
+    std::string mText, mSecondary, mNote;
+    std::optional<el::color> mTextInk;
     Icons* mIcons = nullptr;
     std::string mIcon;
     el::color mTint;

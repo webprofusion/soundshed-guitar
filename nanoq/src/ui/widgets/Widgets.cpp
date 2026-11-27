@@ -712,7 +712,7 @@ ListRow::ListRow(const Theme& theme, std::string text, std::string secondary, bo
 
 el::view_limits ListRow::limits(const el::basic_context&) const
 {
-    const float h = mHeading ? 30.0f : metrics::kRowHeight;
+    const float h = mHeading ? 30.0f : !mNote.empty() ? std::max(44.0f, metrics::kRowHeight) : metrics::kRowHeight;
     return {{160.0f, h}, {el::full_extent, h}};
 }
 
@@ -763,8 +763,23 @@ void ListRow::draw(const el::context& ctx)
         textBounds.left += 28.0f;
     }
 
-    FillText(cnv, Ellipsize(cnv, mText, textFont, textBounds.width()), textFont, mTheme.Text(), textBounds,
-             Text::Align::Left);
+    const el::color ink = mTextInk.value_or(mTheme.Text());
+
+    if (mNote.empty())
+    {
+        FillText(cnv, Ellipsize(cnv, mText, textFont, textBounds.width()), textFont, ink, textBounds,
+                 Text::Align::Left);
+        return;
+    }
+
+    // The name over its note (.input-calibration-toolbar-item-copy): 13 over 11, 2 apart.
+    const float mid = b.top + b.height() * 0.5f;
+    const auto nameFont = Font(Weight::SemiBold).size(13.0f);
+    const auto noteFont = Font(Weight::Regular).size(11.0f);
+    FillText(cnv, Ellipsize(cnv, mText, nameFont, textBounds.width()), nameFont, ink,
+             el::rect{textBounds.left, mid - 17.0f, textBounds.right, mid}, Text::Align::Left);
+    FillText(cnv, Ellipsize(cnv, mNote, noteFont, textBounds.width()), noteFont, mTheme.TextMuted(),
+             el::rect{textBounds.left, mid + 1.0f, textBounds.right, mid + 15.0f}, Text::Align::Left);
 }
 
 bool ListRow::key(const el::context& ctx, el::key_info k)
@@ -783,7 +798,7 @@ AccessInfo ListRow::Describe() const
     AccessInfo info;
     info.role = AccessRole::ListItem;
     info.name = NameOr(mText);
-    info.value = mSecondary;
+    info.value = mNote.empty() ? mSecondary : mNote + (mSecondary.empty() ? "" : ", " + mSecondary);
     info.selected = mSelected;
     return info;
 }
@@ -798,6 +813,18 @@ bool ListRow::Activate(const el::rect&)
     const auto run = mOnClick; // it may rebuild the list this sits in
     run();
     return true;
+}
+
+ListRow& ListRow::Note(std::string note)
+{
+    mNote = std::move(note);
+    return *this;
+}
+
+ListRow& ListRow::TextInk(el::color ink)
+{
+    mTextInk = ink;
+    return *this;
 }
 
 ListRow& ListRow::Icon(Icons* icons, std::string name, el::color tint)
