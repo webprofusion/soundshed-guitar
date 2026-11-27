@@ -72,10 +72,11 @@ void DrawKnob(cycfi::artist::canvas& cnv, const Theme& theme, el::point centre, 
 /// A key standing in `bounds` as the theme draws it (a KeySkin that is `drawn`): its side wall
 /// along the foot, the face over it with `face` (its Backdrops entry) and its box, lightened when
 /// `hover`, pushed down its wall when `down` (and a latched key by its own press). `border`, when
-/// visible, replaces the box's border colour (a module's category). Returns where the face is,
-/// for its legend.
+/// visible, replaces the box's border colour (a module's category), and `ring` its halo's colour
+/// where it has one (a chosen module's, in its category). Returns where the face is, for its
+/// legend.
 el::rect DrawKey(cycfi::artist::canvas& cnv, const Theme& theme, el::rect bounds, const KeySkin& key,
-                 const SurfaceBackdrop& face, bool hover, bool down, std::uint32_t border = 0);
+                 const SurfaceBackdrop& face, bool hover, bool down, std::uint32_t border = 0, std::uint32_t ring = 0);
 
 /// A display's lettering (the preset's name, the tempo) in `colour`, with the theme's glow round
 /// it where it has one.

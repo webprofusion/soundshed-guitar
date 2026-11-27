@@ -4,14 +4,12 @@
  */
 
 .theme-dark {
-  /* The chain's node blocks (css/signal-path/nodes.css): a graphite face on a dark
-     aluminium body (the banded wall is below), lit from above. */
+  /* The chain's node blocks (css/signal-path/nodes.css): flat graphite caps with no side wall
+     (dark-skin.css), a faint sheen and lit edge. */
   --node-face: #24242c;
-  --node-sheen: rgb(255 255 255 / 0.07);
-  --node-edge-light: rgb(255 255 255 / 0.12);
-  --node-wall: #4a4d55;
-  --node-wall-edge: rgb(0 0 0 / 0.45);
-  --node-shadow: rgb(0 0 0 / 0.55);
+  --node-sheen: rgb(255 255 255 / 0.04);
+  --node-edge-light: rgb(255 255 255 / 0.07);
+  --node-shadow: rgb(0 0 0 / 0.5);
 
   /* Primary Colors */
   --color-accent: #ff8850;

@@ -296,10 +296,10 @@ inline constexpr BackdropLayer kBackdrop_dark_keyPrimary[] = {
     {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 2, {{0xFFFF8850, 0.0f, false}, {0xFFE86838, 1.0f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_dark_nodePlain[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x12FFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x0AFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_dark_nodeSelected[] = {
-    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x12FFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
+    {1, "", 0.0f, 0.0f, 0.0f, 0.0f, 0, 0.0f, 2, 0.0f, 2, true, true, 180.0f, false, 3, {{0x0AFFFFFF, 0.0f, false}, {0x00000000, 0.42f, false}, {0x0A000000, 1.0f, false}}},
 };
 inline constexpr BackdropLayer kBackdrop_classic_header[] = {
     {0, "images/themes/vintage-film-grain.png", 0.0f, 0.0f, 0.0f, 0.0f, 0, 48.0f, 0, 48.0f, 0, true, true, 0.0f, false, 0, {}},
@@ -710,8 +710,8 @@ inline constexpr ControlSkin kControlSkins[] = {
       {false, {0xFFFF8850, 0xFFE86838, 1.0f, 0xFFE86838, 6.0f, 0.0f, 0x00000000, 0x66000000, 1.0f, 3.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFFFFFFF},
       {false, {0x00000000, 0x00000000, 0.0f, 0xFFF0F0F8, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x0DFFFFFF, 0x00000000}, 1.0f, 0x0FFFFFFF, 0x0FFFFFFF, 0.0f, 0xFFF0F0F8},
       {false, {0x0DFFFFFF, 0x0DFFFFFF, 1.0f, 0x14FFFFFF, 8.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFD0D0E0}},
-     {{{false, {0xFF33333B, 0xFF23232A, 1.0f, 0xFFB77F43, 10.0f, 0.0f, 0x00000000, 0x4D000000, 8.0f, 12.0f, 0x1FFFFFFF, 0x33000000}, 5.0f, 0xFF70747D, 0x99000000, 0.0f, 0xFFEBEBF4}, {0xFFEBEBF4, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFB4A19C, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
-      {{false, {0xFF33333B, 0xFF23232A, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x4D000000, 8.0f, 12.0f, 0x1FFFFFFF, 0x33000000}, 5.0f, 0xFF70747D, 0x99000000, 0.0f, 0xFFEBEBF4}, {0xFFEBEBF4, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFB4A19C, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
+     {{{false, {0xFF2D2D34, 0xFF23232A, 1.0f, 0xFFB77F43, 10.0f, 0.0f, 0x00000000, 0x80000000, 4.0f, 10.0f, 0x12FFFFFF, 0x00000000}, 1.0f, 0x8C000000, 0x8C000000, 0.0f, 0xFFEBEBF4}, {0xFFEBEBF4, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFB4A19C, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false},
+      {{false, {0xFF2D2D34, 0xFF23232A, 1.0f, 0xFFF0A24C, 10.0f, 2.0f, 0x3DF0A24C, 0x80000000, 4.0f, 10.0f, 0x12FFFFFF, 0x00000000}, 1.0f, 0x8C000000, 0x8C000000, 0.0f, 0xFFEBEBF4}, {0xFFEBEBF4, 10.0f, 500, 0.06f, true, "Inter"}, 0xFFB4A19C, {0x47F0A24C, 0x12F0A24C, 0.0f, 0xFFF0A24C, 999.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, false}},
      {{false, {0xFF111118, 0xFF111118, 1.0f, 0x0FFFFFFF, 10.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 1.0f, 0x0AFFFFFF, 0x0AFFFFFF, 0.0f, 0xFFEBEBF4}, {0xFFF0F0F8, 11.0f, 700, 0.05f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
      {{false, {0x00000000, 0x00000000, 1.0f, 0x00000000, 6.0f, 0.0f, 0x00000000, 0x00000000, 0.0f, 0.0f, 0x00000000, 0x00000000}, 0.0f, 0x00000000, 0x00000000, 0.0f, 0xFFC0C0D0}, {0xFFC0C0D0, 11.0f, 600, 0.02f, false, "Arial"}, 0x00000000, 0.0f, 0.0f, 0.0f},
      {{0xFF18181E, kBackdrop_dark_header, 1}, {0xFF1E1E25, kBackdrop_dark_controlBar, 1}, {0xFF18181E, kBackdrop_dark_chain, 1}, {0x00000000, kBackdrop_dark_main, 1}, {0x00000000, nullptr, 0}, {0xFF141419, kBackdrop_dark_footer, 1}, {0x00000000, kBackdrop_dark_shell, 2}, {0x00000000, kBackdrop_dark_modal, 1}, {0x00000000, kBackdrop_dark_modalHeader, 1}, {0x00000000, nullptr, 0}, {0x00000000, nullptr, 0}, {0x00000000, kBackdrop_dark_keyPlain, 1}, {0x00000000, kBackdrop_dark_keyOn, 1}, {0x00000000, kBackdrop_dark_keyPrimary, 1}, {0x00000000, nullptr, 0}, {0x0DFFFFFF, nullptr, 0}, {0xFF24242C, kBackdrop_dark_nodePlain, 1}, {0xFF24242C, kBackdrop_dark_nodeSelected, 1}, {0xFF111118, nullptr, 0}, {0x00000000, nullptr, 0}}},

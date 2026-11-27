@@ -85,18 +85,13 @@
     0 28px 55px rgba(0, 0, 0, 0.5);
 }
 
-/* The node's side wall is dark anodised aluminium: a bright chamfer under the face, then
-   bands that darken toward the strip, so the edge reads as machined metal rather than a
-   shadow. Solid offset shadows draw the bands; nodes.css documents the other tokens. */
+/* The node is flat, as Stage's are: a graphite cap lying on the strip with no side wall, a
+   faint lit top edge, a hairline contact shadow and a short soft one. Its category colour
+   stays on its edge and icon. Themes built on this one that stand their nodes proud (Eleven,
+   Studio 1973) set their own --node-raised. nodes.css documents the other tokens. */
 .theme-dark .signal-node {
   --node-raised:
     inset 0 1px 0 var(--node-edge-light),
-    inset 0 -1px 0 rgb(0 0 0 / 0.2),
-    0 1px 0 #70747d,
-    0 2px 0 #565961,
-    0 3px 0 #4a4d55,
-    0 4px 0 #3e4047,
-    0 5px 0 rgb(0 0 0 / 0.6),
-    0 8px 12px color-mix(in srgb, var(--node-shadow) 55%, transparent),
-    0 20px 40px -10px var(--node-shadow);
+    0 1px 0 rgb(0 0 0 / 0.55),
+    0 4px 10px -2px var(--node-shadow);
 }

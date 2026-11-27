@@ -109,6 +109,91 @@ float StopAt(const guitarfx::uiclient::theme::BackdropStop& stop, float length)
     return std::clamp(stop.px ? (length > 0.0f ? stop.at / length : 0.0f) : stop.at, 0.0f, 1.0f);
 }
 
+// `a` to `b` a fraction `t` of the way, blended premultiplied as CSS blends a gradient's stops.
+el::color PremultipliedMix(std::uint32_t a, std::uint32_t b, float t)
+{
+    const el::color x = Argb(a), y = Argb(b);
+    const float alpha = x.alpha + (y.alpha - x.alpha) * t;
+
+    if (alpha <= 0.0f)
+    {
+        return el::color{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    const auto channel = [&](float p, float q) {
+        return std::clamp((p * x.alpha + (q * y.alpha - p * x.alpha) * t) / alpha, 0.0f, 1.0f);
+    };
+    return el::color{channel(x.red, y.red), channel(x.green, y.green), channel(x.blue, y.blue), alpha};
+}
+
+struct CssStop
+{
+    float at;
+    std::uint32_t colour;
+};
+
+// A stop with no alpha has no colour of its own when blending premultiplied: toward a neighbour
+// it is that neighbour's colour at nothing.
+std::uint32_t Toward(std::uint32_t self, std::uint32_t neighbour)
+{
+    return Visible(self) ? self : (neighbour & 0xFFFFFFu);
+}
+
+// Adds stops (0 to 1 along the gradient) blended as CSS blends them: premultiplied, so a stop at
+// `transparent` (transparent black) only fades the colour beside it. The Direct2D canvas blends
+// straight, which runs that colour through grey on its way out (a grey band across Studio's module
+// caps). So a transparent stop takes each neighbour's colour on that side (two stops at one place
+// when they differ), and between two stops differing in both alpha and colour, stops along the
+// way carry the premultiplied blend. Skia blends premultiplied already; there they change nothing.
+void AddCssStops(canvas::gradient& g, const CssStop* stops, int count)
+{
+    for (int i = 0; i < count; ++i)
+    {
+        const auto& s = stops[i];
+        const std::uint32_t in = i > 0 ? Toward(s.colour, stops[i - 1].colour) : s.colour;
+        const std::uint32_t out = i + 1 < count ? Toward(s.colour, stops[i + 1].colour) : s.colour;
+
+        if (i > 0 && s.at > stops[i - 1].at)
+        {
+            const auto& p = stops[i - 1];
+            const std::uint32_t from = Toward(p.colour, s.colour);
+
+            if ((from >> 24) != (in >> 24) && (from & 0xFFFFFFu) != (in & 0xFFFFFFu))
+            {
+                constexpr int kSteps = 8;
+
+                for (int k = 1; k < kSteps; ++k)
+                {
+                    const float t = static_cast<float>(k) / kSteps;
+                    g.add_color_stop(p.at + (s.at - p.at) * t, PremultipliedMix(from, in, t));
+                }
+            }
+        }
+
+        g.add_color_stop(s.at, Argb(in));
+
+        if (out != in)
+        {
+            g.add_color_stop(s.at, Argb(out));
+        }
+    }
+}
+
+// A layer's stops along a gradient `length` long, blended as CSS blends them.
+void AddCssStops(canvas::gradient& g, const BackdropLayer& layer, float length)
+{
+    constexpr int kMaxStops = static_cast<int>(sizeof(BackdropLayer::stops) / sizeof(BackdropLayer::stops[0]));
+    CssStop stops[kMaxStops];
+    const int count = std::min(layer.stopCount, kMaxStops);
+
+    for (int i = 0; i < count; ++i)
+    {
+        stops[i] = {StopAt(layer.stops[i], length), layer.stops[i].colour};
+    }
+
+    AddCssStops(g, stops, count);
+}
+
 void DrawPicture(canvas& cnv, const Theme& theme, el::rect r, const BackdropLayer& layer)
 {
     const auto image = theme.Picture(layer.image);
@@ -261,8 +346,8 @@ void DrawLinearTile(canvas& cnv, el::rect tile, el::rect r, const BackdropLayer&
                     {
                         const auto start = band(from, from), end = band(to, to);
                         canvas::linear_gradient g{artist::center_point(start), artist::center_point(end)};
-                        g.add_color_stop(0.0f, Argb(c0));
-                        g.add_color_stop(1.0f, Argb(c1));
+                        const CssStop ends[] = {{0.0f, c0}, {1.0f, c1}};
+                        AddCssStops(g, ends, 2);
                         cnv.fill_style(g);
                     }
 
@@ -282,12 +367,7 @@ void DrawLinearTile(canvas& cnv, el::rect tile, el::rect r, const BackdropLayer&
     const auto c = artist::center_point(tile);
     canvas::linear_gradient fill{el::point{c.x - dx * length * 0.5f, c.y - dy * length * 0.5f},
                                  el::point{c.x + dx * length * 0.5f, c.y + dy * length * 0.5f}};
-
-    for (int i = 0; i < layer.stopCount; ++i)
-    {
-        fill.add_color_stop(StopAt(layer.stops[i], length), Argb(layer.stops[i].colour));
-    }
-
+    AddCssStops(fill, layer, length);
     cnv.fill_style(fill);
     cnv.fill_rect(part);
 }
@@ -355,12 +435,7 @@ void DrawRadial(canvas& cnv, el::rect r, const BackdropLayer& layer)
     cnv.translate(cx, cy);
     cnv.scale(rx, ry);
     canvas::radial_gradient fill{el::point{0.0f, 0.0f}, 0.0f, el::point{0.0f, 0.0f}, 1.0f};
-
-    for (int i = 0; i < layer.stopCount; ++i)
-    {
-        fill.add_color_stop(StopAt(layer.stops[i], rx), Argb(layer.stops[i].colour));
-    }
-
+    AddCssStops(fill, layer, rx);
     cnv.fill_style(fill);
     cnv.fill_rect(el::rect{(r.left - cx) / rx, (r.top - cy) / ry, (r.right - cx) / rx, (r.bottom - cy) / ry});
 }
@@ -476,7 +551,7 @@ void DrawControlBox(canvas& cnv, const Theme& theme, el::rect r, const ControlBo
 }
 
 el::rect DrawKey(canvas& cnv, const Theme& theme, el::rect bounds, const KeySkin& key, const SurfaceBackdrop& face,
-                 bool hover, bool down, std::uint32_t border)
+                 bool hover, bool down, std::uint32_t border, std::uint32_t ring)
 {
     // It stands its wall proud: at rest the face fills the bounds less the wall under it. A press
     // pushes it down all but a pixel of the wall (the web's :active), a latched key sits its own
@@ -521,6 +596,11 @@ el::rect DrawKey(canvas& cnv, const Theme& theme, el::rect bounds, const KeySkin
     if (Visible(border))
     {
         box.borderColour = border;
+    }
+
+    if (Visible(ring) && box.ring > 0.0f)
+    {
+        box.ringColour = ring;
     }
 
     DrawControlBox(cnv, theme, r, box, face, 1.0f, rad);

@@ -351,6 +351,19 @@ The shape lives once, in `css/signal-path/nodes.css`; a theme only sets its colo
 
 Set them on the theme class (`.theme-dark { --node-face: … }`), not on `.signal-node`.
 
+A theme that wants a different stand-off overrides `--node-raised` (the whole box-shadow
+stack) on `.theme-x .signal-node`. Dark and Stage draw their nodes flat, with no side wall:
+a lit top edge, a hairline contact shadow and a short soft one. Eleven and Studio 1973 build
+on Dark but stand theirs proud again, with banded walls of their own (anodised aluminium,
+cream plastic).
+
+Nano Q draws a theme's nodes from these captured styles (`tools/capture-native-controls.mjs`)
+only where the theme restyles them from its base theme; Dark, Light and Classic nodes keep
+Nano Q's own look. Two things it has to do itself to match: gradients blend premultiplied as
+CSS does (a stop at `transparent` fades, never greys; `ControlSkin.cpp`), and a node's edge is
+its category colour mixed into its face as `nodes.css` mixes it (72%, 88% on hover, full with a
+24% halo when selected), not the theme's border colour.
+
 ## Themes Built on Another: Studio and Studio 2003
 
 Both studio themes are the light theme drawn as hardware, each as a different unit:

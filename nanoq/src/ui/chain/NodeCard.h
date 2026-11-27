@@ -368,15 +368,21 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
 
         if (skinned)
         {
+            // The edge as nodes.css mixes it: the category 72% into the cap's face (88% under the
+            // pointer), full when chosen, with the chosen halo in the category's colour too.
+            const std::uint32_t faceArgb = skin.backdrops.nodePlain.colour;
+            const el::color capFace = (faceArgb >> 24) != 0 ? Theme::Argb(faceArgb) : face;
             const el::color category = mLook.missing    ? el::rgba(232, 76, 76, 153)
                                        : mLook.selected ? tint
-                                       : boundary       ? Mix(tint, mTheme.Border(), 0.6f)
-                                                        : Mix(tint, mTheme.Border(), 0.42f);
-            const std::uint32_t border = nodeSkin.fixedBorder && !mLook.missing ? 0u : Theme::ArgbOf(ghost(category));
+                                                        : Mix(tint, capFace, mHover ? 0.12f : 0.28f);
+            const bool own = !nodeSkin.fixedBorder || mLook.missing;
+            const std::uint32_t border = own ? Theme::ArgbOf(ghost(category)) : 0u;
+            const std::uint32_t ring =
+                own ? Theme::ArgbOf(tint.opacity(Theme::Argb(nodeSkin.face.box.ringColour).alpha)) : 0u;
             const el::rect cap{r.left, r.top, r.right, r.bottom + nodeSkin.face.wall};
             DrawKey(cnv, mTheme, cap, nodeSkin.face,
                     mLook.selected ? skin.backdrops.nodeSelected : skin.backdrops.nodePlain, mHover && !mLook.selected,
-                    false, border);
+                    false, border, ring);
 
             if (!on)
             {
