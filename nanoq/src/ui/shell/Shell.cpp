@@ -3,6 +3,7 @@
 #include "WindowChrome.h"
 #include "ui/debug/DrawProbe.h"
 #include "ui/shell/ShellIcons.h"
+#include "ui/widgets/Tooltip.h"
 #include "ui/widgets/ControlSkin.h"
 #include "uiclient/NodeLabels.h"
 
@@ -194,6 +195,7 @@ void Shell::BuildRoot()
     mKeys->keyboard = mKeyboard;
     mKeys->onKey = [this](const el::key_info& k) { return HandleKey(k); };
     mKeys->ringColour = [this] { return mTheme.Accent(); };
+    mKeys->drawOver = [this](const el::context& ctx) { Tooltips::Draw(ctx, mTheme); };
     mKeys->onPointerDown = [this] { mChainFocused = false; };
     mKeys->onTrackDrop = [this](const el::drop_info& info, bool leaving) { TrackFileDrop(info, leaving); };
     mKeys->onDrop = [this](const el::drop_info& info) { return DropFiles(info); };
@@ -543,6 +545,12 @@ void Shell::OnTick()
     // and pages change with it.
     // A press held still is a right click (LongPress.h).
     LongPress::Tick();
+
+    // A tooltip came up or went: drawn over everything, so the window is redrawn.
+    if (Tooltips::Tick())
+    {
+        mSession.View().refresh();
+    }
 
     // A chain card rested on long enough is picked up, and lifts to say so (TouchHold.h).
     if (TouchHold::Tick() && mChainSlot)

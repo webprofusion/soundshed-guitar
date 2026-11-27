@@ -100,7 +100,15 @@ AccessInfo DescribeTarget(const el::element& element)
 {
     if (const auto* f = dynamic_cast<const Focusable*>(&element))
     {
-        return f->Describe();
+        auto info = f->Describe();
+
+        // The tooltip as help text, where it says more than the name.
+        if (auto tip = f->TooltipText(); info.help.empty() && tip != info.name)
+        {
+            info.help = std::move(tip);
+        }
+
+        return info;
     }
 
     AccessInfo info;

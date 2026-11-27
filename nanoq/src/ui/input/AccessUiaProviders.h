@@ -170,6 +170,14 @@ class NodeProvider final : public IRawElementProviderSimple,
         case UIA_AutomationIdPropertyId:
             SetString(out, node.id);
             break;
+        case UIA_HelpTextPropertyId:
+
+            if (!node.info.help.empty())
+            {
+                SetString(out, node.info.help);
+            }
+
+            break;
         case UIA_FrameworkIdPropertyId:
             SetString(out, "Elements");
             break;

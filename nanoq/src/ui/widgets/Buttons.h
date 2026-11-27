@@ -55,6 +55,17 @@ class IconButton final : public Pressable
         return info;
     }
 
+    /// An icon-only button says what it does under the pointer, as the web's title= does.
+    [[nodiscard]] std::string TooltipText() const override
+    {
+        if (!mTooltip.empty() || !mLabel.empty())
+        {
+            return mTooltip;
+        }
+
+        return NameOr(IconMeaning(mIcon));
+    }
+
     /// What an icon on a button means, for one with no label to read.
     [[nodiscard]] static std::string IconMeaning(const std::string& icon)
     {

@@ -277,7 +277,19 @@ Ptr Shell::BuildChain()
         look.selected = nodeId == mSelectedNode;
         width = look.width;
         const bool canBypass = look.canBypass;
+        // Its tooltip, as the web's title: "name · type · badge".
+        std::string tip = look.name;
+
+        for (const auto* part : {&look.detail, &look.badge})
+        {
+            if (!part->empty())
+            {
+                tip += " \xC2\xB7 " + *part;
+            }
+        }
+
         auto card = std::make_shared<NodeCard>(mTheme, mIcons, std::move(look));
+        card->Tooltip(std::move(tip));
         card->onSelect = [this, nodeId] {
             SelectNode(nodeId);
             mChainFocused = true;
@@ -286,7 +298,8 @@ Ptr Shell::BuildChain()
         // Every card is somewhere to drop; effects can be dragged, the input and output stay put.
         card->Draggable(mHitMap, nodeId);
 
-        if (card->BoundaryKind() == NodeCard::Boundary::None)
+        // Splitters and mixers stay put, as on the web (isProtectedSignalPathNode).
+        if (card->BoundaryKind() == NodeCard::Boundary::None && canBypass)
         {
             card->onDrag = [this, nodeId](el::point from, el::point to, bool done) {
                 DragCard(nodeId, from, to, done);
@@ -358,9 +371,10 @@ Ptr Shell::BuildChain()
         return connector;
     };
 
-    // ── A parallel block: the split rail, a lane per branch, the join rail. A lane runs as the
-    // main row does, so a split nested in a branch is a block inside that lane, and the lane is
-    // as tall as its branches ──
+    // ── A parallel block (parallel.css): the splitter's card, the split's routes, a lane per
+    // branch in a dashed box, the join's routes. A lane runs as the main row does, in its
+    // branch's colour, so a split nested in a branch is a block inside that lane, and the lane
+    // is as tall as its branches ──
     struct Block
     {
         std::vector<Ptr> parts;
@@ -370,15 +384,19 @@ Ptr Shell::BuildChain()
 
     std::function<Block(const ChainItem&)> parallelBlock;
 
-    const auto laneOf = [&](const ChainItem& item, const ChainBranch& branch) {
+    const auto laneOf = [&](const ChainItem& item, const ChainBranch& branch, int branchIndex) {
         Block lane;
         lane.height = rowHeight;
         std::string after = item.splitNodeId;
         bool joinsBlock = false;
+        const auto colour = BranchColour(branchIndex);
 
         // The first cable is the splitter's edge for this branch, picked out by its port.
         const auto into = [&](const std::string& to, bool stretch = false) {
-            return after == item.splitNodeId ? cable(after, to, branch.port, stretch) : cable(after, to, -1, stretch);
+            auto connector =
+                after == item.splitNodeId ? cable(after, to, branch.port, stretch) : cable(after, to, -1, stretch);
+            connector->Tint(colour);
+            return connector;
         };
 
         for (const auto& step : branch.items)
@@ -390,6 +408,7 @@ Ptr Shell::BuildChain()
                 {
                     auto drawing = std::make_shared<Connector>(mTheme, std::function<void()>{});
                     drawing->RowHeight(rowHeight);
+                    drawing->Tint(colour);
                     lane.parts.push_back(drawing);
                 }
                 else
@@ -424,10 +443,11 @@ Ptr Shell::BuildChain()
         std::vector<Ptr> lanes;
         std::vector<float> laneHeights;
         float lanesWidth = 0.0f;
+        int branchIndex = 0;
 
         for (const auto& branch : item.branches)
         {
-            auto lane = laneOf(item, branch);
+            auto lane = laneOf(item, branch, branchIndex);
             lanesWidth = std::max(lanesWidth, std::max(lane.width, 2.0f * kConnectorWidth));
 
             if (!lanes.empty())
@@ -435,26 +455,37 @@ Ptr Shell::BuildChain()
                 lanes.push_back(VGap(kLaneGap));
             }
 
-            lanes.push_back(FixedHeight(lane.height, Row(lane.parts)));
-            laneHeights.push_back(lane.height);
+            // Each branch a tinted row, its cables 8 px in from its ends.
+            const float height = lane.height + 2.0f * kBranchPadY;
+            lanes.push_back(
+                FixedHeight(height, Over(Pad(kBranchPadX, kBranchPadY, kBranchPadX, kBranchPadY, Row(lane.parts)),
+                                         std::make_shared<BranchRow>(branchIndex))));
+            laneHeights.push_back(height);
+            ++branchIndex;
         }
 
-        const auto splitId = item.splitNodeId;
-        auto split =
-            std::make_shared<Rail>(mTheme, mIcons, laneCount, false, splitId == mSelectedNode, [this, splitId] {
-                SelectNode(splitId);
-                mChainFocused = true;
-            });
-        auto join = std::make_shared<Rail>(mTheme, mIcons, laneCount, true, false, std::function<void()>{});
-        split->RowHeight(rowHeight);
-        join->RowHeight(rowHeight);
+        auto split = std::make_shared<Rail>(laneCount, false);
+        auto join = std::make_shared<Rail>(laneCount, true);
+        split->RowHeight(rowHeight + 2.0f * kBranchPadY);
+        join->RowHeight(rowHeight + 2.0f * kBranchPadY);
         split->LaneHeights(laneHeights);
         join->LaneHeights(laneHeights);
 
+        // The box round the branches, 4 px off each rail.
+        constexpr float kBoxInsetX = kBranchBoxPadX + 1.0f, kBoxInsetY = kBranchBoxPadY + 1.0f;
+        const float boxWidth = lanesWidth + 2.0f * kBranchPadX + 2.0f * kBoxInsetX;
+        auto box = Pad(kBranchBoxMargin, 0.0f, kBranchBoxMargin, 0.0f,
+                       FixedWidth(boxWidth, Over(Pad(kBoxInsetX, kBoxInsetY, kBoxInsetX, kBoxInsetY, Col(lanes)),
+                                                 std::make_shared<BranchBox>(mTheme))));
+
+        // The splitter is a card of its own, as the mixer that joins the branches is.
+        float splitWidth = 0.0f;
+        auto splitter = makeCard(item.splitNodeId, splitWidth);
+
         Block block;
-        block.parts = {split, FixedWidth(lanesWidth, Col(lanes)), join};
-        block.width = kRailWidth * 2.0f + lanesWidth;
-        block.height = static_cast<float>(laneCount - 1) * kLaneGap;
+        block.parts = {splitter, split, box, join};
+        block.width = splitWidth + kRailWidth * 2.0f + boxWidth + 2.0f * kBranchBoxMargin;
+        block.height = static_cast<float>(laneCount - 1) * kLaneGap + 2.0f * kBoxInsetY;
 
         for (const float h : laneHeights)
         {

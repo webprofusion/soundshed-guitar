@@ -7,6 +7,7 @@
 #include "ui/input/Focus.h"
 #include "ui/widgets/Layout.h"
 #include "ui/widgets/LongPress.h"
+#include "ui/widgets/Tooltip.h"
 #include "ui/widgets/Widgets.h"
 
 #include <functional>
@@ -102,6 +103,7 @@ class Pressable : public el::element, public Drawn, public Focusable, public Tap
         if (btn.down)
         {
             mDown = true;
+            Tooltips::Press();
             ctx.view.refresh(ctx);
 
             // Held, a finger's press is the right click (LongPress.h).
@@ -137,6 +139,15 @@ class Pressable : public el::element, public Drawn, public Focusable, public Tap
     bool cursor(const el::context& ctx, el::point, el::cursor_tracking status) override
     {
         const bool hover = status != el::cursor_tracking::leaving;
+
+        if (hover)
+        {
+            Tooltips::Hover(this, ctx.bounds, TooltipText());
+        }
+        else
+        {
+            Tooltips::Leave(this);
+        }
 
         if (hover != mHover)
         {

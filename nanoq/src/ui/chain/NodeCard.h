@@ -9,6 +9,7 @@
 #include "ui/widgets/Graphics.h"
 #include "ui/widgets/Layout.h"
 #include "ui/widgets/LongPress.h"
+#include "ui/widgets/Tooltip.h"
 #include "ui/widgets/TouchHold.h"
 #include "ui/widgets/Widgets.h"
 
@@ -96,8 +97,20 @@ constexpr float kPlainCardHeight = 72.0f;
 constexpr float kThumbCardHeight = 86.0f;
 constexpr float kBoundaryWidth = 72.0f;
 constexpr float kConnectorWidth = 36.0f;
-constexpr float kRailWidth = 30.0f;
+// A parallel block (parallel.css): the splitter's card, a 32 px split where the branch routes fan
+// out, the branches in a dashed box (4 px off each rail, 8 px in at the top and bottom, 4 at the
+// sides), each branch a tinted row 8 px in at its ends and 4 at its top and bottom, 8 apart; then
+// the join and the mixer's card.
+constexpr float kRailWidth = 32.0f;
 constexpr float kLaneGap = 8.0f;
+constexpr float kBranchBoxMargin = 4.0f;
+constexpr float kBranchBoxPadX = 4.0f;
+constexpr float kBranchBoxPadY = 8.0f;
+constexpr float kBranchPadX = 8.0f;
+constexpr float kBranchPadY = 4.0f;
+// From a rail's edge to where its branch's first or last cable starts: the box's margin, its
+// 1 px border, its padding and the branch's own.
+constexpr float kBranchReach = kBranchBoxMargin + 1.0f + kBranchBoxPadX + kBranchPadX;
 constexpr float kWireEndWidth = 14.0f; // where a line's cable turns down, or the next one's comes in
 // The cable back under a line: with each row's 10 px either side of its cards, wrapped rows sit
 // 28 apart as the web UI's (wrap.css row-gap).
@@ -147,6 +160,15 @@ inline el::color CableColour(const Theme& theme)
     const auto t = theme.TextSecondary(), g = theme.Success();
     return el::color{t.red * 0.78f + g.red * 0.22f, t.green * 0.78f + g.green * 0.22f, t.blue * 0.78f + g.blue * 0.22f,
                      1.0f};
+}
+
+/// A parallel branch's colour, by its place (parallel.css .parallel-branch:nth-child): its routes,
+/// its cables and its row's tint. Past the fourth they come round again.
+inline el::color BranchColour(int branch)
+{
+    static const el::color kColours[] = {el::rgba(240, 160, 107, 255), el::rgba(135, 148, 255, 255),
+                                         el::rgba(72, 224, 120, 255), el::rgba(224, 72, 168, 255)};
+    return kColours[static_cast<std::size_t>(std::max(0, branch)) % 4];
 }
 
 /// `a` mixed into `b` by `amount` (CSS color-mix).
@@ -866,6 +888,19 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
         if (inside && !mHover)
         {
             mHoverSince = std::chrono::steady_clock::now();
+        }
+
+        // The card's tooltip (name, type and badge), or its corner button's.
+        if (inside)
+        {
+            Tooltips::Hover(this, ctx.bounds,
+                            power    ? std::string(mLook.enabled ? "Bypass" : "Enable")
+                            : remove ? std::string("Remove")
+                                     : TooltipText());
+        }
+        else
+        {
+            Tooltips::Leave(this);
         }
 
         if (inside != mHover || power != mHoverPower || remove != mHoverRemove)

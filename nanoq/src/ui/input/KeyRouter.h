@@ -23,6 +23,7 @@
 #include "ui/input/OnScreenKeyboard.h"
 #include "ui/widgets/LongPress.h"
 #include "ui/widgets/TouchHold.h"
+#include "ui/widgets/Tooltip.h"
 
 #include <elements.hpp>
 
@@ -121,6 +122,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
         proxy_base::draw(ctx);
         DrawFocusRing(ctx);
 
+        if (drawOver)
+        {
+            drawOver(ctx);
+        }
+
         if (HostsKeyboard())
         {
             keyboard->Draw(ctx);
@@ -161,6 +167,8 @@ class KeyRouter final : public cycfi::elements::proxy_base
         {
             return false;
         }
+
+        Tooltips::Press();
 
         const bool press =
             k.action == cycfi::elements::key_action::press || k.action == cycfi::elements::key_action::repeat;
@@ -242,6 +250,11 @@ class KeyRouter final : public cycfi::elements::proxy_base
             return false;
         }
 
+        if (btn.down)
+        {
+            Tooltips::Press();
+        }
+
         if (HostsKeyboard() && (keyboard->Tracking() || (btn.down && keyboard->Contains(ctx.bounds, btn.pos))))
         {
             keyboard->Click(ctx, btn);
@@ -312,6 +325,9 @@ class KeyRouter final : public cycfi::elements::proxy_base
     bool cursor(const cycfi::elements::context& ctx, cycfi::elements::point p,
                 cycfi::elements::cursor_tracking status) override
     {
+        // Where the pointer is, for the tooltip: one whose control was rebuilt under the pointer
+        // goes when the pointer leaves where that control was.
+        Tooltips::Pointer(p, status != cycfi::elements::cursor_tracking::leaving);
         return !mRetired && !(HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) &&
                proxy_base::cursor(ctx, p, status);
     }
@@ -323,8 +339,8 @@ class KeyRouter final : public cycfi::elements::proxy_base
 
     bool scroll(const cycfi::elements::context& ctx, cycfi::elements::point dir, cycfi::elements::point p) override
     {
-        return !mRetired &&
-               ((HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) || proxy_base::scroll(ctx, dir, p));
+        Tooltips::Press();
+        return !mRetired && ((HostsKeyboard() && keyboard->Contains(ctx.bounds, p)) || proxy_base::scroll(ctx, dir, p));
     }
 
     // Files dragged in from the desktop are offered to the shell first (a model or IR onto an
@@ -533,6 +549,8 @@ class KeyRouter final : public cycfi::elements::proxy_base
     std::function<bool(const cycfi::elements::drop_info&)> onDrop;
     /// The focus ring's colour: the theme's accent.
     std::function<cycfi::elements::color()> ringColour;
+    /// Drawn over everything else, the focus ring too: the hover tooltip (Tooltip.h).
+    std::function<void(const cycfi::elements::context&)> drawOver;
 
   private:
     [[nodiscard]] bool HostsKeyboard() const

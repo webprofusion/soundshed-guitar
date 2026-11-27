@@ -52,6 +52,8 @@ struct AccessInfo
     bool enabled = true;
     /// A knob or slider, 0..1. Negative for anything else.
     double position = -1.0;
+    /// More than the name says, as its tooltip does (UIA's HelpText).
+    std::string help;
 };
 
 class Focusable
@@ -92,6 +94,19 @@ class Focusable
     void AccessName(std::string name)
     {
         mAccessName = std::move(name);
+    }
+
+    /// What its hover tooltip says (Tooltip.h), as the web UI's title=; a screen reader reads it
+    /// as the control's help text.
+    void Tooltip(std::string text)
+    {
+        mTooltip = std::move(text);
+    }
+
+    /// The tooltip: the one given, or the control's own (an icon-only button's name).
+    [[nodiscard]] virtual std::string TooltipText() const
+    {
+        return mTooltip;
     }
 
     /// Keyboard focus is showing: a key has moved focus since the last pointer press.
@@ -136,6 +151,7 @@ class Focusable
     }
 
     std::string mAccessName;
+    std::string mTooltip;
 
   private:
     bool mFocused = false;
