@@ -93,6 +93,7 @@ void AddShellIcons(Icons& icons)
         "ui-more",
         R"(<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.75"/><circle cx="12" cy="12" r="1.75"/><circle cx="19" cy="12" r="1.75"/></svg>)");
     icons.Add("ui-caret", Svg("0 0 24 24", 2.0f, R"(<polyline points="6 9 12 15 18 9"/>)"));
+    icons.Add("ui-caret-up", Svg("0 0 24 24", 2.0f, R"(<polyline points="6 15 12 9 18 15"/>)"));
 
     // The control bar (input-control-group.html, output-control-group.html): the chevron of the
     // meters' and the gate's flyouts, the output's quick mute, and the EQ's bars.

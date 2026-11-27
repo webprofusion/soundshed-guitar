@@ -34,6 +34,8 @@ class UiCommands
     void AddScene(const std::string& title = {});
     void RenameScene(const std::string& sceneId, const std::string& title);
     void RemoveScene(const std::string& sceneId);
+    /// The scene moved to `toIndex` in the preset's list (sceneBadges.ts drag and Alt+arrows).
+    void MoveScene(const std::string& sceneId, int toIndex);
     void SavePreset();
     void SavePresetAs(const std::string& name, const std::string& category, const std::string& description);
 

@@ -92,15 +92,52 @@ bool Shell::TouchSizes() const
     return touch == "on" || (touch != "off" && TouchFirst());
 }
 
+// ── Folding the control bar and the chain ───────────────────────────────────────
+
+namespace
+{
+bool NativeFlag(const guitarfx::uiclient::ClientState& state, const char* key)
+{
+    const auto native = state.uiSettings.find("native");
+    return native != state.uiSettings.end() && native->is_object() && native->value(key, false);
+}
+} // namespace
+
+bool Shell::ControlsCollapsed() const
+{
+    return mControlsCollapsedSet >= 0 ? mControlsCollapsedSet == 1 : NativeFlag(mState, "controlBarCollapsed");
+}
+
+bool Shell::ChainCollapsed() const
+{
+    return mChainCollapsedSet >= 0 ? mChainCollapsedSet == 1 : NativeFlag(mState, "chainCollapsed");
+}
+
+void Shell::SetControlsCollapsed(bool collapsed)
+{
+    // The frame is rebuilt for the bar's new height on the next tick (OnTick).
+    mControlsCollapsedSet = collapsed ? 1 : 0;
+    mSession.Commands().PatchNativeUiSettings({{"controlBarCollapsed", collapsed}});
+}
+
+void Shell::SetChainCollapsed(bool collapsed)
+{
+    // The play stage is rebuilt without the chain, or with it, on the next tick (Rebuild).
+    mChainCollapsedSet = collapsed ? 1 : 0;
+    Mark(kPage);
+    mSession.Commands().PatchNativeUiSettings({{"chainCollapsed", collapsed}});
+}
+
 Ptr Shell::BuildFrame()
 {
     if (mWide)
     {
+        mBuiltControlsCollapsed = ControlsCollapsed();
         auto rule = [this] {
             return FixedHeight(1, Fill(mTheme.Text().opacity(0.06f), std::make_shared<el::element>()));
         };
         return Col({FixedHeight(metrics::kTabBarHeight, Yielding(mRailSlot)), rule(),
-                    FixedHeight(metrics::HeaderHeight() - 1.0f, Yielding(mTopSlot)), rule(), Yielding(mPageSlot),
+                    FixedHeight(WideHeaderHeight() - 1.0f, Yielding(mTopSlot)), rule(), Yielding(mPageSlot),
                     mLooperSlot, FixedHeight(metrics::kWideFooterHeight, Yielding(mTransportSlot))});
     }
 
@@ -201,6 +238,16 @@ Ptr Shell::BuildTabBar()
 Ptr Shell::BuildHeader()
 {
     auto& commands = mSession.Commands();
+
+    // Folded, only its chevron and CONTROLS are left (.control-bar.is-collapsed).
+    auto fold = std::make_shared<CollapseToggle>(mTheme, mIcons, "CONTROLS", ControlsCollapsed());
+    fold->onClick = [this] { SetControlsCollapsed(!ControlsCollapsed()); };
+
+    if (ControlsCollapsed())
+    {
+        return Dressed(mTheme, mTheme.Tertiary(), &Backdrops::controlBar,
+                       Row({HGap(4), Pad(0, 2, 0, 1, fold), Stretch()}));
+    }
 
     // The global chain at either end, the same cells as the compact Controls sheet.
     auto cells = BuildControlCells();
@@ -345,13 +392,31 @@ Ptr Shell::BuildHeader()
                     cellsAt({cells.in, cells.gate, cells.transpose}), Stretch(), centre, Stretch(),
                     cellsAt({cells.eq, cells.doubler, cells.out}), HGap(14), meterColumn(cells.outMeter, cells.mute),
                     HGap(28)});
-    return Dressed(mTheme, mTheme.Tertiary(), &Backdrops::controlBar, bar);
+    // The chevron in its top-left corner.
+    return Dressed(
+        mTheme, mTheme.Tertiary(), &Backdrops::controlBar,
+        Over(Col({FixedHeight(18, Row({HGap(4), Pad(0, 2, 0, 0, fold), Stretch()})), std::make_shared<el::element>()}),
+             bar));
 }
 
 // ── The play stage ──────────────────────────────────────────────────────────────
 
 Ptr Shell::BuildPlayStage()
 {
+    mBuiltChainCollapsed = ChainCollapsed();
+
+    // Folded, the chain is a row with its chevron and SIGNAL CHAIN, and the editor has the rest
+    // (.signal-path-bar.is-collapsed).
+    if (mBuiltChainCollapsed)
+    {
+        auto unfold = std::make_shared<CollapseToggle>(mTheme, mIcons, "SIGNAL CHAIN", true);
+        unfold->onClick = [this] { SetChainCollapsed(false); };
+        auto row = Over(FixedHeight(metrics::kCollapsedBarHeight, Row({HGap(4), Pad(0, 2, 0, 2, unfold), Stretch()})),
+                        std::make_shared<StageBackdrop>(mTheme));
+        return Col({row, FixedHeight(1, Fill(mTheme.Text().opacity(0.06f), std::make_shared<el::element>())),
+                    std::make_shared<BoundsProbe>(mEffectSlot, [this](el::rect r) { mEditorArea = r; })});
+    }
+
     // The chain, as tall as its lines (BuildChain), with the scene chips over it and the add
     // button at its right; the selected effect's editor takes the rest. The compact frame's
     // split stage is this one too, between its rail, preset bar and footer.
@@ -400,8 +465,26 @@ Ptr Shell::BuildPlayStage()
             mSession.Commands().PatchNativeUiSettings(patch);
         }
     };
+    // Its keys and a double click switch between the web UI's two sizes: full cards (as tall
+    // as they need, the drag's height dropped) or icon tiles.
+    handle->Full(!IconChain());
+    handle->onMode = [this](bool full) {
+        mChainIcons = full ? 0 : 1;
+        nlohmann::json patch{{"chainIcons", !full}};
+
+        if (full)
+        {
+            mChainAreaLimit = 0.0f;
+            patch["chainAreaHeight"] = 0;
+        }
+
+        mChainSignature.clear();
+        mEffectSignature.clear();
+        Mark(kChain | kPage);
+        mSession.Commands().PatchNativeUiSettings(patch);
+    };
     // Where the editor is, for the FX Library to open over.
-    return Col({chain, FixedHeight(10, handle),
+    return Col({chain, FixedHeight(8, handle),
                 std::make_shared<BoundsProbe>(mEffectSlot, [this](el::rect r) { mEditorArea = r; })});
 }
 

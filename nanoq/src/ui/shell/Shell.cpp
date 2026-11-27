@@ -281,6 +281,12 @@ void Shell::Rebuild()
     // when the page comes back to it, and its regions built afresh with it.
     const bool playStage = PlayStageShown();
 
+    // The chain folded or unfolded: the stage is built again.
+    if (playStage && mPlayStageShown && ChainCollapsed() != mBuiltChainCollapsed)
+    {
+        mPlayStageShown = false;
+    }
+
     if (!playStage)
     {
         mPlayStageShown = false;
@@ -405,7 +411,13 @@ void Shell::Rebuild()
     {
         const auto signature = SceneSignature();
 
-        if (signature == mSceneSignature)
+        // A name being typed into a chip keeps its row (sceneBadges.ts leaves the badges alone
+        // while the field has focus); the row catches up when the field closes.
+        if (mSceneRenaming)
+        {
+            mDirty &= ~kScenes;
+        }
+        else if (signature == mSceneSignature)
         {
             mDirty &= ~kScenes;
         }
@@ -542,7 +554,9 @@ void Shell::OnTick()
     const bool touch = TouchSizes();
 
     // Touch sizes change every bar's height and every control's room, so they rebuild it all.
-    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit || touch != mTouch)
+    // A folded or unfolded control bar changes the frame's bar heights too.
+    if (const bool split = !wide && WantsSplit(); wide != mWide || split != mSplit || touch != mTouch ||
+                                                  (wide && mWide && ControlsCollapsed() != mBuiltControlsCollapsed))
     {
         mWide = wide;
         mSplit = split;

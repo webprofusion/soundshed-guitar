@@ -227,7 +227,7 @@ class Shell
     /// The page slot's height: the view less the frame's bars, and the looper strip when it is out.
     [[nodiscard]] float StageHeight() const
     {
-        const float bars = mWide ? metrics::kTabBarHeight + 1.0f + metrics::HeaderHeight() + metrics::kWideFooterHeight
+        const float bars = mWide ? metrics::kTabBarHeight + 1.0f + WideHeaderHeight() + metrics::kWideFooterHeight
                                  : metrics::TopBarHeight() + metrics::FooterHeight();
         return ViewSize().y - bars - (mLooperOpen ? LooperStripHeight() : 0.0f);
     }
@@ -380,6 +380,19 @@ class Shell
     /// Whether the full layout's chain is drawn as icon tiles: the bar under it dragged up
     /// past the cards' height, as the web UI's splitter does (signalPath/layout.ts).
     [[nodiscard]] bool IconChain() const;
+    /// The full layout's control bar, or the play stage's chain, folded to a labelled chevron
+    /// (the web UI's control-bar and signal-path collapse; kept in Nano Q's own UI settings).
+    [[nodiscard]] bool ControlsCollapsed() const;
+    [[nodiscard]] bool ChainCollapsed() const;
+    void SetControlsCollapsed(bool collapsed);
+    void SetChainCollapsed(bool collapsed);
+
+    /// The full layout's control bar's height: folded, only its chevron's row.
+    [[nodiscard]] float WideHeaderHeight() const
+    {
+        return ControlsCollapsed() ? metrics::kCollapsedBarHeight : metrics::HeaderHeight();
+    }
+
     [[nodiscard]] std::string ChainSignature() const;
     /// Files dragged in from the desktop (ChainStrip.cpp): a .nam model or a .wav IR held over
     /// an effect that plays one lights its card; dropped, it joins the library where it is and
@@ -1005,7 +1018,10 @@ class Shell
     bool mChainDragIcons = false;   // which it was when that drag began
     guitarfx::uiclient::PresetTrail mPresetTrail;
     std::shared_ptr<guitarfx::uiclient::TapTempo> mTapTempo;
-    bool mWrapChain = true; // the web UI's signalPathWrapCompact, on unless turned off
+    bool mWrapChain = true;      // the web UI's signalPathWrapCompact, on unless turned off
+    bool mSceneRenaming = false; // a scene chip's name field is open: the row is left as it is
+    int mControlsCollapsedSet = -1, mChainCollapsedSet = -1;            // chosen here, ahead of the settings' echo
+    bool mBuiltControlsCollapsed = false, mBuiltChainCollapsed = false; // as the frame and stage were built
 
     // The Tones page: what it shows, and what the service last answered.
     TonesTab mTonesTab = TonesTab::Presets;

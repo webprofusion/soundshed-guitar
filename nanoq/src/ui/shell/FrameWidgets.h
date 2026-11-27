@@ -6,7 +6,9 @@
 // the full layout's chain and editor.
 
 #include "ui/Drawn.h"
+#include "ui/input/Focus.h"
 #include "ui/widgets/Buttons.h"
+#include "ui/widgets/InlineEdit.h"
 #include "ui/widgets/Pressable.h"
 
 #include <algorithm>
@@ -282,6 +284,58 @@ class SceneChip final : public Pressable
 
     std::function<void()> onRemove;
     std::function<void()> onMenu;
+    /// Renamed in place (double click or F2, as sceneBadges.ts): the name typed, Enter or
+    /// leaving keeps it, Esc drops it. `onRenaming` hears the field open and close.
+    std::function<void(const std::string&)> onRename;
+    std::function<void(bool)> onRenaming;
+    /// Dragged sideways to a new place: the pointer's x as it moves, and on release.
+    std::function<void(float x, bool done)> onDrag;
+    /// Alt+Left and Alt+Right: one place earlier or later.
+    std::function<void(int step)> onMove;
+
+    /// A drop mark at its left (-1) or right (1) edge, or none (0), while a chip is dragged.
+    void Mark(int side)
+    {
+        if (side != mMark)
+        {
+            mMark = side;
+            RepaintSoon(DrawnArea());
+        }
+    }
+
+    /// Where it was last drawn, for a drag to find its place among the chips.
+    [[nodiscard]] el::rect DrawnBounds() const
+    {
+        return mDrawn;
+    }
+
+    [[nodiscard]] bool Renaming() const
+    {
+        return mEdit.Active();
+    }
+
+    bool wants_focus() const override
+    {
+        return Pressable::wants_focus() || mEdit.Active();
+    }
+
+    bool end_focus() override
+    {
+        // Going elsewhere keeps what was typed, as the web UI's field does on blur.
+        FinishRename(true);
+        return Pressable::end_focus();
+    }
+
+    bool text(const el::context& ctx, el::text_info info) override
+    {
+        if (!mEdit.Char(info))
+        {
+            return false;
+        }
+
+        ctx.view.refresh(ctx);
+        return true;
+    }
 
     [[nodiscard]] AccessInfo Describe() const override
     {
@@ -292,9 +346,41 @@ class SceneChip final : public Pressable
         return info;
     }
 
-    // Delete removes the scene (as its x does), the Menu key opens its menu.
+    // Delete removes the scene (as its x does), the Menu key opens its menu, F2 renames it and
+    // Alt+Left/Right moves it.
     bool key(const el::context& ctx, el::key_info k) override
     {
+        if (mEdit.Active())
+        {
+            switch (mEdit.Key(k))
+            {
+            case InlineEdit::Outcome::Commit:
+                FinishRename(true);
+                return true;
+            case InlineEdit::Outcome::Cancel:
+                FinishRename(false);
+                return true;
+            case InlineEdit::Outcome::Used:
+                ctx.view.refresh(ctx);
+                return true;
+            case InlineEdit::Outcome::Unused:
+                return false;
+            }
+        }
+
+        if (k.action == el::key_action::press && k.key == el::key_code::f2 && onRename)
+        {
+            BeginRename(ctx);
+            return true;
+        }
+
+        if ((k.action == el::key_action::press || k.action == el::key_action::repeat) && (k.modifiers & el::mod_alt) &&
+            (k.key == el::key_code::left || k.key == el::key_code::right) && onMove)
+        {
+            onMove(k.key == el::key_code::left ? -1 : 1);
+            return true;
+        }
+
         if (IsMenuKey(k) && onMenu)
         {
             onMenu();
@@ -316,15 +402,46 @@ class SceneChip final : public Pressable
         // own past the face, kRemoveZone wide, so a tap on the name never removes the scene.
         const float face = FaceWidth(ctx.canvas);
         const float w = !metrics::Touch() ? face : onRemove ? face + kRemoveZone - 12.0f : metrics::Hit(face);
+
+        // Renaming, it is a field with room to type.
+        if (mEdit.Active())
+        {
+            const float field = std::max(w, 120.0f);
+            return {{field, 18.0f}, {field, metrics::Hit(18.0f)}};
+        }
+
         return {{w, 18.0f}, {w, metrics::Hit(18.0f)}};
     }
 
     void draw(const el::context& ctx) override
     {
-        NoteDrawn(ctx);
+        NoteDrawn(ctx, ctx.bounds.inset(-4.0f, 0.0f));
+        mDrawn = ctx.bounds;
         auto& cnv = ctx.canvas;
+        auto dragState = cnv.new_state();
+
+        // Dragged, it follows the pointer.
+        if (mDragging)
+        {
+            cnv.translate(mDragDx, 0.0f);
+        }
+
         const auto b = FaceRect(ctx.bounds, cnv);
         const auto font = Font(Weight::SemiBold).size(LabelSize());
+
+        // Where a dragged chip would land: an accent bar at this one's edge.
+        if (mMark != 0)
+        {
+            const float x = mMark < 0 ? b.left - 3.0f : b.right + 2.0f;
+            cnv.fill_style(mTheme.Accent());
+            cnv.fill_round_rect(el::rect{x, b.top, x + 2.0f, b.bottom}, 1.0f);
+        }
+
+        if (mEdit.Active())
+        {
+            mEdit.Draw(cnv, metrics::Touch() ? b : ctx.bounds, mTheme, font);
+            return;
+        }
 
         // The add chip (.scene-badge-add): a dashed edge over the raised face at 60%, muted until
         // hovered.
@@ -405,6 +522,41 @@ class SceneChip final : public Pressable
             return true;
         }
 
+        if (mEdit.Active())
+        {
+            return btn.state == el::mouse_button::left;
+        }
+
+        // A double click renames it in place.
+        if (btn.state == el::mouse_button::left && btn.down && btn.num_clicks >= 2 && onRename && !mAdd)
+        {
+            BeginRename(ctx);
+            return true;
+        }
+
+        if (btn.state == el::mouse_button::left && btn.down)
+        {
+            mDownAt = btn.pos;
+            mDragging = false;
+        }
+
+        // Let go after a drag: it lands, and is not a click.
+        if (btn.state == el::mouse_button::left && !btn.down && mDragging)
+        {
+            mDragging = false;
+            mDragDx = 0.0f;
+            mDown = false;
+            ctx.view.refresh(ctx);
+
+            if (onDrag)
+            {
+                const auto drop = onDrag; // it may rebuild the row this sits in
+                drop(btn.pos.x, true);
+            }
+
+            return true;
+        }
+
         // Held, a finger's press renames it, as a right click does (LongPress.h).
         if (btn.state == el::mouse_button::left && btn.down && onMenu)
         {
@@ -424,7 +576,64 @@ class SceneChip final : public Pressable
         return Pressable::click(ctx, btn);
     }
 
+    void drag(const el::context& ctx, el::mouse_button btn) override
+    {
+        if (!mDown || !onDrag || mEdit.Active() || (!mDragging && std::abs(btn.pos.x - mDownAt.x) < 5.0f))
+        {
+            return;
+        }
+
+        LongPress::Cancel();
+        mDragging = true;
+        mDragDx = btn.pos.x - mDownAt.x;
+        onDrag(btn.pos.x, false);
+        ctx.view.refresh(ctx);
+    }
+
   private:
+    void BeginRename(const el::context& ctx)
+    {
+        mEdit.Begin(mLabel);
+
+        if (onRenaming)
+        {
+            onRenaming(true);
+        }
+
+        ctx.view.layout();
+        ctx.view.refresh();
+        ctx.view.post([self = weak_from_this(), &view = ctx.view] {
+            if (const auto chip = self.lock())
+            {
+                FocusInView(view, *chip);
+            }
+        });
+    }
+
+    void FinishRename(bool keep)
+    {
+        if (!mEdit.Active())
+        {
+            return;
+        }
+
+        const auto typed = mEdit.Value();
+        mEdit.End();
+        RepaintSoon(DrawnArea());
+        const auto rename = onRename;
+        const auto renaming = onRenaming;
+
+        if (renaming)
+        {
+            renaming(false);
+        }
+
+        if (keep && rename && !typed.empty() && typed != mLabel)
+        {
+            rename(typed);
+        }
+    }
+
     static constexpr float kRemoveZone = 32.0f;
     static constexpr float kCloseSize = 14.0f;
     static constexpr float kLabelMax = 160.0f;
@@ -473,6 +682,65 @@ class SceneChip final : public Pressable
     std::string mLabel;
     bool mActive, mAdd;
     bool mHoverClose = false;
+    bool mDragging = false;
+    int mMark = 0;
+    float mDragDx = 0.0f;
+    el::point mDownAt;
+    el::rect mDrawn;
+    InlineEdit mEdit;
+};
+
+/// The chevron that folds the control bar or the chain (.control-bar-collapse-btn,
+/// .signal-path-collapse-btn): muted at .38, .75 under the pointer, pointing up while open; folded,
+/// it points down with the bar's name beside it.
+class CollapseToggle final : public Pressable
+{
+  public:
+    CollapseToggle(const Theme& theme, Icons& icons, std::string label, bool collapsed)
+        : mTheme(theme), mIcons(icons), mLabel(std::move(label)), mCollapsed(collapsed)
+    {
+    }
+
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info = Pressable::Describe();
+        info.name = NameOr((mCollapsed ? "Expand " : "Collapse ") + Lower(mLabel));
+        return info;
+    }
+
+    el::view_limits limits(const el::basic_context& ctx) const override
+    {
+        const float w = mCollapsed ? 26.0f + TrackedWidth(ctx.canvas, mLabel, LabelFont(), 0.08f) : 24.0f;
+        return {{w, 16.0f}, {w, 16.0f}};
+    }
+
+    void draw(const el::context& ctx) override
+    {
+        NoteDrawn(ctx);
+        auto& cnv = ctx.canvas;
+        const auto b = ctx.bounds;
+        const auto ink = mTheme.TextMuted().opacity(mHover || HasFocus() ? 0.75f : 0.38f);
+        const float cy = b.top + b.height() * 0.5f;
+        mIcons.Draw(cnv, mCollapsed ? "ui-caret" : "ui-caret-up",
+                    el::rect{b.left + 6.0f, cy - 6.0f, b.left + 18.0f, cy + 6.0f}, ink);
+
+        if (mCollapsed)
+        {
+            FillTrackedText(cnv, mLabel, LabelFont(), ink, el::rect{b.left + 22.0f, b.top, b.right, b.bottom},
+                            HAlign::Left, 0.08f);
+        }
+    }
+
+  private:
+    [[nodiscard]] static el::font_descr LabelFont()
+    {
+        return Font(Weight::SemiBold).size(10.0f);
+    }
+
+    const Theme& mTheme;
+    Icons& mIcons;
+    std::string mLabel;
+    bool mCollapsed;
 };
 
 /// One half of the footer's A/B switch (.footer-ab-btn).
@@ -627,20 +895,88 @@ class RoundAdd final : public Pressable
 /// The bar between the full layout's chain and the editor under it (the web UI's
 /// .signal-path-resize-handle): a grip that is dragged up or down. `onDrag` hears how far the
 /// pointer has moved since the press, and `done` on release.
-class SplitHandle final : public el::element
+class SplitHandle final : public el::element, public Drawn, public Focusable
 {
   public:
     explicit SplitHandle(const Theme& theme) : mTheme(theme)
     {
     }
 
+    /// The two sizes the web UI's handle switches between: full cards, or icon tiles.
+    std::function<void(bool full)> onMode;
+
+    /// Read as the chain's size, as the web UI's handle (role separator) is.
+    [[nodiscard]] AccessInfo Describe() const override
+    {
+        AccessInfo info;
+        info.role = AccessRole::Slider;
+        info.name = NameOr("Signal chain size");
+        info.value = mFull ? "Full" : "Compact";
+        info.position = mFull ? 1.0 : 0.0;
+        return info;
+    }
+
+    SplitHandle& Full(bool full)
+    {
+        mFull = full;
+        return *this;
+    }
+
+    bool Activate(const el::rect&) override
+    {
+        return SetMode(true);
+    }
+
+    bool wants_focus() const override
+    {
+        return FocusWanted(onMode != nullptr);
+    }
+
+    void begin_focus(focus_request) override
+    {
+        NoteFocus(true);
+    }
+
+    bool end_focus() override
+    {
+        NoteFocus(false);
+        return true;
+    }
+
+    /// Up, Left and Home make it compact; Down, Right, End, Enter and Space full.
+    bool key(const el::context&, el::key_info k) override
+    {
+        if (k.action != el::key_action::press && k.action != el::key_action::repeat)
+        {
+            return false;
+        }
+
+        switch (k.key)
+        {
+        case el::key_code::up:
+        case el::key_code::left:
+        case el::key_code::home:
+            return SetMode(false);
+        case el::key_code::down:
+        case el::key_code::right:
+        case el::key_code::end:
+        case el::key_code::enter:
+        case el::key_code::kp_enter:
+        case el::key_code::space:
+            return SetMode(true);
+        default:
+            return false;
+        }
+    }
+
     el::view_limits limits(const el::basic_context&) const override
     {
-        return {{0.0f, 10.0f}, {el::full_extent, 10.0f}};
+        return {{0.0f, 8.0f}, {el::full_extent, 8.0f}};
     }
 
     void draw(const el::context& ctx) override
     {
+        NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
         const float y = b.top + b.height() * 0.5f;
@@ -650,9 +986,10 @@ class SplitHandle final : public el::element
         cnv.move_to(b.left, y);
         cnv.line_to(b.right, y);
         cnv.stroke();
+        // .signal-path-resize-handle: a 48 x 3 grip, the accent under the pointer or held.
         const float cx = (b.left + b.right) * 0.5f;
-        cnv.fill_style(mHover || mDragging ? mTheme.TextSecondary() : mTheme.TextMuted().opacity(0.5f));
-        cnv.fill_round_rect(el::rect{cx - 18.0f, y - 2.0f, cx + 18.0f, y + 2.0f}, 2.0f);
+        cnv.fill_style(mHover || mDragging || HasFocus() ? mTheme.Accent() : mTheme.TextMuted().opacity(0.5f));
+        cnv.fill_round_rect(el::rect{cx - 24.0f, y - 1.5f, cx + 24.0f, y + 1.5f}, 1.5f);
     }
 
     bool click(const el::context& ctx, el::mouse_button btn) override
@@ -660,6 +997,14 @@ class SplitHandle final : public el::element
         if (btn.state != el::mouse_button::left)
         {
             return false;
+        }
+
+        // A double click gives the chain its full cards.
+        if (btn.down && btn.num_clicks >= 2)
+        {
+            mDragging = false;
+            SetMode(true);
+            return true;
         }
 
         if (btn.down)
@@ -716,9 +1061,22 @@ class SplitHandle final : public el::element
     std::function<void(float dy, bool done)> onDrag;
 
   private:
+    bool SetMode(bool full)
+    {
+        if (!onMode)
+        {
+            return false;
+        }
+
+        const auto mode = onMode; // it rebuilds the stage this sits in
+        mode(full);
+        return true;
+    }
+
     const Theme& mTheme;
     float mStartY = 0.0f;
     bool mDragging = false;
     bool mHover = false;
+    bool mFull = true;
 };
 } // namespace nanoq::ui

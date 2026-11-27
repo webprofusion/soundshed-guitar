@@ -121,6 +121,11 @@ void UiCommands::RemoveScene(const std::string& sceneId)
     mClient.Send("removeScene", {{"sceneId", sceneId}});
 }
 
+void UiCommands::MoveScene(const std::string& sceneId, int toIndex)
+{
+    mClient.Send("moveScene", {{"sceneId", sceneId}, {"toIndex", toIndex}});
+}
+
 void UiCommands::SavePreset()
 {
     const auto& state = mClient.State();

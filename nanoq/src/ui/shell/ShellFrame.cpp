@@ -288,10 +288,14 @@ Ptr Shell::BuildScenes()
     if (preset && preset->scenes.size() >= 2)
     {
         int index = 1;
+        // The chips in order, for a dragged one to find where it lands among the others.
+        auto order = std::make_shared<std::vector<std::shared_ptr<SceneChip>>>();
+        const int count = static_cast<int>(preset->scenes.size());
 
         for (const auto& scene : preset->scenes)
         {
             const auto id = scene.id;
+            const int at = index - 1;
             auto label = scene.title.empty() ? "Scene " + std::to_string(index) : scene.title;
             auto chip = std::make_shared<SceneChip>(mTheme, label, id == mState.activeSceneId);
             chip->onClick = [&commands, id] { commands.SelectScene(id); };
@@ -303,6 +307,62 @@ Ptr Shell::BuildScenes()
                 OpenPrompt("Rename scene", title, "Rename",
                            [this, id](const std::string& entered) { mSession.Commands().RenameScene(id, entered); });
             };
+            chip->onRename = [this, id](const std::string& entered) { mSession.Commands().RenameScene(id, entered); };
+            chip->onRenaming = [this](bool open) {
+                mSceneRenaming = open;
+
+                if (!open)
+                {
+                    mSceneSignature.clear();
+                    Mark(kScenes);
+                }
+            };
+            // Alt+Left/Right, as the web UI's badges.
+            chip->onMove = [this, id, at, count](int step) {
+                const int to = std::clamp(at + step, 0, count - 1);
+
+                if (to != at)
+                {
+                    mSession.Commands().MoveScene(id, to);
+                }
+            };
+            // Dragged: the place among the others whose middles it has passed, marked as it moves.
+            chip->onDrag = [this, id, at, order](float x, bool done) {
+                int to = 0;
+                std::shared_ptr<SceneChip> before, after;
+
+                for (int i = 0; i < static_cast<int>(order->size()); ++i)
+                {
+                    if (i == at)
+                    {
+                        continue;
+                    }
+
+                    const auto& other = (*order)[static_cast<std::size_t>(i)];
+                    const auto r = other->DrawnBounds();
+
+                    if ((r.left + r.right) * 0.5f < x)
+                    {
+                        ++to;
+                        after = other;
+                    }
+                    else if (!before)
+                    {
+                        before = other;
+                    }
+                }
+
+                for (const auto& other : *order)
+                {
+                    other->Mark(done || to == at ? 0 : other == before ? -1 : (other == after && !before) ? 1 : 0);
+                }
+
+                if (done && to != at)
+                {
+                    mSession.Commands().MoveScene(id, to);
+                }
+            };
+            order->push_back(chip);
             chips.push_back(chip);
             chips.push_back(HGap(4));
             ++index;
@@ -333,7 +393,15 @@ Ptr Shell::BuildScenes()
 
     // The chips sit in a tray as wide as they are (.signal-path-scene-badges): Row() would
     // stretch it, so the tray is a plain tile.
+    // Where the chain shares the stage with the editor, its chevron folds it (.signal-path-collapse-btn).
     std::vector<Ptr> row{HGap(26)};
+
+    if (PlayStageShown() && !touch)
+    {
+        auto fold = std::make_shared<CollapseToggle>(mTheme, mIcons, "SIGNAL CHAIN", false);
+        fold->onClick = [this] { SetChainCollapsed(true); };
+        row = {HGap(2), Pad(0, 2, 0, 4, fold)};
+    }
 
     if (!chips.empty())
     {

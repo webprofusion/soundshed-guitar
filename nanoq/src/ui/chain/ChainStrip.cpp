@@ -616,10 +616,11 @@ Ptr Shell::BuildChain()
     // scrolls when taller than that, and sideways when the wrap is off.
     if (Split())
     {
-        // The split stage's chain is as tall as its lines, up to a third of the window, so the
-        // editor under it keeps the rest; past that it scrolls.
+        // The split stage's chain is as tall as its lines, up to half the window (45% of the
+        // stage in the compact split), so the editor under it keeps the rest; past that it
+        // scrolls (signalPath/layout.ts SIGNAL_PATH_WRAP_MAX_SHARE, SIGNAL_PATH_SPLIT_MAX_SHARE).
         const float wanted = total + 24.0f;
-        // Unless the bar under it was dragged (chainAreaHeight), up to a third of the window;
+        // Unless the bar under it was dragged (chainAreaHeight), up to that share;
         // never less than a line, nor so much that the editor has no room.
         // As tiles it is as tall as its lines again: the drag that made them only chose them.
         float limit = mChainAreaLimit;
@@ -642,7 +643,7 @@ Ptr Shell::BuildChain()
         // Dragged, it leaves the stage 146 px for the rest (the full layout's window less 360 px,
         // as it was, with the bars taken out, so it holds for the compact frame's too).
         const float most = limit > 0.0f ? std::clamp(limit, floor, std::max(floor, StageHeight() - 146.0f))
-                                        : std::max(floor, ViewSize().y / 3.0f);
+                                        : std::max(floor, mWide ? ViewSize().y * 0.5f : StageHeight() * 0.45f);
 
         // The compact split makes room rather than falling back to Chain and Effect taking turns:
         // cards that need more lines than their share, or a short stage, give way to tiles. Not
