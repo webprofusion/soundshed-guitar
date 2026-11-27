@@ -25,8 +25,16 @@ class Drawn
     /// view::refresh(context) converts it).
     void NoteDrawn(const el::context& ctx)
     {
-        const auto tl = ctx.canvas.user_to_device(ctx.bounds.top_left());
-        const auto br = ctx.canvas.user_to_device(ctx.bounds.bottom_right());
+        NoteDrawn(ctx, ctx.bounds);
+    }
+
+    /// For a widget that draws past its bounds (a chain tile's corner buttons): `area` is all of
+    /// what it draws, in the context's coordinates. A redraw is clipped to the rectangle asked
+    /// for, so one of the bounds alone leaves the overhang out.
+    void NoteDrawn(const el::context& ctx, const el::rect& area)
+    {
+        const auto tl = ctx.canvas.user_to_device(area.top_left());
+        const auto br = ctx.canvas.user_to_device(area.bottom_right());
         mDrawn = el::rect{tl.x, tl.y, br.x, br.y};
     }
 

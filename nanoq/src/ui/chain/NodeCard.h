@@ -317,7 +317,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
 
     void draw(const el::context& ctx) override
     {
-        NoteDrawn(ctx);
+        NoteDrawn(ctx, PaintArea(ctx.bounds));
         auto& cnv = ctx.canvas;
 
         if (mHits && !mNodeId.empty())
@@ -803,7 +803,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             mHover = inside;
             mHoverPower = power;
             mHoverRemove = remove;
-            ctx.view.refresh(ctx);
+            ctx.view.refresh(ctx, PaintArea(ctx.bounds));
         }
 
         return false;
@@ -877,13 +877,24 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
         return mLook.thumbnail ? kThumbCardHeight : kPlainCardHeight;
     }
 
+    /// How far a tile's corner buttons stand out past the tile.
+    static constexpr float kTileCornerProud = 5.0f;
+
+    /// All of what the card draws, for a redraw to cover: its bounds, and round a tile the
+    /// corner buttons that stand out past them (and a pixel for their edge). A redraw of the
+    /// bounds alone drew a hovered tile's buttons cut off at its sides.
+    [[nodiscard]] el::rect PaintArea(const el::rect& bounds) const
+    {
+        return mLook.iconOnly ? bounds.inset(-(kTileCornerProud + 1.0f), -(kTileCornerProud + 1.0f)) : bounds;
+    }
+
     [[nodiscard]] el::rect PowerRect(const el::rect& card) const
     {
         // On a tile it sits over the corner, clear of the icon.
         if (mLook.iconOnly)
         {
-            return el::rect{card.right + 5.0f - kPowerSize, card.top - 5.0f, card.right + 5.0f,
-                            card.top - 5.0f + kPowerSize};
+            return el::rect{card.right + kTileCornerProud - kPowerSize, card.top - kTileCornerProud,
+                            card.right + kTileCornerProud, card.top - kTileCornerProud + kPowerSize};
         }
 
         return el::rect{card.right - 4.0f - kPowerSize, card.top + 4.0f, card.right - 4.0f,
@@ -894,8 +905,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
     {
         if (mLook.iconOnly)
         {
-            return el::rect{card.left - 5.0f, card.top - 5.0f, card.left - 5.0f + kPowerSize,
-                            card.top - 5.0f + kPowerSize};
+            return el::rect{card.left - kTileCornerProud, card.top - kTileCornerProud,
+                            card.left - kTileCornerProud + kPowerSize, card.top - kTileCornerProud + kPowerSize};
         }
 
         return el::rect{card.left + 4.0f, card.top + 4.0f, card.left + 4.0f + kPowerSize, card.top + 4.0f + kPowerSize};
