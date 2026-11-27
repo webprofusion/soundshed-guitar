@@ -150,12 +150,26 @@ class CheckBox final : public Pressable
         return mChecked;
     }
 
+    /// Drawn as a radio button (a ring, a dot when chosen): one of a group where one is chosen.
+    CheckBox& Radio(bool radio)
+    {
+        mRadio = radio;
+        return *this;
+    }
+
+    CheckBox& Enabled(bool enabled)
+    {
+        mEnabled = enabled;
+        return *this;
+    }
+
     [[nodiscard]] AccessInfo Describe() const override
     {
         AccessInfo info = Pressable::Describe();
-        info.role = AccessRole::CheckBox;
+        info.role = mRadio ? AccessRole::Tab : AccessRole::CheckBox;
         info.name = NameOr(mLabel);
-        info.toggled = mChecked ? 1 : 0;
+        info.toggled = mRadio ? -1 : (mChecked ? 1 : 0);
+        info.selected = mRadio && mChecked;
         return info;
     }
 
@@ -174,7 +188,29 @@ class CheckBox final : public Pressable
         const float cy = b.top + b.height() * 0.5f;
         const el::rect box{b.left + 0.5f, cy - 8.0f, b.left + 16.5f, cy + 8.0f};
 
-        if (mChecked)
+        if (mRadio)
+        {
+            const el::point centre{box.left + 8.0f, cy};
+            cnv.fill_style(mTheme.Bar().opacity(fade));
+            cnv.begin_path();
+            cnv.add_circle({centre, 8.0f});
+            cnv.fill();
+            cnv.stroke_style(
+                (mChecked || (mHover && mEnabled) ? mTheme.Accent() : mTheme.BorderStrong()).opacity(fade));
+            cnv.line_width(1.0f);
+            cnv.begin_path();
+            cnv.add_circle({centre, 7.5f});
+            cnv.stroke();
+
+            if (mChecked)
+            {
+                cnv.fill_style(mTheme.Accent().opacity(fade));
+                cnv.begin_path();
+                cnv.add_circle({centre, 4.0f});
+                cnv.fill();
+            }
+        }
+        else if (mChecked)
         {
             cnv.fill_style(mTheme.Accent().level(mHover ? 1.08f : 1.0f).opacity(fade));
             cnv.fill_round_rect(box, 4.0f);
@@ -208,6 +244,7 @@ class CheckBox final : public Pressable
     std::string mLabel;
     float mSize;
     bool mChecked = false;
+    bool mRadio = false;
 };
 
 /// A picker's trigger (the web UI's .metro-select-trigger and themed selects): the choice in a filled box with a

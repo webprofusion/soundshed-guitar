@@ -7,6 +7,7 @@
 #include "ui/shell/Shell.h"
 
 #include "dsp/EffectGuids.h"
+#include "ui/dialogs/DialogChrome.h"
 #include "uiclient/ExposedResources.h"
 #include "uiclient/ParamFormat.h"
 
@@ -194,41 +195,286 @@ Ptr Shell::BuildLayoutChooser(const guitarfx::GraphNode& node, bool usingLayout,
     width = 84.0f;
     auto chip = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Chip);
     chip->Size(width, 26).Label(usingLayout ? "Layout" : "Standard", 11.0f).Caret(true);
-    chip->onClick = [this, nodeId = node.id, c = chip.get()] {
-        const auto* n = SelectedNode();
+    chip->AccessName("Effect layout");
+    chip->onClick = [this, nodeId = node.id] { OpenLayoutPicker({.nodeId = nodeId}); };
+    return chip;
+}
 
-        if (n == nullptr || n->id != nodeId)
+void Shell::OpenLayoutPicker(LayoutPickerDraft draft)
+{
+    const auto* node = SelectedNode();
+
+    if (node == nullptr || node->id != draft.nodeId)
+    {
+        return;
+    }
+
+    const auto blendId = BlendIdOf(*node);
+    const auto entries = AvailableLayoutEntries(mState.layouts.library, node->type, blendId);
+    const auto context = LayoutContextForNode(mState, *node);
+    const auto keys = LayoutLookupKeys(node->type, blendId);
+    const auto selection =
+        ResolveLayoutSelection(&mState.layouts.library, ParseLayoutPreferenceRules(mState.appSettings), context);
+    const auto rules = LayoutRulesForKeys(mState.appSettings, keys);
+    const auto suggestions = SuggestLayoutKeywords(context.matchText);
+
+    if (draft.layoutId.empty())
+    {
+        const bool custom = selection.layoutId && *selection.layoutId != kStandardLayoutId &&
+                            std::any_of(entries.begin(), entries.end(),
+                                        [&](const auto* e) { return e->layoutId == *selection.layoutId; });
+        draft.layoutId = custom ? *selection.layoutId : std::string(kStandardLayoutId);
+    }
+
+    if (!draft.keywordTyped && draft.keyword.empty() && !suggestions.empty())
+    {
+        draft.keyword = suggestions.front();
+    }
+
+    const auto layoutName = [&](const std::string& id) -> std::string {
+        if (id == kStandardLayoutId)
         {
-            return;
+            return "Standard controls";
         }
 
-        const auto* current = ResolveLayoutForNode(mState, *n);
-        auto choose = [this, nodeId](const std::string& layoutId) {
-            const auto* target = SelectedNode();
+        for (const auto* e : entries)
+        {
+            if (e->layoutId == id)
+            {
+                return e->layout.name.empty() ? std::string("(Unnamed layout)") : e->layout.name;
+            }
+        }
 
-            if (target == nullptr || target->id != nodeId)
+        return "(missing layout)";
+    };
+    const auto note = [this](const std::string& text, float width) {
+        auto p = std::make_shared<Paragraph>(mTheme, text, width, 12.0f);
+        p->Colour(mTheme.TextSecondary());
+        return p;
+    };
+    const auto heading = [this](const std::string& text) {
+        auto t = std::make_shared<Text>(mTheme, text, 10.5f, Weight::SemiBold);
+        t->Colour(mTheme.TextMuted()).Tracking(0.08f);
+        return FixedHeight(20, t);
+    };
+    // A change reopens the dialog with it; posted, so the control that asked is not freed under it.
+    const auto reopen = [this](LayoutPickerDraft next) {
+        mSession.View().post([this, next] { OpenLayoutPicker(next); });
+    };
+    constexpr float kWidth = 440.0f;
+    const float inner = kWidth - 40.0f;
+
+    auto tabs = std::make_shared<Segmented>(
+        mTheme,
+        std::vector<std::string>{"Layout",
+                                 rules.empty() ? std::string("Rules") : "Rules (" + std::to_string(rules.size()) + ")"},
+        96.0f);
+    tabs->AccessName("Effect layout sections");
+    tabs->Select(draft.rulesTab ? 1 : 0);
+    std::vector<Ptr> rows{FixedHeight(32, Row({tabs, Stretch()})), VGap(14)};
+    std::shared_ptr<el::basic_input_box> keywordBox;
+
+    if (!draft.rulesTab)
+    {
+        rows.push_back(FixedHeight(20, note(LayoutSourceNote(selection), inner)));
+        rows.push_back(VGap(10));
+        rows.push_back(heading("LAYOUT"));
+        auto picker = std::make_shared<PickerField>(mTheme, mIcons);
+        picker->Set(layoutName(draft.layoutId));
+        picker->AccessName("Layout");
+        picker->onClick = [this, draft, reopen, entries, weak = std::weak_ptr<PickerField>(picker)] {
+            const auto field = weak.lock();
+
+            if (!field)
             {
                 return;
             }
 
-            // Recorded where the web UI records it, so both UIs pick the same face for the effect.
-            mSession.Commands().SetSetting(
-                kLayoutPreferencesSetting,
-                RulesWithLayoutChoice(mState.appSettings, mState, *target, layoutId, NowIso()));
-        };
-        std::vector<MenuItem> items;
-        items.push_back({"Standard controls", current == nullptr, false, [choose] { choose(kStandardLayoutId); }});
+            const auto choose = [draft, reopen](const std::string& id) {
+                return [draft, reopen, id] {
+                    auto next = draft;
+                    next.layoutId = id;
+                    reopen(next);
+                };
+            };
+            std::vector<MenuItem> items{
+                {"Standard controls", draft.layoutId == kStandardLayoutId, false, choose(kStandardLayoutId)}};
 
-        for (const auto* entry : AvailableLayoutEntries(mState.layouts.library, n->type, BlendIdOf(*n)))
+            for (const auto* e : entries)
+            {
+                const auto& layout = e->layout;
+                items.push_back({layout.name.empty() ? std::string("(Unnamed layout)") : layout.name,
+                                 e->layoutId == draft.layoutId, false, choose(e->layoutId),
+                                 e->isFactory ? "Factory" : ""});
+            }
+
+            OpenDropdown(field->Bounds(), std::move(items), 380.0f);
+        };
+        rows.push_back(FixedHeight(34, picker));
+        rows.push_back(VGap(14));
+        rows.push_back(heading("REMEMBER THIS FOR"));
+
+        const auto scopeOption = [&](const std::string& scope, const std::string& label, bool enabled) {
+            auto option = std::make_shared<CheckBox>(mTheme, label, 12.5f);
+            option->Radio(true).Enabled(enabled);
+            option->Set(draft.scope == scope);
+            option->onClick = [draft, reopen, scope, enabled] {
+                if (enabled && draft.scope != scope)
+                {
+                    auto next = draft;
+                    next.scope = scope;
+                    reopen(next);
+                }
+            };
+            return FixedHeight(26, option);
+        };
+        rows.push_back(scopeOption("effectType", "Every use of this effect", true));
+        const bool hasPreset = !context.presetId.empty();
+        const std::string presetName =
+            mState.activePreset && !mState.activePreset->name.empty() ? mState.activePreset->name : context.presetId;
+        rows.push_back(scopeOption("preset",
+                                   hasPreset ? "Only the preset \"" + presetName + "\""
+                                             : std::string("Only this preset (save the preset first)"),
+                                   hasPreset));
+        rows.push_back(scopeOption("keyword", "Amps/FX matching a keyword", true));
+        auto [keywordElement, box] = el::input_box("e.g. twin, ac30, rectifier", Font(Weight::Regular), 1.0f);
+        keywordBox = box;
+        box->set_text(draft.keyword);
+        rows.push_back(VGap(4));
+        rows.push_back(
+            FixedHeight(34, Rounded(mTheme.Tertiary(), 6.0f, Pad(8, 0, 8, 0, el::share(std::move(keywordElement))))));
+
+        if (!suggestions.empty())
         {
-            const std::string name = entry->layout.name.empty() ? std::string("Untitled layout") : entry->layout.name;
-            const bool chosen = current != nullptr && current == &entry->layout;
-            items.push_back({name, chosen, false, [choose, id = entry->layoutId] { choose(id); },
-                             entry->isFactory ? "Factory" : ""});
+            std::vector<Ptr> chips;
+
+            for (const auto& keyword : suggestions)
+            {
+                auto chip = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Chip);
+                chip->Size(std::max(44.0f, 7.5f * static_cast<float>(keyword.size()) + 18.0f), 24)
+                    .Label(keyword, 11.0f);
+                chip->onClick = [draft, reopen, keyword] {
+                    auto next = draft;
+                    next.scope = "keyword";
+                    next.keyword = keyword;
+                    next.keywordTyped = true;
+                    reopen(next);
+                };
+                chips.push_back(chip);
+                chips.push_back(HGap(6));
+            }
+
+            chips.push_back(Stretch());
+            rows.push_back(VGap(6));
+            rows.push_back(FixedHeight(24, Row(chips)));
+        }
+    }
+    else if (rules.empty())
+    {
+        rows.push_back(FixedHeight(20, note("No saved rules for this effect yet.", inner)));
+    }
+    else
+    {
+        rows.push_back(
+            FixedHeight(20, note("Most specific rule wins: preset, then keyword, then effect type.", inner)));
+        rows.push_back(VGap(8));
+        std::vector<Ptr> list;
+
+        for (const auto& rule : rules)
+        {
+            auto scope = std::make_shared<Text>(mTheme, LayoutRuleScopeLabel(rule), 12.5f, Weight::SemiBold);
+            scope->Colour(mTheme.ModalText());
+            auto target = std::make_shared<Text>(mTheme, "\xE2\x86\x92 " + layoutName(rule.layoutId), 12.0f);
+            target->Colour(mTheme.TextSecondary());
+            auto remove = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+            remove->Size(28, 28).Label("\xC3\x97", 13.0f);
+            remove->AccessName("Delete rule");
+            remove->Tooltip("Delete rule");
+            remove->onClick = [this, draft, reopen, id = rule.id] {
+                mSession.Commands().SetSetting(kLayoutPreferencesSetting,
+                                               RulesWithoutLayoutPreference(mState.appSettings, id));
+                auto next = draft;
+                next.rulesTab = true;
+                reopen(next);
+            };
+            list.push_back(FixedHeight(
+                40, Row({Stretch(Col({FixedHeight(20, scope), FixedHeight(18, target)})), HGap(8), Middle(remove)})));
+            list.push_back(VGap(4));
         }
 
-        OpenDropdown(c->Bounds(), std::move(items), 200.0f);
+        rows.push_back(Stretch(VScroll(Col(list))));
+    }
+
+    tabs->onSelect = [draft, reopen, weakBox = std::weak_ptr<el::basic_input_box>(keywordBox)](int index) {
+        auto next = draft;
+        next.rulesTab = index == 1;
+
+        if (const auto box = weakBox.lock())
+        {
+            next.keyword = box->get_utf8();
+            next.keywordTyped = true;
+        }
+
+        reopen(next);
     };
-    return chip;
+
+    auto footer = std::make_shared<Text>(mTheme, "New layouts are designed in Soundshed Guitar.", 11.0f);
+    footer->Colour(mTheme.TextMuted());
+    std::vector<Ptr> actions;
+
+    if (!draft.rulesTab)
+    {
+        auto apply = DialogButton("Apply", {}, true);
+        apply->OnClick([this, draft, layoutName, weakBox = std::weak_ptr<el::basic_input_box>(keywordBox)] {
+            const auto* target = SelectedNode();
+
+            if (target == nullptr || target->id != draft.nodeId)
+            {
+                CloseOverlay();
+                return;
+            }
+
+            const auto box = weakBox.lock();
+            std::string keyword = box ? box->get_utf8() : draft.keyword;
+            const auto first = keyword.find_first_not_of(" \t");
+            keyword = first == std::string::npos ? std::string() : keyword.substr(first);
+
+            if (draft.scope == "keyword" && keyword.empty())
+            {
+                ShowToast("Enter a make or model keyword to match", "", true);
+                return;
+            }
+
+            const auto targetContext = LayoutContextForNode(mState, *target);
+
+            if (draft.scope == "preset" && targetContext.presetId.empty())
+            {
+                ShowToast("Save the preset before pinning a layout to it", "", true);
+                return;
+            }
+
+            LayoutPreferenceRule rule;
+            rule.lookupKey = LayoutLookupKeys(targetContext.effectType, targetContext.blendId).front();
+            rule.scope = draft.scope;
+            rule.layoutId = draft.layoutId;
+            rule.keyword = keyword;
+            rule.presetId = targetContext.presetId;
+            rule.presetName = mState.activePreset ? mState.activePreset->name : std::string();
+            mSession.Commands().SetSetting(kLayoutPreferencesSetting,
+                                           RulesWithLayoutPreference(mState.appSettings, rule, NowIso()));
+            ShowToast("Layout set to " + layoutName(draft.layoutId), "", false);
+            CloseOverlay();
+        });
+        actions.push_back(apply);
+    }
+
+    ShowDialog({.title = "Effect layout",
+                .body = Col(rows),
+                .actions = actions,
+                .footerLeft = footer,
+                .headerExtras = {},
+                .width = kWidth,
+                .height = draft.rulesTab ? (rules.empty() ? 230.0f : 420.0f) : (suggestions.empty() ? 430.0f : 460.0f),
+                .stretch = draft.rulesTab && !rules.empty()});
 }
 } // namespace nanoq::ui

@@ -497,6 +497,20 @@ class Shell
     /// or null when it has none to choose; `width` is what it takes.
     [[nodiscard]] Ptr BuildLayoutChooser(const guitarfx::GraphNode& node, bool usingLayout, float& width);
 
+    /// The web's Effect layout picker (layoutPicker.ts): the layout, how widely it sticks (this
+    /// effect, this preset, or a make or model keyword), and the rules saved for the effect.
+    struct LayoutPickerDraft
+    {
+        std::string nodeId;
+        bool rulesTab = false;
+        std::string layoutId; // empty: the one in use
+        std::string scope = "effectType";
+        std::string keyword;
+        bool keywordTyped = false; // the keyword was chosen, so a reopen keeps it
+    };
+
+    void OpenLayoutPicker(LayoutPickerDraft draft);
+
     // EqPlot.cpp: the EQ curves, in the effect editor and the Global EQ dialog.
     struct EqPlotSource
     {

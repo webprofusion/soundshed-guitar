@@ -389,6 +389,11 @@ void UiCommands::GetCompositePresetList()
     mClient.Send("getCompositePresetList");
 }
 
+void UiCommands::CancelCompositeEdit()
+{
+    mClient.Send("exitCompositeEditMode", {{"save", false}});
+}
+
 // ── Setlists ───────────────────────────────────────────────────────────────
 
 void UiCommands::SetSetlistCursor(int index)

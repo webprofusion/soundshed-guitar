@@ -14,6 +14,7 @@
 #include "uiclient/BlendMix.h"
 #include "uiclient/EffectLayouts.h"
 #include "uiclient/ExposedResources.h"
+#include "uiclient/FeatureFlags.h"
 #include "uiclient/NodeLabels.h"
 #include "uiclient/ParamFormat.h"
 #include "uiclient/PitchShiftRange.h"
@@ -2114,6 +2115,19 @@ Ptr Shell::BuildEffectPage()
     if (hasPlugin)
     {
         addToSection(BuildPluginHost(*node), PluginHostHeight(*node));
+    }
+
+    // The web's Custom Effect Designer block (Design With AI, Save To My Custom Effects, Use This
+    // Effect) lives in Soundshed Guitar; here, a note says so.
+    if (node->type == guitarfx::EffectGuids::kWasmHost && IsFeatureEnabled(mState, Feature::CustomEffects))
+    {
+        auto designer = std::make_shared<Paragraph>(
+            mTheme,
+            "Custom Effects are designed in Soundshed Guitar: Design With AI, Save To My Custom Effects and Use "
+            "This Effect are on this node there.",
+            420.0f, 12.0f);
+        designer->Colour(mTheme.TextSecondary());
+        addToSection(Pad(4, 6, 4, 6, designer), 48.0f);
     }
 
     if (node->type == guitarfx::EffectGuids::kAmpNamBlend)

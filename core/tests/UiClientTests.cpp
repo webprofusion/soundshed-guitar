@@ -1514,6 +1514,23 @@ void TestResourceBrowserSlotHints()
     Expect(!tone3000::SourceToneOf(model), "no source tone for an entry not from Tone3000");
 }
 
+void TestCompositeEditMode()
+{
+    // The web UI's composite editor: every UI hears it start and end, and Nano Q can cancel it.
+    std::vector<std::string> sent;
+    UiClient client([&sent](const std::string& m) { sent.push_back(m); });
+    client.Enqueue(R"({"type":"compositeEditState","compositeId":"c1","name":"Stack","definition":{}})");
+    client.DrainPending();
+    Expect(client.State().compositeEdit && client.State().compositeEdit->name == "Stack", "composite edit starts");
+    UiCommands(client).CancelCompositeEdit();
+    Expect(!sent.empty() && nlohmann::json::parse(sent.back()).value("type", "") == "exitCompositeEditMode" &&
+               nlohmann::json::parse(sent.back()).value("save", true) == false,
+           "cancelled without saving");
+    client.Enqueue(R"({"type":"compositeEditModeExited","compositeId":"c1"})");
+    client.DrainPending();
+    Expect(!client.State().compositeEdit, "composite edit ends");
+}
+
 void TestCompositePresetSearch()
 {
     ClientState state;
@@ -3011,6 +3028,7 @@ int main()
     TestChainDropRules();
     TestFeatureFlagsAndFxMarks();
     TestPresetTrail();
+    TestCompositeEditMode();
     TestCompositePresetSearch();
     TestResourceBrowserSlotHints();
     TestFolderFileRows();

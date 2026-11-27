@@ -557,6 +557,36 @@ void TestClient()
                state.appSettings[ui::kLayoutPreferencesSetting].size() == 1,
            "the layout chosen again, replacing the rule");
 
+    // The picker's scopes: a keyword rule and a preset rule beside the effect-type one, each kept
+    // apart; the keyword lower cased; a rule removed by its id.
+    ui::LayoutPreferenceRule keyword{.lookupKey = type,
+                                     .scope = "keyword",
+                                     .layoutId = ui::kStandardLayoutId,
+                                     .keyword = "  Twin ",
+                                     .presetId = "p9"};
+    mutableState.appSettings[ui::kLayoutPreferencesSetting] =
+        ui::RulesWithLayoutPreference(state.appSettings, keyword, "2026-11-28T00:00:00Z");
+    ui::LayoutPreferenceRule preset{
+        .lookupKey = type, .scope = "preset", .layoutId = "factory::chaos", .presetId = "p1", .presetName = "Crunch"};
+    mutableState.appSettings[ui::kLayoutPreferencesSetting] =
+        ui::RulesWithLayoutPreference(state.appSettings, preset, "2026-11-28T00:00:01Z");
+    auto forNode = ui::LayoutRulesForKeys(state.appSettings, ui::LayoutLookupKeys(type, ""));
+    Expect(forNode.size() == 3 && forNode[1].keyword == "twin" && forNode[1].presetId.empty() &&
+               ui::LayoutRuleScopeLabel(forNode[1]) == "Matching \"twin\"" &&
+               ui::LayoutRuleScopeLabel(forNode[2]) == "Preset: Crunch" &&
+               ui::LayoutRuleScopeLabel(forNode[0]) == "This effect type",
+           "three rules, one per scope");
+    Expect(ui::LayoutRulesForKeys(state.appSettings, {"delay_digital"}).empty(), "none for another effect");
+    mutableState.appSettings[ui::kLayoutPreferencesSetting] =
+        ui::RulesWithoutLayoutPreference(state.appSettings, forNode[1].id);
+    Expect(ui::LayoutRulesForKeys(state.appSettings, {type}).size() == 2, "a rule removed by its id");
+    Expect(ui::SuggestLayoutKeywords("Fender Twin Reverb clean 65 amp ac30 twin", 6) ==
+               std::vector<std::string>{"fender", "twin", "reverb", "ac30"},
+           "keywords from the names: no common words, numbers or repeats");
+    Expect(ui::LayoutSourceNote({.source = "keyword", .rule = forNode[1]}) ==
+               "Currently set by the \"twin\" keyword rule.",
+           "the source note");
+
     client.RequestLayoutImages();
     client.RequestLayoutImages();
     Expect(sent.size() == 1 && nlohmann::json::parse(sent[0]).value("type", "") == "requestLayoutImages",

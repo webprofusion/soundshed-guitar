@@ -170,6 +170,33 @@ Ptr Shell::BuildChain()
         return BuildInlineMixer();
     }
 
+    // The web UI's composite editor has the engine's chain edits while it is open: an edit made
+    // here would land in the composite, so the chain waits behind a note until it is done.
+    if (mState.compositeEdit)
+    {
+        const auto name =
+            mState.compositeEdit->name.empty() ? std::string("a composite") : "\"" + mState.compositeEdit->name + "\"";
+        auto title =
+            std::make_shared<Text>(mTheme, "Editing " + name + " in Soundshed Guitar", 14.0f, Weight::SemiBold);
+        title->Colour(mTheme.Text());
+        auto detail = std::make_shared<Paragraph>(
+            mTheme,
+            "Chain edits go to the composite until it is saved or cancelled there, so the chain is put away until then.",
+            520.0f, 12.0f);
+        detail->Colour(mTheme.TextSecondary());
+        auto cancel = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
+        cancel->Size(150, 30).Label("Cancel Editing", 12.0f);
+        cancel->onClick = [this, name] {
+            OpenConfirm("Cancel editing", "Stop editing " + name + " without saving? Its changes are lost.",
+                        "Stop editing", [this] { mSession.Commands().CancelCompositeEdit(); });
+        };
+        return Pad(
+            24, 18, 24, 18,
+            Row({Stretch(),
+                 Col({FixedHeight(24, title), VGap(4), FixedWidth(520, detail), VGap(10), Row({cancel, Stretch()})}),
+                 Stretch()}));
+    }
+
     // Each build starts from the cards and turns to tiles again only if they still do not fit.
     if (!std::exchange(mChainAutoPass, false))
     {

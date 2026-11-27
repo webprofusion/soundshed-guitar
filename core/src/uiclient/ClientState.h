@@ -882,6 +882,16 @@ struct ClientState
     // The active preset (the engine's working copy) and where it came from.
     std::optional<Preset> activePreset;
     std::string activePresetId;
+
+    /// A composite effect being edited in the web UI (compositeEditState): while it lasts the
+    /// engine sends every UI's chain edits to its inner graph, not to the preset.
+    struct CompositeEdit
+    {
+        std::string id;
+        std::string name;
+    };
+
+    std::optional<CompositeEdit> compositeEdit;
     std::string activeSceneId;
     bool activePresetDirty = false;
     std::vector<std::string> missingNodeResources;

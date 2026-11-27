@@ -113,6 +113,32 @@ struct LayoutSelection
                                                    const GraphNode& node, const std::string& layoutId,
                                                    const std::string& nowIso);
 
+/// The rules after adding `rule` (its id and time made here), replacing one for the same key,
+/// scope and keyword or preset: the web's setLayoutPreference. A keyword is trimmed and lower
+/// cased; a keyword or preset belongs only to its own scope.
+[[nodiscard]] nlohmann::json RulesWithLayoutPreference(const nlohmann::json& appSettings, LayoutPreferenceRule rule,
+                                                       const std::string& nowIso);
+
+/// The rules without the one with `ruleId` (removeLayoutPreference).
+[[nodiscard]] nlohmann::json RulesWithoutLayoutPreference(const nlohmann::json& appSettings, const std::string& ruleId);
+
+/// The rules for a node's lookup keys, in the order they were made (getLayoutPreferenceRulesForKeys).
+[[nodiscard]] std::vector<LayoutPreferenceRule> LayoutRulesForKeys(const nlohmann::json& appSettings,
+                                                                   const std::vector<std::string>& lookupKeys);
+
+/// Make or model words from a node's names to match a keyword rule on: three letters or more,
+/// not a plain number or a common word ("amp", "cab", "clean"...), at most `limit` of them
+/// (suggestLayoutKeywords).
+[[nodiscard]] std::vector<std::string> SuggestLayoutKeywords(const std::string& matchText, std::size_t limit = 6);
+
+/// A rule's scope as the picker's Rules tab names it: "This effect type", "Preset: <name>",
+/// "Matching \"<keyword>\"".
+[[nodiscard]] std::string LayoutRuleScopeLabel(const LayoutPreferenceRule& rule);
+
+/// Where the node's layout comes from, as the picker's note says it ("Currently set by a preset
+/// rule." ...).
+[[nodiscard]] std::string LayoutSourceNote(const LayoutSelection& selection);
+
 // ── Sizing (layoutScaling.ts) ───────────────────────────────────────────────────────────
 
 struct LayoutScaleResult

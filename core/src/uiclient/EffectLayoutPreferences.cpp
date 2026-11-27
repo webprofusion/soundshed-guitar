@@ -378,23 +378,10 @@ const EffectLayout* ResolveLayoutForNode(const ClientState& state, const GraphNo
     return FindLayoutById(state.layouts.library, *selection.layoutId, context.effectType, context.blendId);
 }
 
-nlohmann::json RulesWithLayoutChoice(const nlohmann::json& appSettings, const ClientState& state, const GraphNode& node,
-                                     const std::string& layoutId, const std::string& nowIso)
+namespace
 {
-    const auto context = LayoutContextForNode(state, node);
-    auto rules = ParseLayoutPreferenceRules(appSettings);
-    const auto deciding = ResolveLayoutSelection(&state.layouts.library, rules, context).rule;
-
-    LayoutPreferenceRule rule;
-    // A blend's choice is keyed on the blend, as the web UI's picker keys it.
-    rule.lookupKey = LayoutLookupKeys(context.effectType, context.blendId).front();
-    rule.scope = deciding ? deciding->scope : std::string("effectType");
-    rule.layoutId = layoutId;
-    rule.keyword = deciding ? deciding->keyword : std::string{};
-    rule.presetId = deciding ? deciding->presetId : std::string{};
-    rule.presetName = deciding ? deciding->presetName : std::string{};
-    rule.createdAt = nowIso;
-
+std::string NewRuleId()
+{
     // Ids as the web UI makes them: the time and a few random characters, in base 36.
     const auto base36 = [](std::uint64_t value) {
         static constexpr char kDigits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -412,16 +399,11 @@ nlohmann::json RulesWithLayoutChoice(const nlohmann::json& appSettings, const Cl
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
             .count();
     std::random_device random;
-    rule.id = "layoutpref-" + base36(static_cast<std::uint64_t>(millis)) + "-" + base36(random() % 2176782336u);
+    return "layoutpref-" + base36(static_cast<std::uint64_t>(millis)) + "-" + base36(random() % 2176782336u);
+}
 
-    rules.erase(std::remove_if(rules.begin(), rules.end(),
-                               [&rule](const LayoutPreferenceRule& existing) {
-                                   return existing.lookupKey == rule.lookupKey && existing.scope == rule.scope &&
-                                          existing.keyword == rule.keyword && existing.presetId == rule.presetId;
-                               }),
-                rules.end());
-    rules.push_back(rule);
-
+nlohmann::json SerializeRules(const std::vector<LayoutPreferenceRule>& rules, const std::string& nowIso)
+{
     nlohmann::json serialized = nlohmann::json::array();
 
     for (const auto& r : rules)
@@ -448,5 +430,161 @@ nlohmann::json RulesWithLayoutChoice(const nlohmann::json& appSettings, const Cl
     }
 
     return serialized;
+}
+
+std::string TrimLower(const std::string& text)
+{
+    const auto first = text.find_first_not_of(" \t\r\n");
+
+    if (first == std::string::npos)
+    {
+        return {};
+    }
+
+    auto out = text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+    std::transform(out.begin(), out.end(), out.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return out;
+}
+} // namespace
+
+nlohmann::json RulesWithLayoutChoice(const nlohmann::json& appSettings, const ClientState& state, const GraphNode& node,
+                                     const std::string& layoutId, const std::string& nowIso)
+{
+    const auto context = LayoutContextForNode(state, node);
+    const auto rules = ParseLayoutPreferenceRules(appSettings);
+    const auto deciding = ResolveLayoutSelection(&state.layouts.library, rules, context).rule;
+
+    LayoutPreferenceRule rule;
+    // A blend's choice is keyed on the blend, as the web UI's picker keys it.
+    rule.lookupKey = LayoutLookupKeys(context.effectType, context.blendId).front();
+    rule.scope = deciding ? deciding->scope : std::string("effectType");
+    rule.layoutId = layoutId;
+    rule.keyword = deciding ? deciding->keyword : std::string{};
+    rule.presetId = deciding ? deciding->presetId : std::string{};
+    rule.presetName = deciding ? deciding->presetName : std::string{};
+    return RulesWithLayoutPreference(appSettings, std::move(rule), nowIso);
+}
+
+nlohmann::json RulesWithLayoutPreference(const nlohmann::json& appSettings, LayoutPreferenceRule rule,
+                                         const std::string& nowIso)
+{
+    auto rules = ParseLayoutPreferenceRules(appSettings);
+    rule.keyword = rule.scope == "keyword" ? TrimLower(rule.keyword) : std::string{};
+
+    if (rule.scope != "preset")
+    {
+        rule.presetId.clear();
+        rule.presetName.clear();
+    }
+
+    rule.id = NewRuleId();
+    rule.createdAt = nowIso;
+    rules.erase(std::remove_if(rules.begin(), rules.end(),
+                               [&rule](const LayoutPreferenceRule& existing) {
+                                   return existing.lookupKey == rule.lookupKey && existing.scope == rule.scope &&
+                                          existing.keyword == rule.keyword && existing.presetId == rule.presetId;
+                               }),
+                rules.end());
+    rules.push_back(std::move(rule));
+    return SerializeRules(rules, nowIso);
+}
+
+nlohmann::json RulesWithoutLayoutPreference(const nlohmann::json& appSettings, const std::string& ruleId)
+{
+    auto rules = ParseLayoutPreferenceRules(appSettings);
+    std::erase_if(rules, [&ruleId](const LayoutPreferenceRule& r) { return r.id == ruleId; });
+    return SerializeRules(rules, {});
+}
+
+std::vector<LayoutPreferenceRule> LayoutRulesForKeys(const nlohmann::json& appSettings,
+                                                     const std::vector<std::string>& lookupKeys)
+{
+    auto rules = ParseLayoutPreferenceRules(appSettings);
+    std::erase_if(rules, [&lookupKeys](const LayoutPreferenceRule& r) {
+        return std::find(lookupKeys.begin(), lookupKeys.end(), r.lookupKey) == lookupKeys.end();
+    });
+    return rules;
+}
+
+std::vector<std::string> SuggestLayoutKeywords(const std::string& matchText, std::size_t limit)
+{
+    static const std::set<std::string> kStopWords{"the",   "and",  "amp",     "amplifier", "model", "nam",
+                                                  "ir",    "cab",  "cabinet", "wav",       "mix",   "channel",
+                                                  "clean", "lead", "rhythm",  "high",      "low",   "gain"};
+    std::vector<std::string> out;
+    std::string token;
+    const auto flush = [&] {
+        const bool number = !token.empty() && std::all_of(token.begin(), token.end(),
+                                                          [](unsigned char c) { return std::isdigit(c) != 0; });
+
+        if (token.size() >= 3 && !number && kStopWords.count(token) == 0 &&
+            std::find(out.begin(), out.end(), token) == out.end() && out.size() < limit)
+        {
+            out.push_back(token);
+        }
+
+        token.clear();
+    };
+
+    for (const char raw : matchText)
+    {
+        const auto c = static_cast<char>(std::tolower(static_cast<unsigned char>(raw)));
+
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+')
+        {
+            token.push_back(c);
+        }
+        else
+        {
+            flush();
+        }
+    }
+
+    flush();
+    return out;
+}
+
+std::string LayoutRuleScopeLabel(const LayoutPreferenceRule& rule)
+{
+    if (rule.scope == "preset")
+    {
+        return "Preset: " + (!rule.presetName.empty() ? rule.presetName
+                             : !rule.presetId.empty() ? rule.presetId
+                                                      : std::string("(unknown)"));
+    }
+
+    if (rule.scope == "keyword")
+    {
+        return "Matching \"" + rule.keyword + "\"";
+    }
+
+    return "This effect type";
+}
+
+std::string LayoutSourceNote(const LayoutSelection& selection)
+{
+    if (selection.source == "preset")
+    {
+        return "Currently set by a preset rule.";
+    }
+
+    if (selection.source == "keyword")
+    {
+        return "Currently set by the \"" + (selection.rule ? selection.rule->keyword : std::string()) +
+               "\" keyword rule.";
+    }
+
+    if (selection.source == "effectType")
+    {
+        return "Currently set for this effect type.";
+    }
+
+    if (selection.source == "libraryDefault")
+    {
+        return "Currently using the layout library default.";
+    }
+
+    return "No layout preference set, showing standard controls.";
 }
 } // namespace guitarfx::uiclient

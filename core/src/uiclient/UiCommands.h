@@ -128,6 +128,8 @@ class UiCommands
     void LoadCompositePreset(const std::string& id);
     void RemoveCompositePreset(const std::string& id);
     void GetCompositePresetList();
+    /// Leaves the web UI's composite editor without saving (exitCompositeEditMode).
+    void CancelCompositeEdit();
 
     // ── Setlists ────────────────────────────────────────────────────────────
     void SetSetlistCursor(int index);

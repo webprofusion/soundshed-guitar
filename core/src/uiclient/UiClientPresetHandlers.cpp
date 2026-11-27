@@ -437,6 +437,17 @@ void UiClient::RegisterPresetHandlers()
         Notify(Topic::ActivePreset);
     });
 
+    // ── Composite edit mode (the web UI's composite editor) ──────────────────
+    On("compositeEditState", [this](const nlohmann::json& m) {
+        mState.compositeEdit =
+            ClientState::CompositeEdit{m.value("compositeId", std::string()), m.value("name", std::string())};
+        Notify(Topic::ActivePreset);
+    });
+    On("compositeEditModeExited", [this](const nlohmann::json&) {
+        mState.compositeEdit.reset();
+        Notify(Topic::ActivePreset);
+    });
+
     // ── Multi-Rigs ──────────────────────────────────────────────────────────
     On("compositePresetList", [this](const nlohmann::json& m) {
         auto& list = mState.mixer.compositePresets;
