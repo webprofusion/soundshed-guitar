@@ -188,7 +188,7 @@ std::string RomanToken(int offset, const std::string& quality)
         {"5", {"5", false}},
         {"sus2", {"sus2", false}},
         {"sus4", {"sus4", false}},
-        {"dim", {"Â°", true}},
+        {"dim", {"\xC2\xB0", true}},
         {"aug", {"+", false}},
         {"6", {"6", false}},
         {"m6", {"6", true}},
@@ -197,11 +197,11 @@ std::string RomanToken(int offset, const std::string& quality)
         {"m7", {"7", true}},
         {"mMaj7", {"maj7", true}},
         {"m7b5",
-         {"Ã¸"
+         {"\xC3\xB8"
           "7",
           true}},
         {"dim7",
-         {"Â°"
+         {"\xC2\xB0"
           "7",
           true}},
         {"aug7", {"+7", false}},
@@ -231,12 +231,12 @@ std::string DisplayNumeral(const std::string& token)
 {
     if (!token.empty() && token[0] == 'b')
     {
-        return "â­" + token.substr(1);
+        return "\xE2\x99\xAD" + token.substr(1);
     }
 
     if (!token.empty() && token[0] == '#')
     {
-        return "â¯" + token.substr(1);
+        return "\xE2\x99\xAF" + token.substr(1);
     }
 
     return token;
@@ -244,7 +244,7 @@ std::string DisplayNumeral(const std::string& token)
 
 std::vector<std::string> NumeralTokens(const std::vector<std::string>& numerals)
 {
-    static const std::string kFlat = "â­", kSharp = "â¯";
+    static const std::string kFlat = "\xE2\x99\xAD", kSharp = "\xE2\x99\xAF";
     std::vector<std::string> out;
 
     for (const auto& n : numerals)

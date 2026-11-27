@@ -283,13 +283,13 @@ void TestUiClientEditor()
     namespace sg = guitarfx::uiclient::scaleguide;
     Expect(sg::RomanToken(0, "maj") == "I" && sg::RomanToken(10, "maj") == "bVII" && sg::RomanToken(2, "m7") == "ii7",
            "a degree and a quality make a numeral");
-    Expect(sg::RomanToken(11, "m7b5") == "viiÃ¸"
+    Expect(sg::RomanToken(11, "m7b5") == "vii\xC3\xB8"
                                          "7" &&
-               sg::RomanToken(13, "dim") == "biiÂ°",
+               sg::RomanToken(13, "dim") == "bii\xC2\xB0",
            "half-diminished and diminished, the degree wrapped");
     Expect(sg::RomanToken(7, "nonsense") == "V", "an unknown quality is major");
-    Expect(sg::DisplayNumeral("bVII7") == "â­VII7" && sg::DisplayNumeral("IV") == "IV", "shown with a flat");
-    Expect(sg::NumeralTokens({"â­VII", "I"}) == std::vector<std::string>{"bVII", "I"},
+    Expect(sg::DisplayNumeral("bVII7") == "\xE2\x99\xADVII7" && sg::DisplayNumeral("IV") == "IV", "shown with a flat");
+    Expect(sg::NumeralTokens({"\xE2\x99\xADVII", "I"}) == std::vector<std::string>{"bVII", "I"},
            "a built-in's numerals copied as tokens");
     Expect(sg::NewProgressionId({{"p1", "a", {"I"}}, {"p3", "b", {"I"}}}) == "p4" && sg::NewProgressionId({}) == "p1",
            "a new id none has");
