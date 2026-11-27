@@ -35,6 +35,7 @@
 #include "ui/UiSession.h"
 #include "ui/widgets/Widgets.h"
 #include "uiclient/Automation.h"
+#include "uiclient/LibraryManager.h"
 #include "uiclient/ChainDropRules.h"
 #include "uiclient/ChainHistory.h"
 #include "uiclient/ChainLayout.h"
@@ -871,6 +872,7 @@ class Shell
         Audio,
         Dsp,
         Ui,
+        Library, // while Blend Tools is on (LibrarySection.cpp)
         Help
     };
     SettingsSection mSettingsSection = SettingsSection::General; // the section Settings shows
@@ -879,6 +881,27 @@ class Shell
     Ptr BuildSettingsPage();
     /// A row of tabs inside a section; `tab` is the one shown, and a click shows another.
     [[nodiscard]] Ptr BuildSettingsTabs(std::initializer_list<const char*> labels, int& tab);
+
+    // LibrarySection.cpp: Settings > Library's Resource Library manager, as the web UI's.
+    struct LibraryManagerUi
+    {
+        guitarfx::uiclient::library_manager::Filter filter;
+        std::shared_ptr<el::basic_input_box> searchBox; // kept, with its focus, across rebuilds
+        Ptr searchElement;
+        SlotPtr results; // refilled alone by the search and the library's changes
+        float textWidth = 600.0f;
+        std::string cleanupScope = "all";
+        bool moreFilters = false;
+        std::size_t shownRows = 60;
+        bool refillPosted = false;
+    };
+
+    LibraryManagerUi mLibraryManager;
+    [[nodiscard]] Ptr BuildLibrarySection(float textWidth);
+    [[nodiscard]] Ptr BuildLibraryResults(float textWidth);
+    /// The library or what uses it changed: the results again, once per burst.
+    void RefreshLibraryResults();
+    bool mSettingsLibraryShown = false; // whether the Settings page was built with Library listed
 
     // DspPerformance.cpp: Settings → DSP Performance's live figures (the web UI's views.ts and
     // dspNodeTable.ts): the load over the tabs, and the Diagnostics tab's levels, load history and

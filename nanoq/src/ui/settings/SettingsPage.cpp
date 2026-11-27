@@ -144,12 +144,28 @@ Ptr Shell::BuildSettingsPage()
     const std::string productName = mState.environment.nativeEditor ? "Soundshed Guitar" : "Soundshed Nano Q";
 
     // ── The sections ──
+    // Library only while Blend Tools is on, as the web UI's (settings/tabs.ts).
+    mSettingsLibraryShown = guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::BlendTools);
+
+    if (!mSettingsLibraryShown && mSettingsSection == SettingsSection::Library)
+    {
+        mSettingsSection = SettingsSection::General;
+    }
+
+    std::vector<std::pair<const char*, SettingsSection>> sections{{"General", SettingsSection::General},
+                                                                  {"Audio & MIDI", SettingsSection::Audio},
+                                                                  {"DSP Performance", SettingsSection::Dsp},
+                                                                  {"User Interface", SettingsSection::Ui}};
+
+    if (mSettingsLibraryShown)
+    {
+        sections.emplace_back("Library", SettingsSection::Library);
+    }
+
+    sections.emplace_back("Help", SettingsSection::Help);
     SectionNav nav;
 
-    for (const auto& [label, which] :
-         {std::pair{"General", SettingsSection::General}, std::pair{"Audio & MIDI", SettingsSection::Audio},
-          std::pair{"DSP Performance", SettingsSection::Dsp}, std::pair{"User Interface", SettingsSection::Ui},
-          std::pair{"Help", SettingsSection::Help}})
+    for (const auto& [label, which] : sections)
     {
         nav.items.push_back({label, mSettingsSection == which, [this, which] {
                                  if (mSettingsSection != which)
@@ -826,6 +842,23 @@ Ptr Shell::BuildSettingsPage()
 
             beginCard("");
             describe("Shared with Soundshed Guitar. Some features (the AI Tone Builder, the editors) are there only.");
+            endCard();
+        }
+
+        break;
+    }
+    case SettingsSection::Library: {
+        heading("Library");
+
+        if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::ResourceLibrary))
+        {
+            page.push_back(BuildLibrarySection(textWidth));
+            page.push_back(VGap(18));
+        }
+        else
+        {
+            beginCard("Resource Library");
+            describe("Turn on the Resource Library in User Interface > Features to manage your models and IRs here.");
             endCard();
         }
 

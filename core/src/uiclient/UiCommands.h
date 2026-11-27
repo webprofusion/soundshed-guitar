@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <string>
 
@@ -173,6 +174,12 @@ class UiCommands
     /// Takes one out of the library and leaves its file where it is (cleanupResourceLibrary with
     /// removeFiles false): a scanned plugin, as the web UI's plugin host removes one.
     void ForgetLibraryResource(const std::string& resourceType, const std::string& resourceId);
+    /// Removes these (type, id) entries from the library, and their own files with `removeFiles`
+    /// (cleanupResourceLibrary). The engine keeps any in use, and any outside the scope.
+    void CleanupResourceLibrary(const std::string& scope,
+                                const std::vector<std::pair<std::string, std::string>>& resources, bool removeFiles);
+    /// Asks for a file to point a local library entry at (browseLibraryResourcePath).
+    void BrowseLibraryResourcePath(const std::string& resourceType, const std::string& resourceId);
     /// Asks what uses a resource; answered into ClientState::resourceUsage.
     void QueryResourceUsage(const std::string& resourceType, const std::string& resourceId);
     /// Writes the library as one archive through a save dialog (exportLibraryArchive): the

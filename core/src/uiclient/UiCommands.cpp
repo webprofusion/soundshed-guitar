@@ -1042,6 +1042,25 @@ void UiCommands::ForgetLibraryResource(const std::string& resourceType, const st
                   {"resources", nlohmann::json::array({{{"type", resourceType}, {"id", resourceId}}})}});
 }
 
+void UiCommands::CleanupResourceLibrary(const std::string& scope,
+                                        const std::vector<std::pair<std::string, std::string>>& resources,
+                                        bool removeFiles)
+{
+    auto list = nlohmann::json::array();
+
+    for (const auto& [type, id] : resources)
+    {
+        list.push_back({{"type", type}, {"id", id}});
+    }
+
+    mClient.Send("cleanupResourceLibrary", {{"scope", scope}, {"removeFiles", removeFiles}, {"resources", list}});
+}
+
+void UiCommands::BrowseLibraryResourcePath(const std::string& resourceType, const std::string& resourceId)
+{
+    mClient.Send("browseLibraryResourcePath", {{"resourceType", resourceType}, {"resourceId", resourceId}});
+}
+
 void UiCommands::QueryResourceUsage(const std::string& resourceType, const std::string& resourceId)
 {
     mClient.Send("queryResourceUsage", {{"resourceType", resourceType}, {"resourceId", resourceId}});

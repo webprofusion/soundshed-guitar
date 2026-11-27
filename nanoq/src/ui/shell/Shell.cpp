@@ -5,6 +5,7 @@
 #include "ui/shell/ShellIcons.h"
 #include "ui/widgets/Tooltip.h"
 #include "ui/widgets/ControlSkin.h"
+#include "uiclient/FeatureFlags.h"
 #include "uiclient/VisualizerBackground.h"
 #include "uiclient/NodeLabels.h"
 
@@ -110,7 +111,21 @@ void Shell::Subscribe()
     // pads for it.
     on(Topic::Setlists, kPage);
     on(Topic::Catalog, kChain | kPage);
-    on(Topic::Resources, kChain | kPage);
+    // Settings shows the library only in its Library section, and refills just that list there:
+    // a rebuild would take the search box's focus and the page's scroll (and every row asks
+    // whether it is in use, each answer a Resources change).
+    mSubscriptions.push_back(client.Subscribe(Topic::Resources, [this] {
+        Mark(kChain);
+
+        if (mPage != Page::Settings)
+        {
+            Mark(kPage);
+        }
+        else if (mSettingsSection == SettingsSection::Library)
+        {
+            RefreshLibraryResults();
+        }
+    }));
     on(Topic::Tones, kPage);
     on(Topic::GlobalChain, kTransport);
     on(Topic::Mixer, kTransport | kScenes | kChain);
@@ -138,10 +153,12 @@ void Shell::Subscribe()
             Mark(kPage);
         }
         // Settings is patched in place, but a picture chosen or removed for the effect panel
-        // adds or takes away its preview.
+        // adds or takes away its preview, and Blend Tools shows or hides the Library section.
         else if (mPage == Page::Settings &&
-                 guitarfx::uiclient::visualizer_background::Url(mState.appSettings).value_or(std::string()) !=
-                     mSettingsPanelBackground)
+                 (guitarfx::uiclient::visualizer_background::Url(mState.appSettings).value_or(std::string()) !=
+                      mSettingsPanelBackground ||
+                  guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::BlendTools) !=
+                      mSettingsLibraryShown))
         {
             Mark(kPage);
         }

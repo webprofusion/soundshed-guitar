@@ -52,6 +52,7 @@
 #include "uiclient/FxMarks.h"
 #include "uiclient/InputLevelling.h"
 #include "uiclient/InputMode.h"
+#include "uiclient/LibraryManager.h"
 #include "uiclient/Instruments.h"
 #include "uiclient/LayoutMode.h"
 #include "uiclient/NodeLabels.h"
@@ -2349,6 +2350,80 @@ void TestUpdateCheckVersions()
 
 // The input mode control's choices, as inputMode.ts: greyed with what they need, the track in a
 // DAW, and what runs when it is not what was chosen.
+// Settings > Library's Resource Library (libraryView.ts): where each entry came from, the filters,
+// the tone groups and what Remove unused offers.
+void TestLibraryManager()
+{
+    namespace lm = library_manager;
+    ClientState state;
+    const auto resource = [](std::string id, std::string name, std::string category, std::string path,
+                             nlohmann::json metadata) {
+        guitarfx::uiclient::LibraryResource r;
+        r.id = std::move(id);
+        r.name = std::move(name);
+        r.category = std::move(category);
+        r.filePath = std::move(path);
+        r.metadata = std::move(metadata);
+        return r;
+    };
+    state.resources["nam"] = {
+        resource("a", "Crunch A", "Amp", "C:/Users/x/AppData/Soundshed/resources/content/tone3000/a.nam",
+                 {{"toneId", "7"}, {"toneTitle", "Plexi Pack"}, {"authorUsername", "maker"}}),
+        resource("b", "Crunch B", "Amp", "C:/Users/x/AppData/Soundshed/resources/content/tone3000/b.nam",
+                 {{"provider", "tone3000"}, {"toneId", "7"}, {"toneTitle", "Plexi Pack"}}),
+        resource("c", "Clean", "", "D:/Rigs/clean.nam", {{"creatorName", "Someone"}}),
+        resource("d", "Lead", "Pedal", "C:/Users/x/Documents/lead.nam", nlohmann::json::object()),
+    };
+    state.resources["ir"] = {
+        resource("e", "Cab 4x12", "Cab", "C:/x/resources/content/presetarchive/cab.wav",
+                 {{"provider", "presetArchive"}}),
+    };
+    state.resources["nam"][3].fileMissing = true;
+
+    Expect(lm::Origin(*lm::AllItems(state)[0].resource) == "Tone3000" &&
+               lm::Origin(state.resources["nam"][2]) == "Built-in" &&
+               lm::Origin(state.resources["nam"][3]) == "Local" && lm::Origin(state.resources["ir"][0]) == "Imported",
+           "an entry's origin is its provider, else its file's place");
+
+    const auto all = lm::AllItems(state);
+    Expect(all.size() == 5 && all[0].type == "nam" && all[4].type == "ir", "models first, then IRs");
+    Expect(lm::Categories(all) == std::vector<std::string>{"Amp", "Cab", "Pedal"} &&
+               lm::Creators(all) == std::vector<std::string>{"maker", "presetArchive", "Someone", "tone3000"},
+           "the category and creator choices come from the entries (a provider stands in for a creator)");
+
+    lm::Filter filter;
+    filter.type = "nam";
+    Expect(lm::Filtered(state, filter).size() == 4, "the type filter");
+    filter.source = "local";
+    Expect(lm::Filtered(state, filter).size() == 1, "the source filter");
+    filter = {};
+    filter.query = "SOMEONE";
+    Expect(lm::Filtered(state, filter).size() == 1 && lm::Filtered(state, filter)[0].resource->id == "c",
+           "the search reads the creator, in any case");
+    filter = {};
+    filter.creator = "maker";
+    Expect(lm::Filtered(state, filter).size() == 1, "the creator filter");
+
+    const auto groups = lm::GroupByTone(all);
+    Expect(groups.size() == 1 && groups[0].title == "Plexi Pack" && groups[0].items.size() == 2 &&
+               groups[0].typeLabel == "Amp Model" && groups[0].originLabel == "Tone3000" &&
+               lm::GroupMeta(groups[0]) ==
+                   "Amp Model \xC2\xB7 Amp \xC2\xB7 Tone3000 \xC2\xB7 2 models \xC2\xB7 by maker",
+           "entries of one tone are grouped, and ones with none left out");
+    Expect(lm::RowMeta(all[2]) == "Amp Model \xC2\xB7 Uncategorized \xC2\xB7 Built-in \xC2\xB7 by Someone",
+           "a row's meta line");
+    Expect(lm::Summary(3, 5, false) == "Showing 3 of 5 resources" &&
+               lm::Summary(1, 5, true) == "Showing 1 of 5 resources (grouped)",
+           "the summary");
+    Expect(lm::PathActionLabel(all[3]) == "Set Path" && lm::PathActionLabel(all[0]).empty() && !lm::CanEdit(all[2]) &&
+               lm::CanEdit(all[0]),
+           "a local file's path can be set; a built-in entry cannot be edited");
+
+    const auto unused = lm::CleanupCandidates(state, "all");
+    Expect(unused.size() == 1 && unused[0].resource->id == "e" && lm::CleanupCandidates(state, "nam").empty(),
+           "Remove unused offers the imported entries in its scope");
+}
+
 void TestInputModeChoices()
 {
     using namespace guitarfx::uiclient::input_mode;
@@ -2718,6 +2793,7 @@ int main()
     TestUpdateCheckVersions();
     TestVisualizerBackgroundSettings();
     TestInputModeChoices();
+    TestLibraryManager();
     TestGlobalChainEditsMirror();
     TestLibraryExportAnswer();
     TestRiffMessages();
