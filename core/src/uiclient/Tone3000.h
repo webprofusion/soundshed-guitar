@@ -15,6 +15,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -109,6 +110,10 @@ template <typename T> struct Page
 /// The library entry a model was imported as, by its id or the model id its metadata records.
 [[nodiscard]] const LibraryResource* FindImported(const ClientState& state, const std::string& resourceType,
                                                   const Model& model);
+
+/// The tone a library entry was imported from (its toneId or groupId), for the browser to open
+/// on, as the web UI's tone3000ToneFromResource; nothing for an entry not from Tone3000.
+[[nodiscard]] std::optional<Tone> SourceToneOf(const LibraryResource& resource);
 
 /// The importRemoteResource payload for a model's bytes (base64 in `data`).
 [[nodiscard]] nlohmann::json ImportPayload(const Tone& tone, const Model& model, const std::string& resourceType,

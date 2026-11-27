@@ -87,6 +87,12 @@ struct ResourceFilter
 /// The categories the library holds for a type, in name order ("Uncategorized" for none).
 [[nodiscard]] std::vector<std::string> LibraryCategories(const ClientState& state, const std::string& resourceType);
 
+/// The library category a slot's hint ("cab", "reverb", "amp", "full-rig", "pedal"; "ir" is a
+/// cab) names among `available`: the same name, else one that holds the keyword; nothing when the
+/// library has no such category (the web UI's resolveLibraryCategoryFromHint).
+[[nodiscard]] std::optional<std::string> ResolveLibraryCategoryFromHint(const std::string& hint,
+                                                                        const std::vector<std::string>& available);
+
 struct LibraryPack
 {
     std::string key;

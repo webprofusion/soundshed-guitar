@@ -135,8 +135,9 @@ class ScaleNeck;      // ScaleGuideDraw.h
 class ChordWheelView; // ScaleGuideDraw.h
 class RunTabView;
 class ProgressionTabView;
-class NodeCard;  // NodeCard.h
-class Connector; // ChainWires.h
+class NodeCard;               // NodeCard.h
+struct ResourceBrowserMemory; // ResourceBrowser.cpp
+class Connector;              // ChainWires.h
 
 namespace chain
 {
@@ -858,6 +859,8 @@ class Shell
     void OpenResourceBrowser(const std::string& nodeId, const std::string& resourceType, int resourceIndex,
                              std::function<void(const std::string& resourceId)> onPick = {},
                              const std::string& title = {}, const std::string& category = {});
+    /// What each slot's browser keeps between opens, by slot (the web UI's persistedStateBySlot).
+    std::map<std::string, std::shared_ptr<ResourceBrowserMemory>> mResourceBrowserMemory;
     /// A library row's menu: details, rename, recategorise, copy the path, delete.
     void OpenLibraryResourceMenu(const std::string& resourceType, const std::string& resourceId, el::rect anchor);
     /// A library entry's name, category and tags (the web UI's row edit dialog).

@@ -1333,6 +1333,41 @@ void TestFeatureFlagsAndFxMarks()
 }
 
 // The preset bar's back and forward, as presets/history.ts keeps it.
+void TestResourceBrowserSlotHints()
+{
+    const std::vector<std::string> categories{"Amps", "Cabinet IRs", "Full Rig", "Pedals", "Reverb Rooms"};
+    Expect(ResolveLibraryCategoryFromHint("reverb", categories) == std::optional<std::string>("Reverb Rooms"),
+           "a slot's hint: the reverb picker opens on the reverbs");
+    Expect(ResolveLibraryCategoryFromHint("ir", categories) == std::optional<std::string>("Cabinet IRs"),
+           "a slot's hint: ir is a cab");
+    Expect(ResolveLibraryCategoryFromHint("full-rig", categories) == std::optional<std::string>("Full Rig"),
+           "a slot's hint: a full rig by keyword");
+    Expect(ResolveLibraryCategoryFromHint("amp", {"Full Amp", "Amps"}) == std::optional<std::string>("Amps"),
+           "a slot's hint: amp is not a full one");
+    Expect(ResolveLibraryCategoryFromHint("Pedals", categories) == std::optional<std::string>("Pedals"),
+           "a slot's hint: the same name, any case");
+    Expect(!ResolveLibraryCategoryFromHint("reverb", {"Amps"}) && !ResolveLibraryCategoryFromHint(" ", categories),
+           "a slot's hint: none when the library has no such category");
+
+    guitarfx::uiclient::LibraryResource model;
+    model.description = "Bright";
+    model.metadata = {{"provider", "tone3000"},
+                      {"toneId", 42},
+                      {"toneTitle", " Plexi "},
+                      {"gear", "amp"},
+                      {"sourceUrl", "https://www.tone3000.com/tones/plexi-42?ref=x"},
+                      {"creatorName", "Ann"}};
+    const auto tone = tone3000::SourceToneOf(model);
+    Expect(tone && tone->id == "42" && tone->title == "Plexi" && tone->gear == "amp" && tone->slug == "plexi-42" &&
+               tone->creatorName == "Ann" && tone->description == "Bright",
+           "a library model's source tone, from its import metadata");
+    model.metadata = {{"provider", "tone3000"}, {"groupId", "7"}};
+    Expect(tone3000::SourceToneOf(model) && tone3000::SourceToneOf(model)->title == "Tone3000 pack 7",
+           "a source tone by its group id, named for it");
+    model.metadata = {{"provider", "local"}, {"toneId", "7"}};
+    Expect(!tone3000::SourceToneOf(model), "no source tone for an entry not from Tone3000");
+}
+
 void TestCompositePresetSearch()
 {
     ClientState state;
@@ -2815,6 +2850,7 @@ int main()
     TestFeatureFlagsAndFxMarks();
     TestPresetTrail();
     TestCompositePresetSearch();
+    TestResourceBrowserSlotHints();
     TestResourceIndex();
     TestAnalysis();
     TestAnalysisPresentation();

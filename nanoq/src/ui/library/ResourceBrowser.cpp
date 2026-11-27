@@ -39,6 +39,23 @@ namespace t3 = guitarfx::uiclient::tone3000;
 
 using namespace resource_browser;
 
+/// What a slot's browser had when it closed, put back when it opens again: the tab, the
+/// library's filters, and the Tone3000 search with its results and open tone (so reopening asks
+/// Tone3000 nothing). The library category is not: each open starts on the slot's own.
+struct ResourceBrowserMemory
+{
+    int tab = 0; // the Tab below
+    std::string query, arch, creator;
+    std::vector<std::string> tags;
+    bool favouritesOnly = false;
+    std::map<std::string, bool> openPacks;
+    std::string t3Query, t3Gear, t3Sort = "downloads-all-time", t3Arch;
+    int t3Page = 1, t3Pages = 1;
+    std::vector<t3::Tone> t3Tones;
+    std::string t3Open;
+    std::vector<t3::Model> t3Models;
+};
+
 void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& resourceType, int resourceIndex,
                                 std::function<void(const std::string& resourceId)> onPick, const std::string& title,
                                 const std::string& category)
@@ -95,6 +112,8 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         bool t3ModelsLoading = false;
 
         SlotPtr tabs = MakeSlot(), controls = MakeSlot(), list = MakeSlot(), footer = MakeSlot();
+        SlotPtr pager = MakeSlot();             // Tone 3000's Prev / Page / Next, under its list
+        std::weak_ptr<el::element> selectedRow; // the Library row of the choice, brought into view on open
         std::function<void()> fillTabs, fillControls, fillList, fillFooter;
         std::function<void(int)> searchTone3000;
         std::shared_ptr<el::basic_input_box> searchBox, filterBox, t3Box;
@@ -117,7 +136,6 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     b->index = resourceIndex;
     b->role = RoleFor(mState, *node, resourceType, resourceIndex);
     b->onPick = std::move(onPick);
-    b->category = category;
     b->thumbnails = std::make_unique<ResourceThumbnailFetcher>(mSession.Client(), mSession.Tones());
     // A library entry's tone picture: the cached file, else the download while it arrives.
     b->thumbnailFor = [this, b](const std::string& resourceId) -> std::shared_ptr<artist::image> {
@@ -130,13 +148,6 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
 
         return !picture->path.empty() ? CachedThumbnail(picture->path) : RemoteImage(picture->fetchUrl);
     };
-    b->t3Gear = b->role.gear;
-
-    if (resourceType == "nam")
-    {
-        b->t3Arch = "2";
-    }
-
     const auto slot = static_cast<std::size_t>(std::max(0, resourceIndex));
 
     if (!b->onPick && slot < node->resources.size())
@@ -145,6 +156,91 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         b->hadOriginal = b->original.IsLibraryRef() || b->original.IsFilePath();
         b->selectedId = b->original.resourceId;
         b->selectedPath = guitarfx::util::PathToUtf8(b->original.filePath);
+    }
+
+    // What this slot's browser had last time; the first time, Tone3000 searches the slot's gear
+    // (A2 captures for a model).
+    const bool tone3000On = IsFeatureEnabled(mState, Feature::Tone3000);
+    auto& memorySlot = mResourceBrowserMemory[resourceType + ":" + b->role.context + (b->onPick ? ":pick" : "")];
+
+    if (!memorySlot)
+    {
+        memorySlot = std::make_shared<ResourceBrowserMemory>();
+        memorySlot->t3Gear = b->role.gear;
+        memorySlot->t3Arch = resourceType == "nam" ? "2" : "";
+    }
+
+    const auto memory = memorySlot;
+    b->tab = static_cast<Tab>(std::clamp(memory->tab, 0, 2));
+    b->tab = b->onPick || (b->tab == Tab::Tone3000 && !tone3000On) ? Tab::Library : b->tab;
+    b->query = memory->query;
+    b->arch = memory->arch;
+    b->creator = memory->creator;
+    b->tags = memory->tags;
+    b->favouritesOnly = memory->favouritesOnly;
+    b->openPacks = memory->openPacks;
+    b->t3Query = memory->t3Query;
+    b->t3Gear = memory->t3Gear;
+    b->t3Sort = memory->t3Sort;
+    b->t3Arch = memory->t3Arch;
+    b->t3Page = memory->t3Page;
+    b->t3Pages = memory->t3Pages;
+    b->t3Tones = memory->t3Tones;
+    b->t3Open = memory->t3Open;
+    b->t3Models = memory->t3Models;
+
+    // The library opens on the slot's category (the reverb IR on reverbs, Neural FX on pedals),
+    // or on everything when the library has none; on the chosen entry's own when it is elsewhere.
+    {
+        const auto available = LibraryCategories(mState, resourceType);
+        const auto hint = !category.empty()      ? category
+                          : resourceType == "ir" ? std::string(b->role.gear == "space" ? "reverb" : "cab")
+                                                 : b->role.gear;
+        b->category = ResolveLibraryCategoryFromHint(hint, available).value_or(std::string());
+        const auto* chosen = b->selectedId.empty() ? nullptr : mState.FindLibraryResource(resourceType, b->selectedId);
+        const auto chosenCategory = chosen == nullptr          ? std::string()
+                                    : chosen->category.empty() ? std::string("Uncategorized")
+                                                               : chosen->category;
+
+        if (chosen != nullptr && !b->category.empty() && b->category != chosenCategory)
+        {
+            const bool held = std::find(available.begin(), available.end(), chosenCategory) != available.end();
+            b->category = held ? chosenCategory : std::string();
+        }
+    }
+
+    // A model imported from Tone3000 opens on the tone it came from, its models listed.
+    std::optional<t3::Tone> sourceTone;
+
+    if (!b->onPick && tone3000On && !b->selectedId.empty())
+    {
+        if (const auto* chosen = mState.FindLibraryResource(resourceType, b->selectedId))
+        {
+            sourceTone = t3::SourceToneOf(*chosen);
+            const auto arch = MetaText(chosen->metadata, "architectureVersion");
+
+            if (sourceTone)
+            {
+                b->tab = Tab::Tone3000;
+                b->t3Query.clear();
+                b->t3Arch = resourceType == "nam" && (arch == "1" || arch == "2") ? arch : std::string();
+                b->t3Page = b->t3Pages = 1;
+
+                // Already open from last time: nothing to ask.
+                if (b->t3Open == sourceTone->id && !b->t3Models.empty() && b->t3Tones.size() == 1 &&
+                    b->t3Tones.front().id == sourceTone->id)
+                {
+                    sourceTone.reset();
+                }
+                else
+                {
+                    b->t3Tones = {*sourceTone};
+                    b->t3Open = sourceTone->id;
+                    b->t3Models.clear();
+                    b->t3ModelsLoading = true;
+                }
+            }
+        }
     }
 
     // Everything below runs on the UI thread; a refill asked for from inside a list waits for
@@ -226,6 +322,12 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             auto row = std::make_shared<BrowserRow>(mTheme, mIcons, title,
                                                     ResourceMetaLine(*r, b->resourceType, b->category.empty()));
             row->selected = r->id == b->selectedId || (!b->selectedPath.empty() && r->filePath == b->selectedPath);
+
+            if (row->selected)
+            {
+                b->selectedRow = row;
+            }
+
             row->picture = [b, id = r->id] { return b->thumbnailFor ? b->thumbnailFor(id) : nullptr; };
             row->pictureSlot = true;
             row->star = IsResourceFavorite(mState, r->id) ? 1 : 0;
@@ -306,8 +408,8 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                     creators.push_back(CreatorOf(r->metadata));
                 }
 
-                auto head = std::make_shared<BrowserRow>(
-                    mTheme, mIcons, entry.pack->title, GroupMetaLine(creators, entry.items.size(), b->resourceType));
+                auto head = std::make_shared<BrowserRow>(mTheme, mIcons, entry.pack->title,
+                                                         GroupMetaLine(creators, entry.items.size(), b->resourceType));
                 head->note = open ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
 
                 // The first of its models with a tone picture lends it to the group's caption.
@@ -372,6 +474,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                                                 Font(Weight::Regular), 1.0f);
             b->searchBox = box;
             b->searchElement = el::share(std::move(element));
+            b->searchBox->set_text(b->query); // what this slot's browser was searching last
             b->searchBox->on_text = [b](std::string_view text) {
                 b->query = std::string(text);
 
@@ -721,8 +824,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 std::any_of(group.files.begin(), group.files.end(),
                             [b](const ResourceFolderListing::File* f) { return f->path == b->selectedPath; });
             const auto toggled = b->openPacks.find(group.key);
-            const bool open =
-                toggled != b->openPacks.end() ? toggled->second : (holdsSelected || !b->filter.empty());
+            const bool open = toggled != b->openPacks.end() ? toggled->second : (holdsSelected || !b->filter.empty());
 
             // The tone's title, else what its models' library names share, else its gear, else the
             // first file's name; "gear · by creator · N models"; a member's picture, else the tone's.
@@ -757,7 +859,8 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             head->note = open ? "\xE2\x96\xB4" : "\xE2\x96\xBE";
             head->pictureSlot = true;
             head->picture = [this, b, memberIds,
-                             tonePicture = https(MetaText(group.metadata, "imageUrl"))]() -> std::shared_ptr<artist::image> {
+                             tonePicture =
+                                 https(MetaText(group.metadata, "imageUrl"))]() -> std::shared_ptr<artist::image> {
                 for (const auto& id : memberIds)
                 {
                     if (auto image = b->thumbnailFor ? b->thumbnailFor(id) : nullptr)
@@ -930,39 +1033,36 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                         }
                     }
                 };
-                folderLookup.Start(b->listedFiles, changed,
-                                   [this, changed, alive](const FolderToneLookup::Summary& summary) {
-                                       if (!alive.lock())
-                                       {
-                                           return;
-                                       }
+                folderLookup.Start(
+                    b->listedFiles, changed, [this, changed, alive](const FolderToneLookup::Summary& summary) {
+                        if (!alive.lock())
+                        {
+                            return;
+                        }
 
-                                       changed();
+                        changed();
 
-                                       if (!summary.error.empty())
-                                       {
-                                           ShowToast("Lookup failed", summary.error, true);
-                                           return;
-                                       }
+                        if (!summary.error.empty())
+                        {
+                            ShowToast("Lookup failed", summary.error, true);
+                            return;
+                        }
 
-                                       if (summary.looked == 0)
-                                       {
-                                           return;
-                                       }
+                        if (summary.looked == 0)
+                        {
+                            return;
+                        }
 
-                                       const auto more = summary.remaining > 0
-                                                             ? " Look up again for the next " +
-                                                                   std::to_string(std::min(summary.remaining,
-                                                                                           FolderToneLookup::kBatch)) +
-                                                                   "."
-                                                             : std::string();
-                                       ShowToast(summary.found > 0 ? "Details found" : "No details found",
-                                                 std::to_string(summary.found) + " of " +
-                                                     std::to_string(summary.looked) +
-                                                     (summary.looked == 1 ? " file" : " files") +
-                                                     " matched a published tone." + more,
-                                                 false);
-                                   });
+                        const auto more =
+                            summary.remaining > 0
+                                ? " Look up again for the next " +
+                                      std::to_string(std::min(summary.remaining, FolderToneLookup::kBatch)) + "."
+                                : std::string();
+                        ShowToast(summary.found > 0 ? "Details found" : "No details found",
+                                  std::to_string(summary.found) + " of " + std::to_string(summary.looked) +
+                                      (summary.looked == 1 ? " file" : " files") + " matched a published tone." + more,
+                                  false);
+                    });
             };
             b->lookupButton = lookUp;
             second.push_back(HGap(10));
@@ -980,9 +1080,9 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
         }
 
         const auto& folderLookup = mSession.FolderLookup();
-        const auto pending =
-            std::count_if(b->listedFiles.begin(), b->listedFiles.end(),
-                          [&folderLookup](const ResourceFolderListing::File& f) { return folderLookup.NeedsLookup(f); });
+        const auto pending = std::count_if(
+            b->listedFiles.begin(), b->listedFiles.end(),
+            [&folderLookup](const ResourceFolderListing::File& f) { return folderLookup.NeedsLookup(f); });
 
         if (folderLookup.Running())
         {
@@ -1242,6 +1342,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                               Font(Weight::Regular), 1.0f);
             b->t3Box = box;
             b->t3Element = el::share(std::move(element));
+            b->t3Box->set_text(b->t3Query);
             b->t3Box->on_text = [b](std::string_view text) { b->t3Query = std::string(text); };
             b->t3Box->on_enter = [b, search](std::string_view text) {
                 b->t3Query = std::string(text);
@@ -1378,6 +1479,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     b->fillFooter = [this, b, search] {
         std::vector<Ptr> row;
 
+        // Tone 3000's pages go under its list (.resource-browser-pagination), the hint staying.
         if (b->tab == Tab::Tone3000 && !b->t3Tones.empty())
         {
             auto prev = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Ghost);
@@ -1389,21 +1491,25 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
             auto page = std::make_shared<Text>(
                 mTheme, "Page " + std::to_string(b->t3Page) + " of " + std::to_string(b->t3Pages), 11.0f);
             page->Colour(mTheme.TextSecondary()).Fixed(true);
-            row = {Stretch(), prev, HGap(6), page, HGap(6), next, Stretch()};
+            Fill(*b->pager,
+                 FixedHeight(40, Pad(0, 8, 0, 0, Row({Stretch(), prev, HGap(6), page, HGap(6), next, Stretch()}))));
         }
         else
         {
-            // What a click and a double click do (.resource-browser-footer-hint).
-            auto hint = std::make_shared<Text>(mTheme,
-                                               b->onPick ? "Double click an item to choose it."
-                                                         : "Select an item to preview it in the current signal chain, "
-                                                           "double click to select and return to the effect.",
-                                               11.5f);
-            hint->Colour(mTheme.TextSecondary());
-            row = {Middle(hint), HGap(12)};
+            Fill(*b->pager, FixedHeight(0, std::make_shared<el::element>()));
         }
 
-        auto cancel = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Primary);
+        // What a click and a double click do (.resource-browser-footer-hint).
+        auto hint = std::make_shared<Text>(mTheme,
+                                           b->onPick ? "Double click an item to choose it."
+                                                     : "Select an item to preview it in the current signal chain, "
+                                                       "double click to select and return to the effect.",
+                                           11.5f);
+        hint->Colour(mTheme.TextSecondary());
+        row = {Middle(hint), HGap(12)};
+
+        // Cancel is the secondary button, OK the primary (.btn-secondary, .btn-primary).
+        auto cancel = std::make_shared<IconButton>(mTheme, mIcons, "", IconButton::Look::Boxed);
         cancel->Size(64, 30).Label("Cancel", 11.5f);
         cancel->onClick = [this, b] {
             // A Tone3000 audition ends and the engine puts back what the slot held.
@@ -1648,6 +1754,101 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     b->fillList();
     b->fillFooter();
 
+    // The chosen Library row brought into view once the dialog has its size.
+    const auto showSelected = [this](std::weak_ptr<Browser> weak) {
+        mSession.View().post([this, alive = std::weak_ptr<bool>(mAlive), weak] {
+            const auto st = weak.lock();
+            const auto row = st && alive.lock() && st->tab == Tab::Library ? st->selectedRow.lock() : nullptr;
+
+            if (row)
+            {
+                mSession.View().layout();
+                mSession.View().in_context_do(
+                    *row, [](const el::context& ctx) { el::scrollable::find(ctx).scroll_into_view(ctx.bounds); });
+                mSession.View().refresh();
+            }
+        });
+    };
+
+    if (sourceTone)
+    {
+        // Its models, as a click on the tone asks; a pack that cannot be listed leaves the
+        // Library showing the model (the web UI's fallBackToLibrary).
+        const auto fallBack = [this, showSelected, libraryFilter,
+                               weak = std::weak_ptr<Browser>(state)](const std::string& reason) {
+            const auto st = weak.lock();
+
+            if (!st || !st->fillTabs)
+            {
+                return;
+            }
+
+            ShowToast("Tone3000 pack unavailable", reason + " Showing the model in your library instead.", false);
+            st->tab = Tab::Library;
+            const auto shown = FilterLibrary(mState, st->resourceType, libraryFilter(), st->selectedId);
+
+            if (std::none_of(shown.begin(), shown.end(),
+                             [&st](const LibraryResource* r) { return r->id == st->selectedId; }))
+            {
+                st->query.clear();
+                st->favouritesOnly = false;
+
+                if (st->searchBox)
+                {
+                    st->searchBox->set_text("");
+                }
+            }
+
+            st->fillTabs();
+            st->fillControls();
+            st->fillList();
+            st->fillFooter();
+            showSelected(weak);
+        };
+
+        if (mSession.Tones().Tone3000NeedsKey())
+        {
+            b->t3ModelsLoading = false;
+            b->t3Open.clear();
+            mSession.View().post([fallBack] { fallBack("Add a Tone3000 API key in Settings to browse."); });
+        }
+        else
+        {
+            mSession.Tones().Tone3000Models(
+                sourceTone->id, [fallBack, weak = std::weak_ptr<Browser>(state),
+                                 id = sourceTone->id](const std::vector<t3::Model>& models, const std::string& error) {
+                    const auto st = weak.lock();
+
+                    if (!st || st->t3Open != id)
+                    {
+                        return;
+                    }
+
+                    st->t3Models = models;
+                    st->t3ModelsLoading = false;
+
+                    if (!error.empty() || models.empty())
+                    {
+                        st->t3Open.clear();
+                        fallBack(!error.empty() ? "Its models could not be loaded (" + error + ")."
+                                                : std::string("It has no models to show."));
+                        return;
+                    }
+
+                    if (st->fillList)
+                    {
+                        st->fillList();
+                        st->fillFooter();
+                    }
+                });
+        }
+    }
+    else if (b->tab == Tab::Tone3000 && b->t3Tones.empty())
+    {
+        // Back on Tone 3000 with nothing kept (the last search was still on its way).
+        b->searchTone3000(b->t3Page);
+    }
+
     auto cancel = [this, b] {
         // The x is Cancel, as in the web UI.
         if (b->previewed && !b->onPick)
@@ -1683,7 +1884,7 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
     ShowDialog({.title = title.empty() ? b->role.title : title,
                 .body = Col({FixedHeight(38, b->tabs),
                              FixedHeight(1, Fill(mTheme.ModalRule(), std::make_shared<el::element>())),
-                             VGap(short_ ? 8 : 12), b->controls, VGap(short_ ? 6 : 10), b->list}),
+                             VGap(short_ ? 8 : 12), b->controls, VGap(short_ ? 6 : 10), b->list, b->pager}),
                 .footerLeft = b->footer,
                 .width = std::min(944.0f, view.x - 16.0f),
                 .height = std::max(320.0f, view.y - (short_ ? 16.0f : 40.0f)),
@@ -1691,7 +1892,25 @@ void Shell::OpenResourceBrowser(const std::string& nodeId, const std::string& re
                 .padY = 10.0f,
                 .onClose = cancel,
                 .stretch = true});
-    mOnOverlayClosed = [this, state] {
+    showSelected(state);
+    mOnOverlayClosed = [this, state, memory] {
+        // Kept for the slot's next open; a list still on its way is asked for again then.
+        memory->tab = static_cast<int>(state->tab);
+        memory->query = state->query;
+        memory->arch = state->arch;
+        memory->creator = state->creator;
+        memory->tags = state->tags;
+        memory->favouritesOnly = state->favouritesOnly;
+        memory->openPacks = state->openPacks;
+        memory->t3Query = state->t3Query;
+        memory->t3Gear = state->t3Gear;
+        memory->t3Sort = state->t3Sort;
+        memory->t3Arch = state->t3Arch;
+        memory->t3Page = state->t3Page;
+        memory->t3Pages = state->t3Pages;
+        memory->t3Tones = state->t3Loading ? std::vector<t3::Tone>() : state->t3Tones;
+        memory->t3Open = state->t3ModelsLoading ? std::string() : state->t3Open;
+        memory->t3Models = state->t3ModelsLoading ? std::vector<t3::Model>() : state->t3Models;
         mSession.Tones().RemoveListener(state->toneListener);
         state->subscriptions.clear();
         state->thumbnailFor = nullptr;

@@ -346,6 +346,56 @@ const LibraryResource* FindImported(const ClientState& state, const std::string&
     return nullptr;
 }
 
+std::optional<Tone> SourceToneOf(const LibraryResource& resource)
+{
+    if (Meta(resource, "provider") != "tone3000")
+    {
+        return std::nullopt;
+    }
+
+    const auto trimmed = [&resource](const char* key) {
+        auto text = Meta(resource, key);
+        const auto first = text.find_first_not_of(" \t\r\n");
+        return first == std::string::npos ? std::string()
+                                          : text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+    };
+    Tone tone;
+    tone.id = trimmed("toneId");
+    tone.id = tone.id.empty() ? trimmed("groupId") : tone.id;
+
+    if (tone.id.empty())
+    {
+        return std::nullopt;
+    }
+
+    tone.title = trimmed("toneTitle");
+    tone.title = tone.title.empty() ? trimmed("groupName") : tone.title;
+    tone.title = tone.title.empty() ? "Tone3000 pack " + tone.id : tone.title;
+    tone.description = resource.description;
+    tone.gear = Meta(resource, "gear");
+    tone.gear = tone.gear.empty() ? Meta(resource, "tone3000Category") : tone.gear;
+    tone.platform = Meta(resource, "platform");
+    tone.license = Meta(resource, "licence");
+    tone.license = tone.license.empty() ? Meta(resource, "license") : tone.license;
+    tone.imageUrl = Meta(resource, "imageUrl");
+    tone.creatorId = Meta(resource, "creatorId");
+    tone.creatorName = Meta(resource, "creatorName");
+    tone.creatorUsername = Meta(resource, "authorUsername");
+    tone.creatorUrl = Meta(resource, "creatorUrl");
+
+    // The slug is what follows the tones path of its source URL.
+    static constexpr std::string_view kSourcePrefix = "https://www.tone3000.com/tones/";
+    const auto source = Meta(resource, "sourceUrl");
+
+    if (source.rfind(kSourcePrefix, 0) == 0)
+    {
+        tone.slug = source.substr(kSourcePrefix.size());
+        tone.slug = tone.slug.substr(0, tone.slug.find_first_of("?#"));
+    }
+
+    return tone;
+}
+
 nlohmann::json ImportPayload(const Tone& tone, const Model& model, const std::string& resourceType,
                              const std::string& category, std::string base64Data, const std::string& zipEntry)
 {

@@ -538,6 +538,50 @@ std::vector<std::string> LibraryCategories(const ClientState& state, const std::
     return list;
 }
 
+std::optional<std::string> ResolveLibraryCategoryFromHint(const std::string& hint,
+                                                          const std::vector<std::string>& available)
+{
+    auto wanted = Trim(hint);
+    std::transform(wanted.begin(), wanted.end(), wanted.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    wanted = wanted == "ir" ? std::string("cab") : wanted;
+
+    if (wanted.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto lower = [](std::string text) {
+        std::transform(text.begin(), text.end(), text.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return text;
+    };
+
+    for (const auto& category : available)
+    {
+        if (lower(category) == wanted)
+        {
+            return category;
+        }
+    }
+
+    for (const auto& category : available)
+    {
+        const auto name = lower(category);
+        const auto has = [&name](const char* word) { return name.find(word) != std::string::npos; };
+
+        if ((wanted == "pedal" && has("pedal")) ||
+            (wanted == "full-rig" && (has("full-rig") || has("full rig") || has("fullrig"))) ||
+            (wanted == "amp" && has("amp") && !has("full")) || (wanted == "cab" && has("cab")) ||
+            (wanted == "reverb" && has("reverb")))
+        {
+            return category;
+        }
+    }
+
+    return std::nullopt;
+}
+
 std::optional<LibraryPack> LibraryPackOf(const LibraryResource& resource)
 {
     auto toneId = Trim(MetaString(resource, "toneId"));
