@@ -216,9 +216,9 @@ Ptr Shell::BuildChain()
         if (input || output)
         {
             look.name = input ? "Input" : "Output";
-            look.icon = input ? "guitar" : "output";
-            // --node-input and --node-output.
-            look.tint = input ? mTheme.Success() : el::rgba(104, 136, 168, 255);
+            // amp.svg and speaker.svg, in --node-input and --node-output.
+            look.icon = input ? "amp" : "speaker";
+            look.tint = input ? el::rgba(104, 168, 104, 255) : el::rgba(104, 136, 168, 255);
             look.width = kBoundaryWidth;
             look.canBypass = false;
             look.boundary = input ? NodeCard::Boundary::Input : NodeCard::Boundary::Output;

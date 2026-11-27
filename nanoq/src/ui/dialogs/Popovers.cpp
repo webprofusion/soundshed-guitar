@@ -207,12 +207,13 @@ void Shell::CloseDropdown()
     RemoveLayer(std::move(dropdown));
 }
 
-void Shell::OpenDropdown(el::rect anchor, std::vector<MenuItem> items, float width)
+void Shell::OpenDropdown(el::rect anchor, std::vector<MenuItem> items, float width, bool above)
 {
-    OpenDropdownColumns(anchor, {std::move(items)}, width);
+    OpenDropdownColumns(anchor, {std::move(items)}, width, above);
 }
 
-void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuItem>> columns, float width)
+void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuItem>> columns, float width,
+                                bool openAbove)
 {
     std::vector<Ptr> lists;
     float height = 12.0f;
@@ -262,7 +263,7 @@ void Shell::OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuIte
     }
 
     // Near the bottom of the window (the footer's selects) the list opens upwards.
-    const bool above = anchor.top > ViewSize().y * 0.6f;
+    const bool above = openAbove || anchor.top > ViewSize().y * 0.6f;
     const float maxHeight = above ? anchor.top - 16.0f : ViewSize().y - anchor.bottom - 16.0f;
     const float n = static_cast<float>(columns.size());
     // The panel holds the 6 px padding either side as well, one column or more. Given the

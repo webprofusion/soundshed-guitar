@@ -99,7 +99,9 @@ constexpr float kConnectorWidth = 36.0f;
 constexpr float kRailWidth = 30.0f;
 constexpr float kLaneGap = 8.0f;
 constexpr float kWireEndWidth = 14.0f; // where a line's cable turns down, or the next one's comes in
-constexpr float kRouteHeight = 16.0f;  // the cable back under a line
+// The cable back under a line: with each row's 10 px either side of its cards, wrapped rows sit
+// 28 apart as the web UI's (wrap.css row-gap).
+constexpr float kRouteHeight = 8.0f;
 constexpr float kSidePad = 12.0f;
 constexpr float kPowerSize = 16.0f;
 // The chain dragged short (nodes-compact.css): each card a 40 px tile with only its icon, in a
@@ -107,7 +109,7 @@ constexpr float kPowerSize = 16.0f;
 constexpr float kIconCardSize = 40.0f;
 constexpr float kIconRowHeight = 48.0f;
 
-/// The card's name, its detail and its model's badge: 10, 9 and 8 px, or with touch sizes 11, 10
+/// The card's name, its detail and its model's badge: 10, 8 and 8 px, or with touch sizes 11, 10
 /// and 10.
 inline float CardNameSize()
 {
@@ -116,7 +118,7 @@ inline float CardNameSize()
 
 inline float CardDetailSize()
 {
-    return metrics::Readable(9.0f, 10.0f);
+    return metrics::Readable(8.0f, 10.0f);
 }
 
 inline float CardBadgeSize()
@@ -125,16 +127,16 @@ inline float CardBadgeSize()
 }
 
 /// A card's width for its text, estimated from its length so the wrap can be worked out before
-/// anything is measured: the 10 px capitals run about 6.6 px a letter and the 9 px detail about
-/// 5.2 (in proportion at the touch sizes), inside 12 px of padding each side (min-width 72, the
-/// text at most 160).
+/// anything is measured: the 10 px capitals, spaced .06em, run about 7.2 px a letter and the 8 px
+/// detail about 4.6 (in proportion at the touch sizes), inside 12 px of padding each side
+/// (min-width 72, the text at most 160).
 inline float CardWidthFor(const std::string& name, const std::string& detail)
 {
     const auto chars = [](const std::string& s) {
         return static_cast<float>(
             std::count_if(s.begin(), s.end(), [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; }));
     };
-    const float nameLetter = metrics::Touch() ? 7.3f : 6.6f, detailLetter = metrics::Touch() ? 5.8f : 5.2f;
+    const float nameLetter = metrics::Touch() ? 8.0f : 7.2f, detailLetter = metrics::Touch() ? 5.8f : 4.6f;
     const float wanted = std::min(160.0f, std::max(chars(name) * nameLetter, chars(detail) * detailLetter)) + 24.0f;
     return std::clamp(wanted, 72.0f, 185.0f);
 }
@@ -345,6 +347,11 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             cnv.scale(1.06f, 1.06f);
             cnv.translate(-cx, -cy);
         }
+        else if (mHover && !mDragging && !metrics::Touch())
+        {
+            // Hovered, it lifts a pixel (.signal-node:hover).
+            cnv.translate(0.0f, -1.0f);
+        }
 
         const auto tint = mLook.tint;
         const bool on = mLook.enabled;
@@ -393,90 +400,87 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
         }
         else
         {
-            // The shadow under it, and for the selected card a glow in its colour.
+            // The web UI's raised card (--node-raised): a drop shadow, a 3 px wall of the face
+            // darkened 38% over a 1 px edge, then the face with its sheen. No category wash.
+            const el::rect wall{r.left, r.top + 4.0f, r.right, r.bottom + 4.0f};
             {
                 auto state = cnv.new_state();
-
-                if (mLook.selected)
-                {
-                    cnv.shadow_style(el::point{0.0f, 0.0f}, 22.0f, tint.opacity(0.24f));
-                }
-                else
-                {
-                    cnv.shadow_style(el::point{0.0f, 3.0f}, 8.0f, el::rgba(0, 0, 0, on ? 90 : 40));
-                }
-
-                cnv.fill_style(ghost(face));
-                cnv.fill_round_rect(r, kRadius);
+                cnv.shadow_style(el::point{0.0f, 4.0f}, 12.0f, el::rgba(0, 0, 0, on ? 70 : 30));
+                cnv.fill_style(ghost(el::rgba(0, 0, 0, 77)));
+                cnv.fill_round_rect(wall, kRadius);
             }
-            // A wash of the category colour from the top, and a shade at the foot.
+            cnv.fill_style(ghost(Mix(el::rgba(0, 0, 0, 255), face, 0.38f)));
+            cnv.fill_round_rect(el::rect{r.left, r.top + 3.0f, r.right, r.bottom + 3.0f}, kRadius);
+            cnv.fill_style(ghost(face));
+            cnv.fill_round_rect(r, kRadius);
             {
                 auto state = cnv.new_state();
-                const el::point top{r.left + r.width() * 0.5f, r.top};
-                artist::canvas::radial_gradient wash{top, 0.0f, top, std::max(r.width() * 0.6f, r.height() * 0.7f)};
-                wash.add_color_stop(0.0f, tint.opacity(0.16f * fade));
-                wash.add_color_stop(1.0f, tint.opacity(0.0f));
-                cnv.fill_style(wash);
-                cnv.fill_round_rect(r, kRadius);
-
-                artist::canvas::linear_gradient shade{r.top_left(), r.bottom_left()};
-                shade.add_color_stop(0.55f, el::rgba(0, 0, 0, 0));
-                shade.add_color_stop(1.0f, el::rgba(0, 0, 0, 26));
-                cnv.fill_style(shade);
+                artist::canvas::linear_gradient sheen{r.top_left(), r.bottom_left()};
+                sheen.add_color_stop(0.0f, el::rgba(255, 255, 255, static_cast<std::uint8_t>(15 * fade)));
+                sheen.add_color_stop(0.42f, el::rgba(255, 255, 255, 0));
+                sheen.add_color_stop(1.0f, el::rgba(0, 0, 0, 10));
+                cnv.fill_style(sheen);
                 cnv.fill_round_rect(r, kRadius);
             }
 
-            // The border: the category colour mixed into the border colour, full strength with an inner
-            // ring when selected; red when its file is missing.
+            // The border: the category colour 72% into the face, 88% under the pointer, full when
+            // chosen with a 2 px halo of it outside; red when its file is missing. Dashed when off.
             const el::color border = mLook.missing    ? el::rgba(232, 76, 76, 153)
                                      : mLook.selected ? tint
-                                     : boundary       ? Mix(tint, mTheme.Border(), 0.6f)
-                                                      : Mix(tint, mTheme.Border(), 0.42f);
+                                                      : Mix(tint, face, mHover ? 0.88f : 0.72f);
             cnv.stroke_style(ghost(border));
-            cnv.line_width(mLook.selected ? 2.0f : 1.0f);
-            cnv.stroke_round_rect(mLook.selected ? r.inset(0.5f, 0.5f) : r, kRadius);
+            cnv.line_width(1.0f);
 
-            if (mLook.selected)
+            if (on)
             {
-                cnv.stroke_style(tint.opacity(0.36f));
-                cnv.line_width(1.0f);
-                cnv.stroke_round_rect(r.inset(-1.0f, -1.0f), kRadius + 1.0f);
+                cnv.stroke_round_rect(r.inset(0.5f, 0.5f), kRadius - 0.5f);
+            }
+            else
+            {
+                StrokeDashedRoundRect(cnv, r.inset(0.5f, 0.5f), kRadius - 0.5f, 4.0f, 3.0f);
+            }
+
+            if (mLook.selected || mLook.missing)
+            {
+                const float halo = mLook.selected ? 2.0f : 1.0f;
+                cnv.stroke_style(mLook.selected ? tint.opacity(0.24f) : el::rgba(232, 76, 76, 89));
+                cnv.line_width(halo);
+                cnv.stroke_round_rect(r.inset(-halo * 0.5f, -halo * 0.5f), kRadius + halo * 0.5f);
             }
         }
 
-        // A dragged card would land after this one, or a held one is picked up: an accent ring.
-        if (lifted || (mHits && !mNodeId.empty() && mHits->hoverNode == mNodeId))
+        // A dragged card would land before this one (.signal-node.drag-over): the drop colour's
+        // edge and a 12 px dot at its left; a card held or dragged is edged in the accent.
+        if (mHits && !mNodeId.empty() && mHits->hoverNode == mNodeId)
+        {
+            const el::color drop = el::rgba(72, 224, 120, 255);
+            cnv.stroke_style(drop);
+            cnv.line_width(1.0f);
+            cnv.stroke_round_rect(r.inset(0.5f, 0.5f), kRadius - 0.5f);
+            const el::point dot{r.left - 4.0f, (r.top + r.bottom) * 0.5f};
+            cnv.fill_style(drop.opacity(0.24f));
+            cnv.add_circle(artist::circle(dot, 9.0f));
+            cnv.fill();
+            cnv.fill_style(drop);
+            cnv.add_circle(artist::circle(dot, 6.0f));
+            cnv.fill();
+        }
+        else if (lifted || mDragging)
         {
             cnv.stroke_style(mTheme.Accent());
-            cnv.line_width(2.0f);
-            cnv.stroke_round_rect(r.inset(-3.0f, -3.0f), kRadius + 3.0f);
+            cnv.line_width(1.0f);
+            cnv.stroke_round_rect(r.inset(0.5f, 0.5f), kRadius - 0.5f);
         }
 
         // The highlight along the top edge (a skinned cap has its own).
         if (!skinned)
         {
-            cnv.stroke_style(Mix(el::rgba(255, 255, 255, 255), tint, 0.08f).opacity(0.18f * fade));
+            cnv.stroke_style(el::rgba(255, 255, 255, 255).opacity(0.1f * fade));
             cnv.line_width(1.0f);
             cnv.begin_path();
             cnv.move_to(r.left + kRadius, r.top + 1.5f);
             cnv.line_to(r.right - kRadius, r.top + 1.5f);
             cnv.stroke();
-        }
-
-        // The underglow: a strip of the category colour along the foot, wider when selected.
-        if (on && !skinned)
-        {
-            auto state = cnv.new_state();
-            const float inset = r.width() * (mLook.selected ? 0.10f : 0.22f);
-            const el::rect strip{r.left + inset, r.bottom - 1.0f, r.right - inset, r.bottom + 1.0f};
-            artist::canvas::linear_gradient glow{strip.top_left(), strip.top_right()};
-            const float strength = mLook.selected ? 1.0f : (mLight == Light::Live || mHover ? 0.9f : 0.5f);
-            glow.add_color_stop(0.0f, tint.opacity(0.0f));
-            glow.add_color_stop(0.5f, tint.opacity(strength));
-            glow.add_color_stop(1.0f, tint.opacity(0.0f));
-            cnv.shadow_style(el::point{0.0f, 0.0f}, 10.0f, tint.opacity(0.24f * strength));
-            cnv.fill_style(glow);
-            cnv.fill_round_rect(strip, 1.0f);
         }
 
         // Icon-only: the icon fills the tile, or the artwork covers the whole of it inside the
@@ -569,8 +573,14 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             const auto detailFont = Font(Weight::Medium).size(CardDetailSize());
             const float textWidth = std::min(160.0f, r.width() - 16.0f);
             const float nameRow = metrics::Touch() ? 13.0f : 12.0f;
-            FillText(cnv, Ellipsize(cnv, Upper(mLook.name), nameFont, textWidth), nameFont, ink,
-                     el::rect{r.left + 6.0f, y, r.right - 6.0f, y + nameRow}, HAlign::Centre);
+            // .node-name: spaced .06em.
+            constexpr float kNameTracking = 0.06f;
+            const auto upperName = Upper(mLook.name);
+            const float nameTracking =
+                kNameTracking * CardNameSize() * static_cast<float>(std::min<std::size_t>(upperName.size(), 32));
+            FillTrackedText(cnv, Ellipsize(cnv, upperName, nameFont, std::max(0.0f, textWidth - nameTracking)),
+                            nameFont, ink, el::rect{r.left + 6.0f, y, r.right - 6.0f, y + nameRow}, HAlign::Centre,
+                            kNameTracking);
             y += nameRow + 2.0f;
 
             if (!mLook.detail.empty())
@@ -595,37 +605,80 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
             }
         }
 
-        // The signal light, bottom right.
-        if (on && mLight != Light::None)
+        // The signal light (.node-clip-indicator): 6 px, 5 px in from the bottom right; a lamp
+        // with a highlight when there is signal (green) or clipping (red), grey at .6 with none.
+        // It stays lit on a card that is off, faded with it.
+        if (mLight != Light::None)
         {
-            const el::color colour = mLight == Light::Clip ? mTheme.Error() : el::rgba(72, 224, 120, 255);
-            const el::point c{r.right - 9.0f, r.bottom - 9.0f};
+            const el::point c{r.right - 8.0f, r.bottom - 8.0f};
             auto state = cnv.new_state();
 
-            if (mLight != Light::Idle)
+            if (mLight == Light::Idle)
             {
-                cnv.shadow_style(el::point{0.0f, 0.0f}, 6.0f, colour.opacity(0.8f));
+                cnv.fill_style(ghost(mTheme.TextMuted().opacity(0.6f)));
+            }
+            else
+            {
+                const bool clip = mLight == Light::Clip;
+                const el::color lamp = clip ? el::rgba(255, 92, 92, 255) : el::rgba(72, 224, 120, 255);
+                cnv.shadow_style(el::point{0.0f, 0.0f}, 6.0f, lamp.opacity((clip ? 0.8f : 0.6f) * fade));
+                const el::point spot{c.x - 0.9f, c.y - 1.2f};
+                artist::canvas::radial_gradient glass{spot, 0.0f, spot, 4.2f};
+                glass.add_color_stop(
+                    0.0f, (clip ? el::rgba(255, 208, 208, 255) : el::rgba(216, 255, 228, 255)).opacity(fade));
+                glass.add_color_stop(0.45f, lamp.opacity(fade));
+                glass.add_color_stop(1.0f,
+                                     (clip ? el::rgba(192, 40, 40, 255) : el::rgba(32, 160, 80, 255)).opacity(fade));
+                cnv.fill_style(glass);
             }
 
-            cnv.fill_style(mLight == Light::Idle ? colour.opacity(0.35f) : colour);
             cnv.add_circle(artist::circle(c, 3.0f));
             cnv.fill();
         }
 
-        if (mLook.missing && !mLook.iconOnly)
+        // A small boxed tag (.node-bypass-badge, .node-missing-badge) with its right edge at `right`.
+        const auto tag = [&](const char* text, float size, float right, float top, el::color ink, el::color fill,
+                             el::color edge, float padX, float padY) {
+            const auto font = Font(Weight::SemiBold).size(size);
+            const float w = el::measure_text(cnv, text, font).x + 2.0f * padX;
+            const el::rect box{right - w, top, right, top + size + 2.0f * padY + 1.0f};
+            cnv.fill_style(fill);
+            cnv.fill_round_rect(box, 3.0f);
+
+            if (edge.alpha > 0.0f)
+            {
+                cnv.stroke_style(edge);
+                cnv.line_width(1.0f);
+                cnv.stroke_round_rect(box.inset(0.5f, 0.5f), 3.0f);
+            }
+
+            FillText(cnv, text, font, ink, box, HAlign::Centre);
+        };
+
+        // Off: a red OFF at the top right, under the power (.node-bypass-badge).
+        if (!on && !mLook.iconOnly && !boundary)
         {
-            const auto font = Font(Weight::SemiBold).size(9.0f);
-            FillText(cnv, "\xE2\x9A\xA0", font, el::rgba(255, 102, 102, 255),
-                     el::rect{r.left + 4.0f, r.bottom - 15.0f, r.left + 16.0f, r.bottom - 3.0f}, HAlign::Centre);
+            tag("OFF", 7.0f, r.right - 2.0f, r.top + 20.0f, el::rgba(255, 102, 102, 255), el::rgba(255, 102, 102, 51),
+                el::rgba(0, 0, 0, 0), 4.0f, 2.0f);
+        }
+
+        // Its file is missing: a red boxed warning sign at the top right, or on a tile at the
+        // bottom left (.node-missing-badge).
+        if (mLook.missing)
+        {
+            const float right = mLook.iconOnly ? r.left + 18.0f : r.right - 2.0f;
+            const float top = mLook.iconOnly ? r.bottom - 16.0f : r.top + 18.0f + (on ? 0.0f : 14.0f);
+            tag("\xE2\x9A\xA0", 10.0f, right, top, el::rgba(255, 138, 138, 255), el::rgba(232, 76, 76, 51),
+                el::rgba(232, 76, 76, 102), 4.0f, 1.0f);
         }
 
         // The corners (.signal-node-delete, .signal-node-bypass): remove at the top left and the
         // power at the top right, shown while the card is hovered or chosen; the power also
         // while the card is off. With touch sizes a hover is only a tap on its way, as the web
         // UI's (hover: none) rule has it, so only the chosen card shows them.
-        const auto corner = [&](el::rect at, bool hot, el::color ring) {
+        const auto corner = [&](el::rect at, el::color fill, el::color ring) {
             const auto c = artist::center_point(at);
-            cnv.fill_style(hot ? mTheme.Elevated() : el::rgba(0, 0, 0, 64));
+            cnv.fill_style(fill);
             cnv.add_circle(artist::circle(c, kPowerSize * 0.5f));
             cnv.fill();
             cnv.stroke_style(ring);
@@ -637,10 +690,12 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
 
         if (mLook.canRemove && showCorners)
         {
+            // Red under the pointer (.signal-node-delete:hover).
             const auto x = RemoveRect(r);
-            corner(x, mHoverRemove, el::rgba(255, 255, 255, 38));
+            corner(x, mHoverRemove ? el::rgba(255, 80, 80, 64) : el::rgba(0, 0, 0, 64),
+                   mHoverRemove ? el::rgba(255, 80, 80, 89) : el::rgba(255, 255, 255, 38));
             const auto c = artist::center_point(x);
-            cnv.stroke_style(el::rgba(255, 255, 255, 205));
+            cnv.stroke_style(mHoverRemove ? el::rgba(255, 255, 255, 242) : el::rgba(255, 255, 255, 205));
             cnv.line_width(1.4f);
             cnv.begin_path();
             cnv.move_to(c.x - 3.0f, c.y - 3.0f);
@@ -652,10 +707,19 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
 
         if (mLook.canBypass && (showCorners || !on))
         {
+            // Green under the pointer, red while off (.signal-node-bypass), a 10 px glyph.
             const auto p = PowerRect(r);
-            corner(p, mHoverPower, on ? el::rgba(255, 255, 255, 38) : el::rgba(255, 80, 80, 90));
+            const el::color fill = !on           ? el::rgba(255, 80, 80, 51)
+                                   : mHoverPower ? el::rgba(116, 228, 158, 51)
+                                                 : el::rgba(0, 0, 0, 64);
+            const el::color ring = !on           ? el::rgba(255, 80, 80, 89)
+                                   : mHoverPower ? el::rgba(116, 228, 158, 102)
+                                                 : el::rgba(255, 255, 255, 38);
+            corner(p, fill, ring);
             mIcons.Draw(cnv, "output", p.inset(3.0f, 3.0f),
-                        on ? el::rgba(160, 236, 186, 242) : el::rgba(255, 170, 170, 250));
+                        !on           ? el::rgba(255, 170, 170, 250)
+                        : mHoverPower ? el::rgba(196, 255, 216, 250)
+                                      : el::rgba(160, 236, 186, 242));
         }
     }
 
@@ -903,8 +967,8 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
                             card.right + kTileCornerProud, card.top - kTileCornerProud + kPowerSize};
         }
 
-        return el::rect{card.right - 4.0f - kPowerSize, card.top + 4.0f, card.right - 4.0f,
-                        card.top + 4.0f + kPowerSize};
+        return el::rect{card.right - 2.0f - kPowerSize, card.top + 2.0f, card.right - 2.0f,
+                        card.top + 2.0f + kPowerSize};
     }
 
     [[nodiscard]] el::rect RemoveRect(const el::rect& card) const
@@ -915,7 +979,7 @@ class NodeCard final : public el::element, public Drawn, public Focusable, publi
                             card.left - kTileCornerProud + kPowerSize, card.top - kTileCornerProud + kPowerSize};
         }
 
-        return el::rect{card.left + 4.0f, card.top + 4.0f, card.left + 4.0f + kPowerSize, card.top + 4.0f + kPowerSize};
+        return el::rect{card.left + 2.0f, card.top + 2.0f, card.left + 2.0f + kPowerSize, card.top + 2.0f + kPowerSize};
     }
 
     const Theme& mTheme;

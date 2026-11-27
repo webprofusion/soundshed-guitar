@@ -348,10 +348,12 @@ class Shell
                                  std::function<void()> onOutside);
     void CloseDropdown();
     /// A drop-down list under `anchor`, as the web UI's menus open from their buttons.
-    void OpenDropdown(el::rect anchor, std::vector<MenuItem> items, float width = 180.0f);
+    /// `above`: open upwards (else upwards only near the window's foot).
+    void OpenDropdown(el::rect anchor, std::vector<MenuItem> items, float width = 180.0f, bool above = false);
     /// A drop-down whose options sit in columns side by side, each `width` wide (the web UI's
     /// multi-column metro-select, for the meters).
-    void OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuItem>> columns, float width);
+    void OpenDropdownColumns(el::rect anchor, std::vector<std::vector<MenuItem>> columns, float width,
+                             bool above = false);
     void OpenOptions(el::rect anchor);
     void OpenNewPresetMenu(el::rect anchor);
     /// "New preset" for a menu: it asks first if the preset has unsaved changes.

@@ -103,7 +103,7 @@ class Connector final : public el::element, public Drawn, public Focusable
 
     void draw(const el::context& ctx) override
     {
-        NoteDrawn(ctx);
+        NoteDrawn(ctx, ctx.bounds.inset(-14.0f, -4.0f)); // the hovered + and its glow reach past it
         auto& cnv = ctx.canvas;
         const auto b = ctx.bounds;
         const float y = b.top + b.height() * 0.5f;
@@ -179,21 +179,37 @@ class Connector final : public el::element, public Drawn, public Focusable
 
         const el::point c = PlusCentre(b);
 
-        if (mHover)
+        if (mHover || mHoverCable)
         {
-            // The add button (.signal-add-btn): 24 px, raised, a bold +.
+            // The add button (.signal-add-btn) comes up while the cable is hovered: 24 px, raised,
+            // a bold +. Under the pointer itself it grows a tenth into the accent's gradient,
+            // glowing, its + white.
+            const float r = mHover ? 11.0f * 1.1f : 11.0f;
             auto state = cnv.new_state();
-            artist::canvas::linear_gradient fill{el::point{c.x, c.y - 11.0f}, el::point{c.x, c.y + 11.0f}};
-            fill.add_color_stop(0.0f, mTheme.ButtonBg());
-            fill.add_color_stop(1.0f, mTheme.Surface());
+            artist::canvas::linear_gradient fill{el::point{c.x, c.y - r}, el::point{c.x, c.y + r}};
+
+            if (mHover)
+            {
+                cnv.shadow_style(el::point{0.0f, 0.0f}, 12.0f, el::rgba(224, 120, 72, 128));
+                fill.add_color_stop(0.0f, mTheme.Accent());
+                fill.add_color_stop(1.0f, el::rgba(200, 88, 48, 255));
+            }
+            else
+            {
+                fill.add_color_stop(0.0f, mTheme.DarkOr(el::rgba(58, 58, 68, 255), mTheme.ButtonBg()));
+                fill.add_color_stop(1.0f, mTheme.Surface());
+            }
+
             cnv.fill_style(fill);
-            cnv.add_circle(artist::circle(c, 11.0f));
+            cnv.add_circle(artist::circle(c, r));
             cnv.fill();
-            cnv.stroke_style(mTheme.ButtonBorder());
+            cnv.shadow_style(el::point{0.0f, 0.0f}, 0.0f, el::rgba(0, 0, 0, 0));
+            cnv.stroke_style(mHover ? mTheme.Accent()
+                                    : mTheme.DarkOr(el::rgba(74, 74, 88, 255), mTheme.ButtonBorder()));
             cnv.line_width(2.0f);
-            cnv.add_circle(artist::circle(c, 11.0f));
+            cnv.add_circle(artist::circle(c, r));
             cnv.stroke();
-            cnv.stroke_style(mTheme.TextSecondary());
+            cnv.stroke_style(mHover ? el::rgba(255, 255, 255, 255) : mTheme.TextSecondary());
             cnv.line_width(2.0f);
             cnv.begin_path();
             cnv.move_to(c.x - 4.5f, c.y);
@@ -238,11 +254,14 @@ class Connector final : public el::element, public Drawn, public Focusable
 
     bool cursor(const el::context& ctx, el::point p, el::cursor_tracking status) override
     {
+        const bool inside = mOnAdd && status != el::cursor_tracking::leaving && !metrics::Touch();
         const bool hover = mOnAdd && status != el::cursor_tracking::leaving && HitsPlus(ctx, p);
+        const bool cable = inside && ctx.bounds.includes(p);
 
-        if (hover != mHover)
+        if (hover != mHover || cable != mHoverCable)
         {
             mHover = hover;
+            mHoverCable = cable;
             ctx.view.refresh(ctx);
         }
 
@@ -280,7 +299,7 @@ class Connector final : public el::element, public Drawn, public Focusable
     const Theme& mTheme;
     std::function<void()> mOnAdd;
     bool mStretch;
-    bool mHover = false;
+    bool mHover = false, mHoverCable = false;
     std::shared_ptr<HitMap> mHits;
     std::optional<guitarfx::GraphEdge> mEdge;
     float mRowHeight = kCardHeight;
@@ -540,9 +559,10 @@ class ReturnRoute final : public el::element
         cnv.stroke_style(CableColour(mTheme).opacity(0.55f));
         cnv.line_width(3.0f);
         cnv.begin_path();
+        const float bend = std::min(6.0f, b.height() * 0.5f);
         cnv.move_to(from, b.top);
-        cnv.arc_to(el::point{from, mid}, el::point{to, mid}, 6.0f);
-        cnv.arc_to(el::point{to, mid}, el::point{to, b.bottom}, 6.0f);
+        cnv.arc_to(el::point{from, mid}, el::point{to, mid}, bend);
+        cnv.arc_to(el::point{to, mid}, el::point{to, b.bottom}, bend);
         cnv.line_to(to, b.bottom);
         cnv.stroke();
     }

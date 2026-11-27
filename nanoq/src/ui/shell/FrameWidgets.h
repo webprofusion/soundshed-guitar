@@ -165,7 +165,7 @@ class PresetPill final : public Pressable
         // The status chip (.preset-selector-status): the source, and "Unsaved" in the accent
         // while there are changes to keep; 9 px bold, padded 2 x 7, radius 4.
         const std::string badge =
-            mDirty ? (mBadge.empty() ? std::string("Unsaved") : mBadge + " â¢ Unsaved") : mBadge;
+            mDirty ? (mBadge.empty() ? std::string("Unsaved") : mBadge + " \xE2\x80\xA2 Unsaved") : mBadge;
 
         if (!badge.empty())
         {
@@ -324,6 +324,21 @@ class SceneChip final : public Pressable
         NoteDrawn(ctx);
         auto& cnv = ctx.canvas;
         const auto b = FaceRect(ctx.bounds, cnv);
+        const auto font = Font(Weight::SemiBold).size(LabelSize());
+
+        // The add chip (.scene-badge-add): a dashed edge over the raised face at 60%, muted until
+        // hovered.
+        if (mAdd)
+        {
+            cnv.fill_style(mTheme.Elevated().opacity(0.6f));
+            cnv.fill_round_rect(b, 9.0f);
+            cnv.stroke_style(mHover ? mTheme.BorderStrong() : mTheme.Border().opacity(0.7f));
+            cnv.line_width(1.0f);
+            StrokeDashedRoundRect(cnv, b.inset(0.5f, 0.5f), 8.5f, 3.0f, 2.0f);
+            FillText(cnv, mLabel, font, mHover ? mTheme.TextSecondary() : mTheme.TextMuted(), b, HAlign::Centre);
+            return;
+        }
+
         const el::color fill = mActive ? mTheme.Accent().opacity(0.12f)
                                        : mTheme.DarkOr(el::rgba(38, 38, 46, mHover ? 230 : 153),
                                                        mHover ? mTheme.Elevated() : mTheme.Card());
@@ -336,21 +351,24 @@ class SceneChip final : public Pressable
         cnv.line_width(1.0f);
         cnv.stroke_round_rect(b.inset(0.5f, 0.5f), 9.0f);
 
-        const auto font = Font(Weight::SemiBold).size(LabelSize());
+        // The name stops at 160 px with an ellipsis (.scene-badge-label).
+        el::rect text{b.left + 8.0f, b.top, b.right - (onRemove ? kCloseSize + 4.0f : 8.0f), b.bottom};
+        FillText(cnv, Ellipsize(cnv, mLabel, font, std::min(kLabelMax, text.width())), font, ink, text, HAlign::Left);
 
-        if (mAdd)
-        {
-            FillText(cnv, "+", font, ink, b, HAlign::Centre);
-            return;
-        }
-
-        el::rect text{b.left + 8.0f, b.top, b.right - (onRemove ? 18.0f : 8.0f), b.bottom};
-        FillText(cnv, mLabel, font, ink, text, HAlign::Left);
-
+        // The x (.scene-badge-close): a 14 px circle at .55, red with a red wash under the pointer.
         if (onRemove)
         {
-            const el::point c{b.right - 10.0f, b.top + b.height() * 0.5f};
-            cnv.stroke_style(ink.opacity(0.8f));
+            const el::point c{b.right - 2.0f - kCloseSize * 0.5f, b.top + b.height() * 0.5f};
+            const el::color cross = mHoverClose ? mTheme.Error() : ink.opacity(0.55f);
+
+            if (mHoverClose)
+            {
+                cnv.fill_style(mTheme.Error().opacity(0.18f));
+                cnv.add_circle(cycfi::artist::circle(c, kCloseSize * 0.5f));
+                cnv.fill();
+            }
+
+            cnv.stroke_style(cross);
             cnv.line_width(1.2f);
             cnv.begin_path();
             cnv.move_to(c.x - 2.5f, c.y - 2.5f);
@@ -359,6 +377,20 @@ class SceneChip final : public Pressable
             cnv.line_to(c.x - 2.5f, c.y + 2.5f);
             cnv.stroke();
         }
+    }
+
+    bool cursor(const el::context& ctx, el::point p, el::cursor_tracking status) override
+    {
+        const bool close = onRemove && status != el::cursor_tracking::leaving && !metrics::Touch() &&
+                           p.x > ctx.bounds.right - (kCloseSize + 4.0f);
+
+        if (close != mHoverClose)
+        {
+            mHoverClose = close;
+            ctx.view.refresh(ctx);
+        }
+
+        return Pressable::cursor(ctx, p, status);
     }
 
     bool click(const el::context& ctx, el::mouse_button btn) override
@@ -394,12 +426,20 @@ class SceneChip final : public Pressable
 
   private:
     static constexpr float kRemoveZone = 32.0f;
+    static constexpr float kCloseSize = 14.0f;
+    static constexpr float kLabelMax = 160.0f;
 
     [[nodiscard]] float FaceWidth(el::canvas& cnv) const
     {
-        return mAdd ? 20.0f
-                    : el::measure_text(cnv, mLabel, Font(Weight::SemiBold).size(LabelSize())).x + 16.0f +
-                          (onRemove ? 12.0f : 0.0f);
+        const float text = el::measure_text(cnv, mLabel, Font(Weight::SemiBold).size(LabelSize())).x;
+
+        // The add chip: padded 6 either side, at least as wide as it is tall.
+        if (mAdd)
+        {
+            return std::max(18.0f, text + 12.0f);
+        }
+
+        return std::min(kLabelMax, text) + 16.0f + (onRemove ? kCloseSize - 2.0f : 0.0f);
     }
 
     /// Where the chip is drawn: its bounds, or with touch sizes an 18 px face centred in them
@@ -426,12 +466,13 @@ class SceneChip final : public Pressable
 
     [[nodiscard]] float LabelSize() const
     {
-        return mAdd ? 12.0f : metrics::Readable(10.0f);
+        return mAdd && mLabel == "+" ? 12.0f : metrics::Readable(10.0f);
     }
 
     const Theme& mTheme;
     std::string mLabel;
     bool mActive, mAdd;
+    bool mHoverClose = false;
 };
 
 /// One half of the footer's A/B switch (.footer-ab-btn).
@@ -535,26 +576,40 @@ class RoundAdd final : public Pressable
 
     void draw(const el::context& ctx) override
     {
-        NoteDrawn(ctx);
+        // Its glow and growth reach past its bounds.
+        NoteDrawn(ctx, ctx.bounds.inset(-8.0f, -8.0f));
         auto& cnv = ctx.canvas;
         const auto c = cycfi::artist::center_point(ctx.bounds);
-        const float r = mSize * 0.5f - 1.0f;
+        // Under the pointer it grows a tenth and fills with the accent's gradient, glowing, its +
+        // white (.signal-path-add-menu-trigger:hover).
+        const bool hot = mHover && !metrics::Touch();
+        const float r = (mSize * 0.5f - 1.0f) * (hot ? 1.1f : 1.0f);
         {
             auto state = cnv.new_state();
             cycfi::artist::canvas::linear_gradient fill{el::point{c.x, c.y - r}, el::point{c.x, c.y + r}};
-            fill.add_color_stop(0.0f, mTheme.DarkOr(mHover ? el::rgba(78, 78, 90, 255) : el::rgba(58, 58, 68, 255),
-                                                    mHover ? mTheme.Input() : mTheme.Elevated()));
-            fill.add_color_stop(1.0f, mTheme.Surface());
+
+            if (hot)
+            {
+                cnv.shadow_style(el::point{0.0f, 0.0f}, 12.0f, el::rgba(224, 120, 72, 128));
+                fill.add_color_stop(0.0f, mTheme.Accent());
+                fill.add_color_stop(1.0f, el::rgba(200, 88, 48, 255));
+            }
+            else
+            {
+                fill.add_color_stop(0.0f, mTheme.DarkOr(el::rgba(58, 58, 68, 255), mTheme.Elevated()));
+                fill.add_color_stop(1.0f, mTheme.Surface());
+            }
+
             cnv.fill_style(fill);
             cnv.add_circle(cycfi::artist::circle(c, r));
             cnv.fill();
         }
-        cnv.stroke_style(mHover ? mTheme.Accent() : mTheme.ButtonBorder());
+        cnv.stroke_style(hot ? mTheme.Accent() : mTheme.ButtonBorder());
         cnv.line_width(1.7f);
         cnv.add_circle(cycfi::artist::circle(c, r));
         cnv.stroke();
-        const float arm = mSize * 0.2f;
-        cnv.stroke_style(mHover ? mTheme.Text() : mTheme.TextSecondary());
+        const float arm = r * 0.4f;
+        cnv.stroke_style(hot ? el::rgba(255, 255, 255, 255) : mTheme.TextSecondary());
         cnv.line_width(2.0f);
         cnv.begin_path();
         cnv.move_to(c.x - arm, c.y);

@@ -314,14 +314,16 @@ Ptr Shell::BuildScenes()
     }
     else if (preset)
     {
-        auto add = std::make_shared<SceneChip>(mTheme, "+ Scene", false);
+        auto add = std::make_shared<SceneChip>(mTheme, "+ Scene", false, true);
         add->onClick = [&commands] { commands.AddScene(); };
         chips.push_back(add);
     }
 
     const bool touch = metrics::Touch();
     auto wrap = std::make_shared<IconButton>(mTheme, mIcons, "ui-wrap");
-    wrap->Size(24, 16).IconSize(12).Ink(mWrapChain ? mTheme.Accent() : mTheme.TextMuted());
+    // .signal-path-wrap-btn: muted at .38, the accent at .85 while on.
+    wrap->Size(24, 16).IconSize(12).Ink(mWrapChain ? mTheme.Accent().opacity(0.85f)
+                                                   : mTheme.TextMuted().opacity(0.38f));
     wrap->onClick = [this] {
         mWrapChain = !mWrapChain;
         mChainSignature.clear();
