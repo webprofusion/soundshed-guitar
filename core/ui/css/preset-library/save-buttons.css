@@ -1,0 +1,27 @@
+/* ===== Save and Save As: always spelled out ===== */
+
+/* The other toolbar keys drop their words and live as icons, which is fine for Edit or Random but
+   left Save a bare floppy disk and Save As hidden in the "..." menu. These two keep their labels at
+   every width except compact density, which has no room: there the "..." menu's Save As is the way,
+   and Save keeps its icon and tooltip. The compound selectors outrank toolbar.css's narrow-window
+   rule that squares every key to 28px. */
+.preset-action-btn.preset-action-btn-saves {
+  width: auto;
+  padding: 0 8px;
+}
+
+.preset-action-btn-saves .preset-action-btn-label {
+  display: inline;
+}
+
+html[data-density="compact"] .preset-action-btn.preset-action-btn-saves {
+  padding-inline: 6px;
+}
+
+html[data-density="compact"] .preset-action-btn-saves .preset-action-btn-label {
+  display: none;
+}
+
+html[data-density="compact"] #preset-save-as-toolbar-btn {
+  display: none;
+}

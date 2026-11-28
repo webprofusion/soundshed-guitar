@@ -438,8 +438,7 @@ export function initializeSavePresetModal(): void {
 }
 
 export function initializeSaveAsButton(): void {
-  const saveAsBtn = document.getElementById("preset-save-as-btn");
-  if (saveAsBtn) {
-    saveAsBtn.addEventListener("click", openSavePresetModal);
+  for (const id of ["preset-save-as-btn", "preset-save-as-toolbar-btn"]) {
+    document.getElementById(id)?.addEventListener("click", openSavePresetModal);
   }
 }

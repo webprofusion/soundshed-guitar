@@ -17,12 +17,23 @@
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
                   </button>
-                  <button class="preset-action-btn" id="preset-save-btn" type="button" title="Save changes to this preset" aria-label="Save preset">
+                  <button class="preset-action-btn preset-action-btn-saves" id="preset-save-btn" type="button" title="Save changes to this preset" aria-label="Save preset">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                       <polyline points="17 21 17 13 7 13 7 21" />
                       <polyline points="7 3 7 8 15 8" />
                     </svg>
+                    <span class="preset-action-btn-label">Save</span>
+                  </button>
+                  <!-- Beside Save so that a copy is as easy to find as an overwrite. Hidden at compact density
+                       (css/preset-library/save-buttons.css), where the "..." menu's Save As is the way. -->
+                  <button class="preset-action-btn preset-action-btn-saves" id="preset-save-as-toolbar-btn" type="button" title="Save this preset as a new copy" aria-label="Save preset as a new copy">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path d="M19 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h7" />
+                      <line x1="18" y1="2" x2="18" y2="8" />
+                      <line x1="15" y1="5" x2="21" y2="5" />
+                    </svg>
+                    <span class="preset-action-btn-label">Save As</span>
                   </button>
                 </div>
               </div>
