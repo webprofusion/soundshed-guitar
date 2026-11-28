@@ -49,7 +49,7 @@ import { initResourceSlotDragHighlight } from "./signalPath/resourceFileDrag.js"
 import { initializeCustomEffectDesignerModal } from "./customEffectDesigner.js";
 import { initializeDialogModals } from "./dialogs.js";
 import { initializeModalEscape } from "./modalEscape.js";
-import { activateTab, initCompactStageDestinations, initCompactStagePersistence, initializeControlBarTabs, initializeIconBarTabs, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
+import { activateTab, initCompactStageDestinations, initCompactStagePersistence, initializeControlBarTabs, initializeIconBarTabs, initSettingsClose, initializePlayFooterPadsToggle, initializeTabButtons, switchMainPanel, initControlBarCollapse, initSignalPathCollapse } from "./navigation.js";
 // Loaded for its registration: navigation opens the Tones panel through tonesPanelLink.ts.
 import "./tonesPanel.js";
 import { handleDroppedRiffAudioFiles, initializeRiffLibraryPanel } from "./riffLibrary.js";
@@ -227,6 +227,7 @@ async function bootstrap(): Promise<void> {
 
   // Ensure listeners for icon bar tabs (Play/Tones/Jam/Settings) are attached early
   initializeIconBarTabs({ onEq: openEqModal });
+  initSettingsClose();
 
   // Force initial main panel visibility via legacy logic (adds .active)
   switchMainPanel('visualizer');
