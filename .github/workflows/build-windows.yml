@@ -147,6 +147,25 @@ jobs:
           Write-Host "Running build_windows.bat $buildArgs"
           .\build_windows.bat @buildArgs
 
+      - name: Check VST3 bundle layout and dependencies
+        # A Windows ARM host loads only plugins built for its own kind of process (REAPER's
+        # ARM build is ARM64EC), so the arm64 leg checks both bundles it installs. The binary's
+        # machine type, GetPluginFactory export and DLL imports are read from the PE headers.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Check-Bundle($bundle, $arch) {
+            node tools/check-windows-packaging.mjs --bundle $bundle --require-arch $arch
+            if ($LASTEXITCODE -ne 0) { throw "VST3 bundle check failed for $arch" }
+          }
+          $vst3 = 'SoundshedGuitar_artefacts/Release/VST3/Soundshed Guitar.vst3'
+          if ('${{ matrix.arch }}' -eq 'arm64') {
+            Check-Bundle "juce/Builds/$vst3" 'arm64-win'
+            Check-Bundle "juce/builds-arm64ec/$vst3" 'arm64ec-win'
+          } else {
+            Check-Bundle "juce/Builds/$vst3" 'x86_64-win'
+          }
+
       - name: Validate plugin formats (pluginval, clap-validator)
         # The arm64 leg cross-compiles on an x64 runner, so its plugins cannot be
         # loaded here; the x64 legs cover every SIMD tier the runner can execute.

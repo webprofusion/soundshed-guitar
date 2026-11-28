@@ -21,6 +21,7 @@ If `JUCE/` is still missing (some clones do not have gitlink entries for the sub
  native plugins in `juce/Builds`, then the ARM64EC VST3 and CLAP in `juce/builds-arm64ec`, and the
  installer ships both: `arm64-win` and `arm64ec-win` in the VST3 bundle, and two `.clap` files.
  The ARM64EC build has no Custom Effects (WASM): Wasmtime publishes no ARM64EC library.
+ `node tools/check-windows-packaging.mjs` checks that packaging (add `--bundle <Soundshed Guitar.vst3> --require-arch arm64-win,arm64ec-win` to inspect a built or installed bundle's machine types, exports and DLL imports). `build-installer.bat` honours a preset `ISCC` environment variable for an Inno Setup that is not in `Program Files (x86)`.
 
  If you need a custom external Steinberg ASIO SDK instead of JUCE's bundled ASIO headers, pass `-DGUITARFX_ASIO_SDK_DIR="C:/path/to/ASIOSDK"` and make sure that directory contains `iasiodrv.h`.
 
