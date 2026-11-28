@@ -43,6 +43,13 @@ class StandalonePluginHolder;
  *  - It saves the device setup as soon as it changes. JUCE writes it on a clean
  *    exit, which a phone rarely gives an app.
  *
+ * Nor does it offer "System default" as the output, which follows the output the
+ * operating system has chosen (headphones plugged in, AirPods connected) instead of
+ * staying on one device. The device manager only opens the default when nothing is
+ * saved, so here the choice is remembered on its own and the default is checked again
+ * whenever the device list changes, and once a second while it is chosen (CoreAudio
+ * says nothing to JUCE when only the default changes).
+ *
  * And one the device manager gets wrong on desktop: MIDI ports that come and go.
  * It reopens a returning port only if the setup it loaded at startup named it, and
  * a port that goes away leaves a dead connection behind that it still counts as
@@ -82,6 +89,7 @@ class StandaloneAudioSettings final : private juce::ChangeListener, private juce
 
     juce::String setDeviceType(const juce::String& typeName);
     juce::String setDevice(const juce::String& kind, const juce::String& name);
+    juce::String setOutputFollowsSystemDefault();
     juce::String setChannelGroup(bool isInput, int group);
     juce::String setSampleRate(double sampleRate);
     juce::String setBufferSize(int bufferSize);
@@ -91,6 +99,13 @@ class StandaloneAudioSettings final : private juce::ChangeListener, private juce
     juce::String requestInputPermission();
     juce::String setMidiInputEnabled(const juce::String& identifier, bool enabled);
     juce::String setMidiOutput(const juce::String& identifier);
+
+    /// The output device the operating system has chosen, or empty when this driver
+    /// opens input and output as one device (ASIO, mobile) and so has none to offer.
+    [[nodiscard]] juce::String systemDefaultOutputName() const;
+    /// While "System default" is the output, opens the default if another device is open.
+    juce::String followSystemDefaultOutput();
+    void setOutputFollowsDefault(bool follow);
 
     /// Opens the input side again once record permission has been granted.
     void enableInput();
@@ -140,6 +155,12 @@ class StandaloneAudioSettings final : private juce::ChangeListener, private juce
     juce::Array<juce::MidiDeviceInfo> mWantedMidiInputs;
     juce::MidiDeviceInfo mWantedMidiOutput;
     juce::MidiDeviceListConnection mMidiDeviceListConnection;
+
+    // "System default" is the output (see the class comment). A default that failed to
+    // open, so it is not retried on every change message and poll until the default changes.
+    bool mOutputFollowsDefault = false;
+    juce::String mFailedDefaultOutput;
+    juce::TimedCallback mDefaultOutputPoll{[this] { followSystemDefaultOutput(); }};
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(StandaloneAudioSettings)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StandaloneAudioSettings)

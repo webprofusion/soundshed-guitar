@@ -35,6 +35,10 @@ export interface AudioDeviceState {
   /** Empty is "no device". */
   inputDevice: string;
   outputDevice: string;
+  /** The output the operating system has chosen; empty when the driver has none to follow (ASIO, mobile). */
+  defaultOutputDevice: string;
+  /** "System default" is the output: it follows the operating system's choice. */
+  outputFollowsDefault: boolean;
   deviceOpen: boolean;
   /** Channels in groups as wide as the plugin's bus; at most one group is on. */
   inputChannels: AudioDeviceChannelGroup[];
@@ -133,6 +137,8 @@ export function normalizeAudioDeviceState(raw: unknown): AudioDeviceState | null
     outputDevices: strings(s.outputDevices),
     inputDevice: typeof s.inputDevice === "string" ? s.inputDevice : "",
     outputDevice: typeof s.outputDevice === "string" ? s.outputDevice : "",
+    defaultOutputDevice: typeof s.defaultOutputDevice === "string" ? s.defaultOutputDevice : "",
+    outputFollowsDefault: s.outputFollowsDefault === true,
     deviceOpen: s.deviceOpen === true,
     inputChannels: channelGroups(s.inputChannels),
     outputChannels: channelGroups(s.outputChannels),
@@ -164,6 +170,22 @@ export function deviceOptions(devices: string[], selected: string, noneLabel: st
   }
   options.push({ value: "", label: noneLabel });
   return options;
+}
+
+/** The output picker's value for "System default"; no device can be named this. */
+export const SYSTEM_DEFAULT_OUTPUT = "\u0000system-default";
+
+/** The output picker: "System default" first when the driver has one, then the devices. */
+export function outputDeviceOptions(state: AudioDeviceState): SelectOption[] {
+  const options = deviceOptions(state.outputDevices, state.outputFollowsDefault ? "" : state.outputDevice, state.separateIO ? "No output" : "No device");
+  if (state.defaultOutputDevice !== "") {
+    options.unshift({ value: SYSTEM_DEFAULT_OUTPUT, label: `System default (${state.defaultOutputDevice})` });
+  }
+  return options;
+}
+
+export function selectedOutputOption(state: AudioDeviceState): string {
+  return state.outputFollowsDefault ? SYSTEM_DEFAULT_OUTPUT : state.outputDevice;
 }
 
 /** "None", then each channel group by index. */
@@ -407,11 +429,7 @@ function render(): void {
   if (outputLabel) {
     outputLabel.textContent = state.separateIO ? "Output Device" : "Device";
   }
-  fillSelect(
-    el<HTMLSelectElement>("audio-device-output"),
-    deviceOptions(state.outputDevices, state.outputDevice, state.separateIO ? "No output" : "No device"),
-    state.outputDevice,
-  );
+  fillSelect(el<HTMLSelectElement>("audio-device-output"), outputDeviceOptions(state), selectedOutputOption(state));
   const testButton = el<HTMLButtonElement>("audio-device-test");
   if (testButton) {
     testButton.disabled = !state.deviceOpen || state.outputDevice === "";
@@ -550,7 +568,10 @@ export function initAudioDeviceSettings(): void {
 
   onSelectChange("audio-device-type", (deviceType) => request("setDeviceType", { deviceType }));
   onSelectChange("audio-device-input", (name) => request("setDevice", { kind: "input", name }));
-  onSelectChange("audio-device-output", (name) => request("setDevice", { kind: current?.separateIO === false ? "linked" : "output", name }));
+  onSelectChange("audio-device-output", (name) =>
+    name === SYSTEM_DEFAULT_OUTPUT
+      ? request("setDevice", { kind: "output", systemDefault: true })
+      : request("setDevice", { kind: current?.separateIO === false ? "linked" : "output", name }));
   onSelectChange("audio-device-input-channels", (group) => request("setInputChannels", { group: Number(group) }));
   onSelectChange("audio-device-output-channels", (group) => request("setOutputChannels", { group: Number(group) }));
   onSelectChange("audio-device-sample-rate", (rate) => request("setSampleRate", { sampleRate: Number(rate) }));

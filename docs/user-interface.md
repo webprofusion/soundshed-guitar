@@ -319,7 +319,7 @@ keeps the existing Library/Folder behavior.
 | `getGlobalChain` | `{}` | Request global chain state |
 | `getEffectCatalog` | `{}` | Request effect catalog |
 | `getPresetList` | `{}` | Request preset list from disk |
-| `audioDevice` | `{action, ...}` | Standalone: one audio/MIDI device request, answered with `audioDeviceState`. Actions: `getState {rescan?}`, `setDeviceType {deviceType}`, `setDevice {kind: "input"\|"output"\|"linked", name}` (`""` is no device), `setInputChannels {group}` / `setOutputChannels {group}` (group index, `-1` for none), `setSampleRate {sampleRate}`, `setBufferSize {bufferSize}`, `setInputMuted {muted}`, `playTestTone`, `showControlPanel`, `resetDevice`, `requestInputPermission`, `setMidiInputEnabled {identifier, enabled}`, `setMidiOutput {identifier}` (`""` is none), `watchLevels {enabled}` (a lease that lapses 5 s after the last renewal, so the UI renews it every 2 s while the controls are on screen) |
+| `audioDevice` | `{action, ...}` | Standalone: one audio/MIDI device request, answered with `audioDeviceState`. Actions: `getState {rescan?}`, `setDeviceType {deviceType}`, `setDevice {kind: "input"\|"output"\|"linked", name}` (`""` is no device; `{kind: "output", systemDefault: true}` makes the output follow the system default), `setInputChannels {group}` / `setOutputChannels {group}` (group index, `-1` for none), `setSampleRate {sampleRate}`, `setBufferSize {bufferSize}`, `setInputMuted {muted}`, `playTestTone`, `showControlPanel`, `resetDevice`, `requestInputPermission`, `setMidiInputEnabled {identifier, enabled}`, `setMidiOutput {identifier}` (`""` is none), `watchLevels {enabled}` (a lease that lapses 5 s after the last renewal, so the UI renews it every 2 s while the controls are on screen) |
 | `setWindowChrome` | `{caption, text, border}` | Standalone: the header bar's colours as `"#rrggbb"`, for the native title bar (`ts/windowChrome.ts`). Sent on every `themeChanged`, so first when the `getTheme` answer arrives, and only when the colours change. Handled by the JUCE adapter, never the engine: the standalone window recolours its caption through DWM (Windows 11 takes all three; Windows 10 only goes light or dark, following the caption's brightness) and keeps them in its window state file, so the next launch opens with them. Answered with `windowChromeState`. Dropped in plugin formats and on Android; on macOS and Linux it is answered `customCaption: false` |
 | `browsePracticeToolFile` | `{}` | Practice Tool: open native file browser for a backing track |
 | `loadPracticeToolFile` | `{path}` | Practice Tool: load a backing track by native path |
@@ -772,6 +772,13 @@ A list the device offers only one entry for is shown disabled, with a line sayin
   connection to a port that went away, which it still reports as enabled. A port is matched
   by identifier, else by name. Desktop only: on Android the holder opens every MIDI input
   that appears.
+- *System default output.* The Output list starts with "System default (*device*)" when the
+  driver has separate inputs and outputs (not ASIO, not mobile). Chosen, the output follows
+  the operating system's default device: headphones, AirPods or an interface becoming the
+  default switch the app over within a second. The choice is kept as
+  `soundshedOutputFollowsDefault` in the settings file, since JUCE's `audioSetup` only names a
+  device, and picking a device by name ends it. The snapshot carries it as
+  `defaultOutputDevice` (empty when there is no default to offer) and `outputFollowsDefault`.
 - *Latency and dropouts.* The driver's reported input and output latency, and its dropout
   count while the section is on screen.
 

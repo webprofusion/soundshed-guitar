@@ -22,6 +22,8 @@ function state(overrides: Partial<AudioDeviceState> = {}): AudioDeviceState {
     outputDevices: ["Interface Out", "Speakers (Realtek)"],
     inputDevice: "Interface In",
     outputDevice: "Interface Out",
+    defaultOutputDevice: "Speakers (Realtek)",
+    outputFollowsDefault: false,
     deviceOpen: true,
     inputChannels: [{ name: "Input 1 + 2", active: false }, { name: "Input 3 + 4", active: true }],
     outputChannels: [{ name: "Output 1 + 2", active: true }],
@@ -198,6 +200,29 @@ describe("the controls", () => {
 
     change("audio-device-output", "Interface Out");
     expect(requests().at(-1)).toEqual({ type: "audioDevice", action: "setDevice", kind: "linked", name: "Interface Out" });
+  });
+
+  it("offer the system default output, and follow it when chosen", () => {
+    audioDevice.syncAudioDeviceSettingsAvailability(true);
+    audioDevice.showAudioDeviceState(state());
+    expect(optionLabels("audio-device-output")).toEqual(["System default (Speakers (Realtek))", "Interface Out", "Speakers (Realtek)", "No output"]);
+    expect(select("audio-device-output").value).toBe("Interface Out");
+
+    change("audio-device-output", audioDevice.SYSTEM_DEFAULT_OUTPUT);
+    expect(requests().at(-1)).toEqual({ type: "audioDevice", action: "setDevice", kind: "output", systemDefault: true });
+
+    // Following, the open device is the default, and is not shown as chosen by name.
+    audioDevice.showAudioDeviceState(state({ outputDevice: "Speakers (Realtek)", outputFollowsDefault: true }));
+    expect(select("audio-device-output").value).toBe(audioDevice.SYSTEM_DEFAULT_OUTPUT);
+
+    change("audio-device-output", "Speakers (Realtek)");
+    expect(requests().at(-1)).toEqual({ type: "audioDevice", action: "setDevice", kind: "output", name: "Speakers (Realtek)" });
+  });
+
+  it("offer no system default output when the driver has none", () => {
+    audioDevice.syncAudioDeviceSettingsAvailability(true);
+    audioDevice.showAudioDeviceState(state({ separateIO: false, defaultOutputDevice: "" }));
+    expect(optionLabels("audio-device-output")).not.toContain(expect.stringMatching(/System default/));
   });
 
   it("send what each control changes", () => {
