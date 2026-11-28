@@ -25,8 +25,10 @@ class SectionTab final : public Pressable
         Account
     };
 
-    SectionTab(const Theme& theme, std::string label, bool active, Style style)
-        : mTheme(theme), mLabel(std::move(label)), mActive(active), mStyle(style)
+    SectionTab(const Theme& theme, std::string label, bool active, Style style, std::string count = {},
+               int depth = 0)
+        : mTheme(theme), mLabel(std::move(label)), mActive(active), mStyle(style), mCount(std::move(count)),
+          mDepth(depth)
     {
     }
 
@@ -35,6 +37,7 @@ class SectionTab final : public Pressable
         AccessInfo info = Pressable::Describe();
         info.role = mStyle == Style::Account ? AccessRole::Button : AccessRole::Tab;
         info.name = NameOr(mLabel);
+        info.value = mCount;
         info.selected = mActive;
         return info;
     }
@@ -93,8 +96,21 @@ class SectionTab final : public Pressable
 
         if (mStyle == Style::Side)
         {
-            FillText(cnv, mLabel, LabelFont(), ink, el::rect{b.left + 12.0f, b.top, b.right - 8.0f, b.bottom},
-                     HAlign::Left);
+            // A count at the right (.tones-local-folder-count), the name cut short before it.
+            float right = b.right - 8.0f;
+
+            if (!mCount.empty())
+            {
+                const auto countFont = Font(Weight::Regular).size(10.0f);
+                const float w = MeasureTextWidth(mCount, countFont);
+                FillText(cnv, mCount, countFont, mTheme.TextMuted(), el::rect{right - w - 2.0f, b.top, right, b.bottom},
+                         HAlign::Right);
+                right -= w + 10.0f;
+            }
+
+            const float left = b.left + 12.0f + 14.0f * static_cast<float>(mDepth);
+            FillText(cnv, Ellipsize(cnv, mLabel, LabelFont(), std::max(0.0f, right - left)), LabelFont(), ink,
+                     el::rect{left, b.top, right, b.bottom}, HAlign::Left);
         }
         else
         {
@@ -117,6 +133,8 @@ class SectionTab final : public Pressable
     std::string mLabel;
     bool mActive;
     Style mStyle;
+    std::string mCount;
+    int mDepth;
 };
 } // namespace
 
@@ -143,7 +161,7 @@ Ptr Shell::WithSectionNav(SectionNav nav, Ptr content)
     if (mWide)
     {
         constexpr float kWidth = 208.0f;
-        std::vector<Ptr> column{VGap(24)};
+        std::vector<Ptr> column{VGap(nav.top)};
 
         if (account)
         {
@@ -151,12 +169,26 @@ Ptr Shell::WithSectionNav(SectionNav nav, Ptr content)
             column.push_back(VGap(9));
         }
 
+        std::vector<Ptr> rows;
+
         for (auto& item : nav.items)
         {
-            auto tab = std::make_shared<SectionTab>(mTheme, item.label, item.active, SectionTab::Style::Side);
+            auto tab = std::make_shared<SectionTab>(mTheme, item.label, item.active, SectionTab::Style::Side,
+                                                    item.count, item.depth);
             tab->onClick = std::move(item.onClick);
-            column.push_back(FixedHeight(33, tab));
-            column.push_back(VGap(6));
+            rows.push_back(FixedHeight(33, tab));
+            rows.push_back(VGap(6));
+        }
+
+        // A long list (a library's folders) scrolls in the column's height, its bar beside the
+        // rows' counts rather than over them.
+        if (nav.scrollItems)
+        {
+            column.push_back(VScroll(Pad(0, 0, 10, 0, Col(rows))));
+        }
+        else
+        {
+            column.insert(column.end(), rows.begin(), rows.end());
         }
 
         for (auto& tool : nav.tools)
@@ -173,7 +205,17 @@ Ptr Shell::WithSectionNav(SectionNav nav, Ptr content)
             column.push_back(Over(Pad(10, 10, 10, 10, text), el::share(Surface(mTheme.Card(), mTheme.Border(), 8.0f))));
         }
 
-        column.push_back(std::make_shared<el::element>());
+        // The room left goes under the list, or to the scrolling list itself, so it scrolls only
+        // when its rows run past the column's foot.
+        if (!nav.scrollItems)
+        {
+            column.push_back(std::make_shared<el::element>());
+        }
+        else
+        {
+            column.push_back(VGap(12));
+        }
+
         return Row({FixedWidth(kWidth + 36.0f, Pad(24, 0, 12, 0, Col(column))), rule(true), content});
     }
 
@@ -263,11 +305,7 @@ void Shell::OpenPublishInfo(bool pack)
             "My Content",
             [this] {
                 CloseOverlay();
-                mTonesTab = TonesTab::Mine;
-                mTonesPage = 1;
-                LoadTones(false);
-                ShowPage(Page::Tones);
-                Mark(kPage);
+                OpenTonesCommunity(TonesTab::Mine);
             },
             false));
     }

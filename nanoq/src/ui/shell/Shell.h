@@ -124,6 +124,8 @@ struct SectionNav
         std::string label;
         bool active = false;
         std::function<void()> onClick;
+        std::string count; // drawn small at the row's right (Your Presets' folder sizes)
+        int depth = 0;     // a nested folder, stepped in
     };
 
     std::string account; // the account pill's label; empty for none
@@ -133,6 +135,8 @@ struct SectionNav
     std::vector<Ptr> compactTools;  // at the right of the chips, at the compact size
     float compactToolsWidth = 0.0f; // their widths together, to tell whether the chips still fit
     std::string help;               // a help card under the side list
+    float top = 24.0f;              // the side list's space above its first row
+    bool scrollItems = false;       // the rows scroll in the column (a long list)
 };
 
 class WebViewSlot;    // JamPage.cpp
@@ -378,8 +382,9 @@ class Shell
         Ptr levelling; // input levelling, under the input meter
     };
 
-    /// `cellWidth`: each knob's cell, narrowed where the compact strip has less room (640 wide).
-    ControlCells BuildControlCells(float cellWidth = 84.0f);
+    /// `cellWidth`: each knob's cell, narrowed where the compact strip has less room (640 wide);
+    /// 0 for the web UI's control bar, where each stack is as wide as its own (.control-stack).
+    ControlCells BuildControlCells(float cellWidth = 0.0f);
     /// A small panel beside `anchor` (a control's bounds), closed by a tap anywhere else but
     /// `passThrough`, where a tap reaches what is under it and the panel stays.
     void ShowPopover(Ptr panel, el::rect anchor, float width, float height, bool above = false,
@@ -801,7 +806,37 @@ class Shell
         Installed,
         Mine // My Content: the account's own presets and packs
     };
+    /// The Tones tab's three sections, as the web UI's (tonesPanel/tabs.ts): Community Presets
+    /// (tone sharing, the sections above), Your Presets and Tone 3000. Community follows the
+    /// Tone Sharing feature and Tone 3000 its own; Your Presets is always there.
+    enum class TonesSection
+    {
+        Community,
+        Local,
+        Tone3000
+    };
     Ptr BuildTonesPage();
+    [[nodiscard]] bool TonesSectionOn(TonesSection section) const;
+    /// The section to show for `wanted`: itself if it is on, else the first that is.
+    [[nodiscard]] TonesSection ResolveTonesSection(TonesSection wanted) const;
+    /// Opens the Tones page on Community Presets' `tab` (a link to tone sharing).
+    void OpenTonesCommunity(TonesTab tab);
+    Ptr BuildTonesCommunity();
+    // TonesLocal.cpp: Your Presets, the presets on this machine as a grid of cards with the folders
+    // down the side (tonesPanel/localPresets.ts).
+    Ptr BuildTonesLocal();
+    [[nodiscard]] std::string TonesLocalSignature() const;
+    void RefillTonesLocalGrid();
+    // TonesTone3000.cpp: the Tone 3000 browser (tone3000Browser.ts, tones-tone3000.html).
+    Ptr BuildTonesTone3000();
+    [[nodiscard]] std::string TonesTone3000Signature() const;
+    /// Shows page `page` of the open category's results (or the favourites): from the hour's
+    /// cache unless `refresh`, else from Tone3000.
+    void BrowseTone3000(int page, bool refresh);
+    /// Imports every model of a tone into the library (the card's Import).
+    void ImportTone3000Tone(const guitarfx::uiclient::tone3000::Tone& tone);
+    /// The tone's details and its models, with Select All / None and Import Selected.
+    void OpenTone3000Details(const guitarfx::uiclient::tone3000::Tone& tone);
     // SectionNav.cpp
     [[nodiscard]] Ptr WithSectionNav(SectionNav nav, Ptr content);
     /// Says where publishing is (Soundshed Guitar), with a way to My Content.
@@ -1284,6 +1319,19 @@ class Shell
     Ptr mTonesSearchElement;
     int mToneListener = 0;
     std::string mTonesSignature;
+    TonesSection mTonesSection = TonesSection::Community;
+
+    // Your Presets: where it is looking, its own, so browsing here does not move the chooser.
+    std::string mLocalFolder = "__all__", mLocalQuery, mLocalTag;
+    bool mLocalByRating = false;
+    std::shared_ptr<el::basic_input_box> mLocalSearchBox;
+    Ptr mLocalSearchElement;
+    SlotPtr mLocalGridSlot, mLocalSummarySlot;
+    float mLocalGridWidth = 0.0f;
+
+    // Tone 3000: what the browser shows, and the hour's results (TonesTone3000.cpp).
+    struct Tone3000Browse;
+    std::shared_ptr<Tone3000Browse> mT3;
     RemoteImages mRemoteImages;
     std::unique_ptr<LayoutImages> mLayoutImages; // the custom layouts' pictures
 

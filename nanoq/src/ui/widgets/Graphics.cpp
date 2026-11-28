@@ -269,6 +269,115 @@ Paint Inherit(const Paint& parent, const Attributes& a)
     return p;
 }
 
+/// Where the number starting at `i` in path data ends: a sign, digits, one point, an exponent
+/// (".5.5" is two numbers, "4.5-4.5" two).
+std::size_t NumberEnd(std::string_view d, std::size_t i)
+{
+    const auto digits = [&] {
+        while (i < d.size() && d[i] >= '0' && d[i] <= '9')
+        {
+            ++i;
+        }
+    };
+
+    if (i < d.size() && (d[i] == '-' || d[i] == '+'))
+    {
+        ++i;
+    }
+
+    digits();
+
+    if (i < d.size() && d[i] == '.')
+    {
+        ++i;
+        digits();
+    }
+
+    if (i < d.size() && (d[i] == 'e' || d[i] == 'E'))
+    {
+        std::size_t j = i + 1;
+
+        if (j < d.size() && (d[j] == '-' || d[j] == '+'))
+        {
+            ++j;
+        }
+
+        if (j < d.size() && d[j] >= '0' && d[j] <= '9')
+        {
+            i = j;
+            digits();
+        }
+    }
+
+    return i;
+}
+
+/// Path data with a line-to spelt out wherever a move-to has more than one pair: SVG reads
+/// "M3.5 5.75 8 10.25" as a move then a line, but Artist repeats the move, which loses the
+/// line (a chevron drawn as a slash).
+std::string ExplicitLineTos(std::string_view d)
+{
+    std::string out;
+    out.reserve(d.size() + 8);
+    std::size_t i = 0;
+
+    const auto separator = [](char c) { return c == ' ' || c == ',' || c == '\t' || c == '\n' || c == '\r'; };
+    const auto numberStart = [](char c) { return (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.'; };
+
+    while (i < d.size())
+    {
+        const char c = d[i];
+        out += c;
+        ++i;
+
+        if (c != 'M' && c != 'm')
+        {
+            continue;
+        }
+
+        int numbers = 0;
+
+        while (true)
+        {
+            std::size_t j = i;
+
+            while (j < d.size() && separator(d[j]))
+            {
+                ++j;
+            }
+
+            if (j >= d.size() || !numberStart(d[j]))
+            {
+                out.append(d.substr(i, j - i));
+                i = j;
+                break;
+            }
+
+            if (numbers == 2)
+            {
+                out += c == 'M' ? 'L' : 'l';
+                numbers = 0;
+            }
+
+            const std::size_t end = NumberEnd(d, j);
+
+            if (end == j)
+            {
+                // Not a number after all (a lone sign): left for Artist to report.
+                out.append(d.substr(i, j - i));
+                i = j;
+                break;
+            }
+
+            out.append(d.substr(i, end - i));
+            i = end;
+            ++numbers;
+        }
+    }
+
+    return out;
+}
+
 std::optional<artist::path> ShapePath(const std::string& name, const Attributes& a)
 {
     artist::path path;
@@ -282,7 +391,7 @@ std::optional<artist::path> ShapePath(const std::string& name, const Attributes&
             return std::nullopt;
         }
 
-        return artist::path(std::string_view(it->second));
+        return artist::path(std::string_view(ExplicitLineTos(it->second)));
     }
 
     if (name == "line")
@@ -1018,4 +1127,32 @@ void StrokeDashedRoundRect(artist::canvas& cnv, el::rect r, float radius, float 
         cnv.stroke();
     }
 }
+/// A five-pointed star filling `r`, as the web UI's ★.
+void FillStar(el::canvas& cnv, const el::rect& r, el::color colour)
+{
+    const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f + 0.6f;
+    const float outer = std::min(r.width(), r.height()) * 0.52f, inner = outer * 0.42f;
+    cnv.begin_path();
+
+    for (int i = 0; i < 10; ++i)
+    {
+        const float a = -1.5707963f + static_cast<float>(i) * 0.6283185f;
+        const float rad = i % 2 == 0 ? outer : inner;
+        const el::point p{cx + rad * std::cos(a), cy + rad * std::sin(a)};
+
+        if (i == 0)
+        {
+            cnv.move_to(p);
+        }
+        else
+        {
+            cnv.line_to(p);
+        }
+    }
+
+    cnv.close_path();
+    cnv.fill_style(colour);
+    cnv.fill();
+}
+
 } // namespace nanoq::ui

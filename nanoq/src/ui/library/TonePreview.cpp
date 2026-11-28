@@ -245,6 +245,7 @@ void Shell::SyncTonePreview()
 
 void Shell::OpenToneLink(const tones::LinkTarget& target)
 {
+    mTonesSection = TonesSection::Community;
     ShowPage(Page::Tones);
     auto& service = mSession.Tones();
 

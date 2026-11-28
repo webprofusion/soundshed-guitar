@@ -234,10 +234,7 @@ Ptr Shell::BuildStackTabs()
         tabs.push_back(tab("EFFECT", mPage == Page::Effect, Page::Effect));
     }
 
-    if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::ToneSharing))
-    {
-        tabs.push_back(tab("TONES", mPage == Page::Tones, Page::Tones));
-    }
+    tabs.push_back(tab("TONES", mPage == Page::Tones, Page::Tones));
 
     if (JamShown())
     {
@@ -285,10 +282,7 @@ Ptr Shell::BuildTabBar()
     // The tabs sit in the middle of the row whatever is beside them.
     std::vector<Ptr> tabItems{tab("PLAY", play, play ? mPage : Page::Chain)};
 
-    if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::ToneSharing))
-    {
-        tabItems.push_back(tab("TONES", mPage == Page::Tones, Page::Tones));
-    }
+    tabItems.push_back(tab("TONES", mPage == Page::Tones, Page::Tones));
 
     if (JamShown())
     {
@@ -440,45 +434,66 @@ Ptr Shell::BuildHeader()
         pillItem = LibraryDragSource(std::move(drag), pill);
     }
 
-    // The middle gets what the knobs leave, up to the web UI's 800 px (.preset-group, padded
-    // 6 x 8); 14 between the toolbar and the selector, whose row is 6 apart.
-    auto centre = WidthRange(
-        330.0f, 800.0f,
-        Pad(8, 0, 8, 0,
-            Col({VGap(26), FixedHeight(28, Row({Stretch(), toolbar, Stretch()})), VGap(14),
-                 FixedHeight(36, Row({Pad(0, 4, 0, 4, prev), HGap(6), pillItem, HGap(6), Pad(0, 4, 0, 4, next)})),
-                 std::make_shared<el::element>()})));
+    // The web UI's .control-bar-body-inner: 10 px under the fold's 13 px row, its sides and the
+    // gap either side of the preset group 3% of the window's width, the stacks in a group 1.6%
+    // apart (.control-bar-group); the output's meter 16 px from OUT (.output-vu-meter). Touch
+    // sizes keep their taller rows lower down.
+    const bool touch = metrics::Touch();
+    const float viewWidth = ViewSize().x;
+    const float side = std::round(viewWidth * 0.03f);
+    const float stackGap = std::round(viewWidth * 0.016f);
+    const float groupTop = touch ? 28.0f : 23.0f;
 
-    // As wide as the ladder, or the theme's needle gauge (Studio 1973's VU meters).
+    // As wide as the web's (36), or the theme's needle gauge (Studio 1973's VU meters).
     const float meterWidth = MeterBar::ColumnWidth(mTheme);
-    auto meterColumn = [meterWidth](Ptr meter, Ptr below) {
-        std::vector<Ptr> parts{VGap(26), FixedHeight(84, std::move(meter))};
+    auto meterColumn = [this, meterWidth, touch, groupTop](Ptr meter, Ptr below) {
+        std::vector<Ptr> parts{VGap(groupTop + 2.0f), FixedHeight(MeterBar::ColumnHeight(mTheme), std::move(meter))};
 
         if (below)
         {
-            parts.push_back(VGap(2));
-            parts.push_back(
-                FixedHeight(metrics::Touch() ? 36.0f : 18.0f, Row({Stretch(), std::move(below), Stretch()})));
+            parts.push_back(VGap(4));
+            parts.push_back(FixedHeight(touch ? 36.0f : 26.0f, Row({Stretch(), std::move(below), Stretch()})));
         }
 
         parts.push_back(std::make_shared<el::element>());
         return FixedWidth(meterWidth, Col(parts));
     };
-    auto cellsAt = [](std::vector<Ptr> list) {
+    // The stacks of a group, `gap` apart.
+    auto cellsAt = [groupTop](std::vector<Ptr> list, float gap) {
         auto row = std::make_shared<el::htile_composite>();
 
-        for (auto& c : list)
+        for (std::size_t i = 0; i < list.size(); ++i)
         {
-            row->push_back(Pad(0, 28, 0, 0, c));
+            if (i > 0)
+            {
+                row->push_back(HGap(gap));
+            }
+
+            row->push_back(Pad(0, groupTop, 0, 0, list[i]));
         }
 
         return Ptr(row);
     };
 
-    auto bar = Row({HGap(28), meterColumn(cells.inMeter, cells.levelling), HGap(14),
-                    cellsAt({cells.in, cells.gate, cells.transpose}), Stretch(), centre, Stretch(),
-                    cellsAt({cells.eq, cells.doubler, cells.out}), HGap(14), meterColumn(cells.outMeter, cells.mute),
-                    HGap(28)});
+    // Each group only as wide as its stacks: the room goes to the centre.
+    auto left = Tight({meterColumn(cells.inMeter, cells.levelling), HGap(stackGap),
+                       cellsAt({cells.in, cells.gate, cells.transpose}, stackGap)});
+    auto right = Tight({cellsAt({cells.eq, cells.doubler, cells.out}, stackGap), HGap(16),
+                        meterColumn(cells.outMeter, cells.mute)});
+
+    // The middle takes what the groups leave, up to the web UI's 800 px (.preset-group, padded
+    // 6 x 8); the toolbar 6 px into it, 14 between the toolbar and the selector, whose row is 6
+    // apart.
+    auto centre = WidthRange(
+        330.0f, 800.0f,
+        Pad(8, 0, 8, 0,
+            Col({VGap(groupTop + 6.0f), FixedHeight(28, Row({Stretch(), toolbar, Stretch()})), VGap(14),
+                 FixedHeight(36, Row({Pad(0, 4, 0, 4, prev), HGap(6), pillItem, HGap(6), Pad(0, 4, 0, 4, next)})),
+                 std::make_shared<el::element>()})));
+
+    // Any room the centre can't take (past its 800) goes either side of it.
+    auto bar = Row({HGap(side), left, HGap(side), Stretch(nullptr, 0.001), centre, Stretch(nullptr, 0.001),
+                    HGap(side), right, HGap(side)});
     // The chevron in its top-left corner.
     return Dressed(
         mTheme, mTheme.Tertiary(), &Backdrops::controlBar,

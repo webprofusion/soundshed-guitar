@@ -32,34 +32,6 @@ bool ShortChooser(el::point view, bool wide)
     return !wide && view.y <= metrics::kCompactShortMaxHeight;
 }
 
-/// A five-pointed star filling `r`, as the web UI's ★.
-void FillStar(el::canvas& cnv, const el::rect& r, el::color colour)
-{
-    const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f + 0.6f;
-    const float outer = std::min(r.width(), r.height()) * 0.52f, inner = outer * 0.42f;
-    cnv.begin_path();
-
-    for (int i = 0; i < 10; ++i)
-    {
-        const float a = -1.5707963f + static_cast<float>(i) * 0.6283185f;
-        const float rad = i % 2 == 0 ? outer : inner;
-        const el::point p{cx + rad * std::cos(a), cy + rad * std::sin(a)};
-
-        if (i == 0)
-        {
-            cnv.move_to(p);
-        }
-        else
-        {
-            cnv.line_to(p);
-        }
-    }
-
-    cnv.close_path();
-    cnv.fill_style(colour);
-    cnv.fill();
-}
-
 /// One preset (.preset-item): its name with "+ Mixer" (or "In Mixer") at the right; its category
 /// as a badge (only when it has one) and the folders it is in; its tags as chips; its description;
 /// then its rating, "3/5" or "Not Rated", and the stars. The one playing is outlined in the

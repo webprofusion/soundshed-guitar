@@ -148,6 +148,14 @@ class IconButton final : public Pressable
         return *this;
     }
 
+    /// The room either side of a label together (20 unless set): a flat trigger's is less (the
+    /// input mode's .input-mode-trigger pads 4 a side).
+    IconButton& LabelPadding(float both)
+    {
+        mLabelPad = both;
+        return *this;
+    }
+
     /// Another icon, for a toggle shown in place (play and stop).
     IconButton& Icon(std::string icon)
     {
@@ -551,7 +559,7 @@ class IconButton final : public Pressable
         if (!mLabel.empty())
         {
             const float text = el::measure_text(cnv, mLabel, Font(Weight::SemiBold).size(LabelSize())).x;
-            w = std::max(w, (mIcon.empty() ? 0.0f : mIconSize + 6.0f) + text + (mCaret ? 12.0f : 0.0f) + 20.0f);
+            w = std::max(w, (mIcon.empty() ? 0.0f : mIconSize + 6.0f) + text + (mCaret ? 12.0f : 0.0f) + mLabelPad);
         }
         else if (mCaret)
         {
@@ -565,7 +573,7 @@ class IconButton final : public Pressable
     Icons& mIcons;
     std::string mIcon, mLabel;
     Look mLook;
-    float mW = 28.0f, mH = 28.0f, mIconSize = 14.0f, mLabelSize = 10.0f;
+    float mW = 28.0f, mH = 28.0f, mIconSize = 14.0f, mLabelSize = 10.0f, mLabelPad = 20.0f;
     float mTouchTarget = metrics::kTouchTarget;
     bool mCaret = false, mLit = false, mLitSet = false, mHasInk = false, mUnsaved = false, mHasLitColour = false;
     el::color mInk, mLitColour;
@@ -1097,15 +1105,24 @@ class MiniSwitch final : public Pressable
         return info;
     }
 
+    /// A smaller switch than its own 22 x 12: the control bar's (.mini-toggle-control
+    /// .toggle-switch, 16 x 10).
+    MiniSwitch& Size(float w, float h)
+    {
+        mW = w;
+        mH = h;
+        return *this;
+    }
+
     el::view_limits limits(const el::basic_context& ctx) const override
     {
         if (!mTitle.empty())
         {
-            const float w = TitleWidth(ctx.canvas) + kTitleGap + 22.0f;
-            return {{w, 12.0f}, {el::full_extent, metrics::Hit(12.0f, 36.0f)}};
+            const float w = TitleWidth(ctx.canvas) + kTitleGap + mW;
+            return {{w, mH}, {el::full_extent, metrics::Hit(mH, 36.0f)}};
         }
 
-        return {{metrics::Hit(22.0f, metrics::kTouchFloor), 12.0f}, {metrics::Hit(22.0f), metrics::Hit(12.0f, 36.0f)}};
+        return {{metrics::Hit(mW, metrics::kTouchFloor), mH}, {metrics::Hit(mW), metrics::Hit(mH, 36.0f)}};
     }
 
     void draw(const el::context& ctx) override
@@ -1118,23 +1135,31 @@ class MiniSwitch final : public Pressable
         {
             // The label and the switch, centred as one.
             const float titleW = TitleWidth(cnv);
-            const float left = b.left + std::max(0.0f, (b.width() - titleW - kTitleGap - 22.0f) * 0.5f);
+            const float left = b.left + std::max(0.0f, (b.width() - titleW - kTitleGap - mW) * 0.5f);
             FillText(cnv, mTitle, Font(Weight::SemiBold).size(mTitleSize), mTitleInk,
                      el::rect{left, b.top, left + titleW + 1.0f, b.bottom}, HAlign::Left);
             const float cy = b.top + b.height() * 0.5f;
-            b = el::rect{left + titleW + kTitleGap, cy - 6.0f, left + titleW + kTitleGap + 22.0f, cy + 6.0f};
+            b = el::rect{left + titleW + kTitleGap, cy - mH * 0.5f, left + titleW + kTitleGap + mW, cy + mH * 0.5f};
         }
         else if (metrics::Touch())
         {
-            b = metrics::Face(b, 22.0f, 12.0f);
+            b = metrics::Face(b, mW, mH);
+        }
+        else
+        {
+            // Its own size, centred in what it is given.
+            b = el::rect{b.left + (b.width() - mW) * 0.5f, b.top + (b.height() - mH) * 0.5f,
+                         b.left + (b.width() + mW) * 0.5f, b.top + (b.height() + mH) * 0.5f};
         }
 
         const float on = mMotion.Position(mOn, DrawnArea());
+        const float half = b.height() * 0.5f;
         cnv.fill_style(
             SwitchMotion::Mix(mTheme.ToggleBg().level(mHover ? 1.2f : 1.0f), mTheme.Accent().level(0.92f), on));
-        cnv.fill_round_rect(b, 6.0f);
+        cnv.fill_round_rect(b, half);
         cnv.fill_style(el::rgba(255, 255, 255, 235));
-        cnv.add_circle(cycfi::artist::circle(el::point{b.left + 6.0f + (b.width() - 12.0f) * on, b.top + 6.0f}, 4.0f));
+        cnv.add_circle(cycfi::artist::circle(
+            el::point{b.left + half + (b.width() - 2.0f * half) * on, b.top + half}, half - 2.0f));
         cnv.fill();
     }
 
@@ -1157,5 +1182,6 @@ class MiniSwitch final : public Pressable
     std::string mTitle;
     float mTitleSize = 9.0f;
     el::color mTitleInk;
+    float mW = 22.0f, mH = 12.0f;
 };
 } // namespace nanoq::ui

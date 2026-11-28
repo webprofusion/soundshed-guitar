@@ -185,6 +185,7 @@ set(TEST_SOURCES
     UiBackgroundTests.cpp
     TonePreviewTests.cpp
     ToneSharingLinkTests.cpp
+    TonesBrowseTests.cpp
     JamPracticeToolTests.cpp
     ScaleGuideTests.cpp
     ScaleGuideListenTests.cpp
@@ -345,6 +346,8 @@ target_compile_definitions(UiClientLayoutTests PRIVATE GUITARFX_UI_DIR="${CMAKE_
 target_link_libraries(SplitterRoutingTests PRIVATE SoundshedUiClient)
 # The tone sharing links and installed-item lookups the native UIs share (uiclient/ToneSharing.h).
 target_link_libraries(ToneSharingLinkTests PRIVATE SoundshedUiClient)
+# The Tones page's Your Presets and Tone 3000 tabs (uiclient/TonesBrowse.h), against the web UI's.
+target_link_libraries(TonesBrowseTests PRIVATE SoundshedUiClient)
 # The Jam tab's backing tracks and Practice Tool (uiclient/Jam.h, uiclient/PracticeTool.h).
 target_link_libraries(JamPracticeToolTests PRIVATE SoundshedUiClient)
 # The Scale Guide's engine half, and the native UIs' half (uiclient/ScaleGuide.h).

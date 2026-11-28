@@ -381,6 +381,35 @@ class ParamKnob : public el::element, public Drawn, public Focusable
         return *this;
     }
 
+    /// The control bar's knob (.control-bar .knob-control): 38 px with no name over it (the bar
+    /// draws the label), its 12 px value 4 px under it.
+    ParamKnob& ControlBar(bool bar)
+    {
+        mBar = bar;
+        return *this;
+    }
+
+    /// Greyed, and left alone by the pointer, while what it sets is off (.knob-control.disabled:
+    /// the gate's threshold with the gate off).
+    ParamKnob& Dimmed(bool dimmed)
+    {
+        if (dimmed != mDimmed)
+        {
+            mDimmed = dimmed;
+            RepaintSoon(DrawnArea());
+        }
+
+        return *this;
+    }
+
+    /// The value centred in the cell less this much at its right, where a chevron sits beside
+    /// it (.knob-value-row: the gate's value and its settings, centred as one).
+    ParamKnob& ValueInset(float right)
+    {
+        mValueInset = right;
+        return *this;
+    }
+
     /// A point marked on the knob's travel (0..1): where a NAM Blend's model was captured
     /// (.knob-mapped-point), lit where the other knobs reach it, green where the knob is on it.
     struct Mark
@@ -421,12 +450,23 @@ class ParamKnob : public el::element, public Drawn, public Focusable
     void FinishEdit(bool commit);
     [[nodiscard]] el::rect ValueBox(const el::rect& b) const;
 
+    /// The heights down the cell: the name, the gap to the knob, the knob, the gap to the value
+    /// and the value.
+    struct Geometry
+    {
+        float name, nameGap, diameter, valueGap, value;
+    };
+    [[nodiscard]] Geometry Layout() const;
+
     const Theme& mTheme;
     std::string mName;
     std::string mValueText;
     double mValue = 0.0;
     float mBare = 0.0f; // the diameter of a bare knob; 0 for the named one
     bool mLarge = false;
+    bool mBar = false;
+    bool mDimmed = false;
+    float mValueInset = 0.0f;
     float mCellWidth = 0.0f; // 0: the knob's own cell width
     int mKeySteps = 0;
     InlineEdit mEdit;
@@ -485,6 +525,9 @@ class MeterBar : public el::element, public Drawn, public AccessStatic
     /// Whether the theme draws vertical meters as gauges, and how wide one is.
     [[nodiscard]] static bool ThemeGauge(const Theme& theme);
     [[nodiscard]] static float ColumnWidth(const Theme& theme);
+    /// How tall the vertical meter is: the readout over the ladder (.vu-meter, 68 px to the
+    /// ladder's foot), or over the theme's gauge.
+    [[nodiscard]] static float ColumnHeight(const Theme& theme);
 
   private:
     [[nodiscard]] bool Gauge() const

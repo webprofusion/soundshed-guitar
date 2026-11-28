@@ -76,9 +76,16 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     const float titleSize = metrics::Readable(9.0f);
     const float headHeight = touch ? 36.0f : 12.0f;
     const float belowHeight = touch ? 36.0f : 16.0f;
-    // .control-stack-label: 9 px bold, spaced .08em, --text-muted outside Dark.
+    // .control-stack-label: 9 px bold, spaced .08em, --text-muted outside Dark; a label with a
+    // switch beside it (.toggle-label) is 9 px semibold spaced .5 px, 6 px from its 16 x 10 switch.
     const auto titleInk = mTheme.DarkOr(el::rgba(201, 209, 225, 200), mTheme.TextMuted());
     constexpr float kTitleTracking = 0.08f;
+    constexpr float kToggleTitleTracking = 0.055f;
+    // Without touch sizes the stacks are the web UI's (.control-stack, 8 px apart): the label's
+    // 22 px row, the 38 px knob and its value 4 px under it (.knob-control, 54 px), and 2 px under
+    // that the input's mode (14 px); each stack as wide as the web's at its default text.
+    constexpr float kHeadRow = 22.0f, kStackGap = 8.0f, kKnobControl = 54.0f, kBelowGap = 2.0f, kBelowRow = 14.0f;
+    const auto widthOf = [cellWidth](float web) { return cellWidth > 0.0f ? cellWidth : web; };
     // The small pills of the bar's flyouts and the output's mute (18 x 16).
     auto pill = [this](const char* icon, float iconSize) {
         auto b = std::make_shared<IconButton>(mTheme, mIcons, icon, IconButton::Look::Pill);
@@ -88,9 +95,10 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
 
     // A cell of the strip: its label (with a switch beside it for a stage that turns off) over a
     // knob and its value, and, for the input, its mode under that.
-    auto knobCell = [&](const char* label, const EffectParamInfo& info, Read read, Write write, Format format,
-                        std::function<bool()> readOn = {}, std::function<void(bool)> writeOn = {}, Ptr below = nullptr,
-                        Ptr besideValue = nullptr) -> Ptr {
+    auto knobCell = [&](const char* label, float webWidth, const EffectParamInfo& info, Read read, Write write,
+                        Format format, std::function<bool()> readOn = {}, std::function<void(bool)> writeOn = {},
+                        Ptr below = nullptr, Ptr besideValue = nullptr) -> Ptr {
+        const float width = widthOf(webWidth);
         auto knob = std::make_shared<ParamKnob>(mTheme, "");
         knob->AccessName(info.name);
         knob->onChange = [info, write, format, k = knob.get()](double position) {
@@ -121,8 +129,8 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         });
 
         auto title = std::make_shared<Text>(mTheme, label, titleSize, Weight::SemiBold);
-        title->Colour(titleInk).Tracking(kTitleTracking).Fixed(true);
-        std::vector<Ptr> head{Stretch(), title};
+        title->Colour(titleInk).Tracking(readOn ? kToggleTitleTracking : kTitleTracking).Fixed(true);
+        std::vector<Ptr> head{Stretch(), touch ? Ptr(title) : Middle(title)};
 
         if (readOn)
         {
@@ -130,6 +138,8 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
             toggle->AccessName(std::string(label) + " on");
             toggle->onClick = [readOn, writeOn] { writeOn(!readOn()); };
             mLive.Bind(toggle, readOn, &MiniSwitch::Set);
+            // The stage's knob greys while it is off, as the web's.
+            mLive.Bind(knob, readOn, [](ParamKnob& k, bool on) { k.Dimmed(!on); });
 
             if (touch)
             {
@@ -138,14 +148,43 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
             }
             else
             {
-                head.push_back(HGap(5));
-                head.push_back(toggle);
+                toggle->Size(16, 10);
+                head.push_back(HGap(6));
+                head.push_back(Middle(toggle));
             }
         }
 
         if (!touch || !readOn)
         {
             head.push_back(Stretch());
+        }
+
+        if (!touch)
+        {
+            // The web UI's stack: the label row, the knob 8 px under it, and the input's mode.
+            knob->ControlBar(true).CellWidth(width);
+            Ptr top = Col({FixedHeight(kHeadRow, Row(head)), VGap(kStackGap),
+                           FixedHeight(kKnobControl, Row({Stretch(), knob, Stretch()}))});
+
+            // A flyout's chevron beside the value, the two centred as one (.knob-value-row).
+            if (besideValue)
+            {
+                knob->ValueInset(20.0f);
+                top = Over(Col({VGap(kHeadRow + kStackGap + kKnobControl - 12.0f),
+                                FixedHeight(14, Row({Stretch(), std::move(besideValue)})),
+                                std::make_shared<el::element>()}),
+                           top);
+            }
+
+            std::vector<Ptr> cell{FixedHeight(kHeadRow + kStackGap + kKnobControl + kBelowGap, top)};
+
+            if (below)
+            {
+                cell.push_back(FixedHeight(kBelowRow, Row({Stretch(), below, Stretch()})));
+            }
+
+            cell.push_back(std::make_shared<el::element>());
+            return FixedWidth(width, Col(cell));
         }
 
         // The knob draws no name of its own: the label row sits over the space it leaves (and
@@ -171,7 +210,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         }
 
         cell.push_back(std::make_shared<el::element>());
-        return FixedWidth(cellWidth, Col(cell));
+        return FixedWidth(width, Col(cell));
     };
 
     // ── IN: the level, and which inputs feed it ──
@@ -200,7 +239,12 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
         return ModeLook{im::Present(shown, caps).name, im::Tooltip(current, caps), im::FallsBack(shown, caps)};
     };
     auto mode = std::make_shared<IconButton>(mTheme, mIcons, "");
-    mode->Size(70, 16).Label(modeLook().label, 10.0f).Caret(true).Ink(mTheme.TextSecondary());
+    // .input-mode-trigger: as wide as the IN stack, 14 px tall.
+    mode->Size(touch || cellWidth > 0.0f ? 70.0f : 67.0f, touch ? 16.0f : 14.0f)
+        .Label(modeLook().label, 10.0f)
+        .Caret(true)
+        .LabelPadding(touch ? 20.0f : 8.0f)
+        .Ink(mTheme.TextSecondary());
     mode->onClick = [this, chain, currentMode, m = mode.get()] {
         const auto& c = chain();
         const auto& caps = mState.inputCapabilities;
@@ -255,16 +299,23 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     });
 
     auto in = knobCell(
-        "IN", Param("inputGain", "In", "dB", -12.0, 12.0, 0.0), [chain] { return chain().inputGain; },
+        "IN", 67.0f, Param("inputGain", "In", "dB", -12.0, 12.0, 0.0), [chain] { return chain().inputGain; },
         [&commands](double v) { commands.SetGlobalChainParam("input.gain", v); }, Decibels, {}, {}, mode);
 
     // ── GATE ──
     // ── GATE: Threshold and on/off here; everything else, and Learn, behind Settings ──
     auto gateSettings = pill("ui-chevron-down", 9.0f);
     gateSettings->AccessName("Noise gate settings");
+
+    // .gate-settings-trigger: 16 x 14 beside the value.
+    if (!touch)
+    {
+        gateSettings->Size(16, 14);
+    }
+
     gateSettings->onClick = [this, g = gateSettings.get()] { OpenGlobalGate(g->Bounds()); };
     auto gate = knobCell(
-        "GATE", Param("threshold", "Gate", "dB", -90.0, 0.0, -60.0, 1.0),
+        "GATE", 57.0f, Param("threshold", "Gate", "dB", -90.0, 0.0, -60.0, 1.0),
         [chain] { return NodeParam(chain().preChainGraph, "global_gate", "threshold", -60.0); },
         [&commands](double v) { commands.SetGlobalChainParam("gate.threshold", v); },
         [](double v) { return std::to_string(static_cast<int>(std::lround(v))) + " dB"; },
@@ -273,7 +324,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
 
     // ── TRANSPOSE: as the web UI's knob, the transpose runs only while it transposes ──
     auto transpose = knobCell(
-        "TRANSPOSE", Param("semitones", "Transpose", " st", -12.0, 12.0, 0.0, 1.0),
+        "TRANSPOSE", 62.0f, Param("semitones", "Transpose", " st", -12.0, 12.0, 0.0, 1.0),
         [chain] {
             return NodeEnabled(chain().preChainGraph, "global_transpose")
                        ? NodeParam(chain().preChainGraph, "global_transpose", "semitones", 0.0)
@@ -305,22 +356,28 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     };
     mLive.Bind(eqOn, [chain] { return NodeEnabled(chain().postChainGraph, "global_eq"); }, &MiniSwitch::Set);
     auto eqTitle = std::make_shared<Text>(mTheme, "EQ", titleSize, Weight::SemiBold);
-    eqTitle->Colour(titleInk).Tracking(kTitleTracking).Fixed(true);
-    Ptr eqHead = Row({Stretch(), eqTitle, HGap(5), eqOn, Stretch()});
+    eqTitle->Colour(titleInk).Tracking(kToggleTitleTracking).Fixed(true);
+    Ptr eqHead;
 
     if (touch)
     {
         eqOn->Title("EQ", titleSize, titleInk);
         eqHead = Row({eqOn});
     }
+    else
+    {
+        eqOn->Size(16, 10);
+        eqHead = Row({Stretch(), Middle(eqTitle), HGap(6), Middle(eqOn), Stretch()});
+    }
 
-    auto eq =
-        FixedWidth(72, Col({FixedHeight(headHeight, eqHead), VGap(touch ? 4 : 7),
-                            FixedHeight(48, Row({Stretch(), eqButton, Stretch()})), std::make_shared<el::element>()}));
+    // The EQ's stack: its label row, and the button where the other stacks have their knobs.
+    auto eq = FixedWidth(cellWidth > 0.0f ? 72.0f : 48.0f,
+                         Col({FixedHeight(touch ? headHeight : kHeadRow, eqHead), VGap(touch ? 4.0f : kStackGap),
+                              FixedHeight(48, Row({Stretch(), eqButton, Stretch()})), std::make_shared<el::element>()}));
 
     // ── DOUBLER ──
     auto doubler = knobCell(
-        "DOUBLER", Param("time", "Doubler", "ms", 0.5, 50.0, 6.0),
+        "DOUBLER", 68.0f, Param("time", "Doubler", "ms", 0.5, 50.0, 6.0),
         [chain] { return NodeParam(chain().postChainGraph, "global_doubler", "time", 6.0); },
         [&commands](double v) { commands.SetGlobalChainParam("doubler.delay", v); },
         [](double v) {
@@ -336,7 +393,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     outStatus->AccessName("Output DSP status");
     outStatus->onClick = [this, o = outStatus.get()] { OpenOutputStatus(o->Bounds()); };
     auto out = knobCell(
-        "OUT", Param("outputGain", "Out", "dB", -12.0, 12.0, 0.0), [chain] { return chain().outputGain; },
+        "OUT", 46.0f, Param("outputGain", "Out", "dB", -12.0, 12.0, 0.0), [chain] { return chain().outputGain; },
         [&commands](double v) { commands.SetGlobalChainParam("output.gain", v); }, Decibels);
 
     // The meters, from the telemetry feed (20 Hz): only a bar that moved is redrawn.
@@ -367,7 +424,19 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
     cells.out = out;
     cells.inMeter = inMeter;
     cells.outMeter = outMeter;
-    cells.mute = Tight({mute, HGap(3), outStatus});
+    // Under the output meter the mute (18 x 14) and 2 px under it the status chevron (18 x 10),
+    // as the web UI's .output-vu-meter; side by side with touch sizes.
+    if (touch)
+    {
+        cells.mute = Tight({mute, HGap(3), outStatus});
+    }
+    else
+    {
+        mute->Size(18, 14);
+        outStatus->Size(18, 10);
+        cells.mute = FixedWidth(18, Col({FixedHeight(14, mute), VGap(2), FixedHeight(10, outStatus)}));
+    }
+
     cells.levelling = BuildInputLevellingButton();
     return cells;
 }
@@ -375,7 +444,7 @@ Shell::ControlCells Shell::BuildControlCells(float cellWidth)
 void Shell::OpenControls()
 {
     // Touch sizes: the chevron and mute under the meters take 36 px rows, as the cells' do.
-    const float under = metrics::Touch() ? 36.0f : 18.0f;
+    const float under = metrics::Touch() ? 36.0f : 26.0f;
     // and the gaps beside the meters close up, so the strip is no wider than without them.
     const float meterGap = metrics::Touch() ? 8.0f : 14.0f;
     // The five knob cells narrow (down to their 70 px drop-downs) where the strip would run past
@@ -385,14 +454,16 @@ void Shell::OpenControls()
     // Under the stacked frame's tab bar; the rail's preset bar is at the top.
     const float top = mStack ? metrics::kStackTabBarHeight : 0.0f;
     const float room = view.x - StageLeft() - 12.0f - 16.0f;
-    const float fixed = 72.0f + 2.0f * meterGap + 2.0f * (metrics::Touch() ? 36.0f : 30.0f) + 2.0f;
+    const float fixed = 72.0f + 2.0f * meterGap + 2.0f * std::max(metrics::Touch() ? 36.0f : 0.0f, MeterBar::ColumnWidth(mTheme)) + 2.0f;
     auto c = BuildControlCells(std::clamp(std::floor((room - fixed) / 5.0f), 72.0f, 84.0f));
     auto strip =
         Row({Stretch(),
-             Col({FixedHeight(84, c.inMeter), VGap(2), FixedHeight(under, Row({Stretch(), c.levelling, Stretch()})),
+             Col({FixedHeight(MeterBar::ColumnHeight(mTheme), c.inMeter), VGap(4),
+                  FixedHeight(under, Row({Stretch(), c.levelling, Stretch()})),
                   std::make_shared<el::element>()}),
              HGap(meterGap), c.in, c.gate, c.transpose, Stretch(), c.eq, c.doubler, c.out, HGap(meterGap),
-             Col({FixedHeight(84, c.outMeter), VGap(2), FixedHeight(under, Row({Stretch(), c.mute, Stretch()})),
+             Col({FixedHeight(MeterBar::ColumnHeight(mTheme), c.outMeter), VGap(4),
+                  FixedHeight(under, Row({Stretch(), c.mute, Stretch()})),
                   std::make_shared<el::element>()}),
              Stretch()});
 

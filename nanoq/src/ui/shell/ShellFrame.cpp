@@ -64,12 +64,9 @@ Ptr Shell::BuildRail()
     items.insert(items.end(),
                  {VGap(4), FixedHeight(46, tab("ui-pads", "Setlist", Page::Pads, mPage == Page::Pads)), VGap(4)});
 
-    // Tone sharing can be switched off in Settings > Features, as in the web UI.
-    if (guitarfx::uiclient::IsFeatureEnabled(mState, guitarfx::uiclient::Feature::ToneSharing))
-    {
-        items.push_back(FixedHeight(46, tab("ui-tones", "Tones", Page::Tones, mPage == Page::Tones)));
-        items.push_back(VGap(4));
-    }
+    // Always there, as the web UI's: Your Presets needs no feature (TonesPage.cpp).
+    items.push_back(FixedHeight(46, tab("ui-tones", "Tones", Page::Tones, mPage == Page::Tones)));
+    items.push_back(VGap(4));
 
     if (JamShown())
     {

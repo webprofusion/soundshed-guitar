@@ -537,11 +537,7 @@ Ptr Shell::BuildPresetListContent()
                 mTheme, "Browse Tone Sharing",
                 [this] {
                     CloseOverlay();
-                    mTonesTab = TonesTab::Presets;
-                    mTonesPage = 1;
-                    LoadTones(false);
-                    ShowPage(Page::Tones);
-                    Mark(kPage);
+                    OpenTonesCommunity(TonesTab::Presets);
                 },
                 Button::Style::Primary);
             rows.push_back(FixedHeight(36, PadXY(12, 0, Row({browse, Stretch()}))));

@@ -613,7 +613,24 @@ bool MeterBar::ThemeGauge(const Theme& theme)
 
 float MeterBar::ColumnWidth(const Theme& theme)
 {
-    return ThemeGauge(theme) ? std::ceil(theme.Controls().gaugeWidth) : 30.0f;
+    return ThemeGauge(theme) ? std::ceil(theme.Controls().gaugeWidth) : 36.0f;
+}
+
+namespace
+{
+// The web UI's .vu-meter: a 10 px readout, then 4 px down the ladder of eight 5 px segments
+// 2 px apart, 14 px wide.
+constexpr float kLadderTop = 14.0f;
+constexpr float kSegmentHeight = 5.0f;
+constexpr float kSegmentPitch = 7.0f;
+constexpr float kSegmentWidth = 14.0f;
+constexpr int kLadderSegments = 8;
+} // namespace
+
+float MeterBar::ColumnHeight(const Theme& theme)
+{
+    return ThemeGauge(theme) ? 84.0f
+                             : kLadderTop + kSegmentPitch * (kLadderSegments - 1) + kSegmentHeight;
 }
 
 el::view_limits MeterBar::limits(const el::basic_context&) const
@@ -621,7 +638,8 @@ el::view_limits MeterBar::limits(const el::basic_context&) const
     if (mVertical)
     {
         const float w = ColumnWidth(mTheme);
-        return {{w, 84.0f}, {w, 84.0f}};
+        const float h = ColumnHeight(mTheme);
+        return {{w, h}, {w, h}};
     }
 
     return {{60.0f, 8.0f}, {el::full_extent, 8.0f}};
@@ -707,7 +725,8 @@ void MeterBar::draw(const el::context& ctx)
         }
 
         FillText(cnv, text, Font(Weight::SemiBold).size(9.0f), mTheme.TextSecondary(),
-                 el::rect{b.left - 6.0f, b.top, b.right + 6.0f, b.top + 12.0f}, Text::Align::Centre);
+                 el::rect{b.left - 6.0f, b.top, b.right + 6.0f, b.top + (Gauge() ? 12.0f : 10.0f)},
+                 Text::Align::Centre);
 
         if (Gauge())
         {
@@ -717,15 +736,18 @@ void MeterBar::draw(const el::context& ctx)
             return;
         }
 
-        constexpr int kSegments = 8;
+        constexpr int kSegments = kLadderSegments;
         const float level = static_cast<float>(std::clamp((mPeakDb + 60.0) / 60.0, 0.0, 1.0));
         const int lit = static_cast<int>(std::ceil(level * kSegments - 0.01f));
-        const float top = b.top + 16.0f, h = (b.bottom - top) / kSegments;
-        const float cx = (b.left + b.right) * 0.5f;
+        // From the readout down, the lowest segment at the ladder's foot: a taller column than the
+        // ladder (the compact Controls sheet's) leaves its room under it.
+        const float foot = b.top + ColumnHeight(mTheme);
+        const float cx = std::round((b.left + b.right) * 0.5f);
 
         for (int i = 0; i < kSegments; ++i)
         {
-            const el::rect seg{cx - 6.0f, b.bottom - (i + 1) * h + 1.0f, cx + 6.0f, b.bottom - i * h - 1.0f};
+            const float bottom = foot - static_cast<float>(i) * kSegmentPitch;
+            const el::rect seg{cx - kSegmentWidth * 0.5f, bottom - kSegmentHeight, cx + kSegmentWidth * 0.5f, bottom};
             el::color colour = mTheme.DarkOr(el::rgba(46, 46, 56, 255), mTheme.KnobRingTrack());
 
             if (i < lit)

@@ -310,6 +310,10 @@ constexpr float kLargeCellWidth = 74.0f;
 constexpr float kLargeNameHeight = 13.0f;
 constexpr float kLargeValueHeight = 15.0f;
 constexpr float kLargeDiameter = 40.0f;
+// The control bar's (.control-bar .knob-control): 38 px, the value 12 px tall 4 px under it.
+constexpr float kBarDiameter = 38.0f;
+constexpr float kBarValueGap = 4.0f;
+constexpr float kBarValueHeight = 12.0f;
 constexpr float kKnobDragPixels = 200.0f;
 } // namespace
 
@@ -325,15 +329,38 @@ el::view_limits ParamKnob::limits(const el::basic_context&) const
     }
 
     const float w = mCellWidth > 0.0f ? mCellWidth : (mLarge ? kLargeCellWidth : kKnobCellWidth);
-    const float h = mLarge ? kLargeNameHeight + kLargeDiameter + kLargeValueHeight + 4.0f
-                           : kKnobNameHeight + kKnobDiameter + kKnobValueHeight + 4.0f;
+    const auto g = Layout();
+    const float h = g.name + g.nameGap + g.diameter + g.valueGap + g.value;
     return {{w, h}, {w, h}};
+}
+
+ParamKnob::Geometry ParamKnob::Layout() const
+{
+    if (mBar)
+    {
+        return {0.0f, 0.0f, kBarDiameter, kBarValueGap, kBarValueHeight};
+    }
+
+    if (mLarge)
+    {
+        return {kLargeNameHeight, 2.0f, kLargeDiameter, 2.0f, kLargeValueHeight};
+    }
+
+    return {kKnobNameHeight, 2.0f, kKnobDiameter, 2.0f, kKnobValueHeight};
 }
 
 void ParamKnob::draw(const el::context& ctx)
 {
     NoteDrawn(ctx);
     auto& cnv = ctx.canvas;
+    // At the web's .45 while what it sets is off.
+    std::optional<cycfi::artist::canvas::group> dim;
+
+    if (mDimmed)
+    {
+        dim.emplace(cnv, 0.45f);
+    }
+
     const auto b = ctx.bounds;
     // The web UI's .node-param-label and .node-param-value, in the theme's ink, case and spacing:
     // the effect editor's a size up, the control bar's value a size down.
@@ -341,19 +368,20 @@ void ParamKnob::draw(const el::context& ctx)
     const float labelSize = metrics::Readable(skin.label.size + (mLarge ? 1.0f : 0.0f));
     const float valueSize = skin.value.size + (mLarge ? 1.0f : -1.0f);
     const auto valueFont = ControlFont(skin.value, valueSize);
-    const float nameHeight = mLarge ? kLargeNameHeight : kKnobNameHeight;
-    const float valueHeight = mLarge ? kLargeValueHeight : kKnobValueHeight;
+    const auto g = Layout();
+    const float nameHeight = g.name;
+    const float valueHeight = g.value;
 
     const auto nameBounds = el::rect{b.left, b.top, b.right, b.top + nameHeight};
 
-    if (mBare <= 0.0f)
+    if (mBare <= 0.0f && nameHeight > 0.0f)
     {
         DrawControlText(cnv, mName, skin.label, nameBounds, HAlign::Centre, labelSize);
     }
 
-    const float diameter = mBare > 0.0f ? mBare : (mLarge ? kLargeDiameter : kKnobDiameter);
+    const float diameter = mBare > 0.0f ? mBare : g.diameter;
     const float cx = (b.left + b.right) * 0.5f;
-    const float cy = mBare > 0.0f ? (b.top + b.bottom) * 0.5f : nameBounds.bottom + 2.0f + diameter * 0.5f;
+    const float cy = mBare > 0.0f ? (b.top + b.bottom) * 0.5f : nameBounds.bottom + g.nameGap + diameter * 0.5f;
     const float v = static_cast<float>(std::clamp(mValue, 0.0, 1.0));
     DrawKnob(cnv, mTheme, el::point{cx, cy}, diameter, v);
 
@@ -390,7 +418,7 @@ void ParamKnob::draw(const el::context& ctx)
         return;
     }
 
-    const auto valueBounds = el::rect{b.left, b.bottom - valueHeight, b.right, b.bottom};
+    const auto valueBounds = el::rect{b.left, b.bottom - valueHeight, b.right - mValueInset, b.bottom};
     DrawControlText(cnv, mValueText, skin.value, valueBounds, HAlign::Centre, valueSize);
 }
 
@@ -405,8 +433,8 @@ void ParamKnob::SetMarks(std::vector<Mark> marks)
 
 el::rect ParamKnob::ValueBox(const el::rect& b) const
 {
-    const float valueHeight = mLarge ? kLargeValueHeight : kKnobValueHeight;
-    return el::rect{b.left + 1.0f, b.bottom - valueHeight - 2.0f, b.right - 1.0f, b.bottom + 1.0f};
+    const float valueHeight = Layout().value;
+    return el::rect{b.left + 1.0f, b.bottom - valueHeight - 2.0f, b.right - 1.0f - mValueInset, b.bottom + 1.0f};
 }
 
 void ParamKnob::BeginEdit(std::string text)
@@ -560,6 +588,12 @@ bool ParamKnob::SetPosition(double normalised)
 
 bool ParamKnob::click(const el::context& ctx, el::mouse_button btn)
 {
+    // Off, the pointer passes it by (pointer-events: none), as the web's.
+    if (mDimmed && !mDragging)
+    {
+        return false;
+    }
+
     if (btn.state == el::mouse_button::right && onMenu)
     {
         if (btn.down)
@@ -582,7 +616,7 @@ bool ParamKnob::click(const el::context& ctx, el::mouse_button btn)
             mDragging = false;
 
             if (editText && onTyped && mBare <= 0.0f &&
-                btn.pos.y >= ctx.bounds.bottom - (mLarge ? kLargeValueHeight : kKnobValueHeight) - 2.0f)
+                btn.pos.y >= ctx.bounds.bottom - Layout().value - 2.0f)
             {
                 // The value turns into a field where it is; the knob takes focus for the keys
                 // once this click is done with.
@@ -684,7 +718,7 @@ bool ParamKnob::cursor(const el::context& ctx, el::point, el::cursor_tracking st
 
 bool ParamKnob::scroll(const el::context& ctx, el::point dir, el::point)
 {
-    if (dir.y == 0.0f || !mHover || !sWheelAdjusts)
+    if (dir.y == 0.0f || !mHover || !sWheelAdjusts || mDimmed)
     {
         return false;
     }
